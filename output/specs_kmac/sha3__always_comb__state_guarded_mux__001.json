@@ -1,0 +1,61 @@
+{
+  "chunk_id": "sha3__always_comb__state_guarded_mux__001",
+  "summary": "根据 mux_sel 在内部状态 state 与全零安全值之间选择输出到 state_guarded，非法/默认选择回退为全零。",
+  "behavior": "该组合逻辑对 mux_sel 做 unique case 选择：当 mux_sel 为 MuxGuard 时，state_guarded 被强制为全零；当 mux_sel 为 MuxRelease 时，state_guarded 直接等于 state；对任何其他取值，state_guarded 同样输出全零。代码注释明确将 default 分支视为“valid, safe output”，说明设计意图是在未识别或异常的选择值下屏蔽真实状态而不是传播未知状态或保持旧值。[sha3.sv:332-335]",
+  "guarantees": [
+    {
+      "property": "当 mux_sel 为 MuxGuard 时，state_guarded 一定为全零。",
+      "output_signals": [
+        "state_guarded"
+      ],
+      "source_refs": [
+        "sha3.sv:332-334"
+      ]
+    },
+    {
+      "property": "当 mux_sel 为 MuxRelease 时，state_guarded 一定等于 state；当 mux_sel 为其他未匹配值时，state_guarded 一定回退为全零而非透传 state。",
+      "output_signals": [
+        "state_guarded"
+      ],
+      "source_refs": [
+        "sha3.sv:332-335"
+      ]
+    }
+  ],
+  "security_implications": "该片段明显具有状态屏蔽/释放的保护语义：只有在 mux_sel 选择 MuxRelease 时才暴露内部 state，其余情况下输出被清零。对默认/非法选择值采用全零安全回退，有助于避免因控制信号异常而泄露内部状态，属于防御性的数据门控逻辑。[sha3.sv:333-335]",
+  "assumptions": [
+    {
+      "constraint": "若系统功能需要外部通过 state_guarded 观察真实状态，则 mux_sel 必须在该场景下被正确驱动为 MuxRelease。",
+      "bug_relevance": "如果违反，state_guarded 会输出全零而不是 state，导致依赖真实状态的后续功能错误；这属于行为契约，而不是该块内部的容错目标。",
+      "related_signals": [
+        "mux_sel",
+        "state_guarded",
+        "state"
+      ],
+      "source_refs": [
+        "sha3.sv:332-335"
+      ]
+    },
+    {
+      "constraint": "mux_sel 取到除 MuxGuard/MuxRelease 之外的值应被视为设计上不应发生的输入情况，尽管本块对该情况提供了安全回退。",
+      "bug_relevance": "若不满足则 state_guarded 仍会被安全地置零，不会泄露 state；但若系统原本期望释放真实状态，则会表现为功能被屏蔽。这是防御性设计覆盖的异常场景。",
+      "related_signals": [
+        "mux_sel",
+        "state_guarded"
+      ],
+      "source_refs": [
+        "sha3.sv:332-335"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3.sv:331-337"
+  ],
+  "uncertain_points": [
+    "仅凭该片段无法确定 mux_sel 的编码方式以及 unique case 是否依赖 onehot/枚举完整性；若 mux_sel 含 X/Z，仿真语义和综合后的实际硬件行为可能与“安全输出全零”的直观意图存在差异，需要结合类型定义和上游驱动确认。",
+    "state_guarded 与 state 的具体位宽和语义在本片段外定义；这里只能确认是整组信号在两者之间切换，而不能判断其是否包含安全敏感子字段。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
+  "line_start": 331,
+  "line_end": 337
+}

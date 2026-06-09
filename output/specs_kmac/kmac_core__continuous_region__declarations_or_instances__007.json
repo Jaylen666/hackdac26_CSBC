@@ -1,0 +1,65 @@
+{
+  "chunk_id": "kmac_core__continuous_region__declarations_or_instances__007",
+  "summary": "该片段用形式化约束限定 KMAC 运行期间配置与密钥输入必须保持稳定，并断言消息 FIFO 只有在消息处理状态下才会被确认握手。",
+  "behavior": "该片段本身不实现功能数据通路，而是通过形式化 assume/assert 表达设计意图与可依赖行为。注释和约束共同表明：KMAC 配置在一次操作进行期间应保持不变。具体地，kmac_en_i 和 mode_i 只有在状态 st 处于 StKmacIdle 或 StTerminalError 时才允许变化；strength_i 也应仅在 StKmacIdle 或 StTerminalError 变化，此外还额外允许“前一拍在 StKmacIdle”的边界情况，说明强度切换在离开空闲状态的启动边界上可能被接受。对于密钥接口，一旦 key_valid_i 已经为高且不是刚上升的那个周期，key_len_i 与 key_data_i 必须保持稳定，因此该设计把 key_valid_i 视为一段有效窗口，要求长度和密钥数据在窗口内不抖动。最后，片段断言当 fifo_valid_i、fifo_ready_o 和 kmac_en_i 同时为真、即发生对消息 FIFO 的确认握手时，状态 st 必须是 StKmacMsg；因此消息 FIFO 的消费只允许出现在消息处理状态，而不应出现在空闲、错误或其他状态中。",
+  "guarantees": [
+    {
+      "property": "当 fifo_valid_i、fifo_ready_o 和 kmac_en_i 同时为真时，状态 st 必定为 StKmacMsg，因此本模块不会在非消息处理状态下确认消费消息 FIFO 数据。",
+      "output_signals": [
+        "fifo_ready_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:479-481"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及安全关键约束：KMAC 使能、模式、强度以及密钥长度/数据在操作过程中必须稳定，否则可能导致一次密码运算跨配置或跨密钥边界执行，带来结果不可预测、认证标签错误，甚至形成错误的安全域混合。对 FIFO 握手的断言也限制了消息仅在合法处理状态被消费，有助于避免错误状态下吸收数据。",
+  "assumptions": [
+    {
+      "constraint": "kmac_en_i 只能在 st 为 StKmacIdle 或 StTerminalError 时变化；运行中不应切换 KMAC 使能。",
+      "bug_relevance": "这是行为契约。若违反，可能导致一次进行中的运算在启用/禁用边界被打断或跨模式执行，进而产生错误摘要或不可预期状态。",
+      "related_signals": [
+        "kmac_en_i",
+        "st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:469-470"
+      ]
+    },
+    {
+      "constraint": "mode_i、strength_i 在运行期间必须保持稳定；其中 strength_i 仅额外允许在前一拍 still 为 StKmacIdle 的启动边界变化。",
+      "bug_relevance": "这是行为契约。若违反，可能使同一次吸收/计算流程混用不同模式或强度参数，导致输出与协议预期不一致；strength_i 的边界例外若被误用，也可能造成启动周期配置解释歧义。",
+      "related_signals": [
+        "mode_i",
+        "strength_i",
+        "st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:469-475"
+      ]
+    },
+    {
+      "constraint": "当 key_valid_i 持续为高且不是其上升沿周期时，key_len_i 和 key_data_i 必须保持稳定。",
+      "bug_relevance": "这是行为契约。若违反，核心可能在一次有效密钥窗口内观察到变化的密钥长度或数据，导致使用错误密钥材料计算，属于功能错误并可能带来安全风险。",
+      "related_signals": [
+        "key_valid_i",
+        "key_len_i",
+        "key_data_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:476-477"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:469-477",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:479-481"
+  ],
+  "uncertain_points": [
+    "行 479 的注释写为“no acked to MsgFIFO in StKmacMsg”，字面上像是在说 StKmacMsg 中不应确认 FIFO，但紧随其后的断言实际表达的是“发生确认握手时必须处于 StKmacMsg”。注释与断言语义看起来不一致，更可能是注释笔误，需要结合上下文确认。",
+    "strength_i 约束比 kmac_en_i 和 mode_i 多出“$past(st) == StKmacIdle”的例外，表明其允许的变化边界略宽，但仅凭该片段无法确认这是为了启动流水线对齐、采样时序需要，还是形式化建模上的放宽。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
+  "line_start": 467,
+  "line_end": 483
+}

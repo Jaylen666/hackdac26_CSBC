@@ -1,0 +1,58 @@
+{
+  "chunk_id": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+  "summary": "组合逻辑收集各硬件子密钥的有效标志，检测有效窗口违规，选择KMAC密钥源，并输出PRNG使能。",
+  "behavior": "声明多比特向量 valids，并将 AES、KMAC、OTBN 三个硬核 sideload 密钥的有效标志分别赋值到对应索引位（第204-207行）。sideload_sel_err_o 通过对 valid_tracking_q 的按位取反与 valids 相与后缩减或生成：当任一密钥的有效标志在其不在 valid_tracking_q 允许的窗口内出现时，错误信号立即置位（第214行）。kmac_key_o 由一个复用器驱动：若 key_i.valid 为真，则选择 key_i，否则选择 kmac_sideload_key（第217行）。prng_en_o 直接由 clr 驱动（第220行）。此外，包含一条并发断言，要求每当 data_valid_i 有效时，同一周期 key_i.valid 也必须为真（第228行）。所有赋值均为组合逻辑，无时序延迟。",
+  "guarantees": [
+    {
+      "property": "kmac_key_o 始终等于 key_i（若 key_i.valid 为真），否则等于 kmac_sideload_key。",
+      "output_signals": [
+        "kmac_key_o"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:217"
+      ]
+    },
+    {
+      "property": "sideload_sel_err_o 为 1 当且仅当存在任何 valids 位在其对应 valid_tracking_q 位为 0 时被置位。",
+      "output_signals": [
+        "sideload_sel_err_o"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:214"
+      ]
+    },
+    {
+      "property": "prng_en_o 始终等于 clr。",
+      "output_signals": [
+        "prng_en_o"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:220"
+      ]
+    }
+  ],
+  "security_implications": "sideload_sel_err_o 的错误检测确保 sideload 密钥有效信号只在预期的时间窗口内出现，防止因时序异常或攻击导致密钥在非授权时刻被使用。kmac_key_o 的选择基于 key_i.valid 实现内部密钥优先，若该有效标志意外丢失，可能自动回退到外部 kmac_sideload_key，可能带来信息泄露风险。",
+  "assumptions": [
+    {
+      "constraint": "当 data_valid_i 为真时，key_i.valid 必须在同一周期为真。",
+      "bug_relevance": "若违反，kmac_key_o 将错误地选择 kmac_sideload_key 而非 key_i，导致送往 KMAC 的密钥出错。",
+      "related_signals": [
+        "data_valid_i",
+        "key_i.valid",
+        "kmac_key_o"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:228"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_sideload_key_ctrl.sv:204-230"
+  ],
+  "uncertain_points": [
+    "valid_tracking_q 的来源及索引与 valids 的对应关系不在本片段内，无法确认其生成逻辑。AesIdx、KmacIdx、OtbnIdx 的具体值及 LastIdx 的定义依赖外部参数。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
+  "line_start": 204,
+  "line_end": 230
+}

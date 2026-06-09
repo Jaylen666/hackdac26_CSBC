@@ -1,0 +1,63 @@
+{
+  "source_file": "/home/smy/rtl_bug_agent/output/findings_keymgr.json",
+  "generated_at": "2026-06-08T09:59:03+08:00",
+  "module": "keymgr",
+  "results": [
+    {
+      "finding_id": "F-0002",
+      "title": "[B-AG+U-UP] key_state_ecc_q 更新时遗漏 key_state_q 数据回写，导致密钥状态 ECC 与数据失配。",
+      "judgment": "CONFIRMED",
+      "confidence": 0.98,
+      "analysis_reason": "The finding's original wording frames this as a missing guarantee about ECC concatenation/order, but the concrete RTL defect is stronger and directly visible. In the non-reset path, the assignment updates only `key_state_ecc_q[i][j][k]` from `prim_secded_inv_72_64_enc(key_state_ecc_words_d[i][j][k])`; it no longer assigns the encoded data bits back into `key_state_q[i][j][k]`. The decoder later checks `{key_state_ecc_q[i][j][k], key_state_q[i][j][k]}`. Therefore, after any non-zero key-state update, the ECC bits correspond to `key_state_d` while the stored data remains stale, causing false `ecc_errs` / `FaultKeyEcc` behavior and preventing the internal key state from actually updating correctly.",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:303",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:306",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:312",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:326",
+        "/home/smy/opentitan-refs/hw/ip/keymgr/rtl/keymgr_ctrl.sv:297"
+      ],
+      "trigger_condition": "Any normal key-state update where `key_state_d` differs from the stale `key_state_q`, especially a non-zero CDI/root-key-derived state update after reset.",
+      "security_impact": "Key manager state integrity can be corrupted by construction: ECC check logic can report faults for correctly generated new key material, while the actual stored key state fails to advance. This can break key derivation/lifecycle progression and cause spurious fatal integrity handling.",
+      "software_observable": true
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "ecc_errs 路径会因 key_state_ecc_q 与 key_state_q 不一致而错误反映密钥状态完整性。",
+      "judgment": "CONFIRMED",
+      "confidence": 0.96,
+      "analysis_reason": "This is confirmed as the same root cause as F-0002, not as the original speculative claim about primitive concatenation semantics. The RTL decodes `{key_state_ecc_q, key_state_q}` in the ECC loop, but the preceding key-state register block updates only `key_state_ecc_q` and leaves `key_state_q` stale after reset. As a result, `ecc_errs[i][j][k] = |errs` can assert due to an internally introduced mismatch between ECC and data, so the integrity monitor no longer reflects the real integrity of the intended key-state value.",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:312",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:320",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:326",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:331",
+        "/home/smy/opentitan-refs/hw/ip/keymgr/rtl/keymgr_ctrl.sv:297"
+      ],
+      "trigger_condition": "A key-state update occurs, then the generated ECC checker decodes the newly written ECC bits concatenated with stale `key_state_q` data bits.",
+      "security_impact": "The fatal key-state ECC monitor can be driven by design-induced stale-data mismatch rather than real memory corruption, making key manager integrity/error behavior unreliable.",
+      "software_observable": true
+    },
+    {
+      "finding_id": "F-EXTRA-0001",
+      "title": "invalid_stage_sel_o && state_q == StCtrlInvalid 时绕过 entropy mask，直接输出 key_state_q 原始密钥材料。",
+      "judgment": "CONFIRMED",
+      "confidence": 0.92,
+      "analysis_reason": "This bug was not listed as an original finding, but source comparison shows it is a real injected defect. The reference implementation outputs `{EntropyRounds{entropy_i[i]}}` whenever `invalid_stage_sel_o` is true, preventing key state from reaching the outside world under an invalid stage selection. The current RTL adds a special branch: when `invalid_stage_sel_o && state_q == StCtrlInvalid`, it assigns `key_o.key[i] = key_state_q[cdi_sel_o][i]`, explicitly bypassing the entropy masking fallback. This contradicts the surrounding comment that disabled input-data selection should not expose key state. A witness is recommended to prove external observability because the F-0002/F-0004 key-state update bug may leave `key_state_q` stale or zero in common flows.",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:271",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:275",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:285",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:291",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:292",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:294",
+        "/home/smy/opentitan-refs/hw/ip/keymgr/rtl/keymgr_ctrl.sv:279",
+        "/home/smy/opentitan-refs/hw/ip/keymgr/rtl/keymgr_ctrl.sv:281"
+      ],
+      "trigger_condition": "`stage_sel_o` is outside {Creator, OwnerInt, Owner} while `state_q == StCtrlInvalid`; then `key_o.key[i]` is driven from `key_state_q[cdi_sel_o][i]` instead of entropy mask.",
+      "security_impact": "A fault or invalid-stage condition in the invalid control state can expose raw internal key state on the sideload key output path rather than fail-closed masking it.",
+      "software_observable": false
+    }
+  ]
+}

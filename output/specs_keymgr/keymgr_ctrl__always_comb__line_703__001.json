@@ -1,0 +1,58 @@
+{
+  "chunk_id": "keymgr_ctrl__always_comb__line_703__001",
+  "summary": "将控制状态 state_q 译为工作状态 working_state_o 并控制 update_en，仅在 StCtrlWipe 时禁止更新并保持上一工作状态。",
+  "behavior": "该组合过程块根据输入 state_q 驱动工作状态 working_state_o 和更新使能 update_en。除 StCtrlWipe 外，其它控制状态直接映射到去掉“Ctrl”前缀的工作状态（例如 StCtrlReset/StCtrlEntropyReseed/StCtrlRandom → StReset，StCtrlRootKey/StCtrlInit → StInit 等），且 update_en 为 1。当 state_q 为 StCtrlWipe 时，update_en 被强制置 0，working_state_o 保持为 last_working_st（前一有效工作状态）。非法状态（StCtrlInvalid 或未定义的其它值）均映射为 StInvalid，且 update_en 为 1。",
+  "guarantees": [
+    {
+      "property": "当 state_q 为除 StCtrlWipe 外的任意定义值（包括 StCtrlInvalid）时，update_en 一定为 1。",
+      "output_signals": [
+        "update_en"
+      ],
+      "source_refs": [
+        "keymgr_ctrl.sv:704"
+      ]
+    },
+    {
+      "property": "working_state_o 严格根据 state_q 映射：非法值/StCtrlInvalid 映射为 StInvalid；StCtrlWipe 映射为 last_working_st；其它按 Case 表映射到对应的工作状态。",
+      "output_signals": [
+        "working_state_o"
+      ],
+      "source_refs": [
+        "keymgr_ctrl.sv:705,707-736"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑涉及密钥管理器状态机控制，直接决定后续数据通路的工作阶段。StCtrlWipe 通过禁止更新并冻结工作状态，为安全擦除操作提供控制；若 state_q 意外出现非法值，虽然 working_state_o 会进入 StInvalid，但 update_en 仍保持有效，可能允许数据通路使用无效状态进行更新，造成潜在安全隐患。",
+  "assumptions": [
+    {
+      "constraint": "state_q 应始终取定义的合法枚举值，且不会在正常操作中进入非法状态。",
+      "bug_relevance": "若 state_q 意外取未定义值，将导致 working_state_o = StInvalid 且 update_en 仍为 1，下游逻辑可能在无效状态下继续更新，功能不可预期。",
+      "related_signals": [
+        "state_q"
+      ],
+      "source_refs": [
+        "keymgr_ctrl.sv:707,734-735"
+      ]
+    },
+    {
+      "constraint": "当 state_q 为 StCtrlWipe 时，last_working_st 应已保存一个有效的工作状态（非 StInvalid 或非法值）。",
+      "bug_relevance": "否则在擦除阶段 working_state_o 会呈现无效状态，可能导致安全擦除流程错误处理。",
+      "related_signals": [
+        "last_working_st",
+        "state_q"
+      ],
+      "source_refs": [
+        "keymgr_ctrl.sv:726-729"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_ctrl.sv:703-737"
+  ],
+  "uncertain_points": [
+    "last_working_st 的更新逻辑不在本片段内，其值在 StCtrlWipe 发生时是否始终有效需结合其他代码确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
+  "line_start": 703,
+  "line_end": 737
+}

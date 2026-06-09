@@ -1,0 +1,51 @@
+{
+  "chunk_id": "hmac_reg_top__continuous_region__batched_small_assigns__001",
+  "summary": "当存在寄存器读或写请求时，该片段将 `addrmiss` 置为地址命中向量全零，表示本次访问未命中任何寄存器；无访问时强制不报未命中。",
+  "behavior": "`addrmiss` 由当前访问请求和地址命中结果组合决定：只有在 `reg_re` 或 `reg_we` 为真时，才检查 `addr_hit`；此时若 `addr_hit` 的所有位都为 0，则 `addrmiss` 为 1，表示该读写访问没有命中任何寄存器地址。若存在至少一个命中位，则 `addrmiss` 为 0。没有读写请求时，`addrmiss` 被强制为 0，不会仅因 `addr_hit` 为空而报未命中。代码实际允许多位命中时仍视为“非 miss”，因为它只检测是否全零，不检测 one-hot 性。依据注释上下文，这只是一个孤立的小型组合赋值，没有额外状态或边界处理。 ",
+  "guarantees": [
+    {
+      "property": "当 `reg_re` 和 `reg_we` 都为 0 时，`addrmiss` 一定为 0。",
+      "output_signals": [
+        "addrmiss"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007-2007"
+      ]
+    },
+    {
+      "property": "当存在寄存器读或写请求且 `addr_hit` 全零时，`addrmiss` 一定为 1；当存在请求且 `addr_hit` 非全零时，`addrmiss` 一定为 0。",
+      "output_signals": [
+        "addrmiss"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007-2007"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑参与寄存器地址访问合法性判定：只有在实际读写请求期间才上报地址未命中，可避免空闲时产生伪 miss。若上游地址解码异常导致非法地址被错误标记为命中，则此处不会报 miss，可能影响非法访问检测覆盖性；但该片段本身不执行权限控制。",
+  "assumptions": [
+    {
+      "constraint": "`addr_hit` 应正确反映当前 `reg_re/reg_we` 对应地址的解码结果；对未映射地址应为全零。",
+      "bug_relevance": "这是行为契约。若违反，则 `addrmiss` 可能漏报非法/未映射访问，或对合法访问误报 miss，导致寄存器访问错误处理失真。",
+      "related_signals": [
+        "addr_hit",
+        "reg_re",
+        "reg_we",
+        "addrmiss"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007-2007"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007-2007"
+  ],
+  "uncertain_points": [
+    "该片段仅把 `addr_hit` 非全零视为“命中”，未要求 one-hot；如果设计意图是每次访问至多命中一个寄存器，则多重命中是否应视为错误需要结合其他解码/断言逻辑确认。",
+    "输入依赖列表中出现 `b0`，但此赋值实际使用字面量 `1'b0`；`b0` 是否是邻近代码中的局部常量与本片段无关，无法从该片段确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 2006,
+  "line_end": 2006
+}

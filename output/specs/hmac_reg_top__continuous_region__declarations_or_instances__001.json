@@ -1,0 +1,66 @@
+{
+  "chunk_id": "hmac_reg_top__continuous_region__declarations_or_instances__001",
+  "summary": "该片段将上游 TL-UL 访问经 1-to-2 socket 按 reg_steer 分发到寄存器接口或窗口接口，并对最终返回响应生成完整性，同时汇总完整性/非法写使能错误输出。",
+  "behavior": "片段首先将完整性相关错误与寄存器写使能错误汇总到单一错误指示：intg_err_o 由 err_q、intg_err 和 reg_we_err 三者按位或得到，因此任一来源报错都会立即拉高该输出（82行）。TL-UL 返回路径上，tl_o_pre 先作为未经响应完整性封装的中间 d2h 总线，随后通过 tlul_rsp_intg_gen 实例对响应与数据完整性进行生成，驱动最终对外的 tl_o；该实例显式开启了响应完整性和数据完整性生成（84-92行）。片段还建立了一个 2 路 tlul_socket_1n：tl_socket_h2d[1]/tl_socket_d2h[1] 连接本地寄存器总线 tl_reg_h2d/tl_reg_d2h，而 tl_socket_h2d[0]/tl_socket_d2h[0] 连接窗口接口 tl_win_o/tl_win_i（99-104行）。socket 的主机侧输入为 tl_i，主机侧输出为 tl_o_pre，目标侧输出为上述 2 路设备端总线，具体将请求送往哪一路由 dev_select_i(reg_steer) 决定（107-126行）。该 socket 参数中 N=2，且各请求/响应通道的 pass 均使能、深度均为 0，表明此处意图上不插入额外缓冲；ExplicitErrs 关闭，因此本片段未显式展示由 socket 单独产生的错误响应路径（107-117行）。",
+  "guarantees": [
+    {
+      "property": "当 err_q、intg_err、reg_we_err 中任一为 1 时，intg_err_o 必为 1。",
+      "output_signals": [
+        "intg_err_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:82-82"
+      ]
+    },
+    {
+      "property": "socket 的 0 号下游端口始终连接 tl_win_o/tl_win_i，1 号下游端口始终连接 tl_reg_h2d/tl_reg_d2h，不会在本片段内交换两者映射关系。",
+      "output_signals": [
+        "tl_reg_h2d",
+        "tl_socket_d2h",
+        "tl_win_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:100-104"
+      ]
+    },
+    {
+      "property": "对外 TL-UL 响应 tl_o 总是来自 tl_o_pre 经过响应完整性与数据完整性生成后的结果。",
+      "output_signals": [
+        "tl_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:86-92"
+      ]
+    }
+  ],
+  "security_implications": "该片段包含总线完整性相关逻辑：一方面将 err_q、intg_err、reg_we_err 汇总为 intg_err_o 以对外暴露错误状态（82行），另一方面对所有对外 TL-UL 响应统一生成响应/数据完整性（86-92行）。这意味着寄存器路径和窗口路径返回到上游的响应都依赖同一完整性封装链路；若 reg_steer 选择错误，访问可能被导向错误的目标，但返回响应仍会带完整性保护。",
+  "assumptions": [
+    {
+      "constraint": "reg_steer 必须在每次 TL 事务期间稳定且与地址解码意图一致，因为它直接决定 tl_i 被送往窗口端口还是寄存器端口。",
+      "bug_relevance": "如果违反该约束，合法访问可能被错误路由到另一目标，导致读写命中错误从设备；这更像功能契约，违反后会造成功能错误。",
+      "related_signals": [
+        "reg_steer",
+        "tl_i",
+        "tl_socket_h2d",
+        "tl_reg_h2d",
+        "tl_win_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:97-125"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:82-82",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:84-92",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:94-125"
+  ],
+  "uncertain_points": [
+    "reg_steer 在本片段中仅声明未赋值，其生成逻辑和具体选择规则不在当前代码内，无法仅据此确定哪类地址会被导向寄存器或窗口接口（97行，125行）。",
+    "tlul_socket_1n 在 HReq/HRsp/DReq/DRsp 深度为 0 且 pass 使能时是否完全无附加时序影响，依赖该模块实现；本片段只能确认设计意图是不引入额外缓冲（107-117行）。",
+    "ExplicitErrs 关闭后 socket 在非法选择、无目标响应或协议异常时的具体错误处理行为无法从本片段单独确定（117-125行）。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 82,
+  "line_end": 126
+}

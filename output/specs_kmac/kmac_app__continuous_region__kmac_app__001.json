@@ -1,0 +1,52 @@
+{
+  "chunk_id": "kmac_app__continuous_region__kmac_app__001",
+  "summary": "该片段主要定义 kmac_app 模块接口、与密钥/应用接口/软件消息通路相关的静态参数和内部控制信号，为后续 KMAC 应用仲裁、输出长度编码和错误处理逻辑提供基础结构。",
+  "behavior": "该连续区域没有给出具体组合赋值或时序更新逻辑，实际体现的是模块对外接口、设计约束和内部常量/信号组织。模块同时接收软件侧配置与消息输入、KeyMgr 侧 sideload key、多个 application 请求、SHA3/KMAC 核心状态与错误反馈，并向外输出密钥、消息 FIFO 写入信号、KMAC/SHA3 配置、状态寄存器写回、命令、状态和错误信息，表明其设计意图是作为软件路径与多个应用路径之间的 KMAC 前端适配/仲裁层 [kmac_app.sv:22-122]。注释明确指出：软件发起时是否使用 sideload key 受 keymgr_key_en_i 控制，而应用发起且使用 KMAC 算法时总是使用 sideload key；当应用未激活时，来自 SHA3 核的 state 输出可写入寄存器，而某些应用使能时该状态转而送往应用并对寄存器输出清零；错误会统一上报到错误寄存器/FIFO，且对 KeyMgr 发起场景还用于触发其放弃当前操作并重新发起 [kmac_app.sv:70-80][kmac_app.sv:103-117]。本段还定义了若干静态派生参数：Share 由 EnMasking 决定是 1 份还是 2 份共享数据 [kmac_app.sv:13-15]；KeyMgrKeyW 取自 sideload key 位宽 [kmac_app.sv:136-137]；KeyLengths 数组建立 128/192/256/384/512 位 key_len_e 的索引映射 [kmac_app.sv:139]；SelKeySize 和 SelDigSize 根据 AppKeyW/AppDigestW 选择索引，若不匹配列举值则退回索引 0，进而把 SideloadedKey 设为对应枚举值 [kmac_app.sv:141-151]。另外，片段预先给出了 right_encode(outlen) 常量表 EncodedOutLen 及其掩码 EncodedOutLenMask，注释说明这些编码应与 kmac_core 中的 key length encoding 一致，只是因 right encoding 而字节顺序不同，这表明后续逻辑将据此生成 KMAC 输出长度字段 [kmac_app.sv:153-175]。最后，片段声明了状态机状态 st/st_d、当前应用索引及其置位/清除控制、应用返回相关握手与 digest 完成信号、多路复用选择信号、错误源 fsm_err/mux_err，以及服务拒绝和“错误发生于软件会话期间”的跟踪位，但这些信号在本段尚未被驱动，因此具体状态转移、仲裁策略和错误判定条件仍需依赖后续代码确认 [kmac_app.sv:181-218]。",
+  "guarantees": [],
+  "security_implications": "该片段涉及多处安全关键接口与意图：秘密密钥可来自寄存器或 KeyMgr sideload，且应用路径在使用 KMAC 时按注释总是使用 sideload key，这关系到密钥来源隔离与软件可见性 [kmac_app.sv:22-24][kmac_app.sv:40-41][kmac_app.sv:76-80]。同时模块汇聚错误、清除控制、生命周期升级信号和状态输出，说明后续逻辑会参与故障处理和可能的敏感状态屏蔽；但本段尚未展示具体防护实现。",
+  "assumptions": [
+    {
+      "constraint": "参数 AppKeyW 和 AppDigestW 应落在 {128,192,256,384,512} 这些受支持取值中，否则 SelKeySize/SelDigSize 会回退到索引 0。",
+      "bug_relevance": "如果违反，该片段会把未识别宽度静默映射为 128-bit 对应索引，可能导致 sideload key 长度或输出长度编码错误；这更像是行为契约，违反后可能直接造成功能错误。",
+      "related_signals": [
+        "AppKeyW",
+        "AppDigestW",
+        "SideloadedKey",
+        "EncodedOutLen"
+      ],
+      "source_refs": [
+        "kmac_app.sv:141-151",
+        "kmac_app.sv:161-175"
+      ]
+    },
+    {
+      "constraint": "kmac_core 中使用的 key length encoding/输出长度解释必须与本片段的 EncodedOutLen 和注释描述保持一致。",
+      "bug_relevance": "如果违反，KMAC 前端送出的 right_encode(outlen) 可能被核心按不同语义解释，造成摘要长度错误或协议不兼容；这是行为契约，违反会导致功能错误。",
+      "related_signals": [
+        "EncodedOutLen",
+        "EncodedOutLenMask"
+      ],
+      "source_refs": [
+        "kmac_app.sv:153-175"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_app.sv:13-18",
+    "kmac_app.sv:22-24",
+    "kmac_app.sv:27-38",
+    "kmac_app.sv:40-45",
+    "kmac_app.sv:47-80",
+    "kmac_app.sv:82-122",
+    "kmac_app.sv:136-175",
+    "kmac_app.sv:181-218"
+  ],
+  "uncertain_points": [
+    "本段只包含接口、局部参数和内部信号声明，没有实际赋值逻辑，因此 sw/app 仲裁优先级、app_active_o 的判定、cmd_o/absorbed_o/error_o 的具体生成条件无法从本片段单独确认。",
+    "注释称“应用发起且使用 KMAC 算法时总是使用 sideloaded key”以及“应用未激活时 state 写寄存器，否则寄存器输出全零”，但本段没有实现代码，需后续逻辑确认是否完全按注释执行 [kmac_app.sv:70-80]。",
+    "SelDigSize 在本段已声明但未见使用，其是否用于摘要长度选择、应用接口返回宽度检查或后续编码逻辑，需要上下文确认 [kmac_app.sv:146-150]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
+  "line_start": 7,
+  "line_end": 218
+}

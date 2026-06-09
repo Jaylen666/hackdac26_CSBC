@@ -1,0 +1,65 @@
+{
+  "chunk_id": "hmac__always_comb__select_fifo_wdata__001",
+  "summary": "该组合逻辑在普通寄存器写入数据与 HMAC 摘要读出数据之间选择 FIFO 写数据，并按摘要位宽把 digest 数组拆成 32-bit 片段输出。",
+  "behavior": "该块默认将 `fifo_wdata` 透传为 `reg_fifo_wentry`，并把局部选择位 `index` 置 0，注释说明这是 `!hmac_fifo_wsel` 时的默认路径 [hmac.sv:550-552]。当 `hmac_fifo_wsel` 置位时，输出切换为由摘要寄存器 `digest` 构造的 FIFO 写数据：先将 `fifo_wdata` 清零作为兜底值 [hmac.sv:554-555]，然后按 `digest_size` 选择打包方式。若为 `SHA2_256`，只取 `digest[hmac_fifo_wdata_sel[2:0]]` 的低 32 位作为 `data` 字段，并把 `mask` 置全 1；注释表明高 32 位被视为零填充并丢弃 [hmac.sv:556-558]。若为 `SHA2_384` 或 `SHA2_512`，则将每个 digest word 分成两个 32-bit 半字输出，且注释说明输出顺序为先高 32 位、再低 32 位；具体通过 `index = !hmac_fifo_wdata_sel[0]` 实现：当选择位最低位为 0 时取位段 `[63:32]`，为 1 时取 `[31:0]`，word 索引使用 `hmac_fifo_wdata_sel[3:1]` [hmac.sv:559-562]。如果 `hmac_fifo_wsel` 为 1 但 `digest_size` 不属于上述三种情况，则 `fifo_wdata` 保持全 0，`index` 保持其默认值 0，形成安全兜底行为 [hmac.sv:551,554-564]。",
+  "guarantees": [
+    {
+      "property": "当 `hmac_fifo_wsel` 为 0 时，`fifo_wdata` 一定等于 `reg_fifo_wentry`。",
+      "output_signals": [
+        "fifo_wdata"
+      ],
+      "source_refs": [
+        "hmac.sv:550-552",
+        "hmac.sv:554-564"
+      ]
+    },
+    {
+      "property": "当 `hmac_fifo_wsel` 为 1 且 `digest_size` 为 `SHA2_256`/`SHA2_384`/`SHA2_512` 时，`fifo_wdata.mask` 一定为全 1，且 `fifo_wdata.data` 来自 `digest` 的某个 32-bit 片段。",
+      "output_signals": [
+        "fifo_wdata"
+      ],
+      "source_refs": [
+        "hmac.sv:556-562"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑参与将 HMAC/SHA 摘要内容送入 FIFO。它在摘要导出模式下显式限定只输出 32-bit 片段，并在支持的摘要模式下把 `mask` 置全 1；对未匹配的 `digest_size` 则输出全 0 兜底 [hmac.sv:555-563]。这降低了在非法模式下泄露未定义 digest 数据的风险，但具体是否构成安全边界仍取决于上层对 `hmac_fifo_wsel`、`hmac_fifo_wdata_sel` 和摘要访问权限的控制。",
+  "assumptions": [
+    {
+      "constraint": "当 `hmac_fifo_wsel` 为 1 时，`digest_size` 应只取该块显式处理的 `SHA2_256`、`SHA2_384` 或 `SHA2_512` 之一；否则该块会输出全 0，这更像防御性回退而非期望功能路径。",
+      "bug_relevance": "若不满足则摘要导出会得到零值而非真实 digest；该场景设计上不应发生，但硬件有安全回退行为。",
+      "related_signals": [
+        "hmac_fifo_wsel",
+        "digest_size",
+        "fifo_wdata"
+      ],
+      "source_refs": [
+        "hmac.sv:554-563"
+      ]
+    },
+    {
+      "constraint": "在摘要导出模式下，`hmac_fifo_wdata_sel` 需要落在 `digest` 数组的有效索引范围内，并与所选摘要长度对应；例如 `SHA2_256` 使用 `[2:0]` 选 word，`SHA2_384`/`SHA2_512` 使用 `[3:1]` 选 word、`[0]` 选半字。",
+      "bug_relevance": "若违反该约束，可能读取错误的 digest word/halfword，导致 FIFO 输出的摘要顺序或内容错误；若数组越界行为依赖工具语义，还可能产生仿真与综合不一致。",
+      "related_signals": [
+        "hmac_fifo_wsel",
+        "hmac_fifo_wdata_sel",
+        "digest_size",
+        "digest"
+      ],
+      "source_refs": [
+        "hmac.sv:556-562"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:549-565"
+  ],
+  "uncertain_points": [
+    "`fifo_wdata` 的具体结构体布局未在该片段中展开，只能从赋值看出至少包含 `data` 和 `mask` 字段 [hmac.sv:558,562]。",
+    "注释称 SHA-256 digest word 的高 32 位是 zero padding 并被丢弃 [hmac.sv:557]；该零填充是上游 `digest` 存储格式的设计意图，无法仅凭此片段独立验证。",
+    "该片段只决定送入 FIFO 的数据内容，不说明 `hmac_fifo_wsel`/`hmac_fifo_wdata_sel` 何时推进，因此完整的摘要输出顺序还依赖外部控制逻辑。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 549,
+  "line_end": 565
+}

@@ -1,0 +1,78 @@
+{
+  "chunk_id": "hmac__continuous_region__batched_small_assigns__001",
+  "summary": "该片段定义了若干 HMAC 控制/状态派生信号：软件触发的 secret wipe 接口、在 hash 启动/继续时锁存 digest size 的下一状态、从配置寄存器解码 key 长度，以及在未决中断不存在时对若干错误条件进行统一有效化。",
+  "behavior": "片段将 `reg2hw.wipe_secret` 寄存器接口直接拆成两个组合信号：`wipe_secret` 取自写使能 `reg2hw.wipe_secret.qe`，`wipe_v` 取自写入值 `reg2hw.wipe_secret.q`，表明一次对该寄存器的访问会同时提供“请求擦除”脉冲/资格和对应的数据值来源。`digest_size_started_d` 作为 `digest_size_started_q` 的下一状态，在 `hash_start_or_continue` 为真时采样当前 `digest_size`，否则保持原已锁存值不变，因此该信号用于在一次 hash 启动或继续操作时固定所使用的 digest size。`key_length_supplied` 将配置寄存器 `cfg_reg.key_length.q` 强制转换为枚举类型 `key_length_e`，供后续逻辑按枚举语义使用。错误有效信号 `err_valid` 仅在 `intr_state.hmac_err` 当前尚未置位时才会拉高；其触发源是五类错误条件的或：SHA 被禁用时尝试开始 hash、处理中更新 secret key、在 active 状态下启动 hash、不允许时消息 push、以及启动时配置非法。片段还声明了 `in_process` 与 `initiated` 两个内部逻辑信号，但本片段内未给出其驱动或用途。",
+  "guarantees": [
+    {
+      "property": "当软件对 `wipe_secret` 寄存器发起写操作时，`wipe_secret` 一定反映该写使能，且 `wipe_v` 同时反映写入的数据位。",
+      "output_signals": [
+        "wipe_secret",
+        "wipe_v"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:211-212"
+      ]
+    },
+    {
+      "property": "当 `hash_start_or_continue` 为 1 时，`digest_size_started_d` 一定等于当前 `digest_size`；当其为 0 时，`digest_size_started_d` 一定保持为 `digest_size_started_q`。",
+      "output_signals": [
+        "digest_size_started_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:214-214"
+      ]
+    },
+    {
+      "property": "若 `reg2hw.intr_state.hmac_err.q` 为 1，则 `err_valid` 一定为 0；若其为 0 且五个错误条件中任一成立，则 `err_valid` 一定为 1。",
+      "output_signals": [
+        "err_valid"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:218-220"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及两类安全相关控制。其一，`wipe_secret`/`wipe_v` 直接承接软件对 secret wipe 寄存器的写入，属于密钥/秘密材料擦除触发路径，后续逻辑应正确区分写使能与写值以避免误擦除或漏擦除。其二，`err_valid` 对若干非法或不安全操作进行统一报告，包括处理中更新 secret key、禁用 SHA 时启动以及非法配置启动等，这有助于阻止或显式暴露不安全状态转换；但由于其受 `intr_state.hmac_err.q` 屏蔽，若错误中断状态已置位，新的错误不会再通过该信号重新标记。",
+  "assumptions": [
+    {
+      "constraint": "`reg2hw.wipe_secret.qe` 仅在软件确实意图触发一次 secret wipe 时拉高；设计在本片段中未增加额外过滤，任何该信号的误脉冲都会被直接解释为擦除请求。",
+      "bug_relevance": "若不满足则可能触发非预期的秘密擦除；虽然这是防御性接口的一部分，但该场景在设计上不应发生。",
+      "related_signals": [
+        "reg2hw.wipe_secret.qe",
+        "wipe_secret",
+        "reg2hw.wipe_secret.q",
+        "wipe_v"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:211-212"
+      ]
+    },
+    {
+      "constraint": "`cfg_reg.key_length.q` 应编码为 `key_length_e` 的合法取值，供后续按枚举解释的逻辑使用。",
+      "bug_relevance": "若违反该约束，类型转换仍会产生某个枚举位模式，但后续基于 `key_length_supplied` 的功能判断可能错误，属于行为契约问题。",
+      "related_signals": [
+        "cfg_reg.key_length.q",
+        "key_length_supplied"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:216-216"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:211-212",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:214-214",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:216-216",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:218-220",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:222-224"
+  ],
+  "uncertain_points": [
+    "`wipe_secret` 由 `reg2hw.wipe_secret.qe` 而非 `q` 驱动，说明其语义更像“软件写该寄存器的事件”而不是寄存器存储值；但具体擦除是电平敏感、脉冲敏感还是需结合 `wipe_v` 解释，需查看后续使用处确认。",
+    "`digest_size_started_d` 明显是某个时序寄存器的 next-state，但本片段未包含 `digest_size_started_q` 的更新块，因此无法单独确认该锁存值在 reset、error 或完成后何时清除。",
+    "`err_valid` 使用 `~reg2hw.intr_state.hmac_err.q` 作为门控，表示已置位的错误中断状态会抑制新的 `err_valid`；这是去重机制还是仅避免重复置位，需要结合中断/错误处理逻辑确认。",
+    "`in_process` 与 `initiated` 在此仅声明，缺少驱动和消费上下文，无法从本片段判断其具体状态语义。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 210,
+  "line_end": 930
+}

@@ -1,0 +1,40 @@
+{
+  "chunk_id": "keymgr_data_en_state__always_comb__line_78__001",
+  "summary": "数据使能控制状态机组合逻辑，根据操作请求和硬件选择信号决定硬件或软件数据使能，并在操作完成后等待启动信号释放。",
+  "behavior": "该 always_comb 块实现一个 5 状态的状态机，控制 data_hw_en_o 和 data_sw_en_o 的输出。\n当前状态 state_q 默认为 IDLE。在 IDLE 下，adv_en_i 具有最高优先级，立即进入 DIS 状态。否则，若 id_en_i 或 gen_en_i 有效，则根据 hw_sel_i 的 mubi4 值决定下一状态：若 hw_sel_i 为严格真，进入 HW_EN 状态；若为严格假，进入 SW_EN 状态；若 hw_sel_i 既非严格真也非严格假（非法值），进入 DIS 状态以拒绝操作。\n在 HW_EN 状态下，data_hw_en_o 置 1，data_sw_en_o 为 0；op_done_i 有效时进入 WAIT 状态，否则若 adv_en_i 或 hw_sel_i 变为宽松假（即不再为真），则转向 DIS。\n在 SW_EN 状态下，data_sw_en_o 置 1，data_hw_en_o 为 0；op_done_i 有效时进入 WAIT，否则若 adv_en_i 或 hw_sel_i 变为宽松真，则转向 DIS。\n在 DIS 状态下，两个使能均为 0，仅 op_done_i 可触发进入 WAIT，否则保持 DIS。\n在 WAIT 状态下，两个使能均为 0，当 op_start_i 为低时返回 IDLE，否则保持 WAIT。\n未定义的状态（default）转向 DIS 作为安全回退。\n所有状态下 fsm_err_o 均保持为 0。",
+  "guarantees": [
+    {
+      "property": "输出 data_hw_en_o 与 data_sw_en_o 互斥，二者不会同时为 1。",
+      "output_signals": [
+        "data_hw_en_o",
+        "data_sw_en_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv:98,107"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑通过 mubi4 类型的 hw_sel_i 信号进行硬件/软件使能选择，并使用 strict/loose 测试区分合法值与毛刺。非法 hw_sel_i 值将导致状态机进入 DIS 状态，拒绝数据使能，防止未授权的数据通路激活，属于防御性设计。",
+  "assumptions": [
+    {
+      "constraint": "hw_sel_i 应为 mubi4 类型信号，其合法值仅能通过 mubi4_test_true_strict 或 mubi4_test_false_strict 测试之一，不能同时满足。",
+      "bug_relevance": "若 hw_sel_i 出现既非真亦非假的值（如亚稳值或攻击值），状态机将进入 DIS 状态，操作被静默拒绝，可能导致功能受阻。设计意图上 hw_sel_i 不应出现此类非法值，否则表明上游逻辑或信号完整性存在问题。",
+      "related_signals": [
+        "hw_sel_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv:88-93"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv:78-133"
+  ],
+  "uncertain_points": [
+    "fsm_err_o 在整个 always_comb 中恒为 0，但该信号存在于模块端口，推测错误指示可能在其他逻辑中产生。当前片段未体现任何错误检测，可能为未完成的设计或保留信号。",
+    "未定义状态进入 DIS 后，缺少从 DIS 回到 IDLE 的路径（除非 op_done_i 置位），若因软错误意外进入 default 分支，状态机将卡在 DIS 直到 op_done_i 出现，可能导致较长恢复时间，不确定是否为有意设计。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv",
+  "line_start": 78,
+  "line_end": 133
+}

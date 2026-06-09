@@ -1,0 +1,81 @@
+{
+  "chunk_id": "kmac_entropy__always_comb__line_491__001",
+  "summary": "该组合状态机根据当前熵状态、模式选择、EDN/SW 种子握手、随机数消费与超时条件，驱动 KMAC 熵路径的下一状态、PRNG/数据更新控制、有效标志控制和错误上报。",
+  "behavior": "该块先为下一状态和所有控制输出提供保守默认值：保持当前状态，关闭计时器、PRNG、数据/辅助更新、模式锁存、种子请求/应答，清除阈值动作关闭，错误输出默认为无错，且 rand_valid 的置位/清除分离控制默认都不动作 [kmac_entropy.sv:492-524]。在 StRandReset 中，如果 entropy_ready_i 未到，FSM 留在复位态并将 rand_valid_set 置 1，注释说明这是为了在软件尚未配置前提供“dummy rand”，让应用接口能继续工作；一旦 entropy_ready_i 到来，则先清除当前 dummy 有效标志并锁存 mode_i，然后按 mode_i 分流：EntropyModeSw 启动基于 CSR 的 reseed 并转入 StSwSeedWait，EntropyModeEdn 启动基于 EDN 的 reseed、复位等待计时器并转入 StRandEdn，其它模式值进入错误态 StRandErrIncorrectMode [kmac_entropy.sv:527-565]。\n\n在 StRandReady 中，计时器持续使能，prng_en 默认跟随 prng_en_rand_q[0]。若收到 rand_update_i 或 rand_consumed_i，且满足“允许推进随机数”的条件 ((fast_process_i && in_keyblock_i) || !fast_process_i)，则强制推进 PRNG 并更新数据；其中 rand_consumed_i 还会清除 rand_valid 并转入 StRandGenerate，而单纯 rand_update_i 时留在 StRandReady。若没有上述消费/更新事件，但当前模式为 EDN 且请求 entropy_refresh_req_i 或达到 threshold_hit_q，则启动新的 EDN reseed，复位计时器并清除 threshold_hit 标志，转入 StRandEdn；否则保持在 StRandReady [kmac_entropy.sv:567-601]。这体现了 fast_process 模式下只有 in_keyblock_i 时消费事件才触发随机数展开，否则即使 consumed 也不清 valid，从而避免再次扩展熵 [kmac_entropy.sv:572-577]。\n\n在 StRandEdn 中，模块把内部 seed_req 直接转发为 entropy_req，并持续使能等待计时器 [kmac_entropy.sv:604-610]。若计时器到期且等待上限非零，则进入超时错误态 StRandErrWaitExpired [kmac_entropy.sv:611-614]。否则，当外部握手条件 entropy_req_o && entropy_ack_i 成立时，seed_ack 被拉高；若此时 seed_done 也成立，则转入 StRandGenerate，并在允许推进随机数的条件下同时推进 PRNG、更新数据并清除 rand_valid；若 seed_done 未完成则继续留在 StRandEdn [kmac_entropy.sv:615-628]。此外，即使仍在等待 EDN 返回，若这期间发生 rand_update_i 或 rand_consumed_i 且满足允许推进随机数的条件，FSM 仍留在 StRandEdn，但会先本地推进 PRNG 和更新数据，并在 rand_consumed_i 时清除 rand_valid，以覆盖“等待刷新时又开始了新 hash 操作”的并行情形 [kmac_entropy.sv:629-643]。\n\n在 StSwSeedWait 中，软件种子路径的 ack 由 seed_req 与 seed_update_i 相与生成；当 seed_done 成立时，转入 StRandGenerate，并推进 PRNG、更新数据、清除 rand_valid，否则持续等待 [kmac_entropy.sv:646-660]。在 StRandGenerate 中，不推进新的数据随机数展开，而是仅置 aux_update 和 rand_valid_set，并令 prng_en 回到 prng_en_rand_q[0]，随后转回 StRandReady。注释表明这里当前缓冲输出被当作 auxiliary randomness 使用，且设计意图是避免在这一拍重复使用同一随机数；后续在消息/密钥装载或 Keccak 线性层执行期间会再推进 PRNG 以准备新的非线性层随机数 [kmac_entropy.sv:662-680]。\n\n两个中间错误态只负责打一拍错误信息后跳入统一错误态 StRandErr：StRandErrWaitExpired 上报 ErrWaitTimerExpired，并把 timer_value 截断到 24 位写入 info；StRandErrIncorrectMode 上报 ErrIncorrectEntropyMode，并把 mode_q 截断到 24 位写入 info [kmac_entropy.sv:683-699]。在 StRandErr 中，模块仍强制 rand_valid_set 为 1，以便即使出错也能完成当前哈希；同时仅在发生 rand_update_i 或 rand_consumed_i 且满足允许推进随机数的条件时推进 PRNG 并更新数据。若 err_processed_i 到来则回到 StRandReset，否则停留在错误态 [kmac_entropy.sv:701-717]。StTerminalError 为终态，保持当前状态并拉高 sparse_fsm_error_o；任何未定义状态也会跳入该终态并报告 FSM 错误 [kmac_entropy.sv:719-728]。此外，无论当前状态为何，只要 lc_escalate_en_i 被 life-cycle 逻辑判定为 true，下一状态都会被无条件覆盖为 StTerminalError，体现了全局/本地升级的安全逃生路径 [kmac_entropy.sv:731-736]。",
+  "guarantees": [
+    {
+      "property": "当进入 StRandErrWaitExpired 时，err_o 一定报告有效错误，错误码为 ErrWaitTimerExpired，且 info 携带 24 位 timer_value。",
+      "output_signals": [
+        "err_o"
+      ],
+      "source_refs": [
+        "kmac_entropy.sv:683-689"
+      ]
+    },
+    {
+      "property": "当状态为 StTerminalError，或状态落入 default 分支时，sparse_fsm_error_o 一定被置 1；default 分支还会将下一状态驱动到 StTerminalError。",
+      "output_signals": [
+        "sparse_fsm_error_o",
+        "st_d"
+      ],
+      "source_refs": [
+        "kmac_entropy.sv:719-728"
+      ]
+    },
+    {
+      "property": "一旦 lc_escalate_en_i 被判定为 true，下一状态 st_d 一定无条件改为 StTerminalError，不受当前 case 分支影响。",
+      "output_signals": [
+        "st_d"
+      ],
+      "source_refs": [
+        "kmac_entropy.sv:731-736"
+      ]
+    }
+  ],
+  "security_implications": "该块直接控制熵源模式选择、PRNG reseed、等待超时错误和 life-cycle escalation 下的终态跳转，属于安全关键路径。其设计显式防止非法 entropy mode 被静默接受，并在 EDN 等待超时时上报错误 [kmac_entropy.sv:551-555, 611-614, 686-698]。同时，lc_escalate_en_i 会无条件把 FSM 拉入终态，说明系统在升级/异常条件下优先进入安全失效状态 [kmac_entropy.sv:731-736]。不过在普通错误态 StRandErr 中仍保持 rand_valid_set 以完成当前哈希 [kmac_entropy.sv:701-708]，这是可用性与安全性的折中，需结合更大上下文确认是否满足系统威胁模型。",
+  "assumptions": [
+    {
+      "constraint": "在 EDN 模式下，外部握手应满足 entropy_req_o 与 entropy_ack_i 的语义一致性，使得 ack 只在本模块实际对外发出请求时返回；否则 seed_ack 可能在错误时刻被拉高，导致 reseed 握手提前完成或状态推进异常。",
+      "bug_relevance": "这是行为契约；若违反，可能错误确认种子请求、错误进入 StRandGenerate，进而使用未按预期刷新的随机性。",
+      "related_signals": [
+        "entropy_req_o",
+        "entropy_ack_i",
+        "seed_ack",
+        "seed_done"
+      ],
+      "source_refs": [
+        "kmac_entropy.sv:615-628"
+      ]
+    },
+    {
+      "constraint": "mode_i 在 entropy_ready_i 拉起并触发 mode_latch 的时刻应已稳定且为合法编码；虽然非法值会安全落入 StRandErrIncorrectMode，但该场景按设计不应发生。",
+      "bug_relevance": "若不满足则模块会进入错误处理而非静默失效，这属于防御性设计；但会阻止正常熵初始化并中断预期功能。",
+      "related_signals": [
+        "entropy_ready_i",
+        "mode_i",
+        "mode_latch",
+        "mode_q"
+      ],
+      "source_refs": [
+        "kmac_entropy.sv:528-555"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_entropy.sv:492-524",
+    "kmac_entropy.sv:527-565",
+    "kmac_entropy.sv:567-601",
+    "kmac_entropy.sv:604-643",
+    "kmac_entropy.sv:646-680",
+    "kmac_entropy.sv:683-728",
+    "kmac_entropy.sv:731-736"
+  ],
+  "uncertain_points": [
+    "代码依赖 entropy_req_o 而非本块内直接驱动的 entropy_req 来判定 EDN 握手 [kmac_entropy.sv:606, 615]；若两者之间还有组合/时序包装，实际握手语义需要结合其它片段确认。",
+    "注释称在 fast_process 模式下 consumed 时“不清 rand valid”以避免再次扩展熵 [kmac_entropy.sv:574-577]，但实际条件在满足 (fast_process_i && in_keyblock_i) 时仍会在 rand_consumed_i 下执行 rand_valid_clear [kmac_entropy.sv:581-585]；该行为是否与注释完全一致需要结合 in_keyblock_i 的系统语义确认。",
+    "StRandGenerate 中 aux_update/rand_valid_set/prng_en_rand_q[0] 的组合意图依赖对 PRNG 缓冲、DOM multiplier 和 keccak_round 参数化行为的更大上下文理解；仅从本片段可确认其目的是在生成后发布有效随机并更新辅助随机性，但具体数据通路效果仍需上下文。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
+  "line_start": 491,
+  "line_end": 737
+}

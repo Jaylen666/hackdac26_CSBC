@@ -1,0 +1,60 @@
+{
+  "chunk_id": "hmac_reg_top__always_comb__line_2365__001",
+  "summary": "该组合读回多路选择逻辑根据 addr_hit 生成寄存器读数据，公开状态/配置/摘要/消息长度等寄存器内容，同时将大部分密钥寄存器读回屏蔽为 0，仅保留前两段 key 可读。",
+  "behavior": "该块先将 reg_rdata_next 缺省清零，然后用 unique case(1'b1) 按 addr_hit 的 one-hot 命中位选择要返回的寄存器读数据 [2366-2367]。中断状态寄存器读回 bit[2:0] 分别为 hmac_done、fifo_empty、hmac_err，中断使能寄存器也以相同位映射返回 [2368-2377]。若命中测试/保留类地址，返回的相关位被硬编码为 0，例如 addr_hit[2]、[3]、[5] 以及大批 key/data 区间地址 [2380-2388][2400-2405][2426-2548]。配置寄存器读回包含 hmac/sha 使能、大小端/摘要/key swap 选项、digest_size 和 key_length 字段 [2390-2398]；状态寄存器读回 idle、fifo empty/full 以及 fifo_depth [2407-2412]；错误码寄存器返回 err_code_qs [2414-2416]。密钥区中仅 addr_hit[8] 和 [9] 直接读出 reg2hw.key[0].q 与 reg2hw.key[1].q，而 addr_hit[10] 到 [40] 全部返回 0，说明其余密钥或保留地址被读屏蔽 [2418-2548]。摘要寄存器 addr_hit[41] 到 [56] 依次返回 digest_0_qs 到 digest_15_qs [2550-2612]，消息长度低/高 32 位在 addr_hit[57] 和 [58] 返回 msg_length_lower_qs、msg_length_upper_qs [2614-2620]。若没有任何显式分支命中，则 default 将 reg_rdata_next 设为 reg2hw.key[2].q，而不是保持清零，这与前面的缺省清零形成例外路径 [2622-2624]。",
+  "guarantees": [
+    {
+      "property": "当 addr_hit[41] 到 addr_hit[56] 中某一位命中时，reg_rdata_next 必定返回对应的 32 位 digest word，按 digest_0_qs 至 digest_15_qs 顺序映射。",
+      "output_signals": [
+        "reg_rdata_next"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2550-2612"
+      ]
+    },
+    {
+      "property": "当 addr_hit[10] 到 addr_hit[40] 中任一位命中时，reg_rdata_next 必定为 32'b0；当 addr_hit[8] 或 addr_hit[9] 命中时，分别返回 reg2hw.key[0].q 或 reg2hw.key[1].q。",
+      "output_signals": [
+        "reg_rdata_next"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2418-2548"
+      ]
+    },
+    {
+      "property": "当 addr_hit[4] 命中时，reg_rdata_next 的低 15 位按固定字段位置反映当前配置：bit0 hmac_en、bit1 sha_en、bit2 endian_swap、bit3 digest_swap、bit4 key_swap、bit[8:5] digest_size、bit[14:9] key_length。",
+      "output_signals": [
+        "reg_rdata_next"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2390-2398"
+      ]
+    }
+  ],
+  "security_implications": "该读回逻辑涉及安全敏感数据暴露控制。摘要寄存器和消息长度可被直接读出 [2550-2620]；密钥区只有 key[0]、key[1] 两个 32 位字可读，后续大量 key/保留地址被强制读 0 [2418-2548]。如果这是有意的访问策略，则该块实现了部分密钥读屏蔽；但 default 分支在未命中时返回 reg2hw.key[2].q [2622-2624]，若 addr_hit 编码异常，可能意外暴露另一段密钥，因此地址译码正确性对保密性很关键。",
+  "assumptions": [
+    {
+      "constraint": "addr_hit 应满足 one-hot0 语义：正常情况下至多一个命中位为 1；未命中时 default 路径应只在设计明确允许的地址缺省场景出现。",
+      "bug_relevance": "如果多个 addr_hit 同时为 1，unique case 的行为可能导致仿真告警且读回语义不再明确；如果无命中却落入 default，则会返回 reg2hw.key[2].q，可能造成错误读数据甚至密钥泄露。",
+      "related_signals": [
+        "addr_hit",
+        "reg_rdata_next",
+        "reg2hw.key[2].q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2367-2624"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2366-2624"
+  ],
+  "uncertain_points": [
+    "default 分支返回 reg2hw.key[2].q [2622-2624] 看起来不像常规未命中返回 0 的读多路选择行为，可能是自动生成代码中的地址映射残留、故意的第三个 key word 读口，或潜在错误；仅凭该片段无法确认设计意图。",
+    "依赖列表未列出 msg_length_lower_qs 和 msg_length_upper_qs，但代码在 [2614-2620] 使用了这两个信号；无法仅凭该片段判断是依赖摘要缺失还是上下文裁剪问题。",
+    "只有 key[0] 和 key[1] 明确可读，而大量后续 key/相关地址读回 0 [2418-2548]；这是否代表部分密钥窗口、擦除后屏蔽，还是保留地址布局，需要结合完整寄存器定义确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 2365,
+  "line_end": 2626
+}

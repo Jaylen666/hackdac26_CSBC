@@ -1,0 +1,72 @@
+{
+  "chunk_id": "hmac__continuous_region__declarations_or_instances__009",
+  "summary": "该片段把消息长度回写到寄存器视图，完成消息写入路径的字节序转换与打包，并连接 HMAC 核、SHA-2 引擎、寄存器块及告警测试信号。",
+  "behavior": "该连续区域首先将内部 64 位消息长度拆分为高 32 位和低 32 位，持续驱动到 `hw2reg.msg_length_upper.d` 和 `hw2reg.msg_length_lower.d`，使软件可见当前消息长度值【/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:663-664】。消息写入路径上，`msg_fifo_wdata` 与 `msg_fifo_wmask` 会先经过 `conv_endian32(..., endian_swap)` 做 32 位粒度的端序转换；注释说明其意图是补偿 `prim_packer` 的打包方向与 SHA 输入期望的大端顺序之间的差异，在非大端配置时先反转后再送入 packer【/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:666-672】。`prim_packer` 仅在 `msg_write & sha_en` 时接收写入数据，输出 `reg_fifo_wvalid/data/mask` 送往寄存器消息 FIFO；其下游就绪条件被限制为 `fifo_wready & ~hmac_fifo_wsel`，因此当 HMAC 核选择写 FIFO 时，packer 侧不会继续向该 FIFO 推送【/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:674-696】。`hash_process` 会触发 packer flush，而 `packer_flush_done` 被用作 HMAC 核的 `reg_hash_process_i`，注释表明真正的 process 触发要等“所有消息都写完”之后，因此这里存在一个显式等待条件：先 flush packer，再由 flush 完成信号启动后续 HMAC/process 流程【/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:692-693,706-710】。",
+  "guarantees": [
+    {
+      "property": "软件可见的消息长度寄存器镜像始终反映 `message_length` 的高 32 位和低 32 位。",
+      "output_signals": [
+        "hw2reg.msg_length_upper.d",
+        "hw2reg.msg_length_lower.d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:663-664"
+      ]
+    },
+    {
+      "property": "仅当 `reg2hw.alert_test.q` 与 `reg2hw.alert_test.qe` 同时为 1 时，`alert_test` 对应位才会被置位。",
+      "output_signals": [
+        "alert_test"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:782-785"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及多处安全相关连接。SHA 引擎接收 `wipe_secret_i` 和 `wipe_v_i`，表明设计支持对内部敏感状态进行擦除；HMAC 核接收 `secret_key`，SHA/HMAC 数据通路直接处理密钥相关运算【/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:701-705,741-742】。此外，寄存器块的总线完整性错误 `intg_err_o` 被映射到告警向量 `alerts[0]`，而 `AlertIsFatal` 被定义为致命告警，说明总线完整性异常会进入安全告警路径【/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:777-787】。",
+  "assumptions": [
+    {
+      "constraint": "`endian_swap` 的配置必须与系统期望的软件写入字节序和 SHA 输入格式一致，否则写入消息在进入 FIFO 前会被错误重排。",
+      "bug_relevance": "如果该契约被破坏，哈希/HMAC 将针对错误的消息字节序计算，导致摘要结果错误；这属于合法使用场景下的功能错误。",
+      "related_signals": [
+        "endian_swap",
+        "msg_fifo_wdata",
+        "msg_fifo_wmask",
+        "msg_fifo_wdata_endian",
+        "msg_fifo_wmask_endian"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:666-672"
+      ]
+    },
+    {
+      "constraint": "当需要开始 `hash_process` 时，外部/上游控制应依赖 `packer_flush_done` 作为真正的 process 启动条件，而不是假设 `hash_process` 产生时所有待写消息已立即进入 FIFO。",
+      "bug_relevance": "若违反该行为契约，可能在 packer 尚未把残余字节全部推出时就启动后续 HMAC/SHA 处理，造成消息尾部缺失或摘要错误。",
+      "related_signals": [
+        "hash_process",
+        "packer_flush_done",
+        "reg_hash_process_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:692-693,709"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:663-664",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:666-672",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:674-696",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:698-733",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:735-760",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:762-779",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:781-787"
+  ],
+  "uncertain_points": [
+    "`conv_endian32` 的精确定义未在本片段给出；虽然注释说明其用于在非大端场景下做反转，但具体是按字节、半字还是整 32 位内部字节顺序交换，需要函数实现确认。",
+    "`alert_test` 和 `AlertIsFatal` 在本片段中仅被定义/赋值，尚未看到它们如何与最终告警发送模块相连，因此“测试告警触发”和“fatal 属性”的完整系统效果需结合后续代码确认。",
+    "`packer_flush_done` 注释写明“ignore at this moment”，但实际又被连接到 `reg_hash_process_i`；注释与连接语义之间可能存在表述不够严谨之处，需要结合 `hmac_core` 的接口语义确认其是否确实是关键触发条件。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 663,
+  "line_end": 787
+}

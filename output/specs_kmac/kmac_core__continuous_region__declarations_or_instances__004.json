@@ -1,0 +1,51 @@
+{
+  "chunk_id": "kmac_core__continuous_region__declarations_or_instances__004",
+  "summary": "构造供后续使用的 encoded_key_block：第 0 路总是由编码后的 key 与 bytepad 拼接而成，启用 masking 时第 1 路由另一份编码 key 与 16 位零常量拼接而成。",
+  "behavior": "该片段声明了一个宽度为 MaxEncodedKeyW+16 的 share 数组 encoded_key_block[Share]，用于承载扩展后的编码密钥块 [kmac_core.sv:383-389]。实际驱动中，encoded_key_block[0] 始终取 {encoded_key[0], encode_bytepad}，即在 encoded_key[0] 低位侧拼接 16 位的 encode_bytepad [kmac_core.sv:385-385]。当参数 EnMasking 使能时，还会生成对 encoded_key_block[1] 的驱动，其值为 {encoded_key[1], 16'h0}，即第二个 share 仅拼接 16 位零而不是 bytepad [kmac_core.sv:387-389]。因此该设计意图看起来是在 masked 模式下只让 share0 携带 bytepad 信息，而 share1 保持补零；若 EnMasking 关闭，则本片段只显式驱动 share0，其他 share 是否存在或是否需要驱动取决于 Share 和外部上下文。",
+  "guarantees": [
+    {
+      "property": "encoded_key_block[0] 始终等于 encoded_key[0] 与 encode_bytepad 的拼接结果。",
+      "output_signals": [
+        "encoded_key_block[0]"
+      ],
+      "source_refs": [
+        "kmac_core.sv:385-385"
+      ]
+    },
+    {
+      "property": "当 EnMasking 为真时，encoded_key_block[1] 始终等于 encoded_key[1] 与 16'h0 的拼接结果。",
+      "output_signals": [
+        "encoded_key_block[1]"
+      ],
+      "source_refs": [
+        "kmac_core.sv:387-389"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接参与 masked key block 的构造 [kmac_core.sv:385-389]。在启用 masking 时，只有 share0 携带 encode_bytepad，而 share1 对应位置被清零，这表明 bytepad 扩展不是以共享形式分布到两个 share 上。若后续逻辑依赖 share 间的掩码平衡，这种“常量仅进入一个 share、另一 share 补零”的实现需要与整体 masking 方案一致；否则可能影响掩码组合后的安全性分析。不过仅凭本片段无法判断这是否为预期且安全的方案。",
+  "assumptions": [
+    {
+      "constraint": "在 EnMasking 为假时，系统不应要求 encoded_key_block[1] 或更高 share 被本片段有效驱动；也即 Share 与后续使用方式应与未开启 masking 的实现相匹配。",
+      "bug_relevance": "若不满足则后续逻辑可能读取未驱动或无意义的 share 值，导致功能错误；这更像配置/集成契约问题，而非本片段内部有防护的设计。",
+      "related_signals": [
+        "EnMasking",
+        "Share",
+        "encoded_key_block"
+      ],
+      "source_refs": [
+        "kmac_core.sv:383-389"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_core.sv:383-389"
+  ],
+  "uncertain_points": [
+    "仅从本片段无法确认拼接顺序的语义期望；虽然 SystemVerilog 拼接 {A, B} 表示 A 为高位、B 为低位，但“bytepad/零位于高位还是低位”对协议含义是否正确需要结合 encoded_key_block 的后续消费逻辑确认 [kmac_core.sv:385-389]。",
+    "当 EnMasking 关闭时，encoded_key_block 数组的实际 share 数量是否保证只有索引 0 有效，无法仅凭本片段确认 [kmac_core.sv:383-389]。",
+    "注释缺失，无法单独确认 masked 模式下仅 share0 拼接 encode_bytepad、share1 补零是安全设计意图，还是为了使两路 share 相加/XOR 后恢复未掩码值的实现细节 [kmac_core.sv:385-389]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
+  "line_start": 383,
+  "line_end": 389
+}

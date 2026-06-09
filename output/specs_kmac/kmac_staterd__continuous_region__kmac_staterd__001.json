@@ -1,0 +1,75 @@
+{
+  "chunk_id": "kmac_staterd__continuous_region__kmac_staterd__001",
+  "summary": "该片段实例化一个 TL-UL 到 SRAM 风格接口的适配器，把外部 TL-UL 访问转换为内部 32 位字宽、单笔 outstanding 的状态读接口，并显式将该端口配置为只读且不支持取指/读回。",
+  "behavior": "模块参数化了地址宽度 AddrW 以及是否启用掩码的 Share 数；注释说明 AddrW 设计上应大于状态空间所需地址位数，且启用 masking 时状态份数变为 2，否则为 1 [7-20]。片段中定义了用于 TL-UL 适配的内部 SRAM 风格握手与返回信号，包括请求、写使能、按字寻址地址、读数据、读有效和错误码等 [41-52]。核心行为是实例化 tlul_adapter_sram，将 tl_i/tl_o 转换为内部接口：输出请求 tlram_req、地址 tlram_addr、写标志 tlram_we，以及接收内部返回的 tlram_rdata、tlram_rvalid、tlram_rerror [53-85]。适配器被配置为 32 位数据宽、地址宽为 AddrW-2、最多 1 笔 outstanding，并允许 byte access [54-60]。同时它被明确配置为写操作报错而非执行写入（ErrOnWrite=1），读操作本身不因适配器策略报错（ErrOnRead=0），禁用取指接口 en_ifetch_i 和读回功能 readback_en_i，且固定声明无写冲突、无写挂起 [59-60, 67, 81, 83-84]。因此从该片段可见，此接口意图上是一个面向状态读取的 TL-UL 只读窗口；虽然适配器仍会导出 tlram_we 和写数据/掩码端口，但这些写数据信号在本片段中被标记为 unused，表明本模块不打算消费写数据 [44, 46-47, 59, 73-74]。",
+  "guarantees": [
+    {
+      "property": "该模块对 TL-UL 侧不支持通过此接口成功执行写访问；适配器被配置为对写访问返回错误。",
+      "output_signals": [
+        "tl_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-60",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:65-66"
+      ]
+    },
+    {
+      "property": "内部 SRAM 风格接口始终以 32 位数据宽、按字地址和最多 1 笔 outstanding 事务的形式对外呈现。",
+      "output_signals": [
+        "tlram_req",
+        "tlram_we",
+        "tlram_addr"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:45",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-58",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:68-72"
+      ]
+    }
+  ],
+  "security_implications": "该片段与安全相关之处在于它把 KMAC 内部状态访问端口配置成只读窗口：写访问被适配器拒绝并报错，从而降低通过 TL-UL 篡改内部状态的风险 [54-60]。此外取指与读回功能被关闭 [67, 81]，减少该接口被当作可执行或额外调试/旁路通道使用的可能性。注释还表明 EnMasking 会改变 state_i 的 share 数 [16-20, 28]，但本片段尚未展示这些 share 如何映射到可读地址空间，因此无法仅凭本段判断是否会暴露掩码后的全部状态或单个 share。",
+  "assumptions": [
+    {
+      "constraint": "AddrW 需要足以覆盖状态读地址空间；源码注释给出的设计约束是 AddrW 应大于状态空间所需地址位数（与 Share 相关）。",
+      "bug_relevance": "如果该约束不满足，部分状态字可能无法被寻址，或不同状态位置发生地址别名，导致通过 TL-UL 读取到错误状态。这属于行为契约，违反会直接造成功能错误。",
+      "related_signals": [
+        "AddrW",
+        "state_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:12-19",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:34-35"
+      ]
+    },
+    {
+      "constraint": "连接到适配器下游的内部读通路需要在读请求发生时正确驱动 tlram_gnt、tlram_rdata、tlram_rvalid 和 tlram_rerror，以满足 tlul_adapter_sram 的握手预期。",
+      "bug_relevance": "如果下游未按协议返回授予或读响应，TL-UL 主机可能遭遇挂起、错误响应不一致或读取数据无效。这属于行为契约，违反会导致总线访问功能错误。",
+      "related_signals": [
+        "tlram_gnt",
+        "tlram_rdata",
+        "tlram_rvalid",
+        "tlram_rerror",
+        "tlram_req"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:42-50",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:68-79"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:12-20",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:24-31",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:34-35",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:41-52",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-85"
+  ],
+  "uncertain_points": [
+    "本片段只展示了 TL 适配器实例化，未展示 tlram_gnt、tlram_rdata、tlram_rvalid、tlram_rerror 如何生成，因此无法确认读请求的具体地址译码、返回时机和错误条件。",
+    "声明了 tlram_rdata_endian 和输入 endian_swap_i，但本片段中尚未使用，说明后续可能存在字节序变换；仅凭此段不能确认读出数据是否实际进行了 endian swap。",
+    "state_i[Share] 和 EnMasking/Share 的关系已声明，但本片段未显示状态数组如何映射到 tlram_addr，因此无法确认 masking 模式下地址空间布局以及是否允许读取全部 share。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv",
+  "line_start": 7,
+  "line_end": 85
+}

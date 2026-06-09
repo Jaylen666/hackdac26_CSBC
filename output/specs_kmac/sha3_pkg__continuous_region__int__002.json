@@ -1,0 +1,65 @@
+{
+  "chunk_id": "sha3_pkg__continuous_region__int__002",
+  "summary": "该片段定义了 Keccak 控制状态机和错误上报数据结构的编码，明确区分未掩码/掩码处理路径及软件控制错误类型。",
+  "behavior": "该片段本身不实现动态逻辑，而是通过类型和常量定义约束后续 RTL 的可表示状态与错误格式。它定义了 6 位宽的 Keccak 状态枚举 `keccak_st_e`，包含空闲态 `KeccakStIdle`、仅用于未掩码实现的单周期处理态 `KeccakStActive`，以及仅用于掩码实现的多阶段流程：`KeccakStPhase1`、`KeccakStPhase2Cycle1`、`KeccakStPhase2Cycle2`、`KeccakStPhase2Cycle3`。注释给出了设计意图：掩码版本中，Phase1 完成 Theta/Rho/Pi，并且只有在 Phase2 所需随机数可用时才进入 Phase2；随后 `Phase2Cycle1` 和 `Phase2Cycle2` 分别无条件推进到下一阶段，`Phase2Cycle3` 在最后一轮完成后返回 Idle，否则重复这些阶段。片段还定义了 `KeccakStError` 和 `KeccakStTerminalError` 两个错误相关状态，其中前者的用途在注释中说明为遇到意外输入时转入并通过错误 FIFO 报告调试信息，但同时也明确写明“Not clearly defined yet”，因此其精确处理语义尚未完全定型。错误上报部分定义了 8 位错误码枚举 `err_code_e`，当前只包含无错误 `ErrNone` 和软件控制错误 `ErrSha3SwControl`；后者的设计意图是当软件给出错误流程信号（例如未 `start_i` 就置位 `process_i`）时，状态机会忽略该信号并通过错误 FIFO 报告。最后，`err_t` 将错误报告统一打包为 `valid`、`code` 和 24 位调试信息 `info` 三个字段，供其他逻辑生成或消费错误记录。",
+  "guarantees": [
+    {
+      "property": "`keccak_st_e` 的合法编码集合被限制为片段中定义的 7 个命名状态，且状态位宽固定为 6 位。",
+      "output_signals": [
+        "keccak_st_e",
+        "KeccakFsmWidth"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:215-248"
+      ]
+    },
+    {
+      "property": "错误报告接口可统一表示为 `err_t`，其中错误是否有效由 `valid` 指示，错误类别由 8 位 `code` 指示，并携带 24 位附加调试信息 `info`。",
+      "output_signals": [
+        "err_t.valid",
+        "err_t.code",
+        "err_t.info"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:254-267"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及安全相关控制与错误处理。Keccak 状态机明确区分掩码与未掩码实现路径，其中掩码路径在注释中要求等待 Phase2 所需随机数可用后再继续，这反映了掩码运算对随机性的依赖；若后续实现偏离该约束，可能削弱抗侧信道保护。错误码 `ErrSha3SwControl` 和错误状态/错误 FIFO 设计意图表明非法软件控制会被忽略并记录，有助于防止错误控制序列静默影响密码处理流程。",
+  "assumptions": [
+    {
+      "constraint": "使用 `keccak_st_e` 的后续状态机实现应只进入片段定义的命名状态，并对未覆盖状态采取明确的安全处理；设计上不应出现枚举外编码。",
+      "bug_relevance": "若不满足则状态机可能落入未定义编码，导致流程失控，尤其错误状态与终止错误状态的恢复/上报语义可能失效；该场景通常属于非法状态，但实现应有安全回退。",
+      "related_signals": [
+        "keccak_st_e"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:215-248"
+      ]
+    },
+    {
+      "constraint": "后续使用 `ErrSha3SwControl` 的控制逻辑应将“错误流程信号”判定为非法输入并忽略其功能效果，同时生成相应错误记录；例如注释举例的 `process_i` 在没有 `start_i` 时不应触发正常处理。",
+      "bug_relevance": "若违反该契约，软件非法控制序列可能被当作合法命令执行，导致 SHA3/KMAC 流程错乱或在安全敏感上下文中处理未预期数据。",
+      "related_signals": [
+        "ErrSha3SwControl",
+        "valid",
+        "code",
+        "info"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:257-267"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:215-267"
+  ],
+  "uncertain_points": [
+    "`KeccakStError` 的具体行为在注释中被明确标注为“Not clearly defined yet”，因此除了其用于异常输入和错误 FIFO 上报的设计意图外，无法从本片段确认其退出条件、是否可恢复、以及与 `KeccakStTerminalError` 的精确区别。 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:242-247]",
+    "关于掩码版本中 Phase1 仅在“Phase2 所需随机数可用”时才进入 Phase2，这只是注释给出的设计意图；本片段没有给出随机数可用信号或实际门控逻辑，需结合状态机实现确认。 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:223-240]",
+    "注释说明 `KeccakStActive` 仅用于未掩码版本、Phase1/Phase2 仅用于掩码版本，但本片段只是类型定义，没有强制机制保证两类实现不会混用这些状态。 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:219-240]"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv",
+  "line_start": 215,
+  "line_end": 267
+}

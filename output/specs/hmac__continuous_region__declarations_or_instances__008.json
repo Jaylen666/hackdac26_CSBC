@@ -1,0 +1,76 @@
+{
+  "chunk_id": "hmac__continuous_region__declarations_or_instances__008",
+  "summary": "该片段将 FIFO 空和 HMAC 错误事件接入标准中断硬件单元，并定义消息 FIFO 读口的固定返回值、读授权条件以及寄存器写入消息 FIFO 时的数据/字节使能重排。",
+  "behavior": "片段实例化了两个 `prim_intr_hw` 中断单元：`fifo_empty` 中断使用 `Status` 类型，其事件输入为 `status_fifo_empty`，并由对应的 `intr_enable`、`intr_test`、`intr_state` CSR 字段控制和回写，输出到 `intr_fifo_empty_o`；`hmac_err` 中断以 `err_valid` 为事件输入，连接对应的使能、测试和状态寄存器字段，输出到 `intr_hmac_err_o`。这表明该片段本身不直接生成中断条件，而是把上游事件接入统一的中断寄存/测试框架中 [497-523]。消息 FIFO 的读数据接口被固定驱动为全 1，读错误标志也固定为全 1，因此从该接口读访问总是返回全 F 且标记为错误；同时，读授权 `msg_fifo_gnt` 只在存在读请求、当前未选择 HMAC FIFO 写通路且 `packer_ready` 为真时才置位 [529-531]。为消除未使用位告警，代码将 `reg_fifo_wmask` 中每个字节 lane 的高 7 位折叠到 `unused_signals`，实际只使用位 `[0]、[8]、[16]、[24]` 作为 4 字节写掩码 [536-538, 543-544]。写入消息 FIFO 的寄存器入口 `reg_fifo_wentry.data` 总是对 `reg_fifo_wdata` 做 `conv_endian32(..., 1'b1)` 转换，`reg_fifo_wentry.mask` 则从 32 位按字节间隔抽取 4 个有效掩码位重新打包为 4 位掩码 [541-544]。此外，`fifo_empty` 被直接定义为 `~fifo_rvalid`，而 `fifo_wvalid` 在 `hmac_fifo_wsel && fifo_wready` 时选择 `hmac_fifo_wvalid`，否则退回 `reg_fifo_wvalid`；因此 HMAC 写源只在被选中且下游就绪时驱动写有效，否则寄存器写源保留控制权 [545-546]。",
+  "guarantees": [
+    {
+      "property": "消息 FIFO 读数据总是返回全 1，且读错误标志总是置 1。",
+      "output_signals": [
+        "msg_fifo_rdata",
+        "msg_fifo_rerror"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:529-530"
+      ]
+    },
+    {
+      "property": "只有在 `msg_fifo_req` 为真、未选择 HMAC FIFO 写通路且 `packer_ready` 为真时，消息 FIFO 读授权 `msg_fifo_gnt` 才会置位。",
+      "output_signals": [
+        "msg_fifo_gnt"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:531"
+      ]
+    },
+    {
+      "property": "写入消息 FIFO 的寄存器路径始终对 32 位写数据执行 endian 转换，并且仅使用 `reg_fifo_wmask[0]`、`[8]`、`[16]`、`[24]` 形成 4 位字节掩码。",
+      "output_signals": [
+        "reg_fifo_wentry.data",
+        "reg_fifo_wentry.mask"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:541-544"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及错误与状态中断上报，其中 `hmac_err` 事件会进入标准中断路径，利于上层检测 HMAC 异常 [512-523]。此外，消息 FIFO 读口被硬编码为返回错误和全 1 数据 [529-530]，这有助于避免通过该读路径泄露 FIFO 内容；但其安全效果仍取决于系统是否把该接口暴露给可能的非法读访问者。",
+  "assumptions": [
+    {
+      "constraint": "`reg_fifo_wmask` 采用每字节 8 位扩展表示，且只有位 `[0]、[8]、[16]、[24]` 对应真实字节写使能，其余位设计上应恒为 0 或无语义。",
+      "bug_relevance": "如果软件或上游逻辑错误地赋予其余位语义，这些位会被本片段忽略，仅被折叠进 `unused_signals`，从而导致预期的字节使能失效。不过该场景从实现看属于不应发生的接口使用方式，硬件回退行为是安全地忽略这些位。",
+      "related_signals": [
+        "reg_fifo_wmask",
+        "unused_signals",
+        "reg_fifo_wentry.mask"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:536-544"
+      ]
+    },
+    {
+      "constraint": "`msg_fifo_req` 的发起方应只在能够接受错误返回值的场景下访问该读接口，因为本片段不提供真实 FIFO 读数据。",
+      "bug_relevance": "若其他合法逻辑把该接口当作正常数据读口使用，将始终读到全 1 且伴随错误标志，导致功能错误；这更像接口行为契约而非防御性回退。",
+      "related_signals": [
+        "msg_fifo_req",
+        "msg_fifo_rdata",
+        "msg_fifo_rerror",
+        "msg_fifo_gnt"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:529-531"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:497-523",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:529-546"
+  ],
+  "uncertain_points": [
+    "`prim_intr_hw` 的精确语义（如 `Status` 类型与默认类型的中断保持/清除行为）依赖该通用模块定义，本片段只能确认其连接关系，无法单独证明中断脉冲/保持细节 [/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:497-523]。",
+    "`msg_fifo_gnt` 虽然在读请求时可置位，但同一片段又把读数据和错误固定为非法访问返回；这暗示 `gnt` 可能仅表示总线接受请求而非成功读取真实 FIFO 数据，具体握手语义需结合外部接口定义确认 [/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:529-531]。",
+    "`fifo_wvalid` 在 `hmac_fifo_wsel && fifo_wready` 时才选择 `hmac_fifo_wvalid`，否则退回 `reg_fifo_wvalid`；这种选择是否有意避免 HMAC 侧在下游未就绪时占用通路，还是依赖更大范围仲裁协议，需结合上下文确认 [/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:546-546]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 497,
+  "line_end": 548
+}

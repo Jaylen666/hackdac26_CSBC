@@ -1,0 +1,57 @@
+{
+  "chunk_id": "kmac__continuous_region__kmac__001",
+  "summary": "该片段定义了 KMAC 顶层模块的安全/接口相关参数与端口，并根据掩码配置导出内部份额数常量，为后续数据通路和软件密钥接口宽度选择提供静态配置。",
+  "behavior": "该连续区域本身不包含运行时组合逻辑或寄存器更新，而是声明 KMAC 模块的参数和顶层接口，并用两个局部常量刻画掩码配置带来的结构差异。参数 EnMasking 控制内部 Keccak 轮函数是否启用 masking；注释说明启用时摘要结果会表现为两组 1600bit 份额，因而局部常量 Share 在 EnMasking=1 时取 2，否则取 1，用于后续内部数据通路按单份额或双份额实现 [kmac.sv:13-15][kmac.sv:86-86]。参数 SwKeyMasked 仅在 EnMasking=0 时有意义：若为 1，则软件仍可提供双份额密钥；若为 0，则软件密钥的 share1 被忽略。对应地，SwKeyShare 在 EnMasking 或 SwKeyMasked 任一为真时取 2，否则取 1，表达软件密钥接口应按几份 share 解释 [kmac.sv:17-22][kmac.sv:87-87]。SecCmdDelay 和 SecIdleAcceptSwMsg 仅在注释中声明了面向 SCA 测量/软件消息接收策略的设计意图，但本片段未实现其行为 [kmac.sv:24-31]。此外，本片段还定义了 TL-UL 总线、告警、KeyMgr sideload、应用接口、EDN 熵源、生命周期升级控制、中断、掩码配置导出和 idle 状态等顶层端口，表明该模块需要同时与控制总线、安全告警、密钥管理、随机源和生命周期控制交互 [kmac.sv:42-80]。",
+  "guarantees": [
+    {
+      "property": "内部份额数常量 Share 严格由 EnMasking 决定：EnMasking 为 1 时为 2，否则为 1，后续逻辑可据此区分 masked 与 unmasked 结构。",
+      "output_signals": [
+        "Share"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:13-15",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:86-86"
+      ]
+    },
+    {
+      "property": "软件密钥份额数常量 SwKeyShare 严格由 EnMasking 或 SwKeyMasked 决定：只要任一为真即为 2，否则为 1。",
+      "output_signals": [
+        "SwKeyShare"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:17-22",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:87-87"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接决定 KMAC 是否采用掩码安全加固以及软件密钥是否按双份额处理，这会影响侧信道防护边界和密钥接口兼容性 [kmac.sv:13-22]。特别是 EnMasking=0 且 SwKeyMasked=0 时，软件提供的第二份额按注释将被忽略，若上层误以为两份额都会参与计算，可能导致安全假设失效或测试/验证偏差。",
+  "assumptions": [
+    {
+      "constraint": "若软件或集成环境依赖双份额软件密钥语义，则必须满足 EnMasking=1 或 SwKeyMasked=1；否则在 EnMasking=0 且 SwKeyMasked=0 的配置下，软件密钥的第二份额设计上不应被依赖。",
+      "bug_relevance": "如果违反该契约，上层可能错误地认为 share1 参与了密钥运算，导致功能结果与期望不符，或造成对侧信道防护强度的错误判断。",
+      "related_signals": [
+        "EnMasking",
+        "SwKeyMasked"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:17-22",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:87-87"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:13-15",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:17-22",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:24-31",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:42-80",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:86-87"
+  ],
+  "uncertain_points": [
+    "注释称启用 EnMasking 时“result digest will be two set of 1600bit”[kmac.sv:13-15]，但本片段仅定义了 Share=2，未展示摘要输出端口或内部状态宽度，无法仅凭此处确认哪些具体信号真的以双份额形式存在。",
+    "SecCmdDelay 和 SecIdleAcceptSwMsg 的行为只在注释中描述 [kmac.sv:24-31]；本片段未出现相关逻辑，因此无法确认后续实现是否完全符合这些说明。",
+    "端口 en_masking_o 被注释为与 keymgr 做参数一致性检查 [kmac.sv:76-77]，但本片段未给出其驱动逻辑，无法确认它是否直接等于参数 EnMasking。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 7,
+  "line_end": 87
+}

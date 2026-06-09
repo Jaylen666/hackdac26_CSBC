@@ -1,0 +1,51 @@
+{
+  "chunk_id": "kmac_core__generate_for__gen_key_slicer__001",
+  "summary": "为每个密钥 share 实例化一个切片器，根据 key_index 从对应的 encoded_key_block 中选出一个 MsgWidth 宽的数据片段输出到 key_sliced。",
+  "behavior": "该 generate-for 循环对每个 i=0..Share-1 的密钥 share 各实例化一个 prim_slicer。每个实例的输入宽度为 MaxEncodedKeyW+16，输出宽度为 MsgWidth，切片选择信号统一使用 key_index，输入数据来自 encoded_key_block[i]，输出送到 key_sliced[i]。因此所有 share 会并行地按照同一个 key_index，从各自的 encoded_key_block 中提取对应的 MsgWidth 宽片段；该片段本身不包含额外控制、默认值或越界保护逻辑，具体切片语义取决于 prim_slicer 的实现。",
+  "guarantees": [
+    {
+      "property": "对每个 share 索引 i，都存在一条从 encoded_key_block[i] 到 key_sliced[i] 的切片通路，且切片选择统一由 key_index 控制。",
+      "output_signals": [
+        "key_sliced"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:392-402"
+      ]
+    },
+    {
+      "property": "每个 key_sliced[i] 的输出宽度被固定为 MsgWidth，对应输入切片源宽度为 MaxEncodedKeyW+16。",
+      "output_signals": [
+        "key_sliced"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:393-400"
+      ]
+    }
+  ],
+  "security_implications": "该片段处理的是编码后的密钥数据，并对每个 share 独立切片，说明设计意图是保持 share 间并行且结构一致的密钥路径。安全上，key_index 的正确性直接决定暴露到后续逻辑的密钥分片内容；若索引异常，可能导致错误密钥字被使用。不过本片段本身未体现访问控制、擦除或错误告警机制，越界或非法索引时的安全行为依赖 prim_slicer 的实现。",
+  "assumptions": [
+    {
+      "constraint": "key_index 必须落在 prim_slicer 对输入宽度 MaxEncodedKeyW+16 和输出宽度 MsgWidth 所支持的合法切片索引范围内。",
+      "bug_relevance": "这是行为契约；若违反，key_sliced 可能取得错误片段、零值、未知值或实现相关结果，从而导致后续 KMAC 使用错误密钥材料。",
+      "related_signals": [
+        "key_index",
+        "encoded_key_block",
+        "key_sliced"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:394-400"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:392-402"
+  ],
+  "uncertain_points": [
+    "prim_slicer 在 sel_i 越界或非法时返回什么值，本片段未给出，需要查 prim_slicer 定义确认。",
+    "key_index 的编码方式与切片边界如何映射到 MaxEncodedKeyW+16 位输入上，本片段未显式说明。",
+    "输入宽度使用 MaxEncodedKeyW+16 的原因在本片段中不可见，额外 16 位是否对应协议头、长度字段或填充需要结合上下文确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
+  "line_start": 392,
+  "line_end": 402
+}

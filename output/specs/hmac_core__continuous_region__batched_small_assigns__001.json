@@ -1,0 +1,74 @@
+{
+  "chunk_id": "hmac_core__continuous_region__batched_small_assigns__001",
+  "summary": "该片段把内部消息长度直接导出给 SHA 接口，并生成若干组合控制：基于流接口握手产生发送计数增量、基于轮次选择不同消息长度来源，以及对哈希停止请求进行置位保持并在哈希完成后清除。",
+  "behavior": "片段中 `sha_message_length_o` 直接等于内部的 `sha_msg_len`，没有额外变换或屏蔽，表示 SHA 侧看到的消息长度始终由当前内部计算值决定（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:235-235）。`inc_txcount` 仅在 `sha_rready_i` 与 `sha_rvalid_o` 同时为 1 时置位，因此发送计数相关逻辑只应在读通道握手真正完成时递增，而不是仅凭 ready 或 valid 单边活动（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:237-237）。`sel_msglen` 由 `round_q` 是否等于 `Inner` 决定：处于 `Inner` 轮次时选择 `SelIPadMsg`，否则选择 `SelOPadMsg`，即该片段实际把所有非 `Inner` 情况都归入外层/OPad 消息长度选择（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:239-239）。`reg_hash_stop_d` 的组合下一状态具有优先级：若外部/上游请求 `reg_hash_stop_i` 为 1，则立即置 1；否则若 `sha_hash_done_i` 为 1 且当前 `reg_hash_stop_q` 已为 1，则清零；其余情况保持 `reg_hash_stop_q`。因此停止请求会被锁存保持，直到一次哈希完成事件到来后才释放；若完成事件发生时当前未处于停止保持态，则该表达式不会额外置位或清零（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:241-243）。片段末尾还能看出存在对 `digest_size_i` 属于 `{SHA2_256, SHA2_384, SHA2_512}` 的成员判断，但本批处理代码未包含完整语句，无法仅凭此处判断其结果用途或非法值处理方式（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:245-245）。",
+  "guarantees": [
+    {
+      "property": "`sha_message_length_o` 始终与内部 `sha_msg_len` 完全一致。",
+      "output_signals": [
+        "sha_message_length_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:235-235"
+      ]
+    },
+    {
+      "property": "`inc_txcount` 只会在 `sha_rready_i` 和 `sha_rvalid_o` 同时为 1 的握手周期为 1；任一信号为 0 时该信号为 0。",
+      "output_signals": [
+        "inc_txcount"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:237-237"
+      ]
+    },
+    {
+      "property": "一旦 `reg_hash_stop_i` 触发停止请求，`reg_hash_stop_d` 将保持停止态，直到出现 `sha_hash_done_i && reg_hash_stop_q` 时才被清零。",
+      "output_signals": [
+        "reg_hash_stop_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:241-243"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及哈希停止控制与摘要模式选择上下文。`reg_hash_stop_d` 的保持直到 `sha_hash_done_i` 清除，说明停止请求不会瞬时丢失，这有助于避免在安全散列/HMAC 操作期间出现半途停止请求被忽略的情况（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:241-243）。另外，片段可见 `digest_size_i` 只被拿来与受支持的 SHA2 摘要尺寸集合比较，但由于完整语句缺失，无法确认非法摘要尺寸是否会触发安全回退、断言还是其他处理（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:245-245）。",
+  "assumptions": [
+    {
+      "constraint": "`sha_rready_i` 与 `sha_rvalid_o` 应遵循标准握手语义：二者同时为 1 表示恰有一次有效数据传输完成，供发送计数逻辑使用。",
+      "bug_relevance": "若违反该行为契约，`inc_txcount` 驱动的计数可能多计、漏计或与实际传输字数不一致，从而导致消息长度/传输统计错误。",
+      "related_signals": [
+        "sha_rready_i",
+        "sha_rvalid_o",
+        "inc_txcount"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:237-237"
+      ]
+    },
+    {
+      "constraint": "`round_q` 的合法取值应与设计状态编码一致；若当前并非 `Inner` 轮次，本片段会统一选择 `SelOPadMsg`。",
+      "bug_relevance": "这更像防御性默认行为：若 `round_q` 落入非预期编码，消息长度选择会回退到 OPad 路径，但该场景设计上不应发生，否则可能导致错误的 HMAC 轮次长度配置。",
+      "related_signals": [
+        "round_q",
+        "sel_msglen"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:239-239"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:235-235",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:237-237",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:239-239",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:241-243",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:245-245"
+  ],
+  "uncertain_points": [
+    "第 500 行附近只给出了 `digest_size_i inside {SHA2_256, SHA2_384, SHA2_512}` 这一条件片段，缺少完整表达式和结果信号，无法确定其是在断言、条件判断还是输出生成中使用，也无法确认对非法 `digest_size_i` 的处理。",
+    "`reg_hash_stop_d` 的组合定义可见，但其寄存、复位方式以及 `reg_hash_stop_i` 的来源不在本片段中，因此无法仅凭这里确认停止请求的完整生命周期或软件可见语义。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 234,
+  "line_end": 502
+}

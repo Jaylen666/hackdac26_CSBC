@@ -1,0 +1,50 @@
+{
+  "chunk_id": "hmac__always_ff__line_414__001",
+  "summary": "该寄存器块维护一个消息接收允许标志：哈希开始/继续时置位，packer flush 完成时清零，复位时清零。",
+  "behavior": "该块控制寄存器 `msg_allowed` 的生命周期。复位有效时，`msg_allowed` 被清零 [hmac.sv:415-416]。正常运行下，如果出现 `hash_start_or_continue`，则将 `msg_allowed` 置 1，表示允许消息流继续或开始进入当前哈希过程 [hmac.sv:417-418]。如果没有开始/继续事件但出现 `packer_flush_done`，则将 `msg_allowed` 清 0，表示本轮允许结束 [hmac.sv:419-420]。当两者都不成立时，该寄存器保持原值不变 [hmac.sv:417-420]。条件采用 `if ... else if ...` 优先级，因此若 `hash_start_or_continue` 与 `packer_flush_done` 同时为 1，实际行为是优先置位 `msg_allowed`，flush 完成不会在该拍将其清零 [hmac.sv:417-420]。",
+  "guarantees": [
+    {
+      "property": "复位期间 `msg_allowed` 一定为 0。",
+      "output_signals": [
+        "msg_allowed"
+      ],
+      "source_refs": [
+        "hmac.sv:415-416"
+      ]
+    },
+    {
+      "property": "在非复位条件下，若 `hash_start_or_continue` 为 1，则 `msg_allowed` 被置为 1；仅当 `hash_start_or_continue` 为 0 且 `packer_flush_done` 为 1 时，`msg_allowed` 被清为 0。",
+      "output_signals": [
+        "msg_allowed"
+      ],
+      "source_refs": [
+        "hmac.sv:417-420"
+      ]
+    }
+  ],
+  "security_implications": "`msg_allowed` 看起来是消息注入许可控制的一部分。该块确保只有在哈希开始/继续后才打开许可，并在 packer flush 完成后关闭许可，有助于限制消息写入窗口，避免在一次消息处理结束后继续接受数据。若上游控制时序异常，例如开始/继续与 flush_done 重叠，则该块会优先保持允许状态，这一优先级可能影响边界条件下的消息接收控制。",
+  "assumptions": [
+    {
+      "constraint": "设计应避免在同一周期同时断言 `hash_start_or_continue` 和 `packer_flush_done`，除非系统明确接受“开始/继续优先于 flush 完成”的语义。",
+      "bug_relevance": "若该重叠并非预期，`msg_allowed` 会保持/变为 1 而不是被清 0，可能导致消息允许窗口比预期更长；如果这是协议允许的优先级，则不构成 bug。",
+      "related_signals": [
+        "hash_start_or_continue",
+        "packer_flush_done",
+        "msg_allowed"
+      ],
+      "source_refs": [
+        "hmac.sv:417-420"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:414-422"
+  ],
+  "uncertain_points": [
+    "`msg_allowed` 的精确定义和它对哪些下游数据路径生效，需要结合该寄存器在其他位置的使用确认。",
+    "无法仅凭此片段判断 `packer_flush_done` 是否总表示一次消息处理真正结束，还是仅表示内部打包器阶段完成。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 414,
+  "line_end": 422
+}

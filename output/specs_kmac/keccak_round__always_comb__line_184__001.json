@@ -1,0 +1,99 @@
+{
+  "chunk_id": "keccak_round__always_comb__line_184__001",
+  "summary": "该组合状态机根据当前 Keccak 轮处理状态，在空闲、非掩码轮执行、DOM 掩码多周期执行及错误状态之间切换，并协调状态存储更新、轮计数、DOM 输入选择以及随机数握手。",
+  "behavior": "该块先为下一状态和所有控制信号给出保守默认值：状态默认保持，消息异或、状态更新/清零、轮计数增/清零、随机数更新/消耗、DOM 更新、完成指示和错误输出默认关闭；`phase_sel` 默认 `MuBi4False`，DOM 相关保持前值（行 185-206）。在 `KeccakStIdle` 中，若 `valid_i` 为真，则执行 sponge absorbing：保持在 Idle，同时拉高 `xor_message` 与 `update_storage` 以将输入消息异或进状态并写回（行 209-215）。否则若 `clear_i` 被严格判真，则仍停留 Idle 并拉高 `rst_storage` 清空存储（行 216-223）；注释说明设计意图上清零也许只允许在 Idle，或未来改为任意状态都可清零，但当前实现仅在 Idle 分支处理（行 217-220）。若使能掩码且 `run_i` 为真，则进入 `KeccakStPhase1`，并为 DOM 多周期路径预置输入选择：`dom_in_low_d` 取当前 `low_then_high_q`，`dom_in_rand_ext_d` 置 0（行 224-230）。若未使能掩码且 `run_i` 为真，则进入单周期轮处理状态 `KeccakStActive`（行 231-233）；否则保持 Idle（行 234-236）。\n\n在未掩码的 `KeccakStActive` 中，每个周期都更新状态存储（行 239-242）。若 `rnd_eq_end` 为真，说明到达最后一轮：转回 Idle、清零轮计数并置 `complete_d`（行 243-247）；否则保持 Active 并递增轮计数继续下一轮（行 248-252）。\n\n在掩码路径中，`KeccakStPhase1` 进行 Theta/Rho/Pi，DOM 乘法器寄存级不更新，`phase_sel=MuBi4False` 且 `dom_update=0`（行 255-261）。只有在 `rand_early_i` 或 `rand_valid_i` 表示下一周期所需辅助随机数可用时，才会同时推进到 `KeccakStPhase2Cycle1`、更新状态存储并拉高 `keccak_rand_update`，以保证“新状态”和“新随机数”同步送入 DOM 逻辑；同时用 `rand_aux_i` 更新本轮 lane half 处理顺序 `low_then_high_d`，并将该选择及外部随机数使能配置给下一相位的 DOM 输入（行 263-283）。若随机数尚未就绪，则停留在 Phase1 等待（行 283-285）。\n\n`KeccakStPhase2Cycle1` 执行第一批 lane half 的 Chi 第一阶段，`phase_sel=MuBi4True`、`dom_update=1`，并再次请求下个周期的随机数更新 `keccak_rand_update=1`；状态无条件推进到 `KeccakStPhase2Cycle2`，同时将 DOM 输入切换到另一半 lane（`dom_in_low_d=~low_then_high_q`）并继续选择外部随机数（行 288-309）。`KeccakStPhase2Cycle2` 同时完成第一批 lane half 的 Chi 第二阶段/Iota，以及第二批 lane half 的 Chi 第一阶段，继续保持 `phase_sel=MuBi4True` 和 `dom_update=1`（行 311-318）。该周期还会再次请求下一周期随机数更新、拉高 `keccak_rand_consumed` 触发为“下一轮辅助随机选择位”准备新的随机源，并更新状态存储以写回第一批 lane half 的结果（行 320-337）。之后无条件进入 `KeccakStPhase2Cycle3`，并把 DOM 输入重新切回当前 `low_then_high_q` 对应的一半，且关闭外部随机数扩展选择（行 338-343）。注释明确 `keccak_rand_consumed` 对应的辅助随机 `rand_aux_i` 实际会在 2 个周期后（到下一轮的 Phase1）体现，因此这里存在显式的两拍前瞻消耗语义（行 329-333）。\n\n`KeccakStPhase2Cycle3` 完成第二批 lane half 的 Chi 第二阶段和 Iota，保持 `phase_sel=MuBi4True` 但 `dom_update=0`，即不再更新 DOM 内部流水级（行 346-353）。该周期更新状态存储以写回第二批 lane half；注释说明此时刻意不再触发新的随机数更新，以避免旧数据与新随机数组合造成侧信道泄漏（行 355-361）。若 `rnd_eq_end` 为真，则本轮结束后回到 Idle，清零轮计数并置 `complete_d`（行 363-368）；否则转回 `KeccakStPhase1` 开始下一轮、递增轮计数，并为下一轮预置 DOM 输入选择（行 369-377）。\n\n在错误处理上，`KeccakStError` 只是自保持（行 381-383）；`KeccakStTerminalError` 也是终止自保持，并拉高 `sparse_fsm_error_o`（行 385-389）。对任何未列举状态，默认跳转到 `KeccakStTerminalError` 且报告 `sparse_fsm_error_o`（行 391-394）。此外，无论当前状态如何，只要 `lc_escalate_en_i` 被生命周期控制器宽松判真，就会无条件覆盖下一状态为 `KeccakStTerminalError`（行 397-402）；该覆盖不在本块中同时强制拉高 `sparse_fsm_error_o`，因此错误输出是否同周期可见取决于后续进入终止错误态后的状态译码。",
+  "guarantees": [
+    {
+      "property": "当处于 `KeccakStIdle` 且 `valid_i` 为真时，该块保证发起一次消息吸收写回：`xor_message=1` 且 `update_storage=1`，同时下一状态保持 `KeccakStIdle`。",
+      "output_signals": [
+        "xor_message",
+        "update_storage",
+        "keccak_st_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:209-215"
+      ]
+    },
+    {
+      "property": "当处于最后一轮结束点时，状态机会保证返回 Idle 并声明完成：在 `KeccakStActive` 或 `KeccakStPhase2Cycle3` 下若 `rnd_eq_end` 为真，则 `keccak_st_d=KeccakStIdle`、`rst_rnd_num=1`、`complete_d=1`。",
+      "output_signals": [
+        "keccak_st_d",
+        "rst_rnd_num",
+        "complete_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:243-247",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:363-368"
+      ]
+    },
+    {
+      "property": "若检测到非法/默认状态，或当前已处于 `KeccakStTerminalError`，该块保证 `sparse_fsm_error_o=1`，并使下一状态保持或进入 `KeccakStTerminalError`。",
+      "output_signals": [
+        "sparse_fsm_error_o",
+        "keccak_st_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:385-394"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接控制 DOM 掩码 Keccak 的随机数与数据对齐，注释多次强调必须让新状态与新随机数在同一阶段同步送入 DOM 乘法器，并在 `Phase2Cycle3` 避免无谓的随机数更新，以防旧数据/新随机数错配导致侧信道泄漏（/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:263-271,295-300,320-326,355-360）。此外，生命周期升级 `lc_escalate_en_i` 会无条件将状态机打入终止错误态，体现故障/安全升级响应（/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:397-402）。",
+  "assumptions": [
+    {
+      "constraint": "在掩码执行路径中，`rand_early_i`/`rand_valid_i` 只能在确实保证下一周期可提供与 `keccak_rand_update` 配套的新随机数时拉高；否则 `Phase1` 会在数据状态更新的同时推进到 `Phase2Cycle1`，破坏数据与随机数同步配对。",
+      "bug_relevance": "若违反该行为契约，DOM 逻辑可能把陈旧随机数与新状态，或新随机数与旧状态配对，导致功能偏差或侧信道泄漏。",
+      "related_signals": [
+        "rand_early_i",
+        "rand_valid_i",
+        "keccak_rand_update",
+        "update_storage",
+        "keccak_st_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:263-275"
+      ]
+    },
+    {
+      "constraint": "`rand_aux_i` 需要在 `KeccakStPhase1` 接受时稳定且对应本轮要使用的 lane-half 顺序，因为该值会被锁存到 `low_then_high_d` 并驱动后续 Phase2 的 DOM 输入复用。",
+      "bug_relevance": "若违反该行为契约，掩码路径可能按错误的高/低半 lane 顺序处理或切换 DOM 输入，造成计算结果错误；若与随机数时序错配，还可能削弱掩码防护。",
+      "related_signals": [
+        "rand_aux_i",
+        "low_then_high_d",
+        "dom_in_low_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:277-282"
+      ]
+    },
+    {
+      "constraint": "`clear_i` 在设计意图上似乎是不应在非 Idle 状态使用的控制；当前实现即使外界在非 Idle 拉高它也只会被忽略而非全局清零。",
+      "bug_relevance": "若不满足则该场景设计上不应发生；硬件回退行为是除 Idle 外不执行 `rst_storage`，因此上层若错误地期望运行中清零，会观察到状态未被清除。",
+      "related_signals": [
+        "clear_i",
+        "rst_storage",
+        "keccak_st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:216-223"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:185-206",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:208-236",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:239-252",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:255-285",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:288-309",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:311-344",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:346-394",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:397-402"
+  ],
+  "uncertain_points": [
+    "`KeccakStError` 与 `KeccakStTerminalError` 的功能分工在该片段内不完全清楚：前者只是自保持且不报错，后者才拉高 `sparse_fsm_error_o`；需要结合其他代码确认 `KeccakStError` 是否为可恢复/暂态错误。",
+    "`clear_i` 的真实设计意图不明确。注释提出“只允许 Idle 清零”与“任意状态都可清零”两种方案，但当前 RTL 仅在 Idle 处理，因此注释与未来方向存在不确定性（/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:217-220）。",
+    "当 `lc_escalate_en_i` 触发时，本块只覆盖 `keccak_st_d` 为 `KeccakStTerminalError`，没有在同一分支显式拉高 `sparse_fsm_error_o`；该升级触发当周期是否要求错误输出立即可见，需要结合状态寄存器与下游错误处理逻辑确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
+  "line_start": 184,
+  "line_end": 403
+}

@@ -1,0 +1,56 @@
+{
+  "chunk_id": "kmac__continuous_region__declarations_or_instances__008",
+  "summary": "该片段实例化了 fifo_empty 中断上报逻辑，并将多个错误源的 valid 信号合并为统一错误事件以驱动 err_code 寄存器写使能。",
+  "behavior": "片段通过 `prim_intr_hw` 实例为 `fifo_empty` 状态型中断提供标准中断处理：中断事件输入来自 `status_msgfifo_empty`，使能、测试注入、测试写使能和当前中断状态分别由 `reg2hw.intr_enable.fifo_empty.q`、`reg2hw.intr_test.fifo_empty.q`、`reg2hw.intr_test.fifo_empty.qe`、`reg2hw.intr_state.fifo_empty.q` 提供；该实例向寄存器侧输出 `hw2reg.intr_state.fifo_empty.de/d` 以更新中断状态，并驱动顶层中断输出 `intr_fifo_empty_o`。另外，`event_error` 由四个错误源的 `valid` 信号按位或形成，只要 `sha3_err.valid`、`app_err.valid`、`entropy_err.valid` 或 `errchecker_err.valid` 中任意一个为 1，就认为发生错误事件。发生该错误事件时，`hw2reg.err_code.de` 被置 1，从而使错误码寄存器具备被硬件写入的使能；但本片段未给出 `hw2reg.err_code.d` 的赋值，因此具体写入哪一种错误码需依赖其他代码确定。",
+  "guarantees": [
+    {
+      "property": "当任一错误源的 valid 置位时，`hw2reg.err_code.de` 一定为 1；仅当四个错误源的 valid 全为 0 时，`hw2reg.err_code.de` 为 0。",
+      "output_signals": [
+        "hw2reg.err_code.de"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:680-686"
+      ]
+    },
+    {
+      "property": "`intr_fifo_empty_o` 由 `prim_intr_hw` 的 fifo_empty 中断实例统一生成，并受 `status_msgfifo_empty` 事件、对应 interrupt enable/test/state 寄存器接口控制。",
+      "output_signals": [
+        "intr_fifo_empty_o",
+        "hw2reg.intr_state.fifo_empty.de",
+        "hw2reg.intr_state.fifo_empty.d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:662-676"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及错误与中断上报。任何一个内部错误源被标记为 valid 都会触发 `err_code` 寄存器的硬件写使能，有助于将安全/完整性相关异常暴露给软件；同时 fifo_empty 事件可通过标准中断路径通知外部。但由于此处只看到写使能而未看到错误码数据选择，若外部相关逻辑未正确提供 `err_code.d`，则可能出现错误被检测到但错误类型记录不完整的风险。",
+  "assumptions": [
+    {
+      "constraint": "`hw2reg.err_code.d` 必须在 `event_error` 置位时由其他逻辑同步提供有效且与触发错误一致的错误码。",
+      "bug_relevance": "如果违反，该片段仍会使能错误码寄存器写入，但可能写入错误、陈旧或未定义的错误码，导致软件错误诊断失真；这更像行为契约，违反可能构成功能或安全问题。",
+      "related_signals": [
+        "hw2reg.err_code.de",
+        "hw2reg.err_code.d",
+        "event_error",
+        "sha3_err.valid",
+        "app_err.valid",
+        "entropy_err.valid",
+        "errchecker_err.valid"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:680-686"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:662-686"
+  ],
+  "uncertain_points": [
+    "`prim_intr_hw` 的精确语义（例如 `IntrT(\"Status\")` 对 sticky/level/edge 行为的具体影响）依赖该子模块定义，本片段只能确定其接口连接关系，无法单独证明内部中断状态机细节。",
+    "注释“Assign error code to the register”与实际代码仅驱动 `hw2reg.err_code.de` 一致性不完全充分；本片段没有显示 `hw2reg.err_code.d` 的赋值，因此这里只能确认启用写入而不能确认错误码内容。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 662,
+  "line_end": 686
+}

@@ -1,0 +1,56 @@
+{
+  "chunk_id": "hmac_reg_top__continuous_region__hmac_reg_top__001",
+  "summary": "该片段定义了 HMAC 寄存器顶层的总线/寄存器接口内部信号，并实例化两类错误检测：TL-UL 入站完整性检查和寄存器写使能 one-hot 合法性检查。",
+  "behavior": "该连续逻辑片段主要完成接口和检查逻辑的搭建。模块对外暴露 TL-UL 从设备接口、一个 window 转发接口、寄存器到硬件/硬件到寄存器接口，以及完整性错误输出 intg_err_o；内部定义了寄存器访问所需的读写控制、地址、写数据、字节使能、读数据、错误、地址未命中、写错误、忙状态等信号，为后续寄存器解码和响应逻辑提供连线基础 [hmac_reg_top.sv:9-25,29-49]。在安全/健壮性检查方面，tlul_cmd_intg_chk 直接对输入事务 tl_i 做命令完整性校验，并产生内部错误指示 intg_err，体现该寄存器块会监测 TL-UL 入站负载是否损坏 [hmac_reg_top.sv:51-56]。同时，prim_reg_we_check 监测寄存器写使能向量 reg_we_check 是否满足 one-hot 约束；该检查仅在出现寄存器写且地址未 miss 时启用，即 en_i 为 reg_we && !addrmiss，若检测到异常则置位 reg_we_err，用于发现意外的多寄存器同时写入或伪写使能情形 [hmac_reg_top.sv:58-69]。本片段末尾还声明了 err_q，但其用途和与输出错误信号的关系在本片段内尚未展开 [hmac_reg_top.sv:71]。",
+  "guarantees": [
+    {
+      "property": "模块内部始终对输入 TL-UL 请求 tl_i 执行命令完整性检查，并产生结果信号 intg_err 供后续错误处理逻辑使用。",
+      "output_signals": [
+        "intg_err"
+      ],
+      "source_refs": [
+        "hmac_reg_top.sv:51-56"
+      ]
+    },
+    {
+      "property": "当发生有效寄存器写且地址命中时，会对 reg_we_check 执行 one-hot 合法性检查；若写使能模式异常，则产生 reg_we_err。",
+      "output_signals": [
+        "reg_we_err"
+      ],
+      "source_refs": [
+        "hmac_reg_top.sv:58-69"
+      ]
+    }
+  ],
+  "security_implications": "该片段包含两类与安全/稳健性直接相关的检测：一是对 TL-UL 入站命令做完整性校验，可用于发现传输篡改或损坏；二是对寄存器写使能执行 one-hot 检查，可用于发现异常多点写入或错误解码。两者都属于防止非法访问或故障注入影响寄存器状态的基础防护机制 [hmac_reg_top.sv:51-69]。",
+  "assumptions": [
+    {
+      "constraint": "在合法寄存器写事务中，reg_we_check 应编码为至多一个目标寄存器被写的 one-hot 形式；该约束仅适用于 reg_we 为真且 addrmiss 为假时。",
+      "bug_relevance": "如果违反该约束，可能意味着地址解码或写使能生成错误，导致多个寄存器被同时写入；本设计会通过 reg_we_err 检出，但该情形设计上不应发生。",
+      "related_signals": [
+        "reg_we_check",
+        "reg_we",
+        "addrmiss",
+        "reg_we_err"
+      ],
+      "source_refs": [
+        "hmac_reg_top.sv:58-69"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac_reg_top.sv:9-25",
+    "hmac_reg_top.sv:29-49",
+    "hmac_reg_top.sv:51-56",
+    "hmac_reg_top.sv:58-69",
+    "hmac_reg_top.sv:71"
+  ],
+  "uncertain_points": [
+    "输出端口 intg_err_o 在本片段中仅被声明，尚未看到其是否直接由 intg_err 驱动、是否与其他错误源合并，需结合后续代码确认 [hmac_reg_top.sv:23-25,51-56]。",
+    "reg_we_check 的 59 位宽度暗示后续可能有 59 个可写寄存器或写槽位，但本片段未展示该向量的具体构成，无法仅凭此处确认对应寄存器数量和映射 [hmac_reg_top.sv:60-63]。",
+    "err_q 在本片段末尾被声明但未使用，无法判断其是否用于错误锁存、告警保持或总线响应整形 [hmac_reg_top.sv:71]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 7,
+  "line_end": 71
+}

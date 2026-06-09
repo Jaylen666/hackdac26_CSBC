@@ -1,0 +1,60 @@
+{
+  "chunk_id": "kmac_msgfifo__always_comb__error_logic__001",
+  "summary": "组合地产生统一错误报告：默认无错，若检测到 packer 或消息 FIFO 完整性错误则置位 error，并以 packer_err 优先。",
+  "behavior": "该组合逻辑先将 error 结构体初始化为“无错误”状态：valid 为 0，code 为 kmac_pkg::ErrNone，info 清零 [kmac_msgfifo.sv:245-249]。随后按优先级检查错误源；若 packer_err 为 1，则输出有效错误，错误码为 ErrPackerIntegrity，并将 flush_st 转换后填入 info 字段 [kmac_msgfifo.sv:251-258]。只有在 packer_err 为 0 且 fifo_err 为 1 时，才报告 FIFO 完整性错误，错误码为 ErrMsgFifoIntegrity，info 同样为 flush_st 的类型转换值 [kmac_msgfifo.sv:259-264]。因此当两个错误同时出现时，实际输出只反映 packer_err，对 fifo_err 的报告被屏蔽 [kmac_msgfifo.sv:251-259]。",
+  "guarantees": [
+    {
+      "property": "当 packer_err 和 fifo_err 都为 0 时，error 一定表示无错误：valid=0、code=kmac_pkg::ErrNone、info='0。",
+      "output_signals": [
+        "error"
+      ],
+      "source_refs": [
+        "kmac_msgfifo.sv:245-249"
+      ]
+    },
+    {
+      "property": "当 packer_err 为 1 时，error 一定报告 kmac_pkg::ErrPackerIntegrity；仅当 packer_err 为 0 且 fifo_err 为 1 时，error 才报告 kmac_pkg::ErrMsgFifoIntegrity。",
+      "output_signals": [
+        "error"
+      ],
+      "source_refs": [
+        "kmac_msgfifo.sv:251-264"
+      ]
+    }
+  ],
+  "security_implications": "该片段属于完整性错误汇总路径，会把 packer 或消息 FIFO 的完整性故障编码为显式 error 输出 [kmac_msgfifo.sv:252-264]。这有助于上层安全控制逻辑检测数据通路篡改或存储损坏；但同时只保留单一最高优先级错误，若多个完整性故障并发，较低优先级故障不会在该输出中体现。",
+  "assumptions": [
+    {
+      "constraint": "若系统希望通过 error 完整观测所有并发故障，则外部不应依赖该接口同时报告多个错误源；因为此处明确采用优先级选择，只输出一个错误。",
+      "bug_relevance": "若外部逻辑错误地假设 packer_err 与 fifo_err 可同时被独立上报，则在两者并发时会漏看 fifo_err，造成诊断不完整；不过该片段已定义了安全回退行为，即优先报告 packer_err。",
+      "related_signals": [
+        "packer_err",
+        "fifo_err",
+        "error"
+      ],
+      "source_refs": [
+        "kmac_msgfifo.sv:251-264"
+      ]
+    },
+    {
+      "constraint": "注释表明当 EnProtection 为 0 时 packer_err 应被绑为 0。",
+      "bug_relevance": "如果在 EnProtection 为 0 的配置下 packer_err 仍可能拉高，则会产生与设计意图不符的完整性错误上报，可能导致误报警或错误恢复流程被误触发。",
+      "related_signals": [
+        "packer_err"
+      ],
+      "source_refs": [
+        "kmac_msgfifo.sv:254-255"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_msgfifo.sv:245-264"
+  ],
+  "uncertain_points": [
+    "flush_st 被强制转换后写入 error.info [kmac_msgfifo.sv:257,263]，可见其被当作错误附加信息使用，但仅凭该片段无法确定 flush_st 的具体语义和编码。",
+    "注释称 EnProtection 为 0 时 packer_err 被绑为 0 [kmac_msgfifo.sv:254-255]，但该约束的实际实现不在本片段中，无法仅凭这里验证。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
+  "line_start": 244,
+  "line_end": 266
+}

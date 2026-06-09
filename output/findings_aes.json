@@ -1,0 +1,851 @@
+{
+  "_stats": {
+    "call_count": 11,
+    "error_count": 0,
+    "total_input_tokens": 23611,
+    "total_output_tokens": 18928,
+    "total_tokens": 42539,
+    "total_wall_seconds": 304.0,
+    "total_wall_minutes": 5.1
+  },
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "title": "NumShares 必须与 key_dec_d 数组的维度一致，以确保 for 循环不越界。",
+      "severity": "HIGH",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.925,
+      "contradiction": "该 assumption 对设计参数 NumShares 提出了静态一致性要求，属于集成或配置层面的前置条件，而非 RTL 模块本身对输入 / 状态的行为保证。提供的 guarantee 仅描述 key_dec_d 的驱动属性与清零条件，并未涉及 NumShares 的检查或约束。因此，无法从现有 guarantee 中判断该 assumption 是否得到满足，既无矛盾也不构成覆盖缺口，信息不足以作出 CONTRADICTION 或 GAP 的判定。",
+      "involved_signals": [
+        "key_dec_d",
+        "key_dec_q"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__always_comb__line_481__001",
+        "aes_cipher_core__always_comb__key_full_mux__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__010",
+        "aes_cipher_core__always_ff__key_dec_reg__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__006"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__always_comb__line_481__001",
+          "field": "assumption",
+          "excerpt": "NumShares 必须与 key_dec_d 数组的维度一致，以确保 for 循环不越界。"
+        },
+        {
+          "spec": "aes_cipher_core__always_comb__key_full_mux__001",
+          "field": "assumption",
+          "excerpt": "当 key_full_sel == KEY_FULL_DEC_INIT 且 CiphOpFwdOnly == 0 时，key_dec_q 必须包含有效的解密后密钥。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "该 guarantee 仅描述 key_full_sel 的产生方式，未涉及 key_dec_q 或 CiphOpFwdOnly，也未保证解密后密钥的有效性。"
+        },
+        {
+          "spec": "aes_cipher_core__always_comb__key_full_mux__001",
+          "field": "assumption",
+          "excerpt": "当 key_full_sel == KEY_FULL_DEC_INIT 且 CiphOpFwdOnly == 0 时，key_dec_q 必须包含有效的解密后密钥。"
+        },
+        {
+          "spec": "aes_cipher_core__always_ff__key_dec_reg__001",
+          "field": "guarantee",
+          "excerpt": "复位后 key_dec_q 一定为全零；rst_ni 解除后，key_dec_q 仅在 key_dec_we 有效时更新为 key_dec_d，其它情况下保持稳定。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "在 gen_no_key_dec 条件下，key_dec_q 和 key_dec_d 的值恒为全零。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "Guarantee 未保证 add_rk_sel 信号的输出值域只包含三个合法枚举值。若 sel_ctrl 出现非法值且无内部错误标志，add_rk_sel 将直接输出非法枚举值，违反对输入多路选择器的合法假设，可能导致 AddRoundKey 数据源错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "Driver 通过 aes_sel_buf_chk 模块保证合法值仅限于三个枚举成员，并会对非法值产生 err_o 及锁定状态机。Consumer 显式处理了所有合法值，并将非法值导向安全的 state_q，与初始化行为兼容。不存在合法值走 default 的情况，故为防御性设计而非覆盖缺口。",
+      "involved_signals": [
+        "add_rk_sel"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__always_comb__add_round_key_in_mux__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__010"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__always_comb__add_round_key_in_mux__001",
+          "field": "assumption",
+          "excerpt": "add_rk_sel 信号仅应取 ADD_RK_INIT、ADD_RK_ROUND、ADD_RK_FINAL 三个合法枚举值，不应出现其他值"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "当所有 err_o 信号为低时，每个 sel 输出（包括 add_rk_sel）等于各自对应的 sel_ctrl 输入延迟一个时钟周期并进行枚举类型转换后的值。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "key_full_sel 的合法性（单热、枚举范围）未得到驱动方的 guarantee 覆盖。若 sel_ctrl 产生非法值，key_full_sel 将违反该假设，导致密钥通路选择 default 分支，使用 prd_clearing_key_i 造成密钥扩展数据错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "key_full_sel 的合法性（单热、枚举范围）未得到驱动方的 guarantee 覆盖。若 sel_ctrl 产生非法值，key_full_sel 将违反该假设，导致密钥通路选择 default 分支，使用 prd_clearing_key_i 造成密钥扩展数据错误。",
+      "involved_signals": [
+        "key_full_sel"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__always_comb__key_full_mux__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__010"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__always_comb__key_full_mux__001",
+          "field": "assumption",
+          "excerpt": "输入 key_full_sel 必须为单热值且仅属于 {KEY_FULL_ENC_INIT, KEY_FULL_DEC_INIT, KEY_FULL_ROUND, KEY_FULL_CLEAR} 之一。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "当所有 err_o 信号为低时，key_full_sel 等于 sel_ctrl 输入延迟一个时钟周期并进行枚举类型转换后的值。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "生产者未对 prd_sub_bytes 的总宽度施加至少为 4*WidthPRDRow 的约束，消费者在切片时可能发生越界访问，导致错误的安全掩码输出。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "生产者未对 prd_sub_bytes 的总宽度施加至少为 4*WidthPRDRow 的约束，消费者在切片时可能发生越界访问，导致错误的安全掩码输出。",
+      "involved_signals": [
+        "prd_sub_bytes"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__generate_for__gen_in_mask__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__003"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__generate_for__gen_in_mask__001",
+          "field": "assumption",
+          "excerpt": "prd_sub_bytes has a total width of at least 4*WidthPRDRow so that all slices i*WidthPRDRow +: WidthPRDRow are within bounds."
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "prd_sub_bytes 的每一位在组合逻辑延迟后总是与 prd_sub_bytes_q 对应位值相同"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "generated block生成的sp2v_sig_chk[i]由实例sel_o驱动，但未约束sel_o输出值在sp2v_e枚举内，可能导致枚举变量携带非法编码，进而破坏下游安全路径的译码行为。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "generated block生成的sp2v_sig_chk[i]由实例sel_o驱动，但未约束sel_o输出值在sp2v_e枚举内，可能导致枚举变量携带非法编码，进而破坏下游安全路径的译码行为。",
+      "involved_signals": [
+        "sp2v_sig_chk"
+      ],
+      "involved_specs": [
+        "aes_cipher_control__generate_for__gen_sel_buf_chk__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__011"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_control__generate_for__gen_sel_buf_chk__001",
+          "field": "assumption",
+          "excerpt": "aes_sel_buf_chk 实例输出的 sp2v_sig_chk_raw[i] 值必须落在 sp2v_e 枚举类型的合法范围内。"
+        },
+        {
+          "spec": "aes_cipher_control__generate_for__gen_sel_buf_chk__001",
+          "field": "guarantee",
+          "excerpt": "对于每个有效的 i (0 ≤ i < NumSp2VSig)，sp2v_sig_chk[i] 仅由对应 u_aes_sp2v_sig_buf_chk_i 实例的 sel_o 输出经类型转换驱动，sp2v_sig_err[i] 仅由同一实例的 err_o 驱动，不存在其他驱动源。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__011",
+          "field": "assumption",
+          "excerpt": "sp2v_sig_chk 信号的位宽至少为 3，以保证第 0、1、2 位可安全索引。"
+        },
+        {
+          "spec": "aes_cipher_control__generate_for__gen_sel_buf_chk__001",
+          "field": "guarantee",
+          "excerpt": "对于每个有效的 i (0 ≤ i < NumSp2VSig)，sp2v_sig_chk[i] 仅由对应 u_aes_sp2v_sig_buf_chk_i 实例的 sel_o 输出经类型转换驱动，sp2v_sig_err[i] 仅由同一实例的 err_o 驱动，不存在其他驱动源。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "round_key_sel 应仅被驱动为 ROUND_KEY_DIRECT 或 ROUND_KEY_MIXED，其他取值属于非法状态。",
+      "severity": "HIGH",
+      "verdict": "DEFENSIVE",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.712,
+      "contradiction": "Assumption 明确将 round_key_sel 的合法取值限定为两个枚举值，其他取值均为非法状态，这属于对环境的输入约束。硬件在遇到非法输入时，根据上下文描述会默认将 round_key 驱动为 key_bytes，提供了安全的回退行为。Guarantee 仅在无错误时保证信号正常传递，并未对非法输入做出承诺，与 Assumption 不矛盾。因此属于防御性设计，不存在硬件错误。",
+      "involved_signals": [
+        "round_key_sel"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__always_comb__round_key_mux__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__010"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__always_comb__round_key_mux__001",
+          "field": "assumption",
+          "excerpt": "round_key_sel 应仅被驱动为 ROUND_KEY_DIRECT 或 ROUND_KEY_MIXED，其他取值属于非法状态。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "当所有 err_o 信号为低时，每个 sel 输出（state_sel、add_rk_sel、key_full_sel、key_dec_sel、key_words_sel、round_key_sel）等于各自对应的 sel_ctrl 输入延迟一个时钟周期并进行枚举类型转换后的值。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "当 state_we 等于 SP2V_HIGH 时，state_d 必须提供合法的下一状态值。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.712,
+      "contradiction": "assumption 要求 state_we 有效时 state_d 必须合法。guarantee 保证在 state_sel 为三个定义状态时 state_d 合法，覆盖了主要合法场景。state_sel 可能存在未定义值，设计会通过防御性逻辑（根据密钥长度清除或保持）提供安全的下一状态，这属于对非法/非预期状态的防御性回退，不是协议矛盾或合法路径的覆盖缺失。",
+      "involved_signals": [
+        "state_d",
+        "state_we"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__always_ff__state_reg__001",
+        "aes_cipher_core__always_comb__state_mux__001",
+        "aes_cipher_core__generate_for__gen_sec_cm_key_masking_share_svas__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__011"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__always_ff__state_reg__001",
+          "field": "assumption",
+          "excerpt": "当 state_we 等于 SP2V_HIGH 时，state_d 必须提供合法的下一状态值。"
+        },
+        {
+          "spec": "aes_cipher_core__always_comb__state_mux__001",
+          "field": "guarantee",
+          "excerpt": "当 state_sel 等于 STATE_INIT、STATE_ROUND 或 STATE_CLEAR 之一时，state_d 一定等于对应的输入信号。"
+        },
+        {
+          "spec": "aes_cipher_core__always_ff__state_reg__001",
+          "field": "assumption",
+          "excerpt": "当 state_we 等于 SP2V_HIGH 时，state_d 必须提供合法的下一状态值。"
+        },
+        {
+          "spec": "aes_cipher_core__generate_for__gen_sec_cm_key_masking_share_svas__001",
+          "field": "guarantee",
+          "excerpt": "当 state_we 为高且 (crypt_i || crypt_o) 为高时，下一个时钟 cycle 内 state_q[s] 与 NumCyclesPerRound 周期前或 2*NumCyclesPerRound 周期前的值不同，除非 force_masks_i 有效且 SecAllowForcingMasks 为高，或者 dec_key_gen_o 为高。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__011",
+          "field": "assumption",
+          "excerpt": "sp2v_sig_chk 信号的位宽至少为 3，以保证第 0、1、2 位可安全索引。"
+        },
+        {
+          "spec": "aes_cipher_core__generate_for__gen_sec_cm_key_masking_share_svas__001",
+          "field": "guarantee",
+          "excerpt": "当 state_we 为高且 (crypt_i || crypt_o) 为高时，下一个时钟 cycle 内 state_q[s] 与 NumCyclesPerRound 周期前或 2*NumCyclesPerRound 周期前的值不同，除非 force_masks_i 有效且 SecAllowForcingMasks 为高，或者 dec_key_gen_o 为高。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "aes_prd_get_lsbs behaves as intended (extracts the required LSBs) and returns a value compatible with the element width ",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.675,
+      "contradiction": "该假设是对下游函数 aes_prd_get_lsbs 的功能正确性及位宽兼容性的预期，属于该模块正常运行所依赖的合法前提。guarantee 直接承诺 data_in_mask 的值始终等于该函数的输出，且零延迟，这意味着只要函数满足假设，信号行为就完全符合假设的场景。两者描述的是同一设计意图的‘假设’与‘实现保证’关系，不存在冲突或覆盖缺失。",
+      "involved_signals": [
+        "data_in_mask",
+        "prd_masking"
+      ],
+      "involved_specs": [
+        "aes_cipher_core__generate_for__gen_in_mask__001",
+        "aes_cipher_core__continuous_region__declarations_or_instances__002"
+      ],
+      "evidence": [
+        {
+          "spec": "aes_cipher_core__generate_for__gen_in_mask__001",
+          "field": "assumption",
+          "excerpt": "aes_prd_get_lsbs behaves as intended (extracts the required LSBs) and returns a value compatible with the element width of data_in_mask."
+        },
+        {
+          "spec": "aes_cipher_core__generate_for__gen_in_mask__001",
+          "field": "guarantee",
+          "excerpt": "data_in_mask[i] always equals aes_prd_get_lsbs(prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow]) with zero additional delay."
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "prd_masking 的位宽（WidthPRDMasking）必须不小于用于密钥扩展和 SubBytes 的伪随机数据位宽之和（WidthPRDKey + WidthPRDData），否则块提取（部分选择 -:）将超出范围。"
+        },
+        {
+          "spec": "aes_cipher_core__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "当 SecMasking 为假时，sb_in_mask 和 prd_masking 恒为全零，prd_masking_rsd_ack 和 entropy_req_o 恒为 0，且 prd_sub_bytes_q 组合跟随 prd_sub_bytes_d 变化。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "Finding on key_words_sel",
+      "severity": "MEDIUM",
+      "verdict": "DEFENSIVE",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.499,
+      "contradiction": "消费逻辑（aes_cipher_core 中的 key_words_mux）显式处理了所有合法选择值（来自 spec 行为描述），default 分支被限定用于处理非法输入并给出安全输出（全零）。同时 driver 路径上存在专门的选通检查逻辑（aes_sel_buf_chk）检测并报告非法值，形成了‘检测+安全回退’的完整防御。无合法值落入 default，不存在功能缺口。",
+      "involved_signals": [
+        "key_words_sel"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0017",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0018",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0019",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0020",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0021",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0022",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0023",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0024",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "未检索到与密钥扩展延迟、解密启动周期数相关的 RTL spec，无法评估该设计声明。",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "未检索到与密钥扩展延迟、解密启动周期数相关的 RTL spec，无法评估该设计声明。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "缺少控制 FSM 的次态逻辑，无法确定密钥变更后的状态转移路径，也无从验证声明中关于特定模式下无初始延迟的设计意图是否被实现。",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "缺少控制 FSM 的次态逻辑，无法确定密钥变更后的状态转移路径，也无从验证声明中关于特定模式下无初始延迟的设计意图是否被实现。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0035",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0036",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0037",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "检索到的 RTL spec 片段（chunk aes_pkg__continuous_region__declarations_or_instances__004）仅包含控制寄存器结构体定义、选择信号枚举等数据类型，其中提到了 IV 选择器（iv_sel_e）和控制寄存器中的 mode 域，但并未描述 ECB 模式下数据通路如何处理 IV 或是否忽略 IV 寄存器。无法从这些片段中确认 ECB 模式下 IV 的行为与设计声明一致或矛盾。需要扩大搜索范围，获取 ECB 模式实际操作逻辑（例如状态机、密钥扩展或加解密数据通路的 spec）才能判断。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0038",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0039",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "检索到的 RTL spec 片段仅定义了 CTR 状态枚举（aes_ctr_e）和控制状态枚举（aes_ctrl_e）及其编码，未包含任何关于初始密钥或控制寄存器更新条件的 behavior、guarantees 或假设。缺少与“空闲状态下才能更新”相关的写使能逻辑或状态依赖描述，因此无法从现有片段判断设计声明是否被满足。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0040",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "检索到的 spec 片段仅包含 aes_pkg 中的枚举类型定义（CTR 状态机枚举、控制状态机枚举）以及多路选择器选择信号和复位常量的声明，没有任何关于 IV 寄存器更新控制的运行时行为描述。例如，未出现描述 AES 单元忙/空闲状态判断、CBC/CTR 模式下的内部 IV 更新逻辑，也未说明软件写 IV 的准入条件。因此，基于当前提供的片段无法判断设计声明是否被实现满足。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    }
+  ]
+}

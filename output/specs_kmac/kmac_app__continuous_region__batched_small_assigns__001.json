@@ -1,0 +1,77 @@
+{
+  "chunk_id": "kmac_app__continuous_region__batched_small_assigns__001",
+  "summary": "该片段定义了应用接口状态寄存器的默认复位状态，并给出若干关键组合派生信号：软件错误粘滞标志、编码后的输出长度/掩码，以及基于状态的 app_active_o 活动指示。",
+  "behavior": "状态机寄存器通过 `PRIM_FLOP_SPARSE_FSM` 实例保存 `st_d` 到 `st`，其默认/复位状态为 `StIdle`，表明应用接口状态机在初始化后从空闲态开始运行（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:317-317）。`err_during_sw_d` 是一个针对软件路径 `mux_sel == SelSw` 的粘滞错误指示：当下一状态 `st_d` 进入 `StError` 或 `StKeyMgrErrKeyNotValid` 时被置 1；当下一状态回到 `StIdle` 时清 0；否则保持先前值 `err_during_sw_q`，因此该标志会跨非空闲状态保留，直到状态机回到空闲才释放（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:319-322）。`encoded_outlen` 和 `encoded_outlen_mask` 分别直接从查表常量 `EncodedOutLen[SelDigSize]` 与 `EncodedOutLenMask[SelKeySize]` 组合导出，表示输出长度编码依赖摘要尺寸选择，而对应掩码依赖密钥尺寸选择（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:324-325）。片段还声明了按 share 组织的 `keymgr_key` 数组，并根据参数 `EnMasking` 在 `g_masked_key` 与 `g_unmasked_key` 两个生成分支之间二选一，说明 keymgr 侧载密钥在掩码开启和关闭时走不同实现，但本片段未展示具体赋值细节（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:327-332）。`app_active_o` 在状态属于 `StAppCfg`、`StAppMsg`、`StAppOutLen`、`StAppProcess` 或 `StAppWait` 时为 1，其余状态为 0，因此它将应用接口配置、消息接收、输出长度处理、处理执行和等待阶段统一标记为“活动中”（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:334-335）。最后的覆盖语句表达了一个设计关注点：在 `StAppCfg` 且 `kmac_en_o` 有效时，应存在一次 `reg_key_len_i != SideloadedKey` 的使用场景，即应用接口支持使用与侧载密钥默认尺寸不同的寄存器配置密钥长度（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:337-338）。",
+  "guarantees": [
+    {
+      "property": "当状态 `st` 处于 `StAppCfg`、`StAppMsg`、`StAppOutLen`、`StAppProcess` 或 `StAppWait` 任一状态时，`app_active_o` 一定为 1；离开这些状态时一定为 0。",
+      "output_signals": [
+        "app_active_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:334-335"
+      ]
+    },
+    {
+      "property": "软件路径错误标志 `err_during_sw_d` 在 `mux_sel == SelSw` 且 `st_d` 进入 `StError` 或 `StKeyMgrErrKeyNotValid` 时被置 1，并且只有当 `st_d == StIdle` 时才被清 0；其他情况下保持原值。",
+      "output_signals": [
+        "err_during_sw_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:319-322"
+      ]
+    },
+    {
+      "property": "`encoded_outlen` 恒等于 `EncodedOutLen[SelDigSize]`，`encoded_outlen_mask` 恒等于 `EncodedOutLenMask[SelKeySize]`。",
+      "output_signals": [
+        "encoded_outlen",
+        "encoded_outlen_mask"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:324-325"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及多处安全相关控制。`err_during_sw_d` 会在软件选择路径进入错误态时粘滞记录异常，直到回到空闲态才清除，这有助于在软件操作期间保留错误上下文（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:319-322）。此外，`keymgr_key` 的生成分支受 `EnMasking` 控制，说明侧载/密钥管理器密钥在是否启用 masking 时采用不同实现路径；虽然具体数据处理未在本片段中展示，但这一分支本身反映了对密钥保护机制的配置依赖（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:327-332）。覆盖点还暗示设计需要支持不同于侧载密钥尺寸的应用配置密钥长度，这种尺寸选择若与其他路径约定不一致，可能影响密钥处理正确性（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:337-338）。",
+  "assumptions": [
+    {
+      "constraint": "当外部逻辑依赖 `app_active_o` 作为“应用接口忙/活跃”指示时，应保证相关活动阶段确实由状态机编码为 `StAppCfg`、`StAppMsg`、`StAppOutLen`、`StAppProcess` 或 `StAppWait`；若存在未列入集合的活动状态，本信号不会反映该活动。",
+      "bug_relevance": "这是行为契约；若状态编码与该集合不一致，外部逻辑可能在模块仍忙时误认为空闲，导致握手时序错误或过早发起新事务。",
+      "related_signals": [
+        "st",
+        "app_active_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:334-335"
+      ]
+    },
+    {
+      "constraint": "若系统希望 `err_during_sw_d` 仅表示软件路径错误，应保证只有在 `mux_sel == SelSw` 时才将 `StError`/`StKeyMgrErrKeyNotValid` 解释为该标志的置位来源；非软件路径即使进入这些状态也不会置位该标志。",
+      "bug_relevance": "这是行为契约；若其他逻辑错误地把该标志当作所有错误的统一指示，则在非软件路径出错时可能漏报错误。该限制是设计定义的一部分，而非本片段的保护性回退。",
+      "related_signals": [
+        "mux_sel",
+        "st_d",
+        "err_during_sw_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:319-322"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:317-317",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:319-322",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:324-325",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:327-332",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:334-335",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:337-338"
+  ],
+  "uncertain_points": [
+    "`PRIM_FLOP_SPARSE_FSM` 宏通常意味着带复位/稀疏编码检查的状态寄存器，但仅从该片段无法确认其具体复位极性、错误检测或容错行为；这里只能确认默认状态参数为 `StIdle`。",
+    "`keymgr_key` 在 `g_masked_key` 和 `g_unmasked_key` 两个生成分支中的具体赋值、share 组织方式以及与 `Share` 参数的关系未在本片段展开，因此无法进一步说明密钥数据如何被构造或传播。",
+    "覆盖点 `AppIntfUseDifferentSizeKey_C` 只表明设计希望观测到 `reg_key_len_i != SideloadedKey` 的场景；它不是功能约束，不能单凭该语句断定所有不同尺寸组合都被完整支持。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
+  "line_start": 316,
+  "line_end": 911
+}

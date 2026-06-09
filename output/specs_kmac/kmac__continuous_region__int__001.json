@@ -1,0 +1,70 @@
+{
+  "chunk_id": "kmac__continuous_region__int__001",
+  "summary": "该片段主要定义 KMAC 顶层连续逻辑区域中使用的状态编码、接口/数据通路信号以及少量静态连接与一致性约束，为后续 KMAC/SHA3/KeyMgr/消息 FIFO/熵源协同处理建立结构基础。",
+  "behavior": "片段首先定义了 KMAC 控制状态机的6个稀疏编码状态：空闲、前缀处理、密钥块处理、消息喂入、摘要输出和终止错误，表明设计意图是按“启动后先处理前缀/密钥，再喂消息，最后进入摘要或错误终态”的流程组织 KMAC 操作，但本片段本身只给出状态类型和状态寄存器声明，没有给出具体转移条件或输出逻辑 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:113-135]。片段还声明了寄存器接口、TL-UL 窗口选择、SHA3 核控制/响应、应用接口吸收事件、前缀寄存器、内部状态输出、熵接口、消息 FIFO、软件/KeyMgr 到 FIFO 的多路输入、KMAC 到 SHA3 的消息通路、处理脉冲链路、软件与内部密钥数据、模式/强度配置、命令路径、熵配置、消息掩码、各类错误与告警、以及生命周期升级相关信号，体现该模块把软件、KeyMgr、FIFO、SHA3 核和熵源耦合在一起的总体结构 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:137-340]。唯一直接体现出的组合行为是：当启用消息掩码实现（EnMasking）时，消息 FIFO 输出数据的第二份 share 被硬连为 0，因此输入消息仅放在一份 share 中，另一份 share 不承载消息内容；注释明确说明这里关注的是秘密密钥而不是消息本身，所以这种 share 布局是设计意图 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:218-223]。此外，3个初始化断言保证前缀寄存器字数、消息 FIFO 深度和消息 FIFO 单项字节数分别与包参数/计算参数一致，反映该 RTL 依赖寄存器定义与算法包参数在构建时保持一致，否则设计配置无效 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:180-192]。",
+  "guarantees": [
+    {
+      "property": "在 EnMasking 配置下，msgfifo_data 的第 2 个 share 恒为全 0，不会承载消息数据。",
+      "output_signals": [
+        "msgfifo_data"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:218-223"
+      ]
+    },
+    {
+      "property": "KMAC 内部控制状态只会使用已定义的 6 个稀疏编码值：KmacIdle、KmacPrefix、KmacKeyBlock、KmacMsgFeed、KmacDigest、KmacTerminalError。",
+      "output_signals": [
+        "kmac_st",
+        "kmac_st_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:113-135"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及多处安全相关结构。首先，状态机采用显式稀疏编码，并在注释中将 SW 命令标记为 SEC_CM: SW_CMD.CTRL.SPARSE，对异常命令和值域健壮性有安全意图 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:113-131,282-291]。其次，消息掩码模式下仅将消息放入一个 share、另一 share 置零，注释说明 masking 主要关注秘密密钥而非消息，这意味着消息路径并未尝试提供对称双 share 保护；后续安全分析应确认这与威胁模型一致 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:218-223]。另外，片段显式引入熵配置、熵错误、清错后清除、告警、生命周期升级等信号，表明后续逻辑会把熵源健康、错误处理和生命周期升级纳入安全控制路径 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:294-340]。",
+  "assumptions": [
+    {
+      "constraint": "寄存器包与算法/实现包的参数必须保持一致：NumWordsPrefix*4 == NSRegisterSize、NumEntriesMsgFifo == MsgFifoDepth、NumBytesMsgFifoEntry*8 == MsgWidth。",
+      "bug_relevance": "这是行为契约。若不满足，前缀寄存器布局、消息 FIFO 深度或单项宽度会与实际数据通路不一致，可能导致前缀截断、FIFO 寻址/容量错误或消息数据字节映射错误。",
+      "related_signals": [
+        "reg_ns_prefix",
+        "msgfifo_depth",
+        "msgfifo_data",
+        "msgfifo_strb"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:180-192"
+      ]
+    },
+    {
+      "constraint": "若系统依赖消息 share 的双份掩码语义，则不应在 EnMasking 模式下假定 msgfifo_data[1] 含有有效消息 share；该场景设计上就是只在一个 share 上传递消息。",
+      "bug_relevance": "若不满足则下游逻辑可能错误地把全零第二 share 当作真实掩码份额参与组合，导致功能错误；不过根据注释，这种双 share 消息假设本就不应发生，设计对该场景的安全回退是将第二 share 固定为 0。",
+      "related_signals": [
+        "msgfifo_data"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:218-223"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:113-135",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:143-150",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:152-168",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:172-192",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:194-223",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:225-340"
+  ],
+  "uncertain_points": [
+    "注释在 118-121 行说明从 KmacIdle 写入 CmdStart 且 kmac_en 后进入 KmacPrefix，但本片段没有给出 kmac_en、CmdStart 检测和状态转移实现，因此这里只能确认设计意图，无法单独由本片段证明实际行为 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:118-121]。",
+    "注释在 152-153 行给出了 SHA3 控制序列 start -> process(多次) -> absorbed -> {run ->} done，但本片段仅声明相关信号，未展示握手生成与依赖条件，无法确认 run 是否总是需要、done/absorbed 的精确定义和边界行为 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:152-160]。",
+    "state/state_valid 与 reg_state/reg_state_valid 的注释表明摘要状态会根据配置被重定向到 KeyMgr 或软件可见状态寄存器，但本片段没有多路选择逻辑，无法确认何时选择哪个去向及两者是否可能同时有效 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:194-202]。",
+    "处理脉冲 reg2msgfifo_process、msgfifo2kmac_process、kmac2sha3_process 的注释表明存在逐级 flush 后再传播的非单纯组合/单拍行为，但本片段没有给出具体延迟拍数、握手条件或阻塞场景，只能知道存在这种链式 process 语义 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:256-260]。",
+    "SW 命令经过 checked_sw_cmd 过滤、kmac_cmd 可能由 SW 或 KeyMgr 控制是注释中的设计意图；本片段未包含过滤或仲裁实现，因此无法仅凭此处判断非法命令的精确处理方式 [/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:282-291]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 113,
+  "line_end": 340
+}

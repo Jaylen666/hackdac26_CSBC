@@ -1,0 +1,62 @@
+{
+  "chunk_id": "kmac__continuous_region__declarations_or_instances__006",
+  "summary": "该片段从寄存器接口提取命令/配置字段，并将吸收完成事件转换为 kmac_done 中断，同时用断言约束若干事件信号必须是单拍脉冲。",
+  "behavior": "片段首先将 `reg2hw.cmd.err_processed.q` 与其写使能 `qe` 相与，形成 `err_processed`，因此该信号只在软件对该命令字段发起一次有效写入时为真，而不是简单反映寄存器存储值 [kmac.sv:573-576]。随后直接从 shadowed 配置寄存器导出若干配置：`reg_kmac_en` 取自 `cfg_shadowed.kmac_en.q`，`reg_sha3_mode` 和 `reg_keccak_strength` 分别由寄存器字段强制转换为对应的 SHA3 模式和强度枚举，供后续逻辑使用 [kmac.sv:578-581]。在中断路径上，片段将多比特布尔 `app_absorbed` 通过 `mubi4_test_true_strict` 严格判真，得到单比特事件 `event_absorbed`；只有当 `app_absorbed` 处于严格真编码时才会触发该事件，其他编码不会被当作中断事件 [kmac.sv:587-589]。`event_absorbed` 被送入 `prim_intr_hw` 实例，结合 `intr_enable.kmac_done`、`intr_test.kmac_done`、`intr_state.kmac_done` 寄存器，实现 kmac_done 中断状态更新及外部中断输出 `intr_kmac_done_o`，并通过 `hw2reg.intr_state.kmac_done.{de,d}` 回写中断状态寄存器 [kmac.sv:591-602]。另外两个断言体现设计意图：`err_processed` 的上升沿后下一周期必须拉低，说明该命令事件应为单拍脉冲；同样，对 `sha3_absorbed` 的严格真检测上升沿后，下一周期必须回到严格假，说明吸收完成事件也应是脉冲而非持续电平 [kmac.sv:575-576,604-606]。",
+  "guarantees": [
+    {
+      "property": "只有当 `app_absorbed` 为 mubi4 严格真编码时，`event_absorbed` 才为 1；非严格真编码不会被转换为中断事件。",
+      "output_signals": [
+        "event_absorbed"
+      ],
+      "source_refs": [
+        "kmac.sv:587-589"
+      ]
+    },
+    {
+      "property": "`intr_kmac_done_o` 由 `prim_intr_hw` 基于 `event_absorbed` 与 kmac_done 的中断使能/测试/状态寄存器统一生成，并将状态更新通过 `hw2reg.intr_state.kmac_done.{de,d}` 对外提供。",
+      "output_signals": [
+        "intr_kmac_done_o",
+        "hw2reg.intr_state.kmac_done.de",
+        "hw2reg.intr_state.kmac_done.d"
+      ],
+      "source_refs": [
+        "kmac.sv:591-602"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及安全相关的多比特布尔和中断生成。`app_absorbed` 先经 `mubi4_test_true_strict` 再生成中断，降低了非法/毛刺编码被误判为有效事件的风险 [kmac.sv:587-589]。同时，配置来自 shadowed 寄存器字段 [kmac.sv:579-581]，表明这些控制信号依赖受保护配置路径，但该片段本身未展示 shadowed 错误处理。",
+  "assumptions": [
+    {
+      "constraint": "`reg2hw.cmd.err_processed.qe` 只在一次有效软件命令写入时脉冲，且寄存器顶层应保证 `err_processed` 不会持续多个周期。",
+      "bug_relevance": "若不满足则 `err_processed` 可能被下游误当作持续命令而重复处理；代码含断言表明这种情况设计上不应发生，并依赖 reg_top 的锁存/脉冲语义。",
+      "related_signals": [
+        "reg2hw.cmd.err_processed.q",
+        "reg2hw.cmd.err_processed.qe",
+        "err_processed"
+      ],
+      "source_refs": [
+        "kmac.sv:573-576"
+      ]
+    },
+    {
+      "constraint": "`sha3_absorbed` 应只产生单拍的严格真脉冲，而不应保持为严格真多个周期。",
+      "bug_relevance": "若违反，可能导致吸收完成事件被重复计数或重复触发相关控制/中断路径；断言表明这属于合法行为契约而非正常输入变化。",
+      "related_signals": [
+        "sha3_absorbed"
+      ],
+      "source_refs": [
+        "kmac.sv:604-606"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:573-606"
+  ],
+  "uncertain_points": [
+    "`intr_kmac_done_o` 的精确置位/保持/清除语义由 `prim_intr_hw` 模块决定；本片段只给出其实例连接，无法仅凭此处完全展开其内部行为 [kmac.sv:591-602]。",
+    "注释写的是“Hash process absorbed interrupt”，但中断实例名和寄存器字段名为 `kmac_done`，说明该中断实际由 `app_absorbed` 事件驱动；该命名是否等价于“完成”需要结合模块上下文确认 [kmac.sv:587-602]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 573,
+  "line_end": 606
+}

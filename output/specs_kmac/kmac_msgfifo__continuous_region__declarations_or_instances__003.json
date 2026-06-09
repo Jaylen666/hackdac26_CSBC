@@ -1,0 +1,41 @@
+{
+  "chunk_id": "kmac_msgfifo__continuous_region__declarations_or_instances__003",
+  "summary": "该片段不实现新硬件逻辑，而是用形式化假设约束消息 FIFO 的使用场景：处理触发和 FIFO 有效数据都只应在非 flush 状态下出现。",
+  "behavior": "这段代码仅包含两个 `ASSUME` 形式化约束，没有直接驱动任何 RTL 信号。第一个假设要求当 `process_i` 为真时，`flush_st` 必须等于 `FlushIdle`，即处理请求只能在 flush 空闲状态下发起；源码注释表明其设计意图是 `process_i` 与后续清除/flush 流程之间不应再插入额外消息。第二个假设要求当 `fifo_valid_i` 为真时，`flush_st` 也必须等于 `FlushIdle`，即 FIFO 中出现有效消息数据时系统也应处于非 flush 状态。综合来看，该片段把 flush 期间禁止新处理请求、禁止消息有效输入视为环境约束，而不是在本片段内实现防御性屏蔽或报错行为。",
+  "guarantees": [],
+  "security_implications": "该约束与 KMAC 消息通路在 flush/clear 期间的输入隔离有关。如果环境违反这些假设，可能导致清空中的消息缓冲混入新消息，进而影响摘要边界、消息完整性或擦除过程的可信性。但本片段本身只声明前提，不提供硬件强制防护。",
+  "assumptions": [
+    {
+      "constraint": "当 `process_i` 置位时，`flush_st` 必须为 `FlushIdle`。",
+      "bug_relevance": "这是行为契约；若在非 `FlushIdle` 状态下仍发起 `process_i`，则 flush/clear 期间可能与新一轮处理请求重叠，导致消息边界或处理时序错误。",
+      "related_signals": [
+        "process_i",
+        "flush_st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:279-279"
+      ]
+    },
+    {
+      "constraint": "当 `fifo_valid_i` 为真时，`flush_st` 必须为 `FlushIdle`。",
+      "bug_relevance": "这是行为契约；若 flush 过程中仍允许 FIFO 有效消息出现，可能把新消息注入正在清空或收尾的路径，造成消息内容污染或与设计期望不一致。",
+      "related_signals": [
+        "fifo_valid_i",
+        "flush_st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:281-282"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:279-282"
+  ],
+  "uncertain_points": [
+    "注释“`process_i` 和 `clear_i` 之间不应有消息”提到了 `clear_i`，但本片段实际假设中未直接引用 `clear_i`；完整时序关系需要结合其他代码确认。",
+    "无法仅凭该片段判断这些 `ASSUME` 仅用于形式验证/仿真约束，还是也参与某些综合外检查；从常见用法看更可能不是实际硬件功能。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
+  "line_start": 279,
+  "line_end": 284
+}

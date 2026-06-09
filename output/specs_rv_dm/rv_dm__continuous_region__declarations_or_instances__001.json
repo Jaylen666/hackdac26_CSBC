@@ -1,0 +1,49 @@
+{
+  "chunk_id": "rv_dm__continuous_region__declarations_or_instances__001",
+  "summary": "该连续区域实例化生命周期同步器、生成经生命周期门控的 NDM 复位输出，并同步跨时钟域的 LC 复位检测信号。",
+  "behavior": "实例化 prim_lc_sync（AsyncOn=0，因输入已同步），将 lc_hw_debug_en_gated_raw 直接复制给 lc_hw_debug_en_gated，不引入额外同步延迟。assign reset_req_en = lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnResetReq])，使用生命周期门控信号中对应复位请求的副本经严格真值测试生成使能；ndmreset_req_o = ndmreset_req_qual & reset_req_en，确保只有调试生命周期允许且 dm 内部请求时才会向系统发出 NDM 复位。为检测 LC 复位，用 prim_flop_2sync 构建两级同步器：第一级（u_prim_flop_2sync_lc_rst_assert）复位值 1、输入端接 0，并以 rst_lc_ni（LC 复位域，不复位 RV_DM）作为复位脚，在复位有效时直接异步置 1（但注释指出该级在复位断言时可能输出亚稳态），复位释放后经两级同步延迟约 2 个周期输出 0，产生 lc_rst_asserted_async。第二级（u_prim_flop_2sync_lc_rst_sync）以 rst_ni 为复位，将 lc_rst_asserted_async 进一步同步，最终输出稳定的 lc_rst_asserted，其变化相对于实际复位有效存在多周期延迟（先经历第一级约 2 拍延迟变为 0，再经第二级约 2 拍延迟更新）。此外声明了 dmi_req/rsp 接口信号、dmi_rst_n 以及 ndmreset_pending_q/lc_rst_pending_q 寄存器，但本区域未对其驱动。",
+  "guarantees": [
+    {
+      "property": "ndmreset_req_o 仅在 ndmreset_req_qual 有效且 reset_req_en 为 1 时有效；reset_req_en 由生命周期门控信号确定，从而保证 NDM 复位请求受硬件调试生命周期严格控制。",
+      "output_signals": [
+        "ndmreset_req_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:290-291"
+      ]
+    },
+    {
+      "property": "lc_rst_asserted 是 LC 复位状态的稳定同步指示，高有效，且已与 clk_i 域同步，亚稳态风险大幅降低。",
+      "output_signals": [
+        "lc_rst_asserted"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:293-315"
+      ]
+    }
+  ],
+  "security_implications": "lc_hw_debug_en_gated 及派生信号 reset_req_en 对 ndmreset_req_o 进行门控，结合 SEC_CM: DM_EN.CTRL.LC_GATED 注释，表明该逻辑确保只有在生命周期控制器允许调试时才能向处理器发出 NDM 复位，防止未授权调试访问。",
+  "assumptions": [
+    {
+      "constraint": "lc_hw_debug_en_gated_raw 与 clk_i 同步（注释说明 AsyncOn=0，故要求输入已同步）。",
+      "bug_relevance": "若输入异步，可能导致多个副本采样不一致或亚稳态，进而使 lc_hw_debug_en_gated 和 reset_req_en 出错。",
+      "related_signals": [
+        "lc_hw_debug_en_gated_raw",
+        "lc_hw_debug_en_gated"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:266-274"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:265-320"
+  ],
+  "uncertain_points": [
+    "第二级同步器 u_prim_flop_2sync_lc_rst_sync 未指定 ResetValue，其默认值（可能为 0）可能在系统上电且 rst_ni 有效时清零 lc_rst_asserted，导致漏报 lc 复位状态，需确认该行为是否符合预期。",
+    "lc_tx_test_true_strict 函数的确切行为（是否为多副本一致性检查或简单真值判定）影响 reset_req_en 的生成条件，当前仅从名称推断为严格真值测试。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
+  "line_start": 265,
+  "line_end": 320
+}

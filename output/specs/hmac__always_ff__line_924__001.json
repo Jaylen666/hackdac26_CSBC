@@ -1,0 +1,49 @@
+{
+  "chunk_id": "hmac__always_ff__line_924__001",
+  "summary": "维护 HMAC/Hash 运算进行中的状态位：开始处理或收到 stop 时置位，完成时清零，复位时为 0。",
+  "behavior": "该时序块实现寄存器 `in_process` 的置位/清零控制。复位有效时，`in_process` 被清为 0，表示当前不在处理过程中 [hmac.sv:924-925]。离开复位后，只要 `hash_process` 或 `reg_hash_stop` 任一为 1，就将 `in_process` 置为 1 [hmac.sv:926-926]；否则若 `reg_hash_done` 为 1，则将其清为 0 [hmac.sv:927-927]。由于没有最终的 `else` 分支，在上述条件都不满足时寄存器保持原值 [hmac.sv:924-928]。条件优先级上，置位条件 `hash_process || reg_hash_stop` 高于清零条件 `reg_hash_done`，因此若二者同周期同时为真，`in_process` 会被置为 1 而不是清 0 [hmac.sv:926-927]。",
+  "guarantees": [
+    {
+      "property": "复位期间 `in_process` 一定为 0。",
+      "output_signals": [
+        "in_process"
+      ],
+      "source_refs": [
+        "hmac.sv:924-925"
+      ]
+    },
+    {
+      "property": "当 `hash_process` 或 `reg_hash_stop` 为 1 时，`in_process` 被驱动为 1；仅在二者均不为 1 且 `reg_hash_done` 为 1 时，`in_process` 被驱动为 0；其余情况下保持原值。",
+      "output_signals": [
+        "in_process"
+      ],
+      "source_refs": [
+        "hmac.sv:926-927"
+      ]
+    }
+  ],
+  "security_implications": "该状态位反映哈希/HMAC 操作是否处于进行中，可能被用于阻止非法重配置、启动/停止流程协调或状态可见性控制。特别是 `reg_hash_stop` 也会将 `in_process` 置 1，说明 stop 可能被视为处理流程的一部分而非立即空闲；若上层安全策略依赖该位判断“引擎已完全空闲”，需要结合其他逻辑确认是否存在短暂或设计性的 busy 延续 [hmac.sv:926-927]。",
+  "assumptions": [
+    {
+      "constraint": "`reg_hash_done` 应只在一次合法处理流程结束时产生；若在未开始处理时错误拉高，`in_process` 会被清 0，但该块本身对此有安全回退行为（保持/清空为空闲），属于设计上不应发生的输入场景。",
+      "bug_relevance": "若不满足则可能掩盖上游控制时序错误，使模块过早表现为空闲，不过此块不会进入危险状态，只是状态指示可能与真实流程不一致。",
+      "related_signals": [
+        "reg_hash_done",
+        "in_process"
+      ],
+      "source_refs": [
+        "hmac.sv:927-927"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:924-928"
+  ],
+  "uncertain_points": [
+    "`reg_hash_stop` 置位 `in_process` 的设计意图需要结合上下文确认：从代码看 stop 请求被视为“仍在处理中”，但注释/周边逻辑可能进一步说明这是为了等待尾块处理、摘要完成或软件可见 busy 语义。",
+    "信号 `b0`、`b1` 出现在依赖列表中但未在该片段中使用，其与 `in_process` 状态机的关系无法仅凭本片段确定。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 924,
+  "line_end": 928
+}

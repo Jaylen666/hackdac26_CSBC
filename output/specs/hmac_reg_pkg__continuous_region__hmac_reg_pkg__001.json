@@ -1,0 +1,64 @@
+{
+  "chunk_id": "hmac_reg_pkg__continuous_region__hmac_reg_pkg__001",
+  "summary": "该片段定义了 HMAC 寄存器块的软件/硬件接口类型、寄存器地址映射、复位值、窗口参数以及每个寄存器的字节写许可掩码。",
+  "behavior": "这不是执行逻辑，而是一个寄存器包定义。它首先给出 HMAC 寄存器接口中各寄存器/字段的打包类型：reg2hw 侧包含中断状态、使能、测试、告警测试、配置、命令、擦除秘密、32 个 key 字、16 个 digest 字以及消息长度上下字；其中可由软件写入并需要写使能脉冲的字段带有 q/qe 形式，普通可读状态字段只暴露 q，见各 typedef 定义以及总的 hmac_reg2hw_t 聚合体（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:24-141,218-231）。与之对应，hw2reg 侧定义了硬件回写寄存器视图：中断状态字段用 d/de 表示硬件写数据及写使能，配置/状态/错误码/key/digest/消息长度等则用 d 表示硬件提供的回写值，并在 hmac_hw2reg_t 中聚合（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:143-243）。片段还固定了整个寄存器块的参数：摘要字数 16、密钥字数 32、告警数 1、块内地址宽度 13、寄存器数 59（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:9-18）。寄存器地址映射按 4 字节递增列出，从 INTR_STATE 的 0x0 到 MSG_LENGTH_UPPER 的 0xe8；另定义了一个位于 0x1000、大小 0x1000 的消息 FIFO window（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:245-305,375-378）。复位值参数给出了各 hwext 寄存器及字段的默认值，其中 CFG 总复位值为 0x4100，对应 key_length 默认 0x20、digest_size 默认 0x8、各种 swap 默认 0；STATUS 总复位值为 0x3，对应 hmac_idle 和 fifo_empty 复位为 1；wipe_secret、全部 key、全部 digest、消息长度上下字均复位为 0（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:306-373）。最后，hmac_id_e 为 59 个寄存器定义了稳定的枚举索引，HMAC_PERMIT 为每个索引给出 4-bit 写许可掩码，供非法写宽检查使用：如 CFG 和 STATUS 仅低两个字节允许写入/访问标记为 4'b0011，而大多数 32 位寄存器为 4'b1111，中断/命令类窄寄存器多为 4'b0001（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:380-504）。",
+  "guarantees": [
+    {
+      "property": "该包将 HMAC 寄存器块的软件到硬件接口固定为 hmac_reg2hw_t，包含 3 个中断状态位、3 个中断使能位、3 个中断测试位、1 个告警测试位、配置/命令字段、32 个 32-bit key 字、16 个 32-bit digest 字和 64-bit 消息长度寄存器视图。",
+      "output_signals": [
+        "hmac_reg2hw_t"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:24-141",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:218-231"
+      ]
+    },
+    {
+      "property": "该包为 59 个寄存器和 1 个消息 FIFO window 提供固定地址映射，并给出每个寄存器的字节写许可掩码，可供寄存器访问逻辑一致地解码地址和检查非法写入。",
+      "output_signals": [
+        "HMAC_INTR_STATE_OFFSET",
+        "HMAC_INTR_ENABLE_OFFSET",
+        "HMAC_CFG_OFFSET",
+        "HMAC_MSG_FIFO_OFFSET",
+        "HMAC_MSG_FIFO_SIZE",
+        "HMAC_PERMIT"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:245-305",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:375-378",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:443-504"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及多项安全敏感寄存器定义，包括 secret key 数组、digest、wipe_secret 控制以及 alert/intr 测试接口（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:118-131,223-230,239-242,306-373）。包本身不实现访问控制或擦除行为，但它固定了这些敏感寄存器的可见接口、复位值和地址布局；后续实现若错误使用这些定义，可能导致密钥暴露、擦除控制误连或对告警/中断测试寄存器的误处理。",
+  "assumptions": [
+    {
+      "constraint": "使用该包的寄存器解码/适配逻辑必须按 hmac_id_e 与 HMAC_PERMIT 的同一索引顺序解释 59 个寄存器，并将 HMAC_PERMIT 作为非法写宽检查依据。",
+      "bug_relevance": "若索引顺序或许可掩码解释不一致，可能把写请求路由到错误寄存器，或错误接受/拒绝部分字节写，造成配置、命令或密钥数据损坏；这属于行为契约，违反会直接导致功能错误。",
+      "related_signals": [
+        "hmac_id_e",
+        "HMAC_PERMIT"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:380-504"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:9-18",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:24-141",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:143-243",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:245-305",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:306-373",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:375-378",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:380-504"
+  ],
+  "uncertain_points": [
+    "该片段只定义类型和常量，未展示实际寄存器实现，因此 q/qe、d/de 的精确定义语义只能按常见 reggen 约定推断：通常 q 为寄存器值、qe/de 为写使能脉冲、d 为写入/回写数据，但具体握手规则需结合生成的寄存器顶层模块确认（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:48-66,118-156,197-216）。",
+    "注释称 HMAC_PERMIT 用于“check illegal writes”，但仅从本包无法确定 4-bit 掩码是否严格表示按字节写允许性、可读写属性，还是更宽泛的访问属性；其实际执法方式依赖片段外的寄存器访问逻辑（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:443-504）。",
+    "STATUS 被归入 hw2reg 类型且给出复位值、许可掩码为 4'b0011，但本片段无法独立确认软件是否能直接写 STATUS 的某些字节，还是该许可仅服务于生成工具的统一属性编码；需要查看寄存器生成后的具体读写实现（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:182-195,320-322,451)."
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv",
+  "line_start": 7,
+  "line_end": 506
+}

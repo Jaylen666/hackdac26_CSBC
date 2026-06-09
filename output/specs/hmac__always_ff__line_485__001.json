@@ -1,0 +1,53 @@
+{
+  "chunk_id": "hmac__always_ff__line_485__001",
+  "summary": "该时序块对 FIFO 状态信号进行寄存，包括空、满以及“曾见过满”标志，并在异步复位时将这三个寄存器清零。",
+  "behavior": "该片段实现三个 FIFO 状态寄存器的更新。复位有效时，fifo_empty_q、fifo_full_q 和 fifo_full_seen_q 都被清为 0，而不是反映任何即时 FIFO 状态 [hmac.sv:486-489]。正常工作时，fifo_empty_q 捕获当前 fifo_empty，fifo_full_q 捕获当前 fifo_full，fifo_full_seen_q 捕获组合计算得到的 fifo_full_seen_d [hmac.sv:490-493]。因此该块的实际作用是为后续逻辑提供已寄存的 FIFO 空/满状态，以及一个由上游逻辑决定更新规则的“满状态曾发生过”历史标志；但仅从本片段无法判断 fifo_full_seen_d 是否具有置位保持语义，还是会被其他条件清除。",
+  "guarantees": [
+    {
+      "property": "复位期间 fifo_empty_q、fifo_full_q 和 fifo_full_seen_q 保证为 0。",
+      "output_signals": [
+        "fifo_empty_q",
+        "fifo_full_q",
+        "fifo_full_seen_q"
+      ],
+      "source_refs": [
+        "hmac.sv:486-489"
+      ]
+    },
+    {
+      "property": "非复位时，fifo_empty_q 和 fifo_full_q 分别反映对应输入状态的寄存值，fifo_full_seen_q 反映 fifo_full_seen_d 的寄存值。",
+      "output_signals": [
+        "fifo_empty_q",
+        "fifo_full_q",
+        "fifo_full_seen_q"
+      ],
+      "source_refs": [
+        "hmac.sv:490-493"
+      ]
+    }
+  ],
+  "security_implications": "该片段本身不直接处理密钥或访问控制，但它保存 FIFO 空/满及“曾满”状态，若这些状态用于后续消息吸收控制、错误检测或边界管理，则错误更新可能间接影响数据流完整性。不过从本片段单独看不出更具体的安全策略。",
+  "assumptions": [
+    {
+      "constraint": "fifo_full_seen_d 应由外部组合逻辑正确定义为期望的历史标志下一状态；否则 fifo_full_seen_q 只会机械地寄存一个可能不符合设计意图的值。",
+      "bug_relevance": "若该约束不满足，后续依赖“FIFO 曾经满过”语义的控制逻辑可能误判边界或状态历史，属于功能错误。",
+      "related_signals": [
+        "fifo_full_seen_d",
+        "fifo_full_seen_q"
+      ],
+      "source_refs": [
+        "hmac.sv:493"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:485-495"
+  ],
+  "uncertain_points": [
+    "fifo_empty_q 在复位时被清为 0，即使实际 FIFO 可能处于空状态；这说明其复位值未必表示真实 FIFO 条件，而可能只是内部初始化值。是否允许复位后短暂失配需要结合上下文确认。",
+    "fifo_full_seen_q 的具体语义取决于 fifo_full_seen_d 的生成逻辑；仅凭本片段无法确认它是否为 sticky 位、何时清零，或是否专门用于错误/事件记录。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 485,
+  "line_end": 495
+}

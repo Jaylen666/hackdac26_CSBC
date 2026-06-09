@@ -1,0 +1,60 @@
+{
+  "chunk_id": "kmac_entropy__continuous_region__declarations_or_instances__012",
+  "summary": "该片段根据内部状态导出一个多比特布尔形式的“熵已配置”指示并通过 mubi sender 输出，同时包含对 EDN 总线宽度和置换常量合法性的静态/仿真检查。",
+  "behavior": "组合逻辑将内部状态 `st` 是否不等于 `StRandReset` 映射为四值多比特布尔 `entropy_configured`：只要状态离开 `StRandReset` 就输出 `prim_mubi_pkg::MuBi4True`，否则输出 `prim_mubi_pkg::MuBi4False` [742-744]。该内部多比特值随后送入 `prim_mubi4_sender` 实例 `u_entropy_configured`，以同步方式产生对外输出 `entropy_configured_o` [745-753]。此外，片段包含一个初始化期断言，要求 EDN 端点总线宽度必须等于 32，因为本模块不做宽度适配；这表达了 `ENDPOINT_BUS_WIDTH` 必须与 `ENTROPY_SEED` 寄存器宽度一致的设计约束 [759-761]。在非综合环境下，代码还在 `initial` 块中构造 `perm_test` 位图，并将 `RndCnstLfsrPerm` 的每个索引位置标记为 1，以断言该置换覆盖了 `EntropyOutputW` 范围内的全部位位置，即该常量应为一个完整合法的置换 [765-775]。",
+  "guarantees": [
+    {
+      "property": "当内部状态 `st` 等于 `StRandReset` 时，送入 mubi sender 的 `entropy_configured` 一定为 `MuBi4False`；当 `st` 不等于 `StRandReset` 时，一定为 `MuBi4True`。",
+      "output_signals": [
+        "entropy_configured"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:742-744"
+      ]
+    },
+    {
+      "property": "对外输出 `entropy_configured_o` 始终由 `u_entropy_configured` 根据内部 `entropy_configured` 驱动，不存在该片段中的其他并行赋值来源。",
+      "output_signals": [
+        "entropy_configured_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:745-753"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及安全相关状态暴露：`entropy_configured_o` 反映模块是否已离开随机复位状态，并通过 MuBi4 编码和专用 sender 输出，有助于降低单点故障或简单篡改导致的配置状态误判风险 [742-753]。同时，EDN 宽度一致性和置换合法性检查用于防止熵数据路径配置错误或常量错误，这类错误可能削弱随机性处理的正确性 [759-775]。",
+  "assumptions": [
+    {
+      "constraint": "`edn_pkg::ENDPOINT_BUS_WIDTH` 必须等于 32；该模块假定 EDN 输入宽度与 `ENTROPY_SEED` 所需宽度一致，因为这里没有宽度适配逻辑。",
+      "bug_relevance": "若不满足，该模块与 EDN/种子寄存器之间会出现宽度不匹配，可能导致熵数据截断、拼接错误或接口功能失效；这是行为契约而非防御性回退。",
+      "related_signals": [
+        "edn_pkg::ENDPOINT_BUS_WIDTH"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:759-761"
+      ]
+    },
+    {
+      "constraint": "`RndCnstLfsrPerm` 应覆盖 `EntropyOutputW` 的所有位且每个索引均有效，从而构成合法置换。",
+      "bug_relevance": "若不满足，在仿真/FPV 中会触发断言；在实际设计意图上，这意味着熵输出位重排常量有缺陷，可能造成重复映射或遗漏位，进而破坏预期的数据扩散/混洗行为。这是行为契约。",
+      "related_signals": [
+        "RndCnstLfsrPerm",
+        "perm_test"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:766-775"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:742-753",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:759-775"
+  ],
+  "uncertain_points": [
+    "`prim_mubi4_sender` 对 `entropy_configured_o` 的精确编码、是否包含额外完整性保护或错误检测，需要查看其实例模块定义；本片段只能确认其输入为 `entropy_configured` [745-753]。",
+    "注释称 EDN 总线宽度需等于 `ENTROPY_SEED` 寄存器宽度，但本片段未显示 `ENTROPY_SEED` 的具体声明；这里只能依据注释和断言确认要求为 32 位 [759-761]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
+  "line_start": 742,
+  "line_end": 778
+}

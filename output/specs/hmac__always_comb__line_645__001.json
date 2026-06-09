@@ -1,0 +1,66 @@
+{
+  "chunk_id": "hmac__always_comb__line_645__001",
+  "summary": "组合生成下一拍的消息长度：允许在未配置锁定时由寄存器写入覆盖 64 位长度字段，并在启动新哈希时清零，否则在有效消息写入且打包器可接收时按写掩码字节数递增。",
+  "behavior": "该组合逻辑先默认保持 `message_length_d` 等于当前 `message_length`，然后在 `cfg_block` 未置位时接受软件对消息长度寄存器的写入：`msg_length_lower.qe` 为真时用 `reg2hw.msg_length_lower.q` 覆盖低 32 位，`msg_length_upper.qe` 为真时用 `reg2hw.msg_length_upper.q` 覆盖高 32 位，因此上下半部分可独立更新，也可在同一周期同时更新成新的 64 位值 [645-654]。随后，`hash_start` 具有更高优先级，一旦为真就将整个 `message_length_d` 直接清零，不保留前述寄存器写入结果 [656-657]。若未启动哈希且发生 `msg_write && sha_en && packer_ready`，则将长度更新为 `message_length + 64'(wmask_ones)`，即按 `wmask_ones` 的数值递增长度；从代码看增量直接取自写掩码统计值，只有在 SHA 使能且打包器就绪时才累加，其他情况下保持原值或仅反映软件写入 [658-659]。",
+  "guarantees": [
+    {
+      "property": "当 `hash_start` 为真时，输出的下一状态消息长度一定为全 0，并且该清零优先于配置寄存器写入和消息写入累加。",
+      "output_signals": [
+        "message_length_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:656-657"
+      ]
+    },
+    {
+      "property": "当 `hash_start` 为假且 `msg_write && sha_en && packer_ready` 为真时，输出的下一状态消息长度一定等于当前 `message_length` 加上 `64'(wmask_ones)`。",
+      "output_signals": [
+        "message_length_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:658-659"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及 `cfg_block` 配置锁定：锁定后软件不能再经 `msg_length_lower/upper` 直接改写消息长度 [647-654]，有助于防止哈希过程中长度字段被重新编程。但 `hash_start` 会无条件清零长度 [656-657]，因此控制 `hash_start` 的上游逻辑需要可信，以免在不当时机重置计数。",
+  "assumptions": [
+    {
+      "constraint": "`wmask_ones` 必须准确表示本次 `msg_write` 实际被接受并计入消息的数据量；否则长度累加会与真实写入字节数不一致。",
+      "bug_relevance": "如果违反，该模块记录的消息长度会偏大或偏小，可能导致后续哈希填充/摘要结果错误。这属于行为契约，而非安全回退场景。",
+      "related_signals": [
+        "msg_write",
+        "packer_ready",
+        "wmask_ones",
+        "message_length_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:658-659"
+      ]
+    },
+    {
+      "constraint": "设计上应避免在同一组合评估中既发起 `hash_start` 又依赖软件对 `msg_length_lower/upper` 的写入生效，因为代码规定 `hash_start` 清零优先，寄存器写入会被覆盖。",
+      "bug_relevance": "若上游软件或控制逻辑在该场景下期望写入的新长度被保留，则会得到全 0 长度；不过代码已有确定的安全回退行为，因此这是防御性约束：若不满足则写入被丢弃，但行为仍可预测。",
+      "related_signals": [
+        "hash_start",
+        "reg2hw.msg_length_lower.qe",
+        "reg2hw.msg_length_upper.qe",
+        "message_length_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:647-654",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:656-657"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:645-661"
+  ],
+  "uncertain_points": [
+    "`wmask_ones` 的单位未在该片段中定义；从命名看可能是写掩码中置 1 位的个数，但不能仅凭此片段确认它表示字节数、字数还是其他粒度 [659]。",
+    "该片段只生成 `message_length_d`，其最终何时装载到 `message_length` 以及是否还有其他保护条件需依赖外部时序逻辑确认。",
+    "`cfg_block` 的设计意图似乎是阻止软件直接改写长度，但是否允许在某些工作阶段合法解锁并修改，单凭此片段无法确定。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 645,
+  "line_end": 661
+}

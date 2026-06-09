@@ -1,0 +1,54 @@
+{
+  "chunk_id": "hmac_core__continuous_region__declarations_or_instances__006",
+  "summary": "该片段组合地产生 HMAC 核的空闲状态：启动/继续请求会立即清空闲标志，FSM 处于 Idle 或在整块处理完成且收到停止请求时会置为空闲，否则保持当前空闲状态。",
+  "behavior": "该组合逻辑定义下一拍将采用的空闲标志值 idle_d，并直接将其输出到 idle_o。优先级从上到下：若收到 reg_hash_start_i 或 reg_hash_continue_i，则认为核心不空闲，idle_d=0，即使其他条件同时成立也由该分支优先覆盖【/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:473-477】。若没有启动/继续请求且 FSM 当前状态 st_q 为 StIdle，则 idle_d=1【/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:476-477】。若前两项都不成立，但当前已处理完整个块 txcnt_eq_blksz 且 reg_hash_stop_d 为真，则无论 FSM 处于何种状态都转为空闲，注释表明这是“处理完消息的一个完整块并被要求停止”时的空闲判定【/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:478-480】。其余情况下保持当前 idle_q，不强制改变空闲状态【/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:481-484】。",
+  "guarantees": [
+    {
+      "property": "当 reg_hash_start_i 或 reg_hash_continue_i 为 1 时，idle_o 一定为 0，与其他较低优先级条件无关。",
+      "output_signals": [
+        "idle_o",
+        "idle_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:473-477"
+      ]
+    },
+    {
+      "property": "当没有启动/继续请求且 st_q==StIdle 时，idle_o 一定为 1；当进一步满足 txcnt_eq_blksz && reg_hash_stop_d 且前两项不成立时，idle_o 也一定为 1。",
+      "output_signals": [
+        "idle_o",
+        "idle_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:476-480",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:484-484"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑参与哈希核心的运行/停止边界控制。只有在完成整块处理且收到停止请求时才宣告空闲，可避免在块处理中途过早报告 idle，从而降低外部逻辑在未完成消息边界时切换配置、读取结果或发起新操作的风险【/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:478-480】。",
+  "assumptions": [
+    {
+      "constraint": "reg_hash_start_i、reg_hash_continue_i 与 reg_hash_stop_d 不应在同一时刻以互相冲突的方式同时请求同一事务的开始/继续与停止；本逻辑会按优先级优先判定为非空闲。",
+      "bug_relevance": "若不满足则 idle_o 会被强制为 0，而不是停止为空闲；该场景设计上通常不应发生，否则上层软件/控制逻辑可能误判命令已被接受或停止已生效。",
+      "related_signals": [
+        "reg_hash_start_i",
+        "reg_hash_continue_i",
+        "reg_hash_stop_d",
+        "idle_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:473-480"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:473-484"
+  ],
+  "uncertain_points": [
+    "reg_hash_stop_d 的命名暗示它可能是其他逻辑已计算出的下一状态/延迟版本停止请求，但仅凭该片段无法确认其产生时机以及为何使用 _d 而非输入原始 stop 信号。",
+    "注释称“在任意 FSM 状态下”只要处理完整块且被要求停止就为空闲【/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:478-480】，但这是否覆盖所有非 Idle 状态的体系级合法场景，仍需结合完整 FSM 定义确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 473,
+  "line_end": 484
+}

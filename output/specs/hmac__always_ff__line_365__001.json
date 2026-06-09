@@ -1,0 +1,60 @@
+{
+  "chunk_id": "hmac__always_ff__line_365__001",
+  "summary": "该寄存器在哈希启动/续算期间置位，在哈希完成或停止时清零，用于跟踪配置是否应被阻塞。",
+  "behavior": "该时序块维护寄存器 cfg_block。复位时 cfg_block 被清零 [hmac.sv:366-367]。正常运行时，若 hash_start_or_continue 为真，则 cfg_block 被置 1 [hmac.sv:368-369]；否则若 reg_hash_done 或 reg_hash_stop 为真，则 cfg_block 被清零 [hmac.sv:370-371]。由于使用 if / else if 优先级链，当 hash_start_or_continue 与 reg_hash_done 或 reg_hash_stop 同时为真时，置位分支优先，cfg_block 保持/变为 1 [hmac.sv:368-371]。若上述条件都不满足，则该寄存器保持原值 [hmac.sv:368-372]。结合信号名可推测其设计意图是：在一次 hash 处理开始或继续后阻止配置变更，在显式 done 或 stop 后解除阻塞，但 cfg_block 的具体消费方式需依赖其他代码确认。",
+  "guarantees": [
+    {
+      "property": "复位激活时，cfg_block 一定被清零。",
+      "output_signals": [
+        "cfg_block"
+      ],
+      "source_refs": [
+        "hmac.sv:366-367"
+      ]
+    },
+    {
+      "property": "在非复位状态下，若 hash_start_or_continue 为真，则本周期更新后 cfg_block 一定为 1，且该分支优先于 reg_hash_done/reg_hash_stop。",
+      "output_signals": [
+        "cfg_block"
+      ],
+      "source_refs": [
+        "hmac.sv:368-371"
+      ]
+    },
+    {
+      "property": "在非复位状态下，若 hash_start_or_continue 为假且 reg_hash_done 或 reg_hash_stop 为真，则本周期更新后 cfg_block 一定为 0。",
+      "output_signals": [
+        "cfg_block"
+      ],
+      "source_refs": [
+        "hmac.sv:370-371"
+      ]
+    }
+  ],
+  "security_implications": "cfg_block 的命名和控制条件表明它可能用于在哈希运算期间锁定配置，防止处理中途修改配置。如果其他逻辑依赖该信号实施配置锁定，那么其置位/清零边界将直接影响 HMAC/SHA 操作期间的配置完整性；尤其是 start_or_continue 与 done/stop 同时出现时，置位优先会延长阻塞状态一个更新点 [hmac.sv:368-371]。",
+  "assumptions": [
+    {
+      "constraint": "hash_start_or_continue、reg_hash_done、reg_hash_stop 应与同一哈希会话的生命周期一致；特别是 done/stop 不应在预期解除阻塞时长期缺失，否则 cfg_block 会保持先前状态不变。",
+      "bug_relevance": "如果违反该行为契约，cfg_block 可能持续为 1 而导致配置被错误长期阻塞，或持续为 0 而未能在活动哈希期间阻塞配置修改。",
+      "related_signals": [
+        "hash_start_or_continue",
+        "reg_hash_done",
+        "reg_hash_stop",
+        "cfg_block"
+      ],
+      "source_refs": [
+        "hmac.sv:368-372"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:365-373"
+  ],
+  "uncertain_points": [
+    "cfg_block 的实际用途仅能从命名推测为“配置阻塞”；本片段本身没有展示它是否真的被用于屏蔽寄存器写入或其他配置路径。",
+    "尚不确定 hash_start_or_continue、reg_hash_done、reg_hash_stop 是否设计上互斥；代码明确规定了同时为真时 start_or_continue 优先，但这是否符合更高层协议需要结合上下文确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 365,
+  "line_end": 373
+}

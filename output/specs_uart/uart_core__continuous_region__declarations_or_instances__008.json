@@ -1,0 +1,39 @@
+{
+  "chunk_id": "uart_core__continuous_region__declarations_or_instances__008",
+  "summary": "生成接收超时控制信号：超时使能、阈值、FIFO深度变化检测、下一个超时计数值和超时事件标志。",
+  "behavior": "该片段通过组合赋值实现接收超时控制逻辑。uart_rxto_en 和 uart_rxto_val 直接映射自寄存器字段 reg2hw.timeout_ctrl.en.q 和 reg2hw.timeout_ctrl.val.q（行367-368）。rx_fifo_depth_changed 通过比较当前 rx_fifo_depth 与上一拍锁存值 rx_fifo_depth_prev_q 检测 FIFO 深度变化（行369）。\n\nrx_timeout_count_d 按优先级链计算下一个计数状态（行371-387）：若超时功能未使能（uart_rxto_en=0）则清零；否则若 event_rx_timeout 已有效则清零；否则若 FIFO 深度发生变化则清零；否则若 FIFO 为空则清零；否则在接收波特 tick（rx_tick_baud）有效时计数递增 1；其余情况保持当前计数值 rx_timeout_count_q。该优先级机制确保计数器在收到数据后启动，在 FIFO 被读取、新数据到达或超时事件触发时复位。\n\nevent_rx_timeout 在计数值等于阈值且使能有效时置 1（行389）。由于 event_rx_timeout 清零条件在递增条件之前，当计数器达到阈值时会立即清零下一拍值，产生单周期超时脉冲。被注释移除的旧代码（行382-384）试图在达到阈值后止步，现有设计改为立即清零以自动解除事件。",
+  "guarantees": [
+    {
+      "property": "当 uart_rxto_en=0、event_rx_timeout=1、rx_fifo_depth_changed=1 或 rx_fifo_depth=0 任一条件成立时，rx_timeout_count_d 必为 0。",
+      "output_signals": [
+        "rx_timeout_count_d"
+      ],
+      "source_refs": [
+        "file:371-387"
+      ]
+    }
+  ],
+  "security_implications": "",
+  "assumptions": [
+    {
+      "constraint": "配置的超时阈值 uart_rxto_val 应大于 0。",
+      "bug_relevance": "若 uart_rxto_val = 0 且超时使能有效、FIFO 非空，则 event_rx_timeout 会始终为高，可能造成超时中断一直触发。但该场景可能属于非法配置，设计上不应发生。",
+      "related_signals": [
+        "uart_rxto_val",
+        "event_rx_timeout"
+      ],
+      "source_refs": [
+        "file:371-389"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:367-389"
+  ],
+  "uncertain_points": [
+    "若 uart_rxto_val 被配置为 0 且使能有效、FIFO 非空，event_rx_timeout 将持续为高，可能导致持续中断或非预期行为，意图是否允许有待确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 367,
+  "line_end": 389
+}

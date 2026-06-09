@@ -1,0 +1,63 @@
+{
+  "chunk_id": "sha3pad__continuous_region__declarations_or_instances__009",
+  "summary": "该片段为 sha3pad 的形式验证约束与检查区，限定 start/process/done 输入为互斥单拍事件，并要求 absorbed_o 与 keccak_run_o 也表现为单拍脉冲。",
+  "behavior": "该区域本身不实现功能数据通路，而是通过 SVA 宏为环境输入和模块输出定义可验证的行为约束。对输入侧，假设 start_i 与 process_i 若为高则下一周期必须回到低，因而被建模为单周期脉冲；done_i 作为 MuBi4 信号，则要求其严格为 true 后下一周期严格为 false，也即 done 事件同样是单拍脉冲形式出现【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:748-752】。同时，环境还被约束为 start_i、process_i 与 done_i=true（以 loose MuBi4 判真）三者任意时刻至多一个为高，禁止三类控制事件并发出现【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:760-766】。对输出侧，模块被断言要求 absorbed_o 若严格为 true，则下一周期必须严格为 false；keccak_run_o 若为高，则下一周期必须为低，因此这两个输出都应表现为单周期脉冲【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:754-758】。注释中还表达了期望事件顺序 start_i -> process_i -> absorbed_o -> done_i，但对应的 Sequence_a 属性被注释掉，因此该顺序只是设计意图而非此片段当前生效的形式约束【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:768-769】。此外，在非综合条件下声明了 start_valid、process_valid、absorb_valid、done_valid 这组辅助逻辑，注释说明它们仅作为 FPV 资格信号，用于更易表达“何时允许触发控制信号”的条件【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:771-776】。",
+  "guarantees": [
+    {
+      "property": "absorbed_o 一旦严格为 true，下一周期必须严格为 false，因此不会连续保持为有效高值超过一个周期。",
+      "output_signals": [
+        "absorbed_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:755-757"
+      ]
+    },
+    {
+      "property": "keccak_run_o 一旦为高，下一周期必须为低，因此该输出被约束为单周期脉冲。",
+      "output_signals": [
+        "keccak_run_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:758-758"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及控制握手与 MuBi4 完成信号 done_i 的合法性约束。通过限制 start/process/done 互斥且为脉冲，可减少控制状态重叠带来的异常流程；对 done_i、absorbed_o 使用 strict/loose MuBi4 判定也体现了对安全编码控制信号的验证关注。不过这些主要是形式验证约束/断言，是否在综合硬件中形成实际防护需结合其他逻辑确认。",
+  "assumptions": [
+    {
+      "constraint": "环境应保证 start_i 与 process_i 仅以单周期脉冲方式出现；done_i 若以严格 MuBi4 true 表示完成，则下一周期必须回到严格 MuBi4 false。",
+      "bug_relevance": "若不满足则形式验证会在不符合接口契约的激励下探索状态；这更像环境协议被破坏，而非本片段自身 bug。设计上这些控制事件不应长时间保持有效。",
+      "related_signals": [
+        "start_i",
+        "process_i",
+        "done_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:748-752"
+      ]
+    },
+    {
+      "constraint": "环境应保证 start_i、process_i 与 done_i 判真三者同一时刻至多一个有效，不允许并发控制命令。",
+      "bug_relevance": "若违反该互斥契约，模块在重叠启动、处理和完成事件下的行为可能不再满足预期流程，甚至掩盖真实控制冲突问题；这属于有功能相关性的接口前提。",
+      "related_signals": [
+        "start_i",
+        "process_i",
+        "done_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:761-766"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:748-776"
+  ],
+  "uncertain_points": [
+    "Sequence_a 注释声称期望顺序为 start_i -> process_i -> absorbed_o -> done_i，但该属性已被注释掉，无法确认这只是文档化意图、临时禁用的验证条件，还是实际 RTL 不再要求严格顺序【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:768-769】。",
+    "该片段中的 ASSUME/ASSERT 宏主要用于形式验证；是否在仿真或综合配置下生效、以及失败后的处理方式，需要结合宏定义和构建环境确认【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:748-758】。",
+    "start_valid、process_valid、absorb_valid、done_valid 仅在非综合条件下声明，具体生成条件和它们如何约束控制信号不在本片段中，无法单独判断其完整语义【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:771-776】."
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 748,
+  "line_end": 776
+}

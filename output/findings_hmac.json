@@ -1,0 +1,1506 @@
+{
+  "_stats": {
+    "call_count": 267,
+    "error_count": 0,
+    "total_input_tokens": 454821,
+    "total_output_tokens": 405767,
+    "total_tokens": 860588,
+    "total_wall_seconds": 2770.0,
+    "total_wall_minutes": 46.2
+  },
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "title": "[B-AG+U-UP] 在 StPushToMsgFifo 状态下，即使 FIFO 未就绪（fifo_wready_i=0），fifo_wvalid_o 与 fifo_wsel_o 仍被保持有效，造成 fifo_wdata_sel_o 在空周期内错误递增，破坏数据选择索引与真实写入节拍的对应关系，可能引发后续写数据顺序错乱或写入错误数据片段。",
+      "severity": "HIGH",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 1.0,
+      "contradiction": "HMAC 模块的保证只明确了 StWaitResp 状态下不向 SHA 发送新的有效数据，但未约束 HMAC 模式其余状态（如消息移位、pad 注入阶段）中 hmac_sha_rvalid 与 sel_rdata 的一致性。设计可能在这些状态下出现冒险，导致 SHA 接收到错误的消息字或 pad 数据，破坏最终 HMAC 结果。",
+      "involved_signals": [
+        "fifo_wvalid_o",
+        "fifo_wsel_o",
+        "hmac_sha_rvalid",
+        "msg_fifo_rdata",
+        "hmac_fifo_wsel",
+        "hmac_fifo_wdata_sel",
+        "fifo_empty_negedge",
+        "hmac.sv",
+        "fifo_rdata_i",
+        "sel_rdata",
+        "hmac_core.sv",
+        "intr_state",
+        "hmac_done",
+        "hmac_err",
+        "intr_enable",
+        "intr_test",
+        "fifo_empty",
+        "tl_o_pre.d_valid"
+      ],
+      "involved_specs": [
+        "hmac_core__always_ff__line_296__001",
+        "hmac_core__always_comb__next_state__001",
+        "hmac_core__continuous_region__declarations_or_instances__001",
+        "hmac__continuous_region__declarations_or_instances__008"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_ff__line_296__001",
+          "field": "assumption",
+          "excerpt": "fifo_wsel_o 与 fifo_wvalid_o 的同时置位应只对应一次合法的 FIFO 写数据推进事件；若它们在没有实际数据推进时仍被拉高，会错误推进 fifo_wdata_sel_o。"
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "在 StPushToMsgFifo 状态下，模块保证选择 FIFO/HMAC 写路径并驱动 fifo_wvalid_o=1，直到 fifo_wready_i 且摘要最后一个字被判定写出后才离开该状态。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_296__001",
+          "field": "assumption",
+          "excerpt": "fifo_wsel_o 与 fifo_wvalid_o 的同时置位应只对应一次合法的 FIFO 写数据推进事件；若它们在没有实际数据推进时仍被拉高，会错误推进 fifo_wdata_sel_o。"
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "在 StPushToMsgFifo 状态下，模块保证选择 FIFO/HMAC 写路径并驱动 fifo_wvalid_o=1，直到 fifo_wready_i 且摘要最后一个字被判定写出后才离开该状态。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "在 HMAC 模式下，`hmac_sha_rvalid`、`sel_rdata` 与所选 pad/FIFO 数据源应由状态机保持一致，避免在 `sha_rvalid_o` 有效时选择到错误的数据路径。"
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "在 StWaitResp 状态下，模块不会向 SHA 声明新的输入数据有效；只有等待 sha_hash_done_i 来决定后续转移。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__008",
+          "field": "assumption",
+          "excerpt": "`msg_fifo_req` 的发起方应只在能够接受错误返回值的场景下访问该读接口，因为本片段不提供真实 FIFO 读数据。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__008",
+          "field": "guarantee",
+          "excerpt": "消息 FIFO 读数据总是返回全 1，且读错误标志总是置 1。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "[B-AG+C-COV+U-UP] 设计缺少对 `hash_done_event` 生成条件的约束或检查，可能允许非完成条件（如软件错误或硬件毛刺）触发该事件，导致 `hmac_done` 中断误置位。软件观察到虚假完成中断后可能过早读取摘要、错误推进状态机，造成安全协议执行错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "C-COV",
+        "U-UP"
+      ],
+      "cross_channel_hits": 3,
+      "is_self_ref": false,
+      "score": 0.975,
+      "contradiction": "该片段只定义类型和常量，未展示实际寄存器实现，因此 q/qe、d/de 的精确定义语义只能按常见 reggen 约定推断：通常 q 为寄存器值、qe/de 为写使能脉冲、d 为写入/回写数据，但具体握手规则需结合生成的寄存器顶层模块确认（/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_pkg.sv:48-66,118-156,197-216）。",
+      "involved_signals": [
+        "hw2reg.intr_state.hmac_done.d",
+        "intr_hmac_done_o",
+        "done_state_q",
+        "packer_flush_done",
+        "hw2reg.cfg",
+        "prim_intr_hw",
+        "intr_test",
+        "intr_state",
+        "intr_enable",
+        "intr_o",
+        "hmac.sv",
+        "alert_ack_o",
+        "alert_state_o",
+        "hw2reg.key",
+        "SHA2_512",
+        "hmac_core.sv",
+        "SHA2_384",
+        "load_txcount",
+        "secret_key_i",
+        "hmac_reg_pkg.sv",
+        "prim_subreg_ext"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__declarations_or_instances__006",
+        "hmac__continuous_region__declarations_or_instances__016"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "`hash_done_event` 应只在 HMAC/Hash 操作真实完成时产生；若设计允许软件或其他逻辑在非完成条件下错误拉高该事件，`hmac_done` 中断状态和输出可能被误置位。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "该片段只通过 `hw2reg.intr_state.hmac_done.de` 和 `hw2reg.intr_state.hmac_done.d` 向软件可见的 `hmac_done` 中断状态寄存器发起硬件更新请求。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "`hash_done_event` 应只在 HMAC/Hash 操作真实完成时产生；若设计允许软件或其他逻辑在非完成条件下错误拉高该事件，`hmac_done` 中断状态和输出可能被误置位。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "HMAC 完成中断的外部输出 `intr_hmac_done_o` 由 `prim_intr_hw` 的单比特中断逻辑统一生成，不直接绕过寄存器化的中断控制路径。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "复位后，intr_hmac_done_o、intr_fifo_empty_o、tl_o.d_valid、tl_o.a_ready 和 alert_tx_o 均保证为已知值，不会输出 X/Z。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "[B-AG+U-UP] 规范假设后续控制逻辑会将 Key_None 视为无效并阻止 HMAC 执行，但没有任何保证描述该控制逻辑的存在或其行为。若该逻辑缺失，系统可能使用不支持的密钥长度继续运算，违背设计意图并引入安全漏洞。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.975,
+      "contradiction": "(1) 该 assumption 明确描述了软件禁止同时触发 hash_start 与 msg_length 写入的场景，属于软件契约中的非法使用模式； (2) 相应 guarantee 仅说明 qe 信号如何由寄存器写事件生成，不涉及 hash_start 的交互，也不承诺能保留冲突写入； (3) assumption 本身已注明“若不满足则写入被丢弃，但行为仍可预测”，硬件回退行为（写入覆盖为 0）为确定的安全回退，因此该约束是防御性设计，guarantee 并未与之冲突，也无需额外覆盖。",
+      "involved_signals": [
+        "key_length",
+        "msg_length_lower_we",
+        "reg2hw.msg_length_upper.qe",
+        "msg_length_lower_qs",
+        "msg_length_upper_qs"
+      ],
+      "involved_specs": [
+        "hmac__always_comb__cast_key_length__001",
+        "hmac_reg_top__always_comb__line_2302__001",
+        "hmac_reg_top__continuous_region__declarations_or_instances__016",
+        "hmac__always_comb__line_645__001",
+        "hmac_reg_top__continuous_region__declarations_or_instances__009"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_comb__cast_key_length__001",
+          "field": "assumption",
+          "excerpt": "依赖 key_length 的后续启动控制逻辑必须将 Key_None 视为“无有效/不支持密钥长度”，并在 HMAC 模式下阻止继续执行；否则非法 key_length_supplied 可能仅被静默映射而未被正确拦截。"
+        },
+        {
+          "spec": "hmac__always_comb__cast_key_length__001",
+          "field": "guarantee",
+          "excerpt": "当 key_length_supplied 为受支持的五种编码之一时，key_length 必定等于对应的内部枚举值；当其为任何其他编码时，key_length 必定为 Key_None。"
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2302__001",
+          "field": "assumption",
+          "excerpt": "下游若依赖 reg_we_check 的位位置进行写检查，必须与本块定义的固定索引映射保持一致，特别是 key_0..key_31、digest_0..digest_15、msg_length_lower/upper 对应的索引范围不能错配。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "除 wipe_secret 之外，本片段中所有导出的寄存器读/写使能在 reg_error=1 时都会被抑制，不会对对应寄存器发起正常访问。"
+        },
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "assumption",
+          "excerpt": "设计上应避免在同一组合评估中既发起 hash_start 又依赖软件对 msg_length_lower/upper 的写入生效，因为代码规定 hash_start 清零优先，寄存器写入会被覆盖。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "对每个 digest 分片 0..15 以及 msg_length_lower/msg_length_upper，reg2hw.*.q 始终由对应 prim_subreg_ext 驱动，reg2hw.*.qe 恒等于该寄存器唯一字段的写事件。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "[B-AG+C-COV+U-UP] 驱动 round_d 的逻辑未提供任何保证来确保其在 update_round 有效时输出合法的轮次值，可能导致 round_q 被配置为未定义/非法状态，从而引发后续 HMAC 控制流程错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "C-COV",
+        "U-UP"
+      ],
+      "cross_channel_hits": 3,
+      "is_self_ref": false,
+      "score": 0.975,
+      "contradiction": "消费者逻辑仅显式处理 Inner（选择 IPad 消息长度），其余所有值一律按 Outer 处理。driver spec 未声明 round_d 的合法取值，也未描述 round_q 的完整状态集合；虽然基于 HMAC 结构推测可能只有 Inner/Outer 两种状态，但缺乏明确依据，因此无法确认是否存在未覆盖的合法值。",
+      "involved_signals": [
+        "round_q",
+        "update_round",
+        "round_d"
+      ],
+      "involved_specs": [
+        "hmac_core__always_ff__line_288__001",
+        "hmac_core__continuous_region__batched_small_assigns__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "assumption",
+          "excerpt": "当 update_round 置高时，round_d 应始终编码为 round_q 可接受的合法轮次/阶段值。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "guarantee",
+          "excerpt": "在 rst_ni 为低时，round_q 被强制复位为 Inner。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "guarantee",
+          "excerpt": "在非复位期间，若 update_round 为 0，则该块不会改写 round_q，round_q 保持先前值。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__batched_small_assigns__001",
+          "field": "assumption",
+          "excerpt": "`round_q` 的合法取值应与设计状态编码一致；若当前并非 `Inner` 轮次，本片段会统一选择 `SelOPadMsg`。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "guarantee",
+          "excerpt": "在 rst_ni 为低时，round_q 被强制复位为 Inner。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "guarantee",
+          "excerpt": "在非复位期间，若 update_round 为 0，则该块不会改写 round_q，round_q 保持先前值。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "冷却计数器下一状态逻辑未被充分定义或保证，可能导致硬件生成非法的计数值，破坏冷却等待时序，引发安全状态机错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "冷却计数器下一状态逻辑未被充分定义或保证，可能导致硬件生成非法的计数值，破坏冷却等待时序，引发安全状态机错误。",
+      "involved_signals": [
+        "cool_down_ct_d"
+      ],
+      "involved_specs": [
+        "hmac__always_ff__line_205__001",
+        "hmac__always_comb__line_149__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_ff__line_205__001",
+          "field": "assumption",
+          "excerpt": "`cool_down_ct_d` 在非复位运行时应由上游逻辑生成为合法的冷却计数下一状态；若该信号异常，`cool_down_ct_q` 会无条件采样该值。"
+        },
+        {
+          "spec": "hmac__always_comb__line_149__001",
+          "field": "guarantee",
+          "excerpt": "当状态为 `DoneAwaitHashComplete`、`hash_running` 为 0 且 `cool_down_ct_q` 已达到 127 时，`hash_done_event` 必为 1，且下一状态返回 `DoneAwaitCmd`；在计数未满 127 前不会在该路径上宣告完成。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "没有 guarantee 约束 wmask_ones 在 msg_write 使能时正确表示被接受的消息字节数，可能导致长度累加值和真实写入字节数不一致，进而引发哈希填充和摘要计算错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "没有 guarantee 约束 wmask_ones 在 msg_write 使能时正确表示被接受的消息字节数，可能导致长度累加值和真实写入字节数不一致，进而引发哈希填充和摘要计算错误。",
+      "involved_signals": [
+        "msg_write"
+      ],
+      "involved_specs": [
+        "hmac__always_comb__line_645__001",
+        "hmac__continuous_region__int__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "assumption",
+          "excerpt": "`wmask_ones` 必须准确表示本次 `msg_write` 实际被接受并计入消息的数据量；否则长度累加会与真实写入字节数不一致。"
+        },
+        {
+          "spec": "hmac__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "msg_write 仅在 msg_fifo_req、msg_fifo_we、~hmac_fifo_wsel 和 msg_allowed 同时满足时为 1；其余情况下该片段保证 msg_write 为 0。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "合法消息写操作的控制条件已由 assumption 定义，但硬件未提供相应的行为保证，导致在满足条件时可能不会将消息写入 FIFO，造成消息丢失、长度统计错误等问题。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "合法消息写操作的控制条件已由 assumption 定义，但硬件未提供相应的行为保证，导致在满足条件时可能不会将消息写入 FIFO，造成消息丢失、长度统计错误等问题。",
+      "involved_signals": [
+        "sha_en"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__int__001",
+        "hmac__continuous_region__declarations_or_instances__002"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__int__001",
+          "field": "assumption",
+          "excerpt": "若系统希望一次合法消息写最终进入消息 FIFO，则相关控制应保证 msg_allowed 为真且 sha_en 为真，并且该写请求未被 hmac_fifo_wsel 选择到其他路径。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "内部信号 `sha_en` 始终等于配置寄存器字段 `cfg_reg.sha_en.q`，`hmac_en` 始终等于 `cfg_reg.hmac_en.q`。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "[B-AG+C-COV+U-UP] 各寄存器对应的 we/wd/re/hw2reg.*.d 应由外部地址译码和寄存器访问逻辑正确地产生，避免多个分片被误同时命中或在非法访问时误触发；本片段本身只负责连线，没有本地防护。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG",
+        "C-COV",
+        "U-UP"
+      ],
+      "cross_channel_hits": 3,
+      "is_self_ref": false,
+      "score": 0.787,
+      "contradiction": "(1) Assumption 描述的是 64 位模式下软件只写半个 digest 字的场景，并明确指出“通常不应发生于合法上下文恢复流程”，即该场景属于非法/不应发生的输入。 (2) Guarantee 在非法场景下实现了防御行为：当任一 32 位半字的 qe 有效时，digest_sw_we 置 1，且未写的半字保持旧值，与 assumption 声明的“允许只写半字并保留另一半旧值”完全一致。 (3) 这是典型的防御性设计——assumption 约束了正确用法，guarantee 为误用提供了安全回退，不存在协议矛盾或覆盖缺口。",
+      "involved_signals": [
+        "digest_0_re",
+        "digest_sw_we",
+        "msg_length_upper_re",
+        "digest_size_started_q",
+        "digest_size",
+        "digest",
+        "hmac.sv",
+        "digest_size_i",
+        "SHA2_256",
+        "SHA2_384",
+        "SHA2_512",
+        "hmac_core.sv",
+        "msg_length_",
+        "digest_0",
+        "digest_15",
+        "msg_length_lower"
+      ],
+      "involved_specs": [
+        "hmac_reg_top__continuous_region__declarations_or_instances__009",
+        "hmac_reg_top__continuous_region__declarations_or_instances__016",
+        "hmac__always_comb__assign_digest_reg__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__009",
+          "field": "assumption",
+          "excerpt": "各寄存器对应的 we/wd/re/hw2reg.*.d 应由外部地址译码和寄存器访问逻辑正确地产生，避免多个分片被误同时命中或在非法访问时误触发；本片段本身只负责连线，没有本地防护。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "除 wipe_secret 之外，本片段中所有导出的寄存器读/写使能在 reg_error=1 时都会被抑制，不会对对应寄存器发起正常访问。"
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "assumption",
+          "excerpt": "在 64 位模式下，若软件希望原子恢复一个完整 64 位 digest word，则应成对协调写 reg2hw.digest[2*i] 和 reg2hw.digest[2*i+1]；本逻辑允许只写半字并保留另一半旧值，这更像上下文恢复接口的使用约束。"
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "当 digest_size 为 SHA2_384 或 SHA2_512 时，digest_sw_we[i] 只有在 reg2hw.digest[2*i].qe 或 reg2hw.digest[2*i+1].qe 之一置位时才为 1；未被写的 32 位半字保持当前 digest[i] 的对应内容而不会被置零。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__009",
+          "field": "assumption",
+          "excerpt": "各寄存器对应的 we/wd/re/hw2reg.*.d 应由外部地址译码和寄存器访问逻辑正确地产生，避免多个分片被误同时命中或在非法访问时误触发；本片段本身只负责连线，没有本地防护。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "除 wipe_secret 之外，本片段中所有导出的寄存器读/写使能在 reg_error=1 时都会被抑制，不会对对应寄存器发起正常访问。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "[B-AG+C-COV+U-UP] 设计上应避免在同一组合评估中既发起 `hash_start` 又依赖软件对 `msg_length_lower/upper` 的写入生效，因为代码规定 `hash_start` 清零优先，寄存器写入会被覆盖。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG",
+        "C-COV",
+        "U-UP"
+      ],
+      "cross_channel_hits": 3,
+      "is_self_ref": false,
+      "score": 0.787,
+      "contradiction": "该 assumption 约束的是软件不应同时触发 hash_start 与 msg_length 寄存器写入，这是一个不推荐/非法的使用场景（因为硬件会丢弃寄存器写入）。硬件并未强制禁止这种组合，而是提供了确定性的清零回退行为。guarantee 仅描述了 hash_start 的有效前置条件，未涉及 msg_length 写入的互斥要求，因此与 assumption 不矛盾。硬件行为在 assumption 被违反时已安全回退，属于防御性设计，不存在协议错误或覆盖缺口。",
+      "involved_signals": [
+        "hash_start",
+        "hmac_hash_done",
+        "reg_hash_process_flag",
+        "reg_hash_stop_d",
+        "hash_running",
+        "hmac.sv",
+        "hash_start_sha_disabled",
+        "reg_hash_stop",
+        "packer_flush_done",
+        "reg_hash_process_i",
+        "hmac_core"
+      ],
+      "involved_specs": [
+        "hmac__always_comb__line_645__001",
+        "hmac__continuous_region__declarations_or_instances__005",
+        "hmac_core__always_ff__line_278__001",
+        "hmac_core__always_comb__next_state__001",
+        "hmac_core__continuous_region__declarations_or_instances__006",
+        "hmac_core__continuous_region__batched_small_assigns__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "assumption",
+          "excerpt": "设计上应避免在同一组合评估中既发起 `hash_start` 又依赖软件对 `msg_length_lower/upper` 的写入生效，因为代码规定 `hash_start` 清零优先，寄存器写入会被覆盖。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__005",
+          "field": "guarantee",
+          "excerpt": "当 `hash_start` 为 1 时，必然同时满足：软件对 `cmd.hash_start` 发起了写 1 请求、`sha_en` 为 1、`cfg_block` 为 0、且 `invalid_config` 为 0。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_278__001",
+          "field": "assumption",
+          "excerpt": "reg_hash_process_i、reg_hash_start_i、reg_hash_continue_i 与 hmac_hash_done 应遵循上层控制协议，避免在同一拍无意同时发出互相冲突的请求；虽然本块对冲突有确定回退行为（reg_hash_process_i 优先置位），但该场景设计上通常不应发生。"
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "在 StDone 状态下，模块必定拉高 hmac_hash_done，并将下一状态设为 StIdle。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_278__001",
+          "field": "assumption",
+          "excerpt": "reg_hash_process_i、reg_hash_start_i、reg_hash_continue_i 与 hmac_hash_done 应遵循上层控制协议，避免在同一拍无意同时发出互相冲突的请求；虽然本块对冲突有确定回退行为（reg_hash_process_i 优先置位），但该场景设计上通常不应发生。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_278__001",
+          "field": "guarantee",
+          "excerpt": "在非复位状态下，若 reg_hash_process_i 为 1，则 reg_hash_process_flag 被置 1，且该优先级高于 hmac_hash_done、reg_hash_start_i 和 reg_hash_continue_i 的清零请求。"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_278__001",
+          "field": "guarantee",
+          "excerpt": "在非复位状态下，若 reg_hash_process_i 为 0 且 hmac_hash_done、reg_hash_start_i、reg_hash_continue_i 任一为 1，则 reg_hash_process_flag 一定被清 0。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "reg_hash_start_i、reg_hash_continue_i 与 reg_hash_stop_d 不应在同一时刻以互相冲突的方式同时请求同一事务的开始/继续与停止；本逻辑会按优先级优先判定为非空闲。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "若内部逻辑把 reg2hw.cfg.*.qe 当作“某单个字段被写”的指示，则必须保证软件总是一次性写完整个对应寄存器的所有字段；否则这些统一 qe 可能不产生。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.762,
+      "contradiction": "该假设关注内部逻辑是否将字段级写使能脉冲（reg2hw.cfg.*.qe）用作触发信号，并据此要求软件始终进行全寄存器写入（否则部分字段的 qe 不产生，导致功能缺失）。提供的 guarantee 仅描述了总线的写使能抑制与数据映射，未涉及字段级 qe 的产生机制，也未承诺在部分写入时仍会生成所有字段的 qe，更未揭示内部逻辑究竟使用 q 还是 qe 作为触发。因此，无法判定该假设所描述的场景是合法输入还是非法输入，也无法确认 guarantee 是否满足或与之存在矛盾。验证者需要进一步检查 RTL 实现，以明确内部逻辑对 reg2hw.cfg.*.qe 的实际依赖。",
+      "involved_signals": [
+        "cfg_we"
+      ],
+      "involved_specs": [
+        "hmac_reg_top__continuous_region__declarations_or_instances__002",
+        "hmac_reg_top__continuous_region__declarations_or_instances__016"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "若内部逻辑把 reg2hw.cfg.*.qe 当作“某单个字段被写”的指示，则必须保证软件总是一次性写完整个对应寄存器的所有字段；否则这些统一 qe 可能不产生。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "除 wipe_secret 之外，本片段中所有导出的寄存器读/写使能在 reg_error=1 时都会被抑制，不会对对应寄存器发起正常访问。"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "当对 cfg 地址发起合法无错写访问时，cfg 的各字段写数据必定来自 reg_wdata 的固定位段映射。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "reg_hash_start_i、reg_hash_continue_i 与 reg_hash_stop_d 不应在同一时刻以互相冲突的方式同时请求同一事务的开始/继续与停止；本逻辑会按优先级优先判定为非空闲。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.712,
+      "contradiction": "HMAC 模块依赖 sha_core_idle 来判定整体空闲状态，但现有 guarantee 不包含对 sha_core_idle 准确性的任何保证。如果 SHA 核心在忙碌时错误地上报空闲（或出现未知态），本模块会将此错误状态编码为有效的 MuBi4 空闲编码输出，导致下游逻辑在核心未完成工作时提前执行后续操作，可能引发状态清除、配置切换或安全相关操作的功能错误。",
+      "involved_signals": [
+        "idle_o",
+        "idle_d",
+        "idle_q"
+      ],
+      "involved_specs": [
+        "hmac_core__continuous_region__declarations_or_instances__006",
+        "hmac__continuous_region__declarations_or_instances__013",
+        "hmac__continuous_region__declarations_or_instances__012",
+        "hmac__always_ff__line_896__001",
+        "hmac_core__always_ff__line_486__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "reg_hash_start_i、reg_hash_continue_i 与 reg_hash_stop_d 不应在同一时刻以互相冲突的方式同时请求同一事务的开始/继续与停止；本逻辑会按优先级优先判定为非空闲。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__013",
+          "field": "guarantee",
+          "excerpt": "输出 idle_o 始终等于内部状态信号 idle_q。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "当 reg_hash_start_i 或 reg_hash_continue_i 为 1 时，idle_o 一定为 0，与其他较低优先级条件无关。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "当没有启动/继续请求且 st_q==StIdle 时，idle_o 一定为 1；当进一步满足 txcnt_eq_blksz && reg_hash_stop_d 且前两项不成立时，idle_o 也一定为 1。"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__012",
+          "field": "assumption",
+          "excerpt": "hmac_core_idle 与 sha_core_idle 必须准确反映各自核心是否仍有未完成工作；若核心仍忙却错误拉高 idle，则本片段会把整体状态误判为空闲。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "当 reg_hash_start_i 或 reg_hash_continue_i 为 1 时，idle_o 一定为 0，与其他较低优先级条件无关。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "当没有启动/继续请求且 st_q==StIdle 时，idle_o 一定为 1；当进一步满足 txcnt_eq_blksz && reg_hash_stop_d 且前两项不成立时，idle_o 也一定为 1。"
+        },
+        {
+          "spec": "hmac__always_ff__line_896__001",
+          "field": "assumption",
+          "excerpt": "idle_d 在合法工作场景下应提供符合 MuBi4 语义的有效编码，尤其当其他逻辑依赖 idle_q 进行安全或状态判定时不应驱动非法编码。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "[B-AG+C-COV] HMAC 模式下，当 sel_rdata 选择 FIFO 数据（如传递消息字）时，sha_rdata_o 的输出未被任何 guarantee 规范。这可能导致状态机不一致时错误数据被传递到 SHA，破坏 HMAC 计算。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "C-COV"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": true,
+      "score": 0.682,
+      "contradiction": "根据 driver 描述，digest_size_i 仅用于区分 SHA-256 和 SHA-384/512，pad 硬件也只实现了这两种位宽的 i_pad/o_pad，因此合法值仅为这三种 SHA 标准。消费者通过多路分支明确处理了所有合法输入，注释指出 sel_rdata==2'b11 不应发生，表明非法值落入 default 为容错行为。无合法值被遗漏。",
+      "involved_signals": [
+        "sha_rdata_o"
+      ],
+      "involved_specs": [
+        "hmac_core__continuous_region__declarations_or_instances__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "在 HMAC 模式下，`hmac_sha_rvalid`、`sel_rdata` 与所选 pad/FIFO 数据源应由状态机保持一致，避免在 `sha_rvalid_o` 有效时选择到错误的数据路径。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "当 `hmac_en_i` 为 0 时，SHA 读接口对 FIFO 的握手和数据均为直接旁路：`fifo_rready_o = sha_rready_i`、`sha_rvalid_o = fifo_rvalid_i`、`sha_rdata_o = fifo_rdata_i`。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "当 HMAC 模式下选择 iPad/oPad 数据时，`sha_rdata_o.mask` 一定为全 1，且数据为对应 pad 按当前 pad index 选出的 32 位切片。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "`sel_rdata` 不应取注释中声明不可达的 `2'b11` 非法编码。"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "当 HMAC 模式下选择 iPad/oPad 数据时，`sha_rdata_o.mask` 一定为全 1，且数据为对应 pad 按当前 pad index 选出的 32 位切片。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "[U-UP] 仅凭该片段无法确认 SHA2_None 是否表示“未启动/无摘要模式/默认摘要尺寸”等具体语义，需要结合类型定义和上游状态机确认。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "SHA2_384 与 SHA2_512 共用同一块大小判定，这与 SHA-2 标准相符，但该片段本身未显式注释说明其设计意图，只能从实现推断。",
+      "involved_signals": [
+        "SHA2_None",
+        "SHA2_384",
+        "SHA2_512"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "[U-UP] `unused_cfg_qe` 看起来仅用于消费未使用的 `qe` 信号以避免告警，但该信号是否还被工具流或形式验证脚本赋予额外语义，仅凭本片段无法确认。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "`unused_cfg_qe` 看起来仅用于消费未使用的 `qe` 信号以避免告警，但该信号是否还被工具流或形式验证脚本赋予额外语义，仅凭本片段无法确认。",
+      "involved_signals": [
+        "unused_cfg_qe"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "[U-UP] `conv_endian32` 的精确定义未在本片段给出；虽然注释说明其用于在非大端场景下做反转，但具体是按字节、半字还是整 32 位内部字节顺序交换，需要函数实现确认。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "`conv_endian32` 的精确定义未在本片段给出；虽然注释说明其用于在非大端场景下做反转，但具体是按字节、半字还是整 32 位内部字节顺序交换，需要函数实现确认。",
+      "involved_signals": [
+        "conv_endian32"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "[U-UP] mubi4_bool_to_mubi 的具体编码语义（例如 True/False 的精确 4bit 取值以及对非法值的处理）依赖 prim_mubi_pkg 定义，本片段未展开。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "mubi4_bool_to_mubi 的具体编码语义（例如 True/False 的精确 4bit 取值以及对非法值的处理）依赖 prim_mubi_pkg 定义，本片段未展开。",
+      "involved_signals": [
+        "mubi4_bool_to_mubi",
+        "prim_mubi_pkg",
+        "prim_subreg_ext"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0017",
+      "title": "[U-UP] 属性 wmask_bytealign_p 在本片段中只有声明，没有看到 assert/assume/bind 实例，无法确认它在完整设计中是否实际被启用或如何使用 [hmac.sv:912-915]。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "注释称“byte-aligned”，但属性具体限制为 wmask_byte inside {'0, '1}；若 wmask_byte 为多比特向量，这一条件是否完全等价于允许的所有字节对齐掩码形式，需要结合 wmask_byte 的位宽和编码定义确认 [hmac.sv:911-915]。",
+      "involved_signals": [
+        "wmask_bytealign_p",
+        "hmac.sv",
+        "wmask_byte"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0018",
+      "title": "[U-UP] alert_req_i 连接到 alerts[0] 而非 alerts[i] 可能是有意为之（例如当前模块只定义了一个内部告警源但需要多个外部 sender 实例），也可能是索引遗漏；仅凭该片段无法确认。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "alert_req_i 连接到 alerts[0] 而非 alerts[i] 可能是有意为之（例如当前模块只定义了一个内部告警源但需要多个外部 sender 实例），也可能是索引遗漏；仅凭该片段无法确认。",
+      "involved_signals": [
+        "alert_req_i",
+        "alerts"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0019",
+      "title": "[U-UP] secret_key_i 采用“高位对齐”存放有效密钥是从切片方式推断出的接口契约 [139-179]；该布局是否有更明确的模块级注释或上游格式化逻辑，当前片段中未给出。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "secret_key_i 采用“高位对齐”存放有效密钥是从切片方式推断出的接口契约 [139-179]；该布局是否有更明确的模块级注释或上游格式化逻辑，当前片段中未给出。",
+      "involved_signals": [
+        "secret_key_i"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0020",
+      "title": "[U-UP] default 分支返回 reg2hw.key[2].q [2622-2624] 看起来不像常规未命中返回 0 的读多路选择行为，可能是自动生成代码中的地址映射残留、故意的第三个 key word 读口，或潜在错误；仅凭该片段无法确认设计意图。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "default 分支返回 reg2hw.key[2].q [2622-2624] 看起来不像常规未命中返回 0 的读多路选择行为，可能是自动生成代码中的地址映射残留、故意的第三个 key word 读口，或潜在错误；仅凭该片段无法确认设计意图。",
+      "involved_signals": [
+        "reg2hw.key"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0021",
+      "title": "[U-UP] tlul_socket_1n 在 HReq/HRsp/DReq/DRsp 深度为 0 且 pass 使能时是否完全无附加时序影响，依赖该模块实现；本片段只能确认设计意图是不引入额外缓冲（107-117行）。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "tlul_socket_1n 在 HReq/HRsp/DReq/DRsp 深度为 0 且 pass 使能时是否完全无附加时序影响，依赖该模块实现；本片段只能确认设计意图是不引入额外缓冲（107-117行）。",
+      "involved_signals": [
+        "tlul_socket_1n"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0022",
+      "title": "[U-UP] key_2_wd 前保留了一条被注释掉的 full_wdata 赋值，现用 reg_wdata[31:0] [2137-2140]；两者在当前宽度下等价，但无法判断是否反映了历史位宽调整或代码生成差异。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "key_2_wd 前保留了一条被注释掉的 full_wdata 赋值，现用 reg_wdata[31:0] [2137-2140]；两者在当前宽度下等价，但无法判断是否反映了历史位宽调整或代码生成差异。",
+      "involved_signals": [
+        "key_2_wd",
+        "full_wdata",
+        "reg_wdata"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0023",
+      "title": "使用 SHA-256 模式时不应将 key_length_i 配置为 Key_1024；本块对该非法/不应发生场景采取安全回退，将 SHA-256 的 pad 清零。",
+      "severity": "MEDIUM",
+      "verdict": "DEFENSIVE",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.499,
+      "contradiction": "Assumption 明确声明“不应配置 Key_1024”的场景是非法/不应发生的输入，并说明硬件会采取安全回退清零 pad。相关 guarantee 正好保证当 key_length_i 为 Key_1024 时 i_pad_256 一定为全零，实现了该防御行为。因此 assumption 的约束与 guarantee 之间是互补的防御性设计，不是协议矛盾，没有缺口。",
+      "involved_signals": [
+        "i_pad_256"
+      ],
+      "involved_specs": [
+        "hmac_core__always_comb__adjust_key_pad_length__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_comb__adjust_key_pad_length__001",
+          "field": "assumption",
+          "excerpt": "使用 SHA-256 模式时不应将 key_length_i 配置为 Key_1024；本块对该非法/不应发生场景采取安全回退，将 SHA-256 的 pad 清零。"
+        },
+        {
+          "spec": "hmac_core__always_comb__adjust_key_pad_length__001",
+          "field": "guarantee",
+          "excerpt": "当 key_length_i 为 Key_1024 时，i_pad_256 和 o_pad_256 一定为全零，而 i_pad_512 和 o_pad_512 一定分别等于完整 1024-bit secret_key_i 与 8'h36、8'h5c 的逐字节异或结果。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0024",
+      "title": "`reg2hw.wipe_secret.qe` 仅当软件确实意图触发一次 secret wipe 时拉高；设计在本片段中未增加额外过滤，任何该信号的误脉冲都会被直接解释为擦除请求。",
+      "severity": "MEDIUM",
+      "verdict": "SATISFIED",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.472,
+      "contradiction": "假设定义的是合法使用场景：软件仅在意图擦除时才使能 qe。保证则描述在该合法写操作下，硬件将写使能正确映射为 wipe_secret，将写值映射为 wipe_v。两者直接对应，保证完全满足了假设的预期行为。如果出现误脉冲（违反假设），属于非法输入场景，硬件按现有逻辑会执行擦除，这与假设中“未加额外过滤”的声明一致，不构成硬件设计错误。",
+      "involved_signals": [
+        "wipe_v"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__batched_small_assigns__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__batched_small_assigns__001",
+          "field": "assumption",
+          "excerpt": "`reg2hw.wipe_secret.qe` 仅当软件确实意图触发一次 secret wipe 时拉高；设计在本片段中未增加额外过滤，任何该信号的误脉冲都会被直接解释为擦除请求。"
+        },
+        {
+          "spec": "hmac__continuous_region__batched_small_assigns__001",
+          "field": "guarantee",
+          "excerpt": "当软件对 `wipe_secret` 寄存器发起写操作时，`wipe_secret` 一定反映该写使能，且 `wipe_v` 同时反映写入的数据位。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "Finding on reg_steer",
+      "severity": "MEDIUM",
+      "verdict": "COVERED",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.472,
+      "contradiction": "生产者 spec 明确 reg_steer 只产生 0 或 1（hmac_reg_top__always_comb__line_129__001）；消费者 spec 使用 2 路 socket（hmac_reg_top__continuous_region__declarations_or_instances__001，99-126 行），dev_select_i 直接取 reg_steer，0 对应窗口，1 对应寄存器，构成完整的 1‑bit 多路分发，无需 default 保护。各合法值均已覆盖，无缺口。",
+      "involved_signals": [
+        "reg_steer"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "Finding on addrmiss",
+      "severity": "MEDIUM",
+      "verdict": "COVERED",
+      "channels": [
+        "C-COV"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.472,
+      "contradiction": "addrmiss 为单比特寄存器地址未命中标志，合法取值仅为 0/1。消费者在 prim_reg_we_check 使能中使用 reg_we && !addrmiss，addrmiss=0 时检查 one-hot，addrmiss=1 时屏蔽检查，语义清晰且无未处理取值。",
+      "involved_signals": [
+        "addrmiss"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "[U-UP] DoneAwaitCmd 的具体语义只能从命名推断为“等待命令”状态；该状态在整个 done 状态机中的精确定义需要查看其他代码。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "DoneAwaitCmd 的具体语义只能从命名推断为“等待命令”状态；该状态在整个 done 状态机中的精确定义需要查看其他代码。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "[U-UP] 注释未提供，因此无法判断异步复位清零是否仅为上电初始化，还是对安全/协议行为有明确要求。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "注释未提供，因此无法判断异步复位清零是否仅为上电初始化，还是对安全/协议行为有明确要求。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "[U-UP] 该片段只显示异步低有效复位行为；系统级是否要求复位释放与时钟同步、以及复位期间其他相关状态是否同时清零，需要结合上下文确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "该片段只显示异步低有效复位行为；系统级是否要求复位释放与时钟同步、以及复位期间其他相关状态是否同时清零，需要结合上下文确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "[U-UP] ASSERT_KNOWN 宏的精确生效条件由宏定义决定；注释写的是‘after reset’，但具体是复位释放后立即检查还是在某个屏蔽窗口后检查，需要结合断言宏定义确认 [954-959]。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "ASSERT_KNOWN 宏的精确生效条件由宏定义决定；注释写的是‘after reset’，但具体是复位释放后立即检查还是在某个屏蔽窗口后检查，需要结合断言宏定义确认 [954-959]。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "[U-UP] 该 assert property 在具体工具流中是仅用于仿真/形式验证，还是也会映射到某种在线检查机制，片段中无法确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "该 assert property 在具体工具流中是仅用于仿真/形式验证，还是也会映射到某种在线检查机制，片段中无法确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "[U-UP] 依赖列表中包含 b0、h36、h5c、adjust_key_pad_length，但本片段实际使用的是字面量 8'h36/8'h5c，未使用这些名字；它们是否在其他版本或相邻代码中代表同一设计意图，当前片段无法确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "依赖列表中包含 b0、h36、h5c、adjust_key_pad_length，但本片段实际使用的是字面量 8'h36/8'h5c，未使用这些名字；它们是否在其他版本或相邻代码中代表同一设计意图，当前片段无法确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "[U-UP] 信号名表中出现 b1，但代码实际写为 1'b1；无法判断这是依赖摘要中的格式化产物还是原始上下文中的别名。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "信号名表中出现 b1，但代码实际写为 1'b1；无法判断这是依赖摘要中的格式化产物还是原始上下文中的别名。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "[U-UP] 仅凭该片段无法确认 StIdle 是否也是整个 HMAC 核心在功能和安全意义上的完全初始化状态；需结合其他寄存器和数据通路复位逻辑确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "仅凭该片段无法确认 StIdle 是否也是整个 HMAC 核心在功能和安全意义上的完全初始化状态；需结合其他寄存器和数据通路复位逻辑确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0035",
+      "title": "[U-UP] 无法仅凭本片段确认地址区间 `[4096:8191]` 的体系结构含义，例如是否对应窗口存储区、消息 FIFO 或其他专用接口。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "无法仅凭本片段确认地址区间 `[4096:8191]` 的体系结构含义，例如是否对应窗口存储区、消息 FIFO 或其他专用接口。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0036",
+      "title": "[U-UP] 该解码看起来是 one-hot 风格，但是否系统级要求严格单命中，依赖于各 OFFSET 常量定义及后续使用逻辑；本片段自身未做 one-hot 断言或冲突处理。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "该解码看起来是 one-hot 风格，但是否系统级要求严格单命中，依赖于各 OFFSET 常量定义及后续使用逻辑；本片段自身未做 one-hot 断言或冲突处理。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0037",
+      "title": "[U-UP] 用户提供的 dependencies 只列到 HMAC_KEY_28_OFFSET，但源码实际还解码到 HMAC_KEY_31_OFFSET、DIGEST 和 MSG_LENGTH 寄存器；dependencies 列表与代码片段不完全一致。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "用户提供的 dependencies 只列到 HMAC_KEY_28_OFFSET，但源码实际还解码到 HMAC_KEY_31_OFFSET、DIGEST 和 MSG_LENGTH 寄存器；dependencies 列表与代码片段不完全一致。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0038",
+      "title": "[U-UP] 索引 6 和 7 被置 0 的原因未在片段中说明；它们可能对应保留寄存器、只读寄存器或刻意留空的编号槽位，需要结合寄存器映射上下文确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "索引 6 和 7 被置 0 的原因未在片段中说明；它们可能对应保留寄存器、只读寄存器或刻意留空的编号槽位，需要结合寄存器映射上下文确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0039",
+      "title": "[U-UP] 只有 key[0] 和 key[1] 明确可读，而大量后续 key/相关地址读回 0 [2418-2548]；这是否代表部分密钥窗口、擦除后屏蔽，还是保留地址布局，需要结合完整寄存器定义确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "只有 key[0] 和 key[1] 明确可读，而大量后续 key/相关地址读回 0 [2418-2548]；这是否代表部分密钥窗口、擦除后屏蔽，还是保留地址布局，需要结合完整寄存器定义确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0040",
+      "title": "[U-UP] 输入依赖列表中出现 `b0`，但此赋值实际使用字面量 `1'b0`；`b0` 是否是邻近代码中的局部常量与本片段无关，无法从该片段确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "输入依赖列表中出现 `b0`，但此赋值实际使用字面量 `1'b0`；`b0` 是否是邻近代码中的局部常量与本片段无关，无法从该片段确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0041",
+      "title": "[U-UP] ExplicitErrs 关闭后 socket 在非法选择、无目标响应或协议异常时的具体错误处理行为无法从本片段单独确定（117-125行）。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "ExplicitErrs 关闭后 socket 在非法选择、无目标响应或协议异常时的具体错误处理行为无法从本片段单独确定（117-125行）。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0042",
+      "title": "[U-UP] 片段只展开到 `key[10]`，但前面声明存在 `key[0:31]`，其余子寄存器行为预计类似，但不在本片段证据范围内。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "片段只展开到 `key[10]`，但前面声明存在 `key[0:31]`，其余子寄存器行为预计类似，但不在本片段证据范围内。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0043",
+      "title": "[U-UP] 注释提到一条被注释掉的 `ASSUME` 是为了避免 FPV 误判（2652-2654）；这反映了验证环境考虑，但不构成功能 RTL 行为。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "注释提到一条被注释掉的 `ASSUME` 是为了避免 FPV 误判（2652-2654）；这反映了验证环境考虑，但不构成功能 RTL 行为。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0044",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0045",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档（theory_of_operation.md）未出现在输入中，无法提取相关的设计声明与疑似 bug finding 进行比对。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0046",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0047",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0048",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0049",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0050",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0051",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0052",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0053",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档（theory_of_operation.md）未在本次输入中提供，无法引用其内容与 finding 进行比对。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0054",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档未包含在提供的材料中，无法定位与“SHA‑256 使用 256‑bit 密钥时外部填充密钥由零填充至 512 bit 后与 0x5c 异或”相关的设计声明。因此无法判断该疑似 bug 与设计意图是否一致。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0055",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档全文未在输入中提供，无法查找与该 finding 相关的设计声明，因此无法进行比对。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0056",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档全文未被提供，无法从中查找与“SHA-256 engine requires exactly 80 clock cycles to process one 512-bit block”相关的设计声明，因此无法进行对比。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0057",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "未收到官方设计文档（theory_of_operation.md）全文，无法查找与'96 clock cycles'性能指标相关的设计声明。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0058",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0059",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0060",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "The provided materials include only a finding claim and an RTL spec fragment (hmac_core state machine). No official design document was supplied, so it is impossible to locate a relevant design declaration to compare against the RTL. The finding alleges a contradiction regarding back‑pressure when the message FIFO is full, but without the design document, we cannot confirm whether such a claim exists or assess the RTL behavior against it.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "chunk_id": "hmac__continuous_region__declarations_or_instances__006",
+  "summary": "该片段实例化了 HMAC 完成事件的中断硬件单元，将完成事件、寄存器使能/测试/状态位连接到单比特中断输出。",
+  "behavior": "此处实例化一个 Width=1 的 `prim_intr_hw`，专门处理 `hmac_done` 中断源。它接收完成事件 `hash_done_event` 作为硬件中断事件输入，并结合软件可编程的中断使能位 `reg2hw.intr_enable.hmac_done.q`、中断测试位及其写使能 `reg2hw.intr_test.hmac_done.q/qe`、以及当前中断状态位 `reg2hw.intr_state.hmac_done.q` 来生成两类结果：一是驱动寄存器回写接口 `hw2reg.intr_state.hmac_done.de/d`，用于更新该中断的状态寄存器；二是输出最终中断线 `intr_hmac_done_o`。从连线可见，该片段的设计意图是把 HMAC 哈希完成事件纳入 OpenTitan 通用中断原语管理框架中，使该中断支持使能屏蔽、软件测试触发以及状态保持/更新。具体的状态置位、清除优先级和 `intr_o` 的精确定义由 `prim_intr_hw` 内部实现决定，本片段本身只确定了这些信号之间的连接关系。 ",
+  "guarantees": [
+    {
+      "property": "HMAC 完成中断的外部输出 `intr_hmac_done_o` 由 `prim_intr_hw` 的单比特中断逻辑统一生成，不直接绕过寄存器化的中断控制路径。",
+      "output_signals": [
+        "intr_hmac_done_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:429-440"
+      ]
+    },
+    {
+      "property": "该片段只通过 `hw2reg.intr_state.hmac_done.de` 和 `hw2reg.intr_state.hmac_done.d` 向软件可见的 `hmac_done` 中断状态寄存器发起硬件更新请求。",
+      "output_signals": [
+        "hw2reg.intr_state.hmac_done.de",
+        "hw2reg.intr_state.hmac_done.d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:436-439"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及完成事件的中断上报路径。`intr_test` 接口允许软件主动注入测试中断，若被错误暴露给低权限软件，可能造成伪造完成中断或干扰上层控制流；不过这是 OpenTitan 中断框架的常规可测性机制，是否构成安全问题取决于寄存器访问控制。中断使能和状态保持也意味着完成事件不会仅靠瞬时脉冲直接传出，而是经过标准中断状态管理，有助于避免事件丢失。",
+  "assumptions": [
+    {
+      "constraint": "`hash_done_event` 应只在 HMAC/Hash 操作真实完成时产生；若设计允许软件或其他逻辑在非完成条件下错误拉高该事件，`hmac_done` 中断状态和输出可能被误置位。",
+      "bug_relevance": "这是行为契约。若违反，会导致软件观察到虚假的完成中断，可能过早读取摘要、错误推进协议状态机，甚至掩盖真实完成时序问题。",
+      "related_signals": [
+        "hash_done_event",
+        "intr_hmac_done_o",
+        "hw2reg.intr_state.hmac_done.de",
+        "hw2reg.intr_state.hmac_done.d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:432-439"
+      ]
+    },
+    {
+      "constraint": "软件对 `reg2hw.intr_test.hmac_done.q/qe` 的写入应仅用于预期的中断测试场景；在正常运行中即使误写，硬件仍会按设计注入测试中断。",
+      "bug_relevance": "若不满足则会产生人为触发的 `hmac_done` 中断，但这属于带安全回退的防御性/可测性机制，不一定是 RTL bug；设计上通常不应在非测试路径下发生。",
+      "related_signals": [
+        "reg2hw.intr_test.hmac_done.q",
+        "reg2hw.intr_test.hmac_done.qe",
+        "intr_hmac_done_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:434-435,439"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:429-440"
+  ],
+  "uncertain_points": [
+    "`prim_intr_hw` 内部对 `event_intr_i`、`intr_test`、`intr_state` 和 `intr_enable` 的优先级关系、置位/清除条件以及 `intr_o` 是否取决于状态位或原始事件，无法仅从该片段确定，需要查看 `prim_intr_hw` 实现。",
+    "无法从本片段单独确认 `hash_done_event` 是单周期脉冲、保持型信号，还是经过同步/去抖处理后的事件。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 429,
+  "line_end": 440
+}

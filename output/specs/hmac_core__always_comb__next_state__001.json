@@ -1,0 +1,87 @@
+{
+  "chunk_id": "hmac_core__always_comb__next_state__001",
+  "summary": "该组合状态机根据当前 HMAC/SHA 轮次、消息传输计数和控制寄存器请求，驱动 HMAC 核在 Idle、ipad/msg/opad 发送、等待 SHA 完成、将内层摘要回灌到消息 FIFO、以及完成态之间切换，并生成对应的数据选择、FIFO 读写和 hash 控制信号。",
+  "behavior": "该块先为所有控制信号提供默认值：完成脉冲、向 SHA 提供数据有效、tx 计数控制、轮次更新、FIFO 写选择/有效、FIFO 写数据选择清零、读数据来源选择以及 hash_start/hash_continue/hash_process 都默认关闭，下一状态默认保持当前状态 [hmac_core.sv:314-327]。在 StIdle 中，逻辑总是请求将 round 复位为 Inner，以保证新操作从内层轮次开始；若 hmac_en_i 与 reg_hash_start_i 同时为 1，则转到 StIPad、清零传输计数并发起 hash_start；若是 hmac_en_i 与 reg_hash_continue_i 同时为 1，则跳过 StIPad 直接进入 StMsg，装载 txcount 并发起 hash_continue，注释表明这里设计上假定此前已经完成 StIPad [hmac_core.sv:330-348]。在 StIPad 中，输出数据源切到 SelIPad；达到一个块大小后转入 StMsg 并禁止新的读请求，否则持续对 SHA 声明输入数据有效 [hmac_core.sv:351-363]。在 StMsg 中，数据源来自消息 FIFO，且当 round_q==Outer 时 fifo_wsel_o 置 1 以保持 HMAC 第二阶段选择 [hmac_core.sv:365-368]。若当前是 Outer，或者当前是 Inner 且 reg_hash_process_flag 为 1，并且 txcount 已达到 sha_message_length_o，则转入 StWaitResp，停止继续从消息 FIFO 读，并在 Outer 轮次下同时置 hash_process [hmac_core.sv:369-375]。否则，若当前是 Inner、reg_hash_stop_q 为 1，且既达到块边界 txcnt_eq_blksz 又已发送完整个消息，则同样进入 StWaitResp 并停止读取；注释说明其目的是等 FIFO 中消息字都推出后，再等待 SHA 完成 [hmac_core.sv:375-383]。其余情况下保持在 StMsg，并仅在 fifo_rvalid_i 为 1 时向 SHA 宣告数据有效 [hmac_core.sv:383-386]。在 StWaitResp 中始终禁止新的 SHA 输入；收到 sha_hash_done_i 后，若当前是 Outer 则直接完成，若当前是 Inner 则根据 reg_hash_stop_q 决定直接完成还是进入 StPushToMsgFifo，将内层摘要写回消息 FIFO 以供外层轮次使用；若 sha_hash_done_i 未到则留在该态等待 [hmac_core.sv:389-405]。在 StPushToMsgFifo 中，停止向 SHA 送数据，选择 HMAC/FIFO 写通路并持续拉高 fifo_wvalid_o，同时保持 fifo_wdata_sel 不清零，以便逐字推进摘要写出 [hmac_core.sv:407-412]；当 fifo_wready_i 为 1 且 fifo_wdata_sel_o 已达到对应摘要长度的最后一个字位置时，按 digest_size_i 判断摘要已全部写完，然后转入 StOPad，清零 txcount、把 round 更新为 Outer 并重新发起 hash_start；否则持续停留并继续写 [hmac_core.sv:413-426]。在 StOPad 中，读数据源切到 SelOPad，同时 fifo_wsel_o 保持为 1 以表明 HMAC 处于第二阶段；满一个块后进入 StMsg 并停止新的读请求，否则继续向 SHA 送 opad 数据 [hmac_core.sv:429-441]。在 StDone 中产生 hmac_hash_done 脉冲并无条件回到 StIdle；default 分支也回到 StIdle [hmac_core.sv:444-453]。",
+  "guarantees": [
+    {
+      "property": "在 StWaitResp 状态下，模块不会向 SHA 声明新的输入数据有效；只有等待 sha_hash_done_i 来决定后续转移。",
+      "output_signals": [
+        "hmac_sha_rvalid",
+        "st_d"
+      ],
+      "source_refs": [
+        "hmac_core.sv:389-405"
+      ]
+    },
+    {
+      "property": "在 StDone 状态下，模块必定拉高 hmac_hash_done，并将下一状态设为 StIdle。",
+      "output_signals": [
+        "hmac_hash_done",
+        "st_d"
+      ],
+      "source_refs": [
+        "hmac_core.sv:444-449"
+      ]
+    },
+    {
+      "property": "在 StPushToMsgFifo 状态下，模块保证选择 FIFO/HMAC 写路径并驱动 fifo_wvalid_o=1，直到 fifo_wready_i 且摘要最后一个字被判定写出后才离开该状态。",
+      "output_signals": [
+        "fifo_wsel_o",
+        "fifo_wvalid_o",
+        "clr_fifo_wdata_sel",
+        "st_d"
+      ],
+      "source_refs": [
+        "hmac_core.sv:407-426"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接控制 HMAC 双轮（Inner/Outer）流程以及内层摘要回灌到消息 FIFO 的时机 [hmac_core.sv:369-426]。若这些状态转移或 digest_size_i 相关结束条件出错，可能导致外层 HMAC 计算使用不完整或错误长度的内层摘要，从而产生错误认证码。与安全相关的 stop/process 控制也影响何时停止读取消息和何时等待 SHA 完成 [hmac_core.sv:369-405]，因此这些控制寄存器若被错误驱动，可能造成摘要不对应预期消息边界。",
+  "assumptions": [
+    {
+      "constraint": "当在 StIdle 中使用 reg_hash_continue_i 启动 continue 路径时，设计意图要求此前已完成 StIPad，使得直接进入 StMsg 是合法的上下文续传。",
+      "bug_relevance": "这是行为契约；若在未完成 StIPad 的上下文下错误拉高 reg_hash_continue_i，消息会跳过 ipad 注入直接进入消息阶段，导致 HMAC 结果错误。",
+      "related_signals": [
+        "reg_hash_continue_i",
+        "hmac_en_i",
+        "st_q",
+        "st_d"
+      ],
+      "source_refs": [
+        "hmac_core.sv:341-345"
+      ]
+    },
+    {
+      "constraint": "digest_size_i 必须与当前 SHA/HMAC 配置一致，并且 fifo_wdata_sel_o 在 StPushToMsgFifo 中按字递增覆盖完整摘要长度，否则状态机对“摘要已写完”的判定不成立。",
+      "bug_relevance": "这是行为契约；若 digest_size_i 错误或 fifo_wdata_sel_o 不能正确推进，可能过早或过晚离开 StPushToMsgFifo，导致外层轮次使用截断或越界的内层摘要。",
+      "related_signals": [
+        "digest_size_i",
+        "fifo_wdata_sel_o",
+        "fifo_wready_i",
+        "st_q",
+        "st_d"
+      ],
+      "source_refs": [
+        "hmac_core.sv:413-421"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac_core.sv:314-327",
+    "hmac_core.sv:330-348",
+    "hmac_core.sv:351-363",
+    "hmac_core.sv:365-386",
+    "hmac_core.sv:389-405",
+    "hmac_core.sv:407-426",
+    "hmac_core.sv:429-441",
+    "hmac_core.sv:444-453"
+  ],
+  "uncertain_points": [
+    "StMsg 中第一分支用到 reg_hash_process_flag，而输入依赖列表中出现的是 reg_hash_process_flag，但其置位/清零条件不在本片段内，因此无法仅凭此处确定 Inner 轮次在何种完整条件下会因“process”请求结束消息读取 [hmac_core.sv:369-375]。",
+    "StPushToMsgFifo 对完成条件的判断依赖 fifo_wdata_sel_o 的当前值，但该选择信号的编码、递增机制以及与摘要字序的对应关系不在本片段中，无法确认 4'd7/11/15 是否分别严格对应 256/384/512 位摘要的最后一个字 [hmac_core.sv:413-415]。",
+    "代码在 StMsg/Outer 时将 fifo_wsel_o 置 1，并在 StOPad 注释中说明其用于表明 HMAC 第二阶段，但 fifo_wsel_o 的精确定义（是写目标选择、阶段标记还是两者兼有）需要查看外部连接才能完全确认 [hmac_core.sv:367, hmac_core.sv:431]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 313,
+  "line_end": 456
+}

@@ -1,0 +1,73 @@
+{
+  "chunk_id": "keccak_2share__generate_for__g_chi_w__001",
+  "summary": "该 generate 循环为每个行索引 x 计算两分享 χ 步中的非线性项，使用相邻两行的输入构造 DOM AND，按半 lane 处理并最终与当前行异或生成 chi_data。",
+  "behavior": "该逻辑对 x=0..4 的每一行各生成一份 χ 计算数据路径。它先取 phase2_in 的第 X1=(x+1)%5 行和第 X2=(x+2)%5 行，其中 X1 行的 share0 被按位取反而 share1 保持原值，形成 sheet0；X2 行直接形成 sheet1，这与 χ 中 \"~row[x+1] & row[x+2]\" 的结构一致，但仅从代码可直接确认 share0 上显式取反、share1 不取反 [keccak_2share.sv:158-169]。随后把这两行 5 个 lane 的低半段和高半段分别拼接成一维向量 a*_l/a*_h 与 b*_l/b*_h，并由 dom_in_low_i 选择当前送入 DOM AND 的是低半段还是高半段，因此该块一次只处理 half-sheet 宽度 WSheetHalf 的数据 [keccak_2share.sv:171-224]。\n\n随机掩码输入 in_prd[x] 的来源取决于参数和控制信号：若 ForceRandExt 为 0，则 dom_in_rand_ext_i=1 时使用外部 rand_i 中属于该行 x 的 WSheetHalf 位随机数，否则回用 out_prd 中经 rot_int(x,5) 选出的先前中间随机量；注释说明这是为了避免使用与当前新行依赖关系冲突的若干行中间结果做重掩码 [keccak_2share.sv:226-233]。若 ForceRandExt 为 1，则总是使用外部 rand_i，并把 dom_in_rand_ext_i 与对应 out_prd 引到一个未使用信号上以消除未连接告警 [keccak_2share.sv:233-239]。\n\n核心非线性运算由 prim_dom_and_2share 实例完成，输入为两分享的 a0/a1 与 b0/b1、有效信号 dom_update_i 和随机量 in_prd[x]，输出两分享结果 q0/q1 及新的乘积随机量 out_prd[x]。实例参数 Pipeline=1，注释声明整张 sheet 的处理需要 3 个时钟周期并用于降低侧信道泄漏，这表明该子模块不是纯组合逻辑，且 q0/q1/out_prd 的可用性受该流水实现影响 [keccak_2share.sv:241-258]。\n\n得到 q0/q1 后，逻辑把每个 W/2 宽切片复制到对应 lane 的高低两个半段，重组成 sheet2[share][lane]；这里 lane 次序按 q* 的切片索引反向映射到 [4:0]，并且同一半段值被同时填入 lane 的上下半部。注释明确说明这只是简化内部表示，真正选择高半/低半输出是在后续 Iota 之后生成 phase2_out 时完成 [keccak_2share.sv:260-275]。最后，sheet2 对每个 share 分别与当前行 phase2_in[share][x] 异或，得到 chi_data[share][x]，即当前行原值与非线性项的组合结果 [keccak_2share.sv:277-279]。",
+  "guarantees": [
+    {
+      "property": "对每个 x，chi_data[0][x] 恒等于 phase2_in[0][x] 与由 q0 重组得到的 sheet2[0] 按位异或；chi_data[1][x] 恒等于 phase2_in[1][x] 与由 q1 重组得到的 sheet2[1] 按位异或。",
+      "output_signals": [
+        "chi_data"
+      ],
+      "source_refs": [
+        "keccak_2share.sv:265-279"
+      ]
+    },
+    {
+      "property": "当 ForceRandExt 为 1 时，每个 in_prd[x] 一定直接取自 rand_i 中对应 x 的 WSheetHalf 位切片，不依赖 dom_in_rand_ext_i 或 out_prd。",
+      "output_signals": [
+        "in_prd"
+      ],
+      "source_refs": [
+        "keccak_2share.sv:233-239"
+      ]
+    }
+  ],
+  "security_implications": "该片段实现了两分享 DOM AND，并显式引入随机量 in_prd 以及 Pipeline=1 的流水化处理，注释说明这是为了降低侧信道泄漏 [keccak_2share.sv:226-245]。随机量来源可在外部随机数与内部回用随机量之间切换；若随机源选择或时序配合不当，可能影响掩码刷新质量。ForceRandExt=1 时强制使用外部随机数，可避免内部回用路径带来的相关性。",
+  "assumptions": [
+    {
+      "constraint": "当 ForceRandExt 为 0 且 dom_in_rand_ext_i 为 0 时，被 rot_int(x, 5) 选中的 out_prd 项必须在功能上已由先前合法计算产生并满足 DOM 重掩码需求；否则当前 DOM AND 可能使用无效或相关性过强的随机量。",
+      "bug_relevance": "如果违反该约束，功能值可能仍可传播，但掩码安全性和/或子模块期望的随机独立性可能被破坏，构成实现级安全问题。",
+      "related_signals": [
+        "ForceRandExt",
+        "dom_in_rand_ext_i",
+        "out_prd",
+        "in_prd"
+      ],
+      "source_refs": [
+        "keccak_2share.sv:226-233",
+        "keccak_2share.sv:253-257"
+      ]
+    },
+    {
+      "constraint": "dom_in_low_i 需要与后续 phase2_out 生成时对高半/低半的选择协议一致，因为本块会把 q0/q1 生成的半 lane 同时复制到上下两半，真正的半段区分留给后级处理。",
+      "bug_relevance": "如果违反该契约，后续逻辑可能把错误的半 lane 结果写入最终状态，导致 χ 结果错误；这不是本块内部可自恢复的防御性场景。",
+      "related_signals": [
+        "dom_in_low_i",
+        "q0",
+        "q1",
+        "sheet2",
+        "chi_data"
+      ],
+      "source_refs": [
+        "keccak_2share.sv:220-224",
+        "keccak_2share.sv:260-264",
+        "keccak_2share.sv:265-279"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keccak_2share.sv:157-169",
+    "keccak_2share.sv:171-224",
+    "keccak_2share.sv:226-239",
+    "keccak_2share.sv:241-258",
+    "keccak_2share.sv:260-279"
+  ],
+  "uncertain_points": [
+    "注释和结构表明该块在实现 χ 的 \"~row[x+1] & row[x+2]\" 项，但仅从本片段可直接看到只有 share0 的 X1 输入被取反、share1 未取反；这是否是该分享方案的预期编码需要结合模块其他部分或掩码约定确认 [keccak_2share.sv:161-169]。",
+    "注释称 prim_dom_and_2share 在 Pipeline=1 时“整张 sheet 需 3 个时钟周期” [keccak_2share.sv:243-244]，但本片段未给出 q0/q1/out_prd 相对 dom_update_i 的精确拍数关系，需查看 prim_dom_and_2share 定义确认。",
+    "rot_int(x, 5) 的具体旋转映射未在片段内展开，因此只能确认其用于选择一个避免与当前依赖行冲突的 out_prd 来源，无法仅据此列出精确索引关系 [keccak_2share.sv:228-232]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
+  "line_start": 157,
+  "line_end": 280
+}

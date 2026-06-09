@@ -1,0 +1,1448 @@
+{
+  "_stats": {
+    "call_count": 32,
+    "error_count": 0,
+    "total_input_tokens": 179283,
+    "total_output_tokens": 65975,
+    "total_tokens": 245258,
+    "total_wall_seconds": 971.6,
+    "total_wall_minutes": 16.2
+  },
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "title": "[B-AG+U-UP] 硬件设计未提供非复位期间 fault_err_req_q 的协议行为保证，可能导致信号不满足 prim_alert_sender 的请求协议（例如提前撤销、未能保持到确认等），进而使警报发送器挂起、死锁或软件无法正确感知错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.975,
+      "contradiction": "guarantee 表明该 always_ff 中确实存在复位清除条件，这与假设所称“未在本片段出现”直接矛盾。但该假设可能源于自动分析生成的不准确描述，其真实意图可能是担心缺乏软件清除等机制。由于无法确定原始设计意图和本片段外的逻辑，无法判定是否存在真正缺口或矛盾。",
+      "involved_signals": [
+        "fault_err_req_q",
+        "fault_o",
+        "kmac_done_err_q",
+        "sync_fault_q",
+        "prim_count",
+        "cnt_err",
+        "reseed_req_i",
+        "local_req",
+        "edn_done"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__008",
+        "keymgr__always_ff__line_725__001",
+        "keymgr_ctrl__always_comb__line_739__001",
+        "keymgr_err__continuous_region__declarations_or_instances__003",
+        "keymgr_err__continuous_region__keymgr_err__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+        "keymgr_kmac_if__always_ff__line_379__001",
+        "keymgr_err__always_ff__line_95__001",
+        "keymgr_err__continuous_region__batched_small_assigns__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__008",
+          "field": "assumption",
+          "excerpt": "`fault_err_req_q` 和 `op_err_req_q` 必须遵循 prim_alert_sender 的请求协议（通常为脉冲或电平，保持直到被确认后撤销）。"
+        },
+        {
+          "spec": "keymgr__always_ff__line_725__001",
+          "field": "guarantee",
+          "excerpt": "复位期间及复位释放后的第一个时钟周期内，fault_err_req_q 和 op_err_req_q 保持为 0"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_739__001",
+          "field": "assumption",
+          "excerpt": "在 op_done_o 有效期间，error_o 和 fault_o 必须已经稳定且反映操作的真实最终结果。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "当 op_done_i = 0 时，error_o[ErrInvalidOp] 和 error_o[ErrInvalidIn] 恒为 0，fault_o[FaultKmacOp]、fault_o[FaultKmacOut]、fault_o[FaultSideSel] 恒为 0。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "fault_o 的异步故障位（FaultKmacCmd 到 FaultKeyEcc）在所有时刻反映 async_fault_o 对应位的电平，即组合地暴露锁存及新检测到的异步故障。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "assumption",
+          "excerpt": "在 err_vld 有效期间，fault_o 信号应稳定无毛刺。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "fault_o 的异步故障位（FaultKmacCmd 到 FaultKeyEcc）在所有时刻反映 async_fault_o 对应位的电平，即组合地暴露锁存及新检测到的异步故障。"
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "kmac_done_err_q 必须由时序逻辑（如 always_ff）根据 kmac_done_err_d 更新，否则错误标志将无法实际生效"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "[B-AG+U-UP] Guarantees 缺失对 key_state_ecc_q 与 key_state_q 拼接位序的约束，可能在实际硬件中接线顺序与 prim_secded_inv_72_64_dec 的要求不符，导致 ECC 错误检测功能异常，完整性监控失效。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.975,
+      "contradiction": "假设要求对所有提供给 ECC 解码器的 key_state_q/ecc_q 拼接都满足顺序一致性且 err_o 行为正确；guarantee 只确保复位初始值满足该条件，未约束后续状态，可能导致 ECC 错误检测失效或 err_o 误报，损害密钥完整性监控。",
+      "involved_signals": [
+        "key_state_ecc_q",
+        "key_state_q",
+        "op_state_cmd_err",
+        "key_state_d",
+        "vld_state_change_d",
+        "data_state_e"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+        "keymgr_ctrl__always_ff__line_304__001",
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_ctrl__always_comb__line_363__001",
+        "keymgr_ctrl__continuous_region__batched_small_assigns__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+          "field": "assumption",
+          "excerpt": "${key_state_ecc_q[i][j][k], key_state_q[i][j][k]} 拼接形成的 72 位数据必须与 prim_secded_inv_72_64_dec 要求的（校验位，数据）顺序一致，且模块的 err_o 在无错误时为 2'b00，有任何错误时至少有一位为 1。"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_304__001",
+          "field": "guarantee",
+          "excerpt": "复位释放后第一个时钟沿，key_state_q 必定为全 0，key_state_ecc_q 必定为 TotalEccWords 个 SecdedInv7264ZeroEcc 值。"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_304__001",
+          "field": "guarantee",
+          "excerpt": "非复位时，key_state_ecc_q 每一拍都根据 key_state_ecc_words_d 的当前值更新，且每个分片 i,j,k 均独立完成 ECC 编码。"
+        },
+        {
+          "spec": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+          "field": "assumption",
+          "excerpt": "${key_state_ecc_q[i][j][k], key_state_q[i][j][k]} 拼接形成的 72 位数据必须与 prim_secded_inv_72_64_dec 要求的（校验位，数据）顺序一致，且模块的 err_o 在无错误时为 2'b00，有任何错误时至少有一位为 1。"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_304__001",
+          "field": "guarantee",
+          "excerpt": "复位释放后第一个时钟沿，key_state_q 必定为全 0，key_state_ecc_q 必定为 TotalEccWords 个 SecdedInv7264ZeroEcc 值。"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+          "field": "assumption",
+          "excerpt": "op_err 信号的组成（是否包含 op_state_cmd_err、op_fsm_err 等）未在本片段定义，影响 op_update_sel 的优先级分支行为。"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "assumption",
+          "excerpt": "cnt[EntropyRndWidth-1:0] 的索引范围不能超过 key_state_d[i][j] 的位宽"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "guarantee",
+          "excerpt": "当 update_sel 为 KeyUpdateWipe 时，wipe_key_o 必定为 1 且 key_state_d 所有条目均被熵值完全填充"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "assumption 假定 valid_q 由外部逻辑驱动，而 RTL 实现（guarantee）又在同一模块中驱动 valid_q，造成多驱动冲突，可能产生未知态或破坏 sideload key 有效标志的正确性。",
+      "severity": "HIGH",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.925,
+      "contradiction": "Whether valid and the enable signals are guaranteed to be mutually exclusive or can overlap across different operation types is not specified here – the logic permits simultaneous setting of multiple flags if respective enables are high and the input/state invalid bits are set.",
+      "involved_signals": [
+        "valid_q",
+        "invalid_stage_sel",
+        "adv_dvalid",
+        "stage_sel",
+        "invalid_data",
+        "valid_chk",
+        "MaxWidth",
+        "key_chk",
+        "valid"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key__continuous_region__keymgr_sideload_key__001",
+        "keymgr_sideload_key__always_ff__line_32__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key__continuous_region__keymgr_sideload_key__001",
+          "field": "assumption",
+          "excerpt": "valid_q 和 key_q 由本片段以外的逻辑正确更新，且满足模块整体时序要求。"
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_32__001",
+          "field": "guarantee",
+          "excerpt": "当 clr_i=0 且 en_i=1 时，若在时钟上升沿 set_i=1，则 valid_q 在下一拍被置为 1 并保持至清除条件出现；一旦出现 clr_i=1 或 en_i=0，valid_q 在下一拍被清除为 0。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "如果实际集成中 key_state_ecc_q/key_state_q 的拼接顺序与 prim_secded_inv_72_64_dec 的要求不一致，或者该解码器在无错时未输出 2'b00，ecc_errs 将无法正确反映 ECC 状态，导致密钥完整性监控失效，可纠正错误被忽略或不可纠正错误未检出。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "assumption 约束 fault_o 不得出现毛刺，毛刺属于外部违规的非法场景；guarantee 在无操作更新（op_update_i 和 op_done_i 均为 0）时强制 sync_err_d 对应位为 0，即使 fault_o 违规出现毛刺也不会误报错误，这是对非法输入的防御性回退行为，与前提不矛盾。",
+      "involved_signals": [
+        "ecc_errs",
+        "sync_err_d"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+        "keymgr_err__continuous_region__keymgr_err__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+          "field": "assumption",
+          "excerpt": "${key_state_ecc_q[i][j][k], key_state_q[i][j][k]} 拼接形成的 72 位数据必须与 prim_secded_inv_72_64_dec 要求的（校验位，数据）顺序一致，且模块的 err_o 在无错误时为 2'b00，有任何错误时至少有一位为 1。"
+        },
+        {
+          "spec": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+          "field": "guarantee",
+          "excerpt": "当 key_state_ecc_q[i][j][k] 和 key_state_q[i][j][k] 不变时，ecc_errs[i][j][k] 的值完全由 prim_secded_inv_72_64_dec 的 err_o 按位或决定，无额外延迟或状态。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "assumption",
+          "excerpt": "在 err_vld 有效期间，fault_o 信号应稳定无毛刺。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "guarantee",
+          "excerpt": "当 op_update_i 和 op_done_i 均为 0 时，sync_err_d[SyncErrInvalidOp] 与 sync_err_d[SyncErrInvalidIn] 恒为 0，不会产生错误指示。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "硬件在 op_done_o 有效时未对 error_o 和 fault_o 的稳定性提供任何保证，可能导致 status_o 在有效操作完成时报告错误的完成状态，诱使上层固件做出错误的密钥管理决策。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "硬件在 op_done_o 有效时未对 error_o 和 fault_o 的稳定性提供任何保证，可能导致 status_o 在有效操作完成时报告错误的完成状态，诱使上层固件做出错误的密钥管理决策。",
+      "involved_signals": [
+        "error_o"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__always_comb__line_739__001",
+        "keymgr_err__continuous_region__declarations_or_instances__003"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__always_comb__line_739__001",
+          "field": "assumption",
+          "excerpt": "在 op_done_o 有效期间，error_o 和 fault_o 必须已经稳定且反映操作的真实最终结果。"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "当 op_done_i = 0 时，error_o[ErrInvalidOp] 和 error_o[ErrInvalidIn] 恒为 0，fault_o[FaultKmacOp]、fault_o[FaultKmacOut]、fault_o[FaultSideSel] 恒为 0。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "gen_en_o 有效期要求 gen_op 为真，但 keymgr_op_state_ctrl 的 guarantee 未驱动或约束 gen_op，外部可能未提供该信号的有效值，导致 op_state_cmd_err 意外置位，可能引发错误恢复流程或密钥状态机异常跳转。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "gen_en_o 有效期要求 gen_op 为真，但 keymgr_op_state_ctrl 的 guarantee 未驱动或约束 gen_op，外部可能未提供该信号的有效值，导致 op_state_cmd_err 意外置位，可能引发错误恢复流程或密钥状态机异常跳转。",
+      "involved_signals": [
+        "gen_en_o",
+        "gen_en"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+          "field": "assumption",
+          "excerpt": "外部应保证 gen_op 在 gen_en_o 有效时为真，否则 op_state_cmd_err 将置1。"
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "当 gen_en 为 1 且 gen_req_i 为 1 时，gen_en_o 保证为 1；否则为 0"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "进入安全擦除状态 StCtrlWipe 时，last_working_st 可能因从未更新或之前捕获了无效的 working_state_o 而呈现 StReset 或不合法值，不满足“已保存有效工作状态”的前提，可能导致擦除流程错误处理。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "进入安全擦除状态 StCtrlWipe 时，last_working_st 可能因从未更新或之前捕获了无效的 working_state_o 而呈现 StReset 或不合法值，不满足“已保存有效工作状态”的前提，可能导致擦除流程错误处理。",
+      "involved_signals": [
+        "last_working_st",
+        "valid_tracking_q",
+        "AesIdx",
+        "KmacIdx",
+        "OtbnIdx",
+        "LastIdx"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__always_comb__line_703__001",
+        "keymgr_ctrl__always_ff__line_695__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "assumption",
+          "excerpt": "当 state_q 为 StCtrlWipe 时，last_working_st 应已保存一个有效的工作状态（非 StInvalid 或非法值）。"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_695__001",
+          "field": "guarantee",
+          "excerpt": "复位后 last_working_st 一定等于 StReset。"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_695__001",
+          "field": "guarantee",
+          "excerpt": "在任一 clk_i 上升沿采样到 update_en 为高时，从该时钟沿之后 last_working_st 等于该时钟沿采样到的 working_state_o 值。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "stage_sel 必须为 Creator、OwnerInt 或 Owner 之一，以确保 max_key_versions 数组访问合法且调试条件正确",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.712,
+      "contradiction": "Assumption 约束 stage_sel 必须为三个合法阶段之一，这描述的是合法输入范围；若输入非法，assumption 指出 cur_max_key_version 将未定义。Guarantee 将超出有效阶段数（KeyMgrStages）的 max_key_versions 索引强制清零。如果 stage_sel 落入这些被清零的非法索引，cur_max_key_version 会确定性地取 0，而不是未定义。硬件通过在未用索引上提供已知安全值，实现了对非法输入的防御性回退，消除了 assumption 所担心的未定义行为。因此这不是 bug，而是防御性设计。",
+      "involved_signals": [
+        "max_key_versions",
+        "UseOtpSeedsInsteadOfFlash",
+        "otp_key_i",
+        "flash_i",
+        "unused_key_vld",
+        "key_i.valid"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__006",
+        "keymgr__generate_for__gen_key_version_fill__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "stage_sel 必须为 Creator、OwnerInt 或 Owner 之一，以确保 max_key_versions 数组访问合法且调试条件正确"
+        },
+        {
+          "spec": "keymgr__generate_for__gen_key_version_fill__001",
+          "field": "guarantee",
+          "excerpt": "对于所有满足 KeyMgrStages ≤ i < 2**StageWidth 的索引 i，信号 max_key_versions[i] 恒为 0。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "[U-UP] unused_creator_seed 是否仅用于 lint 抑制，还是为了阻止未使用输入路径被综合优化（可能导致安全信息泄露），设计文档未明确说明。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "unused_owner_seed 的缩位异或是否被后续逻辑使用（代码中未见连接），仅用于消除 lint 警告，其存在性可能被综合工具优化，设计意图是否为强制保留需确认。",
+      "involved_signals": [
+        "unused_creator_seed",
+        "unused_owner_seed",
+        "unused_kmac_en_masking"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "[U-UP] 编译常量 UseOtpSeedsInsteadOfFlash 的定义和作用域未在片段中给出，需外部确认是否保证与 keymgr 的其他配置一致。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "编译常量 UseOtpSeedsInsteadOfFlash 的定义和作用域未在片段中给出，需外部确认是否保证与 keymgr 的其他配置一致。",
+      "involved_signals": [
+        "UseOtpSeedsInsteadOfFlash"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "[U-UP] ASSERT_INIT 宏在硬件综合后的实际行为（是否仍为组合警报逻辑或仅用于仿真）会影响设计保证的严格程度，但根据 OpenTitan 惯例通常综合为恒定检查逻辑。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "ASSERT_INIT 宏在硬件综合后的实际行为（是否仍为组合警报逻辑或仅用于仿真）会影响设计保证的严格程度，但根据 OpenTitan 惯例通常综合为恒定检查逻辑。",
+      "involved_signals": [
+        "ASSERT_INIT"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "[U-UP] prim_sec_anchor_buf 的具体实现行为（是否仅缓冲或包含额外安全锚定逻辑）未在本区域体现，需交叉参考原语。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "当 op_ack 与 op_update（或 random_ack 与 random_req）同时有效时，prim_count 内部清零与递增的优先级未在本片段指定，依赖 prim_count 的实现。",
+      "involved_signals": [
+        "prim_sec_anchor_buf",
+        "prim_secded_inv_72_64_enc",
+        "op_ack",
+        "op_update",
+        "random_ack",
+        "random_req",
+        "prim_count",
+        "prim_secded_inv_72_64_dec",
+        "err_o",
+        "prim_msb_extend",
+        "commit_i"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "[U-UP] lc_keymgr_div_i 及其他生命周期分频信号的连接与同步未在本区域内说明。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "SyncErrInvalidOp 和 SyncErrInvalidIn 等索引值依赖于 keymgr_pkg 包定义，本片段未显式给出，可能影响对其他错误位的理解。",
+      "involved_signals": [
+        "lc_keymgr_div_i",
+        "keymgr_pkg",
+        "keymgr_reg_pkg",
+        "LfsrWidth"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "[U-UP] data_rand[0] 的来源与更新时序未在该片段内定义，影响 adv_matrix 条目随机值的变化模式。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "为何将 AdvLfsrCopies 宽度的所有位设置为相同的 data_rand[0]，而不是采用多比特随机数，本片段未给出理由。",
+      "involved_signals": [
+        "data_rand",
+        "adv_matrix",
+        "data_i",
+        "KeyWidth"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "[U-UP] kmac_data 信号的实际位宽是否保证不小于 KeyWidth？若不满足，部分选择 [KeyWidth-1:0] 可能导致编译错误或意外位扩展，设计隐含依赖参数一致性。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "kmac_data 信号的实际位宽是否保证不小于 KeyWidth？若不满足，部分选择 [KeyWidth-1:0] 可能导致编译错误或意外位扩展，设计隐含依赖参数一致性。",
+      "involved_signals": [
+        "kmac_data",
+        "KeyWidth",
+        "EntropyRndWidth",
+        "LfsrWidth",
+        "CDIs",
+        "MaxWidth",
+        "RandWidth"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "[U-UP] cnt 的递增和边界逻辑不在本块中，其与 KeyUpdateRandom 多周期过程的配合需结合外部状态机理解",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "当 cnt 大于 LastAdvRound/LastIdRound/LastGenRound 时，无符号减法会产生大整数（下溢），此行为是否被设计允许未知；若允许，可能影响后续基于这些选择信号的控制逻辑。",
+      "involved_signals": [
+        "cnt"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0017",
+      "title": "[U-UP] gen_op、adv_op、dis_op 的来源及生成条件未在本片段给出",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "gen_op、adv_op、dis_op 的来源及生成条件未在本片段给出",
+      "involved_signals": [
+        "gen_op",
+        "adv_op",
+        "dis_op"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0018",
+      "title": "[U-UP] 宏 PRIM_FLOP_SPARSE_FSM 的内部实现细节（如位宽、冗余编码方式、检测/纠正逻辑）未知，只能根据其名称和注释推断安全意图",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "PRIM_FLOP_SPARSE_FSM 宏的具体实现未显示，无法确定非法状态检测的具体行为（是否仅报警、是否锁定状态等）；复位信号来源及同步方式未知。",
+      "involved_signals": [
+        "PRIM_FLOP_SPARSE_FSM"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0019",
+      "title": "[U-UP] 未定义状态进入 DIS 后，缺少从 DIS 回到 IDLE 的路径（除非 op_done_i 置位），若因软错误意外进入 default 分支，状态机将卡在 DIS 直到 op_done_i 出现，可能导致较长恢复时间，不确定是否为有意设计。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "未定义状态进入 DIS 后，缺少从 DIS 回到 IDLE 的路径（除非 op_done_i 置位），若因软错误意外进入 default 分支，状态机将卡在 DIS 直到 op_done_i 出现，可能导致较长恢复时间，不确定是否为有意设计。",
+      "involved_signals": [
+        "op_done_i",
+        "op_update_i"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0020",
+      "title": "[U-UP] key_padded 和 key_chk 的信号后续如何使用未在本片段体现",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "key_padded 和 key_chk 的信号后续如何使用未在本片段体现",
+      "involved_signals": [
+        "key_padded",
+        "key_chk"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0021",
+      "title": "[U-UP] enables_d 与 cnt_set 的来源及产生逻辑未在本片段体现，需结合上下文确认。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "The exact definition of enables_sub (its bit mapping relative to enables_d) is not provided here; it must be inferred from surrounding logic.",
+      "involved_signals": [
+        "enables_d",
+        "cnt_set",
+        "enables_sub"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0022",
+      "title": "[U-UP] entropy_i 的确切宽度和来源不确定，片段仅使用 [1] 和 [0]，需要外部保证宽度 ≥2。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "entropy_i 的确切宽度和来源不确定，片段仅使用 [1] 和 [0]，需要外部保证宽度 ≥2。",
+      "involved_signals": [
+        "entropy_i"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0023",
+      "title": "[U-UP] en_i 的时序特性（是否与时钟同步）未知，需结合整体设计确认。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "en_i 的时序特性（是否与时钟同步）未知，需结合整体设计确认。",
+      "involved_signals": [
+        "en_i"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0024",
+      "title": "[U-UP] SideLoadClrIdle、SideLoadClrAes、SideLoadClrKmac、SideLoadClrOtbn 的枚举值范围未定义，clr_all_keys 的非法检测行为依赖于这些枚举是否覆盖所有可能值。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "SideLoadClrIdle、SideLoadClrAes、SideLoadClrKmac、SideLoadClrOtbn 的枚举值范围未定义，clr_all_keys 的非法检测行为依赖于这些枚举是否覆盖所有可能值。",
+      "involved_signals": [
+        "clr_all_keys"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "[U-UP] AesIdx 与 LastIdx 的具体值由外部参数/常量决定，未在本片段中定义，因此无法确定有效槽位总数。",
+      "severity": "HIGH",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.534,
+      "contradiction": "AesIdx 与 LastIdx 的具体值由外部参数/常量决定，未在本片段中定义，因此无法确定有效槽位总数。",
+      "involved_signals": [
+        "AesIdx",
+        "LastIdx"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "out_clr 与 vld_dis 功能均清除 out_q，两者区别及使用场景未在片段中体现，可能对应不同锁定阶段或源，需结合模块其他部分确认。",
+      "severity": "MEDIUM",
+      "verdict": "SATISFIED",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.472,
+      "contradiction": "assumption 仅描述 out_clr 与 vld_dis 都具有清除 out_q 的功能，guarantee 给出的优先级机制并未剥夺这一功能：out_clr 在 vld_set 和 vld_dis 均无效时确实会清除 out_q，vld_dis 则在有效时立即清除。两者同时有效或与 vld_set 并存时的优先级选择是合理的设计行为，不违背‘两者均具备清除能力’的陈述。因此 assumption 被 guarantee 满足。",
+      "involved_signals": [
+        "out_q"
+      ],
+      "involved_specs": [
+        "keymgr_cfg_en__always_ff__line_51__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_51__001",
+          "field": "assumption",
+          "excerpt": "out_clr 与 vld_dis 功能均清除 out_q，两者区别及使用场景未在片段中体现，可能对应不同锁定阶段或源，需结合模块其他部分确认。"
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_51__001",
+          "field": "guarantee",
+          "excerpt": "复位后 out_q 一定为 1；vld_dis 优先级高于 vld_set，vld_set 优先级高于 out_clr。当 vld_set 和 out_clr 同时有效且 vld_dis 无效时，out_q 将在下一时钟沿置 1 而非清 0。"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "The RTL implementation lacks a mechanism to block id/gen commands or any other software commands before the initialize command is received. The state machine allows direct acceptance of operations aft",
+      "severity": "LOW",
+      "verdict": "VIOLATION",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.248,
+      "contradiction": "The RTL implementation lacks a mechanism to block id/gen commands or any other software commands before the initialize command is received. The state machine allows direct acceptance of operations after reset, violating the required command rejection until initialization.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "The RTL lacks a state or gating logic that defers the transition to Invalid until the ongoing operation has finished. Instead, error or deactivation conditions can trigger immediate key erasure (KeyUp",
+      "severity": "LOW",
+      "verdict": "VIOLATION",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.248,
+      "contradiction": "The RTL lacks a state or gating logic that defers the transition to Invalid until the ongoing operation has finished. Instead, error or deactivation conditions can trigger immediate key erasure (KeyUpdateWipe) or a Kmac update (KeyUpdateKmac) that do not respect the ‘complete gracefully’ requirement. This could cause premature termination of an operation, leading to incomplete key updates and potential security weaknesses.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "RTL 缺少对内部密钥的全零、全一检查逻辑，仅实现了密钥版本比较。",
+      "severity": "LOW",
+      "verdict": "VIOLATION",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.248,
+      "contradiction": "RTL 缺少对内部密钥的全零、全一检查逻辑，仅实现了密钥版本比较。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "[U-UP] AdvDataWidth 的具体位宽未知，无法判断拼接后的强制类型转换是否可能产生截断或扩展，需结合外部定义确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "AdvDataWidth 的具体位宽未知，无法判断拼接后的强制类型转换是否可能产生截断或扩展，需结合外部定义确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "[U-UP] `AlertAsyncOn` 参数的来源与位宽未在此片段定义，需确认其是否匹配 alert sender 位宽。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "`AlertAsyncOn` 参数的来源与位宽未在此片段定义，需确认其是否匹配 alert sender 位宽。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "[U-UP] `alert_rx_i` 和 `alert_tx_o` 的其他位用于何种警报或功能未在本片段体现。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "`alert_rx_i` 和 `alert_tx_o` 的其他位用于何种警报或功能未在本片段体现。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "[U-UP] 寄存器模块输出的错误标志在本区域仅声明，未被进一步使用或转发，需确认后续逻辑依赖。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "寄存器模块输出的错误标志在本区域仅声明，未被进一步使用或转发，需确认后续逻辑依赖。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "[U-UP] 复位默认使能（1）的设计意图需要上下文确认（可能用于保证初始可配置状态）。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "复位默认使能（1）的设计意图需要上下文确认（可能用于保证初始可配置状态）。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0035",
+      "title": "[U-UP] 该 chunk 标记为 batched 小型声明/赋值，但实际代码中仅有注释和 endmodule，可能提取时遗漏了有效代码行，或该 chunk 仅包含空白/注释。需确认完整的 keymgr_cfg_en 模块是否在其他 chunk 中包含实际逻辑。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "该 chunk 标记为 batched 小型声明/赋值，但实际代码中仅有注释和 endmodule，可能提取时遗漏了有效代码行，或该 chunk 仅包含空白/注释。需确认完整的 keymgr_cfg_en 模块是否在其他 chunk 中包含实际逻辑。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0036",
+      "title": "[U-UP] 注释所指‘Subtle bug’是开发中标记的已知漏洞还是故意的调试入口，需要进一步上下文确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "注释所指‘Subtle bug’是开发中标记的已知漏洞还是故意的调试入口，需要进一步上下文确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0037",
+      "title": "[U-UP] The chunk was expected to contain a small declaration or assignment, but the extracted code shows only a comment and endmodule. The actual logic may h",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "The chunk was expected to contain a small declaration or assignment, but the extracted code shows only a comment and endmodule. The actual logic may have been missed during extraction.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0038",
+      "title": "[U-UP] async_fault_* 信号出现在依赖列表中但未在该片段中使用，可能是划分边界导致的不一致。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "async_fault_* 信号出现在依赖列表中但未在该片段中使用，可能是划分边界导致的不一致。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0039",
+      "title": "[U-UP] 各输入错误信号是电平还是脉冲，以及是否已在本模块外同步，无法从片段推断。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "各输入错误信号是电平还是脉冲，以及是否已在本模块外同步，无法从片段推断。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0040",
+      "title": "[U-UP] 片段覆盖行号标注为 99-108，但实际有效代码仅第 100 行，endmodule 位于 108 行，中间可能存在格式化空白或已被省略的注释。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "片段覆盖行号标注为 99-108，但实际有效代码仅第 100 行，endmodule 位于 108 行，中间可能存在格式化空白或已被省略的注释。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0041",
+      "title": "[U-UP] 实际的检查逻辑（如非零判断、版本比较、key_i内部valid信号提取）未在片段中给出，无法确认各vld_o信号的具体置位条件。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "实际的检查逻辑（如非零判断、版本比较、key_i内部valid信号提取）未在片段中给出，无法确认各vld_o信号的具体置位条件。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0042",
+      "title": "[U-UP] cur_max_key_version_i和key_version_i之间的关系是否影响key_version_vld_o不明确。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "cur_max_key_version_i和key_version_i之间的关系是否影响key_version_vld_o不明确。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0043",
+      "title": "[U-UP] hw_key_req_t结构体内容未知，无法推断key_vld_o的产生方式。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "hw_key_req_t结构体内容未知，无法推断key_vld_o的产生方式。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0044",
+      "title": "[U-UP] DecoyOutputCopies 与 digest_share1/0 位宽是否确相等未在片段中定义，需结合上下文确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "DecoyOutputCopies 与 digest_share1/0 位宽是否确相等未在片段中定义，需结合上下文确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0045",
+      "title": "[U-UP] 诱饵副本 DecoyCopies/DecoyOutputCopies 的具体使用方式（是否用于数据随机乱序或时间加扰）需在后续逻辑中确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "诱饵副本 DecoyCopies/DecoyOutputCopies 的具体使用方式（是否用于数据随机乱序或时间加扰）需在后续逻辑中确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0046",
+      "title": "[U-UP] 状态编码非连续值的汉明距离设计是否确实用于安全或仅作为编码习惯，注释未明确说明。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "状态编码非连续值的汉明距离设计是否确实用于安全或仅作为编码习惯，注释未明确说明。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0047",
+      "title": "[U-UP] 仅端口声明区域，无内部逻辑，具体行为需结合后续 always_ff/assign 块确定。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "仅端口声明区域，无内部逻辑，具体行为需结合后续 always_ff/assign 块确定。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0048",
+      "title": "[U-UP] 该 chunk 的描述声称包含 1 个孤立的小型声明/赋值语句，但提供的代码片段实际只包含行号标记注释和 endmodule，可能内容缺失或提取错误，无法确定原设计意图。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "该 chunk 的描述声称包含 1 个孤立的小型声明/赋值语句，但提供的代码片段实际只包含行号标记注释和 endmodule，可能内容缺失或提取错误，无法确定原设计意图。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0049",
+      "title": "[U-UP] chunk 描述声称包含 1 个孤立的小型声明或赋值，但实际代码仅出现 endpackage 和注释，缺失预期的声明/赋值内容，可能需要检查代码提取或上下文完整性。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "chunk 描述声称包含 1 个孤立的小型声明或赋值，但实际代码仅出现 endpackage 和注释，缺失预期的声明/赋值内容，可能需要检查代码提取或上下文完整性。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0050",
+      "title": "[U-UP] HW_KEY_REQ_DEFAULT / OTBN_KEY_REQ_DEFAULT 中的 DEADBEEF 默认密钥在硬件中是否实际作为复位值使用，还是仅用于仿真，需结合具体实例化确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "HW_KEY_REQ_DEFAULT / OTBN_KEY_REQ_DEFAULT 中的 DEADBEEF 默认密钥在硬件中是否实际作为复位值使用，还是仅用于仿真，需结合具体实例化确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0051",
+      "title": "[U-UP] 该 chunk 被标记为 batched small assigns / declarations，但实际内容仅为注释与 endmodule，可能 chunk 划分遗漏了实质赋值或声明，需结合上游抽取过程确认",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "该 chunk 被标记为 batched small assigns / declarations，但实际内容仅为注释与 endmodule，可能 chunk 划分遗漏了实质赋值或声明，需结合上游抽取过程确认",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0052",
+      "title": "[U-UP] 注释 Line 103 提到“when clear is received, delete the selected key”，但代码中未见 clear 信号或对应逻辑，可能是过时注释或 clear 功能在外部实现。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "注释 Line 103 提到“when clear is received, delete the selected key”，但代码中未见 clear 信号或对应逻辑，可能是过时注释或 clear 功能在外部实现。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0053",
+      "title": "[U-UP] StSideloadStop 作为“intentional terminal state”（Line 119）仅能通过系统复位退出，但其复位行为未在本片段定义。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "StSideloadStop 作为“intentional terminal state”（Line 119）仅能通过系统复位退出，但其复位行为未在本片段定义。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0054",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "The official design document (theory_of_operation.md) was not included in the input. Without the document text, it is impossible to compare the claim against any design specification, and no relevant design statement can be identified. Therefore, the finding cannot be evaluated.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0055",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No official design document (theory_of_operation.md) was provided with the finding; only RTL implementation fragments were supplied. The claim that advancement from Initialized to CreatorRootKey is irreversible during the current power cycle cannot be compared against an absent design specification.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0056",
+      "title": "缺少设计文档，无法比对 finding 与官方设计意图。",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "缺少设计文档，无法比对 finding 与官方设计意图。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0057",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "The official design document (theory_of_operation.md) was not provided in the input, so I am unable to locate any relevant design claim to compare against the bug finding.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0058",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档全文未提供，RTL spec 片段中未包含与 Disabled 状态进入时内部密钥更新、sideload 密钥槽保留或软件密钥槽保留相关的设计声明，无法进行比对。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0059",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "The finding references a claim about the transition from Reset to Initialized, but the official design document (theory_of_operation.md) was not supplied. Without it, I cannot locate the exact design statement needed to compare against the RTL implementation. The provided RTL spec fragments do not contain the full state-machine sequencing that would confirm or contradict the claimed order of entropy fill followed by root key loading. Therefore, no comparison can be made.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0060",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "未提供官方设计文档全文，无法将该 finding 与设计声明进行比对。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0061",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "The provided RTL specification snippets do not contain any behavior or signals related to reading the root key from OTP, the CreatorRootKey state in the FSM, or the OTP valid signal. Without the relevant RTL specification for the root key loading logic, it is impossible to check whether the implementation matches the design claim.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0062",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No official design document (theory_of_operation.md) was provided for comparison. Without the design document, it is impossible to verify whether the finding's claim (synchronous recoverable errors reported in ERR_CODE and a recoverable alert sent at end of operation) aligns with or contradicts the design intent. The RTL spec fragments describe error/fault reporting at op_done, but no alert mechanism is visible, and the design requirement is unknown.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0063",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "LLM call failed after retries",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0064",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "The official design document (theory_of_operation.md) was not provided in the input. Without the design document, it is impossible to locate a specific design claim related to the finding about non-onehot command conditions causing fault, transition to Invalid state, wipe and error reporting. Therefore, no comparison can be made.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0065",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "本次输入仅提供了疑似 bug finding 与相关 RTL spec 片段，未提供官方设计文档全文（theory_of_operation.md）。根据任务要求，必须基于官方文档中的明确设计声明进行比对，缺少该文档导致无法进行一致性判定。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0066",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "LLM call failed after retries",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0067",
+      "title": "[U-UP] rand_perm_t 类型的具体定义（如每个元素的位宽）未给出，无法验证 perm_sel[k] 是否能直接用于 data 的位选择而不进行额外转换。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "rand_perm_t 类型的具体定义（如每个元素的位宽）未给出，无法验证 perm_sel[k] 是否能直接用于 data 的位选择而不进行额外转换。",
+      "involved_signals": [
+        "perm_sel",
+        "data"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0068",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "SATISFIED",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.073,
+      "contradiction": "The RTL specification defines operation encodings that directly map to the three function classes: OpAdvance corresponds to state advancement, OpGenSwOut and OpGenHwOut correspond to output key generation, and OpGenId corresponds to identity/seed generation. The retrieve specs show that the keymgr control FSM, gen_in multiplexing, and key output routing (e.g., dest_seed selection and output_key generation) implement these operations. There is no indication in the RTL that any of the three classe",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0069",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "SATISFIED",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.073,
+      "contradiction": "RTL spec for op_update_sel (keymgr_ctrl.sv:784-788) implements a priority chain: invalid → KeyUpdateKmac, else op_fault_err → KeyUpdateWipe, else disabled → KeyUpdateKmac. When invalid is true, it dominates both fault and disabled conditions, exactly matching the design requirement that the Invalid entry path always takes precedence in case of collision.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    }
+  ]
+}

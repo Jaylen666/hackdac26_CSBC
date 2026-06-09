@@ -1,0 +1,53 @@
+{
+  "chunk_id": "rv_dm__generate_for__gen_debug_req_hart__001",
+  "summary": "为每个 hart 生成调试请求使能信号，用生命周期严格真值测试的结果驱动 debug_req_en 的对应位。",
+  "behavior": "对每个 hart i 实例化一个组合赋值：debug_req_en[i] 始终等于 lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnDebugReq + i])。该赋值意味着只有当相应 hart 的生命周期调试使能信号在严格意义上有效时，debug_req_en[i] 才为高；否则为低。没有额外时序——信号随着 lc_hw_debug_en_gated 的变化即刻更新。",
+  "guarantees": [
+    {
+      "property": "当 lc_hw_debug_en_gated 中对应 hart 的字段不是严格真值时，debug_req_en[i] 一定为 0。",
+      "output_signals": [
+        "debug_req_en"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:439-442"
+      ]
+    }
+  ],
+  "security_implications": "debug_req_en 直接受生命周期信号控制，防止在非授权或退化生命周期状态下使能调试，是实现硬件调试隔离的关键安全门控。如果 lc_tx_test_true_strict 的严格真值判定存在缺陷，可能允许旁路安全策略。",
+  "assumptions": [
+    {
+      "constraint": "LcEnDebugReq + i 必须处于 lc_hw_debug_en_gated 的有效位宽范围内，且对于 0 ≤ i < NrHarts 均成立。",
+      "bug_relevance": "若索引越界，读取的位值未定义，可能导致 debug_req_en 错误有效或无效，破坏调试安全策略。",
+      "related_signals": [
+        "lc_hw_debug_en_gated",
+        "LcEnDebugReq",
+        "NrHarts"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:439-441"
+      ]
+    },
+    {
+      "constraint": "lc_tx_test_true_strict 必须能够正确识别生命周期信号的“严格真”状态，且其逻辑不包含可被注入的时序漏洞。",
+      "bug_relevance": "若该函数的实现未能正确区分全零、单比特错误或退化状态，则可能将无效的生命周期状态错误判定为真，导致非法调试请求使能。",
+      "related_signals": [
+        "lc_tx_test_true_strict",
+        "lc_hw_debug_en_gated",
+        "debug_req_en"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:441"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:439-442"
+  ],
+  "uncertain_points": [
+    "lc_tx_test_true_strict 的准确功能（例如它如何定义“严格真”，是否包含多比特校验、空闲状态检测等）未在本片段显示，需要参考该函数的实现来确认具体判定逻辑。",
+    "LcEnDebugReq 的常量值及其与 lc_hw_debug_en_gated 位宽的对应关系未在片段中给出，索引越界风险需结合外部定义评估。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
+  "line_start": 439,
+  "line_end": 442
+}

@@ -1,0 +1,50 @@
+{
+  "chunk_id": "hmac_reg_top__always_comb__line_1944__001",
+  "summary": "将当前寄存器地址 reg_addr 解码为一组逐项比较的 one-hot 风格命中向量 addr_hit，用于标识 HMAC 各寄存器偏移地址是否被选中。",
+  "behavior": "该组合逻辑对 reg_addr 与每个已定义寄存器偏移常量逐一做相等比较，并把结果写入 addr_hit[0:58]。映射覆盖了中断寄存器、告警测试、配置、命令、状态、错误码、擦除密钥、32 个 KEY 分片、16 个 DIGEST 分片以及消息长度上下半寄存器；当 reg_addr 等于某个对应 OFFSET 时，相关 addr_hit 位为 1，否则为 0。例如 addr_hit[0:8] 对应基础控制/状态类寄存器，addr_hit[9:40] 对应 HMAC_KEY_0 到 HMAC_KEY_31，addr_hit[41:56] 对应 HMAC_DIGEST_0 到 HMAC_DIGEST_15，addr_hit[57:58] 对应消息长度寄存器。该片段本身只做地址命中解码，不包含优先级、错误检测或对多重命中的额外处理。",
+  "guarantees": [
+    {
+      "property": "若 reg_addr 等于某个已列出的寄存器偏移常量，则对应的 addr_hit 位必为 1；若不等于该常量，则该位必为 0。",
+      "output_signals": [
+        "addr_hit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:1945-2003"
+      ]
+    },
+    {
+      "property": "KEY、DIGEST 与消息长度寄存器地址被显式纳入解码范围：addr_hit[9:40] 覆盖 HMAC_KEY_0..31，addr_hit[41:56] 覆盖 HMAC_DIGEST_0..15，addr_hit[57:58] 覆盖消息长度上下半寄存器。",
+      "output_signals": [
+        "addr_hit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:1954-2003"
+      ]
+    }
+  ],
+  "security_implications": "该解码包含密钥寄存器、摘要寄存器和 wipe_secret 寄存器地址命中路径，因此它是安全敏感寄存器访问控制链路的一部分。若地址常量重叠、映射错误或后续逻辑未正确使用 addr_hit，可能导致对错误安全寄存器的访问、错误的密钥写入/读取路径选择，或擦除命令误定向；但本片段自身只做比较，不直接实施权限检查或擦除动作。",
+  "assumptions": [
+    {
+      "constraint": "各 HMAC_*_OFFSET 常量应彼此唯一，尤其是同一 addr_hit 向量中列出的寄存器偏移不能重叠，否则一个 reg_addr 可能同时使多个 addr_hit 位为 1。",
+      "bug_relevance": "这是行为契约；若违反，后续依赖单一地址命中的读写选择逻辑可能出现多寄存器同时选中，导致功能错误或安全寄存器误访问。",
+      "related_signals": [
+        "reg_addr",
+        "addr_hit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:1945-2003"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:1944-2004"
+  ],
+  "uncertain_points": [
+    "片段未展示 addr_hit 的默认赋值或数组完整宽度；从本块看仅显式驱动了 addr_hit[0:58]，无法确认是否不存在更高位，或是否在别处还会被赋值。",
+    "该解码看起来是 one-hot 风格，但是否系统级要求严格单命中，依赖于各 OFFSET 常量定义及后续使用逻辑；本片段自身未做 one-hot 断言或冲突处理。",
+    "用户提供的 dependencies 只列到 HMAC_KEY_28_OFFSET，但源码实际还解码到 HMAC_KEY_31_OFFSET、DIGEST 和 MSG_LENGTH 寄存器；dependencies 列表与代码片段不完全一致。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 1944,
+  "line_end": 2004
+}

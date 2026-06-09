@@ -1,0 +1,49 @@
+{
+  "chunk_id": "aes_cipher_core__continuous_region__declarations_or_instances__002",
+  "summary": "根据参数 SecMasking 选择是否启用 S-Box 掩码及其 PRNG，禁用时将掩码和熵源旁路，输出固定为零并直通伪随机数据，否则通过共享状态和 PRNG 实例生成掩码。",
+  "behavior": "当参数 SecMasking 为假时（gen_no_masks 生效），所有掩码逻辑被绕过：sb_in_mask 和 prd_masking 被直接赋值为 0；熵源请求输出 entropy_req_o 固定为 0，PRNG 重播种确认 prd_masking_rsd_ack 也固定为 0；外部输入 entropy_ack_i、entropy_i、force_masks_i、prd_masking_upd、prd_masking_rsd_req 以及输出 sb_out_mask 均被连接到未使用变量以抑制 lint 警告，但不会被实际使用。同时，PRD 缓冲的生成块 gen_no_prd_buffer 将 prd_sub_bytes_q 组合地连接到 prd_sub_bytes_d，不引入额外延迟。当 SecMasking 为真时（gen_masks 生效），输入掩码 sb_in_mask 由状态寄存器 state_q 的第二份额 state_q[1] 驱动；实例化参数化的 aes_prng_masking 模块，其输出 prd_masking 用于提供 S-Box 和 key expand 所需的伪随机数据，并处理 entropy_req_o、entropy_ack_i、entropy_i、force_masks_i、prd_masking_upd 和 reseed 握手（prd_masking_rsd_req / _rsd_ack）。无论 SecMasking 为何，prd_masking 的高位被固定拆分为 prd_key_expand 和 prd_sub_bytes_d（使用参数 WidthPRDMasking、WidthPRDKey、WidthPRDData）。SecMasking 为真时 gen_prd_buffer 的具体实现（行 329 开始的 else 分支）未在本片段给出，其内部行为不确定。",
+  "guarantees": [
+    {
+      "property": "当 SecMasking 为假时，sb_in_mask 和 prd_masking 恒为全零，prd_masking_rsd_ack 和 entropy_req_o 恒为 0，且 prd_sub_bytes_q 组合跟随 prd_sub_bytes_d 变化。",
+      "output_signals": [
+        "sb_in_mask",
+        "prd_masking",
+        "prd_masking_rsd_ack",
+        "entropy_req_o",
+        "prd_sub_bytes_q"
+      ],
+      "source_refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:268-269",
+        "output/aes_mini_rtl/aes_cipher_core.sv:276",
+        "output/aes_mini_rtl/aes_cipher_core.sv:284",
+        "output/aes_mini_rtl/aes_cipher_core.sv:327"
+      ]
+    }
+  ],
+  "security_implications": "当 SecMasking 被配置为 0 时，所有掩码被强制为 0，整个 AES 核将无侧信道掩码保护，可能导致密钥或中间状态信息泄露。参数设计上允许这种降级配置，但在安全产品中需谨慎评估。",
+  "assumptions": [
+    {
+      "constraint": "prd_masking 的位宽（WidthPRDMasking）必须不小于用于密钥扩展和 SubBytes 的伪随机数据位宽之和（WidthPRDKey + WidthPRDData），否则块提取（部分选择 -:）将超出范围。",
+      "bug_relevance": "位宽约束不满足会导致 prd_key_expand 或 prd_sub_bytes_d 提取到未定义位段，产生错误的掩码数据，破坏掩码方案的均匀性或造成逻辑错误。",
+      "related_signals": [
+        "prd_masking",
+        "prd_key_expand",
+        "prd_sub_bytes_d"
+      ],
+      "source_refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:321-322"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "output/aes_mini_rtl/aes_cipher_core.sv:266-329"
+  ],
+  "uncertain_points": [
+    "gen_prd_buffer 在 SecMasking 为真时的行为未完整显示（仅看到 begin 关键字，行 329），无法确定 prd_sub_bytes_q 在此分支中的赋值逻辑（是否引入寄存器延迟或其它处理）。",
+    "sb_out_mask 在 gen_no_masks 中仅被连接到 unused_sb_out_mask 以防止 lint 警告，但其实际使用者未知；若后续逻辑仍试图读取 sb_out_mask 并依赖非零掩码，则硬件可能因全零进入不安全状态。",
+    "state_q[1] 作为输入掩码的正确性依赖于 state_q 的份额数不少于 2，且其含义与掩码方案的约定一致，该片段本身不作检查。"
+  ],
+  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "line_start": 266,
+  "line_end": 329
+}

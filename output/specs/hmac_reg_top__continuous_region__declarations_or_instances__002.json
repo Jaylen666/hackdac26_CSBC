@@ -1,0 +1,95 @@
+{
+  "chunk_id": "hmac_reg_top__continuous_region__declarations_or_instances__002",
+  "summary": "该片段实例化 TL-UL 到寄存器接口适配器，并定义 HMAC 寄存器块前半部分的寄存器行为，包括中断状态/使能/测试、告警测试、配置、命令、状态、错误码、密钥擦除以及 key[0:10] 子寄存器。",
+  "behavior": "片段首先通过 `tlul_adapter_reg` 将 TL-UL 寄存器访问转换为本地寄存器总线信号 `reg_we/reg_re/reg_addr/reg_wdata/reg_be`，并把寄存器读数据直接取自 `reg_rdata_next`；寄存器访问错误由 `addrmiss | wr_err | intg_err` 汇总为 `reg_error`，反馈给适配器。适配器显式禁止指令抓取访问 `en_ifetch_i=MuBi4False`，且未使用其完整性错误输出 `intg_error_o` [141-168]。\n\n`intr_state` 寄存器包含 3 个中断状态位：`hmac_done` 与 `hmac_err` 为 W1C，既可由软件写 1 清除，也可由硬件经 `hw2reg...de/d` 置位或更新；`fifo_empty` 为只读，只能由硬件更新。三个字段的读回值分别通过 `*_qs` 提供，同时 `hmac_done`、`fifo_empty`、`hmac_err` 当前寄存值输出到 `reg2hw.intr_state.*.q` 给内部逻辑使用 [358-439]。\n\n`intr_enable` 的 3 个字段 `hmac_done`、`fifo_empty`、`hmac_err` 都是普通 RW 位，仅由软件写入控制，中断使能值通过 `reg2hw.intr_enable.*.q` 提供给内部逻辑；该片段中无硬件对这些位的直接更新路径 [442-522]。\n\n`intr_test` 是软件可写的外部子寄存器接口，三个字段各自产生单独的字段写使能 `intr_test_flds_we[i]` 和写数据 `reg2hw.intr_test.*.q`，但对外给内部逻辑的总写使能 `reg2hw.intr_test.*.qe` 被统一设为 `&intr_test_flds_we`。因此只有当三个字段在同一次访问中都被写到时，三个字段的 `qe` 才同时为 1；单独写某一位时，其 `q` 可能变化，但对应导出的 `qe` 不会单独指示该字段写入 [525-575]。`alert_test` 也采用同样模式，但只有一个字段，因此 `reg2hw.alert_test.qe` 等于该字段自身写使能 [578-595]。\n\n`cfg` 寄存器包含 `hmac_en`、`sha_en`、`endian_swap`、`digest_swap`、`key_swap`、`digest_size[3:0]`、`key_length[5:0]` 七个字段，均通过 `prim_subreg_ext` 暴露为软硬件共享接口。每个字段都可被软件通过 `cfg_we/cfg_re` 访问，字段当前值输出到 `reg2hw.cfg.*.q`，读回值输出到各自 `*_qs`；同时字段还接收来自 `hw2reg.cfg.*.d` 的硬件侧输入。和 `intr_test` 类似，所有字段对外共享统一的总写使能 `cfg_qe = &cfg_flds_we`，所以只有七个字段在同一次寄存器写中全部命中时，`reg2hw.cfg.*.qe` 才会同时为 1 [598-713]。从代码看这是寄存器生成模板的统一行为，但是否期望硬件用 `q` 还是 `qe` 作为配置更新触发需结合其他片段确认。\n\n`cmd` 寄存器提供 `hash_start`、`hash_process`、`hash_stop`、`hash_continue` 四个软件命令位，字段值输出到 `reg2hw.cmd.*.q`，并且统一总写使能 `reg2hw.cmd.*.qe = &cmd_flds_we`。因此仅当四个命令字段一起被写时，导出的 `qe` 才有效；若软件只写单个命令位，则相应 `q` 会承载写入值，但 `qe` 不会单独脉冲 [715-781]。\n\n`status` 是只读状态镜像，`hmac_idle`、`fifo_empty`、`fifo_full` 和 `fifo_depth[5:0]` 直接从 `hw2reg.status.*.d` 取值，经 `*_qs` 返回给寄存器读通路，不向内部硬件输出可写状态 [784-843]。`err_code` 是 32 位只读寄存器，复位值为 0，仅由硬件经 `hw2reg.err_code.de/d` 更新，读出通过 `err_code_qs` 提供 [846-871]。\n\n`wipe_secret` 是一个 32 位软件触发型外部子寄存器，软件写入的数据输出到 `reg2hw.wipe_secret.q`，其写使能 `reg2hw.wipe_secret.qe` 由唯一字段写使能直接导出 [874-892]。`key` 多寄存器阵列在本片段中展开了 `key[0]` 到 `key[10]`：每个元素都是 32 位外部子寄存器，软件写入值输出到 `reg2hw.key[i].q`，写使能输出到 `reg2hw.key[i].qe`；同时每个元素还接收 `hw2reg.key[i].d` 作为硬件侧输入，但本片段未显示这些 `d` 的具体用途或是否参与读回/覆盖 [894-1122]。",
+  "guarantees": [
+    {
+      "property": "寄存器接口对外报告的访问错误始终等于 `addrmiss`、`wr_err` 或 `intg_err` 的逻辑或。",
+      "output_signals": [
+        "reg_error"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:167-168"
+      ]
+    },
+    {
+      "property": "`intr_enable` 的三个中断使能位复位为 0，且其对内部硬件的可见值由软件写入的寄存器内容直接提供在 `reg2hw.intr_enable.*.q` 上。",
+      "output_signals": [
+        "reg2hw.intr_enable.hmac_done.q",
+        "reg2hw.intr_enable.fifo_empty.q",
+        "reg2hw.intr_enable.hmac_err.q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:442-522"
+      ]
+    },
+    {
+      "property": "`status` 和 `err_code` 对软件侧是只读的：该片段不给这些寄存器提供软件写路径，读回内容分别来自 `hw2reg.status.*.d` 和 `hw2reg.err_code`。",
+      "output_signals": [
+        "status_hmac_idle_qs",
+        "status_fifo_empty_qs",
+        "status_fifo_full_qs",
+        "status_fifo_depth_qs",
+        "err_code_qs"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:784-871"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及 HMAC 安全关键寄存器访问控制：`en_ifetch_i` 被固定为禁止，避免通过取指路径访问寄存器接口 [149-153]；同时暴露了 `wipe_secret` 和 `key[0:10]` 等敏感控制/密钥寄存器 [874-1122]。这些寄存器本身在本片段中未见访问锁定、擦除策略或非法写防护，安全性依赖外部地址译码、软件访问策略以及后续逻辑如何消费 `reg2hw.*.q/qe`。另外，`reg_error` 汇总地址/写入/完整性错误，可作为总线访问异常指示 [167-168]。",
+  "assumptions": [
+    {
+      "constraint": "若内部逻辑把 `reg2hw.intr_test.*.qe`、`reg2hw.cfg.*.qe` 或 `reg2hw.cmd.*.qe` 当作“某单个字段被写”的指示，则必须保证软件总是一次性写完整个对应寄存器的所有字段；否则这些统一 `qe` 可能不产生。",
+      "bug_relevance": "违反时，单字段写入虽然可能更新 `q`，但不会产生期望的写触发，导致命令未执行、测试未触发或配置更新握手丢失。这更像行为契约；若设计本意就是看 `q` 而非 `qe`，则不构成问题。",
+      "related_signals": [
+        "intr_test_we",
+        "intr_test_flds_we",
+        "reg2hw.intr_test.hmac_done.qe",
+        "reg2hw.intr_test.fifo_empty.qe",
+        "reg2hw.intr_test.hmac_err.qe",
+        "cfg_we",
+        "cfg_flds_we",
+        "reg2hw.cfg.hmac_en.qe",
+        "reg2hw.cfg.sha_en.qe",
+        "reg2hw.cfg.endian_swap.qe",
+        "reg2hw.cfg.digest_swap.qe",
+        "reg2hw.cfg.key_swap.qe",
+        "reg2hw.cfg.digest_size.qe",
+        "reg2hw.cfg.key_length.qe",
+        "cmd_we",
+        "cmd_flds_we",
+        "reg2hw.cmd.hash_start.qe",
+        "reg2hw.cmd.hash_process.qe",
+        "reg2hw.cmd.hash_stop.qe",
+        "reg2hw.cmd.hash_continue.qe"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:525-575",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:598-713",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:715-781"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:141-168",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:358-439",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:442-522",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:525-575",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:578-595",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:598-713",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:715-781",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:784-843",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:846-871",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:874-892",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:894-1122"
+  ],
+  "uncertain_points": [
+    "`prim_subreg_ext` 中 `q`、`qs`、`d`、`qe` 的精确定义依赖该原语模块语义；本片段可见的是接口连接关系，但无法仅凭此处完全判断 `hw2reg.key[i].d` 在 key 子寄存器中的具体读写优先级。",
+    "`cfg`、`cmd`、`intr_test` 把所有字段的 `qe` 统一绑到按位与结果，这看起来是生成器模板行为；是否为有意要求整寄存器原子写入，还是内部逻辑根本不使用 `qe`，需结合后续消费这些信号的代码确认。",
+    "片段只展开到 `key[10]`，但前面声明存在 `key[0:31]`，其余子寄存器行为预计类似，但不在本片段证据范围内。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 141,
+  "line_end": 1122
+}

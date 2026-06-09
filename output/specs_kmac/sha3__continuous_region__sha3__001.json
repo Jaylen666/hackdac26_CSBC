@@ -1,0 +1,52 @@
+{
+  "chunk_id": "sha3__continuous_region__sha3__001",
+  "summary": "该片段定义了 sha3 模块的外部接口和若干内部控制/状态信号，并将底层错误源组合汇总到对外错误指示输出上。",
+  "behavior": "该连续逻辑区域主要完成三类工作。首先，它参数化定义掩码实现的 share 数：当 EnMasking 为 1 时 Share=2，否则 Share=1，用于消息输入和状态输出数组维度的统一定义（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:14-17,24,67,107-108）。其次，它声明了后续逻辑将使用的关键内部状态和控制信号，包括对外可见的哈希状态 state/state_valid 及其保护版本 state_guarded、状态输出多路选择 mux_sel、表示吸收完成的 absorbed、表示处于 squeezing 阶段的 squeezing、用于防止重复 process_i 的 processing、SHA3 FSM 状态 st/st_d，以及经状态机过滤后的 keccak_start/keccak_process/keccak_done 等（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:104-145）。注释表明设计意图是：只有哈希流程完成后 state 才应对外有效；在无效状态下输出 state 应为零以避免信息泄露；absorbed 是吸收阶段完成脉冲，之后软件可通过 run_i 手动追加 keccak_f；squeezing 表示可读取状态并可继续手动触发轮函数；processing 用于跟踪 final absorbing 已发起，从而检测重复 process_i（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:63-66,113-127）。最后，本片段实际包含的组合赋值仅有错误汇总：count_error_o 是 round_count_error 与 msg_count_error 的按位或；sparse_fsm_error_o 是 sha3_state_error、keccak_round_state_error、sha3pad_state_error 的按位或；keccak_storage_rst_error_o 直接反映 keccak_storage_rst_error（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:136-148）。",
+  "guarantees": [
+    {
+      "property": "只要 round_count_error 或 msg_count_error 任一置位，count_error_o 必定置位；仅当两者都为 0 时，count_error_o 为 0。",
+      "output_signals": [
+        "count_error_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:136-139"
+      ]
+    },
+    {
+      "property": "只要 sha3_state_error、keccak_round_state_error、sha3pad_state_error 中任一置位，sparse_fsm_error_o 必定置位。",
+      "output_signals": [
+        "sparse_fsm_error_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:140-145"
+      ]
+    },
+    {
+      "property": "keccak_storage_rst_error_o 与内部 keccak_storage_rst_error 始终一致，不经过额外过滤或编码。",
+      "output_signals": [
+        "keccak_storage_rst_error_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:146-148"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及安全相关设计意图。注释明确指出 state 输出仅应在哈希流程完成后有效，且无效时应输出零以防止信息泄露（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:63-66）；同时定义了 state_guarded 和 mux_sel，暗示后续逻辑可能通过保护性多路选择控制内部状态何时暴露。另有多路 FSM/计数/存储复位异常被汇总为错误输出，说明设计试图将控制流异常和意外存储复位作为安全/完整性监测事件上报（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:136-148）。不过，本片段本身尚未展示 state 清零或门控的实际赋值实现。",
+  "assumptions": [],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:14-17",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:24-25",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:63-66",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:104-127",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:129-145",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:146-148"
+  ],
+  "uncertain_points": [
+    "注释声称当状态无效时 state_o 应为零以防止信息泄露，但本片段仅声明了 state_valid/state/state_guarded/mux_sel，尚未显示对 state_o 的实际门控或清零赋值；该安全属性是否真正实现需依赖后续代码确认（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:63-66,104-112）。",
+    "absorbed、squeezing、processing、keccak_start/keccak_process/keccak_done 等信号的具体生成条件和与 start_i/process_i/run_i/done_i 的交互在本片段中只有注释和声明，没有实现，无法仅凭此片段确认状态转换与脉冲条件（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:113-145）。",
+    "state_mux_sel_e 仅定义了 MuxGuard 和 MuxRelease 两个稀疏编码值，但本片段未展示 mux_sel 如何驱动状态输出路径，也无法确认其默认值或非法值处理策略（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:95-98,110-112）。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
+  "line_start": 9,
+  "line_end": 148
+}

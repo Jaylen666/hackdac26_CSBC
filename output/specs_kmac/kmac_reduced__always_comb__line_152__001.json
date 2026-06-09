@@ -1,0 +1,61 @@
+{
+  "chunk_id": "kmac_reduced__always_comb__line_152__001",
+  "summary": "将输入掩码 msg_mask 按固定置换表 RndCnstMsgPerm 逐位重排，生成 msg_mask_permuted。",
+  "behavior": "该组合逻辑先将 msg_mask_permuted 清零，然后对 0 到 sha3_pkg::MsgWidth-1 的每一位执行重映射：输出位 msg_mask_permuted[i] 取自输入 msg_mask 的索引 RndCnstMsgPerm[i]。因此该片段实现的是一个基于常量置换表的逐位重排网络，而不是运算或压缩；最终每个输出位都由对应置换项指定的输入位驱动。注释说明设计意图是“按照 MsgPerm 常量交换位”，与代码中使用 RndCnstMsgPerm 进行位交换一致，但具体是否要求该常量为完整一一映射，需要依赖片段外定义确认。源码见 /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:152-158。",
+  "guarantees": [
+    {
+      "property": "对任意索引 i（0 <= i < sha3_pkg::MsgWidth），msg_mask_permuted[i] 恒等于 msg_mask[RndCnstMsgPerm[i]]。",
+      "output_signals": [
+        "msg_mask_permuted"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:154-156"
+      ]
+    },
+    {
+      "property": "该片段不会保留 msg_mask_permuted 的旧值；其所有位都由当前 msg_mask 和置换表决定。",
+      "output_signals": [
+        "msg_mask_permuted"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:153-156"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑处理的是消息掩码位的固定置换。若该置换用于掩码随机化或侧信道防护路径，则其安全性依赖于 RndCnstMsgPerm 的正确性：错误、重复或越界的置换会破坏预期的位分散关系，可能削弱掩码防护效果。不过从本片段本身只能确认其执行固定重排，无法单独证明安全属性。",
+  "assumptions": [
+    {
+      "constraint": "RndCnstMsgPerm[i] 对所有 0 <= i < sha3_pkg::MsgWidth 都应是 msg_mask 的合法位索引。",
+      "bug_relevance": "这是行为契约；若存在越界索引，则会导致仿真出现非法访问/未知值，综合结果也可能与预期不符，进而破坏掩码重排功能。",
+      "related_signals": [
+        "RndCnstMsgPerm",
+        "msg_mask",
+        "msg_mask_permuted"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:154-156"
+      ]
+    },
+    {
+      "constraint": "若设计意图要求“置换”而非一般重映射，则 RndCnstMsgPerm 应构成对各输入位的一一映射，不应有重复或遗漏。",
+      "bug_relevance": "这是行为契约；若常量表有重复或缺失，虽然硬件仍会给出安全的确定输出，但某些输入位会被复制或丢失，导致 msg_mask_permuted 不再是真正的位置换，可能破坏后续依赖该性质的功能或安全分析。",
+      "related_signals": [
+        "RndCnstMsgPerm",
+        "msg_mask_permuted"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:155-156"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:152-158"
+  ],
+  "uncertain_points": [
+    "注释提到“MsgPerm constant”，而代码实际使用的是 RndCnstMsgPerm；两者是否同一概念或是否存在命名演化，需结合片段外定义确认。",
+    "仅从本片段无法确认 RndCnstMsgPerm 是否保证为完整双射置换，还是仅要求为一般索引映射。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
+  "line_start": 152,
+  "line_end": 158
+}

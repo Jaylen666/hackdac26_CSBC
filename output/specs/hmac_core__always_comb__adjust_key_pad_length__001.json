@@ -1,0 +1,66 @@
+{
+  "chunk_id": "hmac_core__always_comb__adjust_key_pad_length__001",
+  "summary": "根据配置的密钥长度选择 secret_key_i 的高位有效部分，按 HMAC 规则对不足块长的部分做零填充，并分别生成 SHA-256/SHA-512 的 inner/outer key pad。",
+  "behavior": "该组合逻辑先将 i_pad_256、i_pad_512、o_pad_256、o_pad_512 全部清零作为默认值 [130-135]，然后按 key_length_i 生成不同哈希模式下的 HMAC key pad [137-186]。对 Key_128、Key_256、Key_384 三种长度，逻辑都取 secret_key_i 的最高有效 128/256/384 位（分别为 [1023:896]、[1023:768]、[1023:640]），在块大小不足处补零到 SHA-256 或 SHA-512 的块长度，再与逐字节常量 8'h36 进行异或得到 i_pad_256/i_pad_512，与 8'h5c 异或得到 o_pad_256/o_pad_512 [138-166]。对 Key_512，SHA-256 路径直接使用 secret_key_i[1023:512] 作为完整 512-bit 块并与 0x36/0x5c 异或；SHA-512 路径则使用同一 512-bit 密钥再补零扩展到 1024-bit 块后异或 [168-174]。对 Key_1024，注释明确说明其“不允许配置给 SHA-2 256”，因此 SHA-256 的 inner/outer pad 被强制清零，而 SHA-512 的 inner/outer pad 则直接用完整 1024-bit secret_key_i 与 0x36/0x5c 异或生成 [176-182]。default 分支不再覆盖默认值，因此若 key_length_i 不匹配任何已知枚举，四个 pad 都保持为全零 [184-185]。",
+  "guarantees": [
+    {
+      "property": "当 key_length_i 为 Key_128、Key_256、Key_384 或 Key_512 时，i_pad_256 和 o_pad_256 一定由所选高位密钥片段按 SHA-256 块长零填充后分别与 8'h36、8'h5c 逐字节异或得到；其中 Key_512 情况不再额外填充。",
+      "output_signals": [
+        "i_pad_256",
+        "o_pad_256"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:138-174"
+      ]
+    },
+    {
+      "property": "当 key_length_i 为 Key_1024 时，i_pad_256 和 o_pad_256 一定为全零，而 i_pad_512 和 o_pad_512 一定分别等于完整 1024-bit secret_key_i 与 8'h36、8'h5c 的逐字节异或结果。",
+      "output_signals": [
+        "i_pad_256",
+        "o_pad_256",
+        "i_pad_512",
+        "o_pad_512"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-182"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑直接处理 secret_key_i 并生成 HMAC 的 inner/outer pad，因此属于密钥派生路径。对 Key_1024 显式将 SHA-256 路径输出清零 [176-182]，可避免在注释所称“不允许”的配置下继续形成 SHA-256 pad；若上层误配，至少该路径不会输出基于 1024-bit 密钥的 SHA-256 pad，但是否会被后续逻辑当作合法全零 pad 使用仍需结合上下文确认。",
+  "assumptions": [
+    {
+      "constraint": "使用 SHA-256 模式时不应将 key_length_i 配置为 Key_1024；本块对该非法/不应发生场景采取安全回退，将 SHA-256 的 pad 清零。",
+      "bug_relevance": "若不满足则本块不会生成基于真实密钥的 SHA-256 pad，而是输出全零；这看起来是防御性设计，但若系统仍继续执行 SHA-256 HMAC，则结果将与预期密钥不符。",
+      "related_signals": [
+        "key_length_i",
+        "i_pad_256",
+        "o_pad_256"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-182"
+      ]
+    },
+    {
+      "constraint": "secret_key_i 的有效密钥必须按本块约定放在高位端，即 128/256/384/512-bit 密钥分别位于 [1023:896]、[1023:768]、[1023:640]、[1023:512]，1024-bit 密钥位于 [1023:0]。",
+      "bug_relevance": "若违反该布局契约，本块会从错误的位段提取密钥并参与 pad 计算，导致 HMAC 结果错误；这属于行为契约而非防御性回退。",
+      "related_signals": [
+        "secret_key_i",
+        "key_length_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:139-179"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:130-187"
+  ],
+  "uncertain_points": [
+    "代码只展示了按 key_length_i 生成 SHA-256/SHA-512 两套 pad，但当前片段未显示后续是如何选择使用 i_pad_256/i_pad_512 或 o_pad_256/o_pad_512，因此无法单独确认在 Key_1024 且系统选择 SHA-256 时是否一定会被上层禁止或报错。",
+    "secret_key_i 采用“高位对齐”存放有效密钥是从切片方式推断出的接口契约 [139-179]；该布局是否有更明确的模块级注释或上游格式化逻辑，当前片段中未给出。",
+    "依赖列表中包含 b0、h36、h5c、adjust_key_pad_length，但本片段实际使用的是字面量 8'h36/8'h5c，未使用这些名字；它们是否在其他版本或相邻代码中代表同一设计意图，当前片段无法确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 130,
+  "line_end": 187
+}

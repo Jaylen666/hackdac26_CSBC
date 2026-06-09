@@ -1,0 +1,76 @@
+{
+  "chunk_id": "hmac__always_comb__line_149__001",
+  "summary": "该组合逻辑实现一个用于产生哈希完成事件的完成状态机下一状态与事件输出，区分正常处理完成和 stop 后等待完整消息块结束的路径。",
+  "behavior": "该块默认保持 `done_state_d = done_state_q`，并将 `hash_done_event` 清零 [hmac.sv:150-151]。状态 `DoneAwaitCmd` 下会将冷却计数器下一值清为 0；若检测到 `sha_hash_process`，表示已命令 SHA 处理消息，则转到 `DoneAwaitHashDone`，后续等待 `reg_hash_done`；若未处理但检测到 `reg_hash_stop`，则转到 `DoneAwaitMessageComplete`，先等待当前消息块走到完整消息块的摘要计算阶段 [hmac.sv:154-162]。在 `DoneAwaitHashDone` 中，只有 `reg_hash_done` 置位时才拉起 `hash_done_event` 并返回 `DoneAwaitCmd` [hmac.sv:165-169]。在 `DoneAwaitMessageComplete` 中，只有当 `digest_on_blk` 置位时，才转到 `DoneAwaitHashComplete`，表示完整消息块已开始摘要计算 [hmac.sv:172-177]。在 `DoneAwaitHashComplete` 中，先等待 `hash_running` 变为 0；一旦 SHA 不再运行，则进入显式冷却过程：若 `cool_down_ct_q < 127`，下一拍继续保持在 `DoneAwaitHashComplete`，并将 `cool_down_ct_d` 递增 1，不产生完成事件；计数达到 127 后才置位 `hash_done_event` 并回到 `DoneAwaitCmd` [hmac.sv:180-189]。因此，stop 路径的完成事件不是在 `hash_running` 刚结束时立即给出，而是在其后额外等待 127 个计数步后给出。`default` 分支不覆盖前述默认赋值，因此未知/未列举状态下保持当前状态且不报完成 [hmac.sv:193-194]。",
+  "guarantees": [
+    {
+      "property": "当状态为 `DoneAwaitHashDone` 且 `reg_hash_done` 为 1 时，`hash_done_event` 必为 1，且下一状态返回 `DoneAwaitCmd`。",
+      "output_signals": [
+        "hash_done_event",
+        "done_state_d"
+      ],
+      "source_refs": [
+        "hmac.sv:165-169"
+      ]
+    },
+    {
+      "property": "当状态为 `DoneAwaitHashComplete`、`hash_running` 为 0 且 `cool_down_ct_q` 已达到 127 时，`hash_done_event` 必为 1，且下一状态返回 `DoneAwaitCmd`；在计数未满 127 前不会在该路径上宣告完成。",
+      "output_signals": [
+        "hash_done_event",
+        "done_state_d",
+        "cool_down_ct_d"
+      ],
+      "source_refs": [
+        "hmac.sv:180-189"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑参与 HMAC/SHA 完成事件的判定，并在 stop 路径上引入等待当前消息块完成及额外冷却计数的机制 [hmac.sv:159-161,180-189]。这有助于避免在哈希引擎尚未真正完成内部处理时过早对外宣告 done，从而降低状态不一致或过早读取摘要的风险。不过冷却 127 计数的设计意图仅能从实现观察到，是否与安全擦除、流水线排空或跨模块同步有关，需要更多上下文确认。",
+  "assumptions": [
+    {
+      "constraint": "`done_state_q` 应只取该状态机定义的合法编码，尤其应落在 `DoneAwaitCmd`、`DoneAwaitHashDone`、`DoneAwaitMessageComplete`、`DoneAwaitHashComplete` 之一。",
+      "bug_relevance": "若进入未覆盖的非法状态，`default` 分支只会保持当前状态且 `hash_done_event` 保持 0，可能导致完成事件永久不产生；这更像状态损坏后的防御性停滞场景，设计上不应发生。",
+      "related_signals": [
+        "done_state_q",
+        "done_state_d",
+        "hash_done_event"
+      ],
+      "source_refs": [
+        "hmac.sv:150-153",
+        "hmac.sv:193-194"
+      ]
+    },
+    {
+      "constraint": "在合法 stop 完成路径上，`digest_on_blk` 应在 `DoneAwaitMessageComplete` 状态下最终出现，且之后 `hash_running` 应最终拉低。",
+      "bug_relevance": "若这些条件在本应完成的停止流程中一直不满足，状态机会卡在等待状态而无法产生 `hash_done_event`，构成功能性完成丢失。",
+      "related_signals": [
+        "reg_hash_stop",
+        "digest_on_blk",
+        "hash_running",
+        "done_state_q",
+        "hash_done_event"
+      ],
+      "source_refs": [
+        "hmac.sv:159-161",
+        "hmac.sv:172-177",
+        "hmac.sv:180-189"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:150-151",
+    "hmac.sv:153-162",
+    "hmac.sv:165-169",
+    "hmac.sv:172-177",
+    "hmac.sv:180-189",
+    "hmac.sv:193-194"
+  ],
+  "uncertain_points": [
+    "代码只在 `DoneAwaitCmd` 中显式将 `cool_down_ct_d` 置 0，在其他状态未给出默认赋值；冷却计数器的完整保持/默认行为可能依赖该 always_comb 块外的赋值，需结合上下文确认 [hmac.sv:155,180-183]。",
+    "`hash_done_event` 被声明/初始化为 `8'd0`，但后续按 1 bit 使用并赋值 `1'b1`/`1'b0`；其实际位宽需结合声明确认，当前片段看不出这是刻意的零扩展还是书写风格不一致 [hmac.sv:151,167,184,187]。",
+    "stop 路径在 `hash_running` 结束后还要等待计数到 127 才报完成，这一 127 周期冷却的具体设计意图（例如流水线排空、同步等待或安全原因）无法仅由本片段确定 [hmac.sv:182-188]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 149,
+  "line_end": 195
+}

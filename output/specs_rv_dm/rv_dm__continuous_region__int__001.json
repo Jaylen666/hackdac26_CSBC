@@ -1,0 +1,61 @@
+{
+  "chunk_id": "rv_dm__continuous_region__int__001",
+  "summary": "定义调试模块的本地参数、实例化 CSR 寄存器块、直通内存 TL 接口、并汇聚完整性错误告警。",
+  "behavior": "该区域首先定义数据总线宽度 BusWidth 为 32，并声明 SelectableHarts 本地参数为全 1，表示所有 hart 均连续且可选。随后实例化寄存器块 u_reg_regs，传入 RACL 相关参数，将其 TL-UL 接口连接到 regs_tl_d_i / regs_tl_d_o，并输出 regs_reg2hw 和完整性错误信号 regs_intg_error。内存侧 TL-UL 接口通过组合赋值直通：mem_tl_win_h2d 由输入 mem_tl_d_i 驱动，输出 mem_tl_d_o 由信号 mem_tl_win_d2h 驱动（该信号需在别处生成）。告警逻辑中，alerts[0] 由六个完整性错误信号（regs/rom/dmi/dbg/sba_gate/rom_gate 的 intg_error）做按位或生成；alert_test 由寄存器的 alert_test.q 和 alert_test.qe 按位与后赋值（如果 NumAlerts 大于 1，高位将悬空或未指定）。",
+  "guarantees": [
+    {
+      "property": "内存 TL 输入 mem_tl_d_i 直接传递给内部 mem_tl_win_h2d，无组合修改或寄存。",
+      "output_signals": [
+        "mem_tl_win_h2d"
+      ],
+      "source_refs": [
+        "rv_dm.sv:146"
+      ]
+    },
+    {
+      "property": "告警信号 alerts[0] 在任何所列的完整性错误信号为高时置为高，否则为低。",
+      "output_signals": [
+        "alerts[0]"
+      ],
+      "source_refs": [
+        "rv_dm.sv:152-153"
+      ]
+    }
+  ],
+  "security_implications": "告警 alerts[0] 汇聚多个总线/存储完整性错误，注释标记为 BUS.INTEGRITY。该逻辑将内部完整性故障集中报告，用于触发系统安全响应。直通的内存接口若未在外部进行完整性校验，可能绕过寄存器块的检查，需由系统级确保 mem_tl_win_d2h 路径的完整性。",
+  "assumptions": [
+    {
+      "constraint": "信号 mem_tl_win_d2h 必须由外部逻辑有效驱动（例如来自 PULP 供应商模块），否则 mem_tl_d_o 输出未知。",
+      "bug_relevance": "若 mem_tl_win_d2h 未驱动，内存读通道无有效数据，可能导致调试器获取错误值或总线挂起。该场景为设计连接错误，正常不会发生。",
+      "related_signals": [
+        "mem_tl_win_d2h",
+        "mem_tl_d_o"
+      ],
+      "source_refs": [
+        "rv_dm.sv:123",
+        "rv_dm.sv:147"
+      ]
+    },
+    {
+      "constraint": "racl_policies_i 输入必须提供有效的 RACL 策略向量，且 racl_error_o 应由上层逻辑处理。",
+      "bug_relevance": "若策略向量未正确配置或错误输出被忽略，可能导致非法访问通过或被静默丢弃，违反访问控制要求。",
+      "related_signals": [
+        "racl_policies_i",
+        "racl_error_o"
+      ],
+      "source_refs": [
+        "rv_dm.sv:138-139"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "rv_dm.sv:114-158"
+  ],
+  "uncertain_points": [
+    "alert_test 的赋值使用单个拼接元素 {regs_reg2hw.alert_test.q & regs_reg2hw.alert_test.qe}，若 NumAlerts 大于 1，高位比特状态未定义，需确认实际位宽与生成信号是否匹配。",
+    "mem_tl_win_d2h 的来源未在该片段指定，依赖外部实例（如 PULP 调试模块）驱动，其完整性和时序未知。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
+  "line_start": 114,
+  "line_end": 158
+}

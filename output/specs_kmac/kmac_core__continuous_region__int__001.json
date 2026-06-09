@@ -1,0 +1,42 @@
+{
+  "chunk_id": "kmac_core__continuous_region__int__001",
+  "summary": "该片段定义了 KMAC 核心的稀疏编码状态机及其关键内部控制/数据信号，为密钥注入、消息转发、flush 和终端错误处理建立状态与接口骨架。",
+  "behavior": "该连续区域首先定义了一个 6 位稀疏编码状态机类型 `kmac_st_e`，包含空闲态 `StKmacIdle`、密钥推送态 `StKey`、消息转发态 `StKmacMsg`、等待完成态 `StKmacFlush` 和终端错误态 `StTerminalError`，注释说明 `StKey` 用于将经 slicer 切片后的 `encode_string(K)` 按块送入 SHA3 引擎，达到块大小限制后转入消息阶段；`StKmacMsg` 用于将输入消息直接转发到 SHA3，并关闭 `en_kmac_datapath`；`StKmacFlush` 用于等待 done；`StTerminalError` 用于不可恢复错误处理【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:92-112】。片段还声明了与这些行为配套的内部信号：`encoded_key` 保存编码后的密钥份额，`key_index`/`inc_keyidx`/`clr_keyidx` 用于选择并推进 64-bit 密钥切片，`block_addr_limit` 与 `sent_blocksize` 用于判断密钥块是否已完整送入 SHA3，`kmac_valid`/`kmac_data`/`kmac_strb` 构成内部消息接口，`kmac_process` 和 `process_latched` 用于避免空消息场景下外部 `process_i` 在密钥块尚未写完时被过早转发，`en_key_write` 指示内部消息接口仅在密钥写入阶段启用，`key_sliced` 表示送往 SHA3 的当前密钥切片【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:118-149】。本片段中唯一实际组合赋值是 `unused_signals = ^{mode_i, key_valid_i}`，其注释表明该信号仅服务于断言/消除未使用告警，不参与功能输出【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:151-153】。最后，状态寄存器 `st`/`st_d` 和错误计数 `st_err_ct`/`st_err_ct_d` 被声明，其中 `st` 通过 `PRIM_FLOP_SPARSE_FSM` 宏实现，并在复位/初始化时落到 `StKmacIdle`，体现该模块采用稀疏 FSM 编码并从空闲态起始【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:158-162】。",
+  "guarantees": [
+    {
+      "property": "状态寄存器 `st` 的初始化/默认复位状态为 `StKmacIdle`。",
+      "output_signals": [
+        "st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:158-162"
+      ]
+    },
+    {
+      "property": "`unused_signals` 恒等于 `mode_i` 与 `key_valid_i` 的按位归约异或，仅用于断言相关辅助连接。",
+      "output_signals": [
+        "unused_signals"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:151-153"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接涉及密钥相关数据路径：`encoded_key`、`key_index`、`key_sliced` 和 `en_key_write` 明确表明 KMAC 会先把编码后的秘密密钥块送入 SHA3，再处理消息【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:118-149】。此外，使用稀疏编码 FSM 和专门的终端错误态 `StTerminalError` 暗示设计希望提升状态非法跳转/故障注入下的可检测性与失效安全性，但本片段未展示进入错误态的条件或错误后的输出约束，因此安全效果仍需结合后续逻辑确认【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:92-112,158-162】。",
+  "assumptions": [],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:92-112",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:118-149",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:151-153",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:158-162"
+  ],
+  "uncertain_points": [
+    "`PRIM_FLOP_SPARSE_FSM` 宏的精确行为未在片段中展开；可以确认其以 `StKmacIdle` 作为默认状态，但是否还包含非法状态检测、纠错或告警输出，需要查看宏定义【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:161-162】。",
+    "注释说明在 `StKmacMsg` 会通过关闭 `en_kmac_datapath` 将消息直接转发到 SHA3，但本片段仅声明 `en_kmac_datapath`，未给出其驱动逻辑，因此该控制极性和完整数据路径行为仍需后续代码确认【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:102-105,146】。",
+    "注释说明 `kmac_process` 会延后转发 `process_i` 以处理空消息时密钥块尚未写完的问题，但本片段没有展示 `process_i`、`kmac_process` 和 `process_latched` 的具体更新条件，因此该等待条件和释放时机需要上下文确认【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:136-141】。",
+    "`st_err_ct`/`st_err_ct_d` 仅被声明，未在本片段中使用；其是否用于稀疏 FSM 错误计数、告警限次或恢复策略无法从这里确定【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:159】。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
+  "line_start": 92,
+  "line_end": 162
+}

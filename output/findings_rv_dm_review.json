@@ -1,0 +1,245 @@
+{
+  "source_file": "/home/smy/rtl_bug_agent/output/findings_rv_dm.json",
+  "generated_at": "2026-06-01T21:04:22",
+  "module": "rv_dm",
+  "results": [
+    {
+      "finding_id": "F-0001",
+      "title": "alerts[0] 被实现为多个完整性错误信号的简单 OR，缺乏每通道独立的触发标识。当该信号广播至所有 gen_alert_tx 的 alert_req_i 时，任何单一错误都会同时触发所有告警通道，导致无法区分故障源，并可能引起虚假多重告警。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.99,
+      "analysis_reason": "RTL 里并不存在“多个告警通道被同时触发”的场景，因为 `NumAlerts` 在 `rv_dm_reg_pkg` 中固定为 1，`rv_dm.hjson` 的 `alert_list` 也只定义了一个 `fatal_fault` 告警。因此 `gen_alert_tx` 只会生成一个 `prim_alert_sender` 实例，`alerts[0]` 连接到该唯一实例的 `alert_req_i` 是正确实现，而不是把单个错误广播到多个独立告警通道。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:10",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:149",
+        "/home/smy/opentitan/hw/ip/rv_dm/data/rv_dm.hjson:81"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "官方声明明确禁止通过 TL-UL 设备接口访问调试模块寄存器，但 RTL 实现提供了名为 regs 的 TL-UL 设备接口，并将其连接到内部调试寄存器块，从而允许通过该接口访问这些寄存器。这违背了“only accessible via DMI”的安全设计意图。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.96,
+      "analysis_reason": "`regs` 接口并不是 PULP debug module 的 DMI/DM CSR 访问口，而是 OpenTitan wrapper 自己的可组合寄存器接口。`rv_dm_reg_pkg`/`rv_dm_regs_reg_top` 显示这个接口只暴露 `alert_test`、`late_debug_enable_regwen` 和 `late_debug_enable` 三个 wrapper 寄存器；真正的调试模块 slave 端口是 `mem_tl_d_i` 经 `tlul_adapter_reg` 后接到 vendored `dm_top.slave_*`，而 DMI/JTAG 则走 `dbg`/`jtag` 路径。因此“通过 TL-UL 设备接口直接访问调试模块寄存器、违反 only-accessible-via-DMI”是把 wrapper CSRs 和实际 DM/DMI 通道混淆了。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/data/rv_dm.hjson:29",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:18",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_regs_reg_top.sv:143",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:128",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:658"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "RTL 通过多比特 MUBI 多路选择器，在 late debug 未使能且未被 OTP 禁用时，将 lc_dft_en_raw 作为调试使能源，允许在 lc_hw_debug_en 无效的情况下使能 RV_DM，破坏了“仅当 LC_HW_DEBUG_EN 有效时 RV_DM 可用”的原始设计约束。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.96,
+      "analysis_reason": "这段选择逻辑是显式设计意图，不是绕过。顶层接口同时接收 `lc_hw_debug_en_i` 和 `lc_dft_en_i`，后者在 `rv_dm.hjson` 中就被定义为 DFT 生命周期使能；`gen_mubi_mux` 明确规定：若 OTP fuse 禁止 late debug 或 CSR `late_debug_enable` 置真，则采用 `lc_hw_debug_en`，否则采用 `lc_dft_en`。此外，总线侧使用 `lc_hw_debug_en_gated`，JTAG/TAP 侧还单独使用 `pinmux_hw_debug_en_i` 门控，DMI 直通模式再由 `rv_dm_dmi_gate` 锁存/门控 `lc_hw_debug_en`。因此这里体现的是“HW debug 与 DFT debug 的分层生命周期策略”，不是未经授权地在 `lc_hw_debug_en` 无效时开启 RV_DM。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/data/rv_dm.hjson:108",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:246",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:261",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:514",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:128"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.99,
+      "analysis_reason": "该 finding 记录本身为空：没有具体标题、矛盾描述、涉及信号或证据，无法对应到任何可验证的 RTL 行为。独立检查 `rv_dm` 顶层和接口定义后，也没有发现一个与此空白条目相匹配的实际缺陷位置，因此这属于工具产出的空候选，而不是真实 bug。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:1",
+        "/home/smy/opentitan/hw/ip/rv_dm/data/rv_dm.hjson:5"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.99,
+      "analysis_reason": "该 finding 记录为空，没有给出可核查的信号链或矛盾点。对 `rv_dm` 源码进行独立检查后，没有找到一个与此条目对应的具体实现缺陷，因此它不是 RTL bug，而是工具生成的空白候选。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:1"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.99,
+      "analysis_reason": "该 finding 记录为空，没有任何可用于回溯 RTL 的具体 claim。由于不存在可验证的矛盾陈述或信号定位点，这一条不能成立为真实硬件缺陷，应视为工具误报。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:1"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.98,
+      "analysis_reason": "该条声称“缺少 0x100–0x10c 等设备内存地址映射定义”，但真实 RTL/package 中这些地址是明确存在的：`rv_dm_reg_pkg` 定义了 `HALTED=0x100`、`GOING=0x108`、`RESUMING=0x110`、`EXCEPTION=0x118`；vendored `dm_mem` 中也用同样的常量做了解码。因此这是 spec 抽取遗漏，而不是设计实现缺失。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:134",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:78"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "RTL spec 中缺少设备内存地址映射的定义，特别是 0x380-0x382 区域的读写属性未体现。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.98,
+      "analysis_reason": "地址映射并不缺失。`rv_dm_reg_pkg` 明确定义了 `RV_DM_DATAADDR_0_OFFSET = 0x380` 和 `RV_DM_DATAADDR_1_OFFSET = 0x384`；在 `dm_mem` 中，`DataBaseAddr..DataEndAddr` 区间统一支持读写，写路径更新 `data_bits`，读路径返回 `data_i`。这里的实现粒度是 32bit/word，对应 TL-UL 字访问，因此“0x380-0x382”这种按字节切分的说法本身就和 RTL 的寄存器粒度不一致。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:158",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:71",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:280",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:323"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.98,
+      "analysis_reason": "该条对地址范围的描述本身就是异常的（`0x383–0x338` 为反向区间），且真实 RTL 已在 `rv_dm_reg_pkg` 与 `dm_mem` 中明确定义 `0x338..0x35c` 为 `ABSTRACTCMD[0..9]`、`0x360..0x37c` 为 `PROGRAM_BUFFER[0..7]`、`0x380/0x384` 为 `DATAADDR[0..1]`。因此这不是实现缺陷，而是工具在地址区间抽取/表述上的错误。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:140",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:150",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_reg_pkg.sv:158",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:75"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "缺少描述调试模块 TL-UL 设备内存映射的 spec 片段，特别是各地址区的读写权限定义。需要在设计文档或实现中寻找地址译码和访问控制逻辑的详细 spec。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.98,
+      "analysis_reason": "地址译码和访问控制逻辑在实现里是完整可见的，不存在“设计缺失”。顶层 `rv_dm.sv` 将 `mem_tl_d_i` 经过 `tlul_adapter_reg` 转成 `device_re/device_we/device_addr` 后直接送入 `dm_top`；vendored `dm_mem` 对各地址区进行了显式读写处理，并在 `err_d` 中定义了未映射地址、未对齐访问、窄写和 ROM 写入等错误条件。这说明问题只是自动化 spec 没抽出来，不是硬件 bug。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:626",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:658",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:299",
+        "/home/smy/opentitan/hw/vendor/pulp_riscv_dbg/src/dm_mem.sv:382"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.99,
+      "analysis_reason": "该条唯一内容是 “No matching RTL specs.”，并没有形成任何具体的实现矛盾或可验证的信号级 claim。独立审阅 RTL 后未发现可与之对应的真实缺陷，因此应判为工具未命中导致的空误报。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:1"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "当前 spec 片段缺少将生命周期状态映射到调试使能信号（如 lc_hw_debug_en_i、lc_dft_en_i）以及如何用这些信号控制 TAP 可达性和门控的完整逻辑，需要进一步搜索 rv_dm 和 lc_ctrl 的相关部分。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.97,
+      "analysis_reason": "实际 RTL 已经给出完整逻辑：`lc_hw_debug_en_i`/`lc_dft_en_i` 经同步后在 `gen_mubi_mux` 中生成 `lc_hw_debug_en_gated_raw`，其后驱动总线侧门控；TAP/JTAG 侧则由独立的 `pinmux_hw_debug_en_i` 副本做 `JtagIn/JtagOut/DmiReq` 门控；若使用 TL-UL DMI，则 `rv_dm_dmi_gate` 还会对 latched `lc_hw_debug_en` 做 strap 采样和 TL gate。也就是说问题在于 spec 片段抽取不全，而不是源代码真的缺这部分逻辑。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:246",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:261",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:514",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:128"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "缺少关于 TAP 可达性的直接描述，以及 lc_dft_en_raw 如何影响 RV_DM 门控状态和 JTAG 连接的说明，现有片段不包含 truth table row 4 所需的全部门控与访问控制行为。",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.96,
+      "analysis_reason": "RTL 中对 TAP 可达性和门控的描述是直接存在的：JTAG 输入输出分别由 `pinmux_hw_debug_en[PmEnJtagIn]` 和 `[PmEnJtagOut]` 控制，JTAG 侧 DMI 请求由 `[PmEnDmiReq]` 控制；总线/ROM/SBA 等内部功能则由 `lc_hw_debug_en_gated` 控制。`lc_dft_en_raw` 只参与生成总线侧的 `lc_hw_debug_en_gated_raw`，并不会直接短接到 JTAG 引脚路径。因此这条 finding 反映的是片段搜集不完整，而非 RTL 行为冲突。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:249",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:261",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:524"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.95,
+      "analysis_reason": "该条文字声称无法判断“特定条件下 RV_DM 是否可通过 TAP 访问且完全未门控”，但相应逻辑在 RTL 里是分层实现的：总线侧受 `lc_hw_debug_en_gated_raw` 及其同步副本控制，TAP 侧受 `pinmux_hw_debug_en_i` 控制，TL-DMI 直通模式还受 `rv_dm_dmi_gate` 的 strap 锁存逻辑控制。换言之，源代码并不缺这部分实现，缺的是自动化提取器把跨模块门控链串起来的能力。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:255",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:514",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:205"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.96,
+      "analysis_reason": "关于 `pinmux_hw_debug_en_i` 在 NDM reset 期间的用途，代码和元数据其实都有直接说明：`rv_dm.hjson` 把它描述为 pinmux 输出的 latched `lc_hw_debug_en`，专门用于在 NDM reset 期间保持 JTAG/TAP debug session；`rv_dm.sv` 也明确写明 TAP side 使用该信号且不再叠加 `LATE_DEBUG_ENABLE`；JTAG gating 逻辑则直接使用同步后的 `pinmux_hw_debug_en` 控制输入、输出和 DMI request。因此这不是实现缺失，而是 spec 片段未覆盖到相关注释和门控逻辑。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/data/rv_dm.hjson:130",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:261",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:514"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "Finding on ",
+      "judgment": "FALSE_ALARM",
+      "confidence": 0.99,
+      "analysis_reason": "这条 finding 自己的矛盾描述已经是在说明实现“满足”该 truth-table 行：当 `otp_dis_rv_dm_late_debug` 为真时，`lc_hw_debug_en_gated_raw` 无条件选择 `lc_hw_debug_en_raw`，不会被 `late_debug_enable` 影响；否则才回落到 `lc_dft_en_raw`。代码与该陈述完全一致，因此它不是 bug，而是被聚合进 findings 列表的一条 satisfied/non-bug 项。",
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:254"
+      ],
+      "trigger_condition": null,
+      "security_impact": null,
+      "software_observable": null
+    }
+  ]
+}

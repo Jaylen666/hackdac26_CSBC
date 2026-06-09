@@ -1,0 +1,38 @@
+{
+  "chunk_id": "rv_dm__always_ff__p_ndm_reset__001",
+  "summary": "管理 NDM 复位请求的 pending 标志和并发生命周期复位标志，确保正确处理握手。",
+  "behavior": "该 always_ff 块在异步复位下将 ndmreset_pending_q 和 lc_rst_pending_q 清 0。正常工作时，ndmreset_pending_q 在 ndmreset_req 有效且当前未 pending 时置 1（行 327-328），在 ndmreset_ack 有效且已 pending 时清 0（行 329-331），避免同一请求重复触发。lc_rst_pending_q 仅在 ndmreset_pending_q 为 1 期间采样 lc_rst_asserted 并锁存为 1（行 333-334），同样在 ndmreset_ack 且 lc_rst_pending_q 已置位时清 0（行 335-337）。注意：两个标志的更新在同一周期内使用旧值采样，因此当 ndmreset_ack 与 lc_rst_asserted 同时有效且 ndmreset_pending_q 为 1 时，ndmreset_pending_q 会被计划清零，而 lc_rst_pending_q 会被计划置 1，导致下一周期 ndmreset_pending_q 为 0 但 lc_rst_pending_q 仍为 1。此后 lc_rst_pending_q 的清除依赖另一次 ndmreset_ack（即使 ndmreset_pending_q 已为 0），可能成为 sticky 状态，需上下文确认是否为此预期。",
+  "guarantees": [
+    {
+      "property": "复位后 ndmreset_pending_q 与 lc_rst_pending_q 一定为 0。",
+      "output_signals": [
+        "ndmreset_pending_q",
+        "lc_rst_pending_q"
+      ],
+      "source_refs": [
+        "rv_dm.sv:322-324"
+      ]
+    },
+    {
+      "property": "当 ndmreset_pending_q 为 1 时，一定标识存在已请求但未确认的 NDM 复位；当 lc_rst_pending_q 为 1 时，一定标识在最近一次 NDM 复位挂起期间发生过生命周期复位（lc_rst_asserted）。",
+      "output_signals": [
+        "ndmreset_pending_q",
+        "lc_rst_pending_q"
+      ],
+      "source_refs": [
+        "rv_dm.sv:327-337"
+      ]
+    }
+  ],
+  "security_implications": "记录在调试模块复位（NDM）过程中是否出现了生命周期复位（lc_rst），该信息可能用于安全状态机区分复位原因，触发安全响应或审计。",
+  "assumptions": [],
+  "evidence_refs": [
+    "rv_dm.sv:321-339"
+  ],
+  "uncertain_points": [
+    "当 ndmreset_ack 与 lc_rst_asserted 在同一周期有效且 ndmreset_pending_q 为 1 时，ndmreset_pending_q 被清零而 lc_rst_pending_q 被置 1（行 329 / 333），此后 lc_rst_pending_q 只能由另一次 ndmreset_ack 清除，即使 ndmreset_pending_q 已为 0。这在设计上是预期 sticky 行为还是需要额外的复位/清除机制，需结合外部逻辑确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
+  "line_start": 321,
+  "line_end": 339
+}

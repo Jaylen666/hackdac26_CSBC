@@ -1,0 +1,64 @@
+{
+  "chunk_id": "keccak_2share__continuous_region__keccak_2share__001",
+  "summary": "该片段定义了 keccak_2share 的参数化接口与内部 Keccak 状态类型/中间信号，并在未启用掩码实现时显式吸收仅供掩码路径使用的控制与随机输入以避免未使用告警。",
+  "behavior": "该连续逻辑区域首先建立模块的参数化结构：状态宽度为 Width，导出每个 lane 的位宽 W=Width/25、轮数相关参数 L、MaxRound 和 RndW；共享数 Share 则由 EnMasking 决定，掩码开启时为 2，否则为 1，因此模块的状态输入/输出数组维度随是否启用掩码而变化[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:13-27,45-46]。随后定义了 Keccak 状态的多种坐标化类型 box_t、lane_t、plane_t、slice_t、sheet_t、row_t、col_t，以及若干按 Share 复制的内部中间状态信号，用于表示 state_in/state_out 及 theta、rho、pi、chi、iota 和 phase1/phase2 的输入输出数据通路[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:51-74]。片段中唯一实际组合赋值出现在未启用掩码的条件生成块内：当 EnMasking=0 时，clk_i、rst_ni、phase_sel_i、rand_i 以及四个 DOM 控制信号会被接到本地 unused_* 信号，其中四个 DOM 控制信号通过归约异或合并为 unused_dom_ctrl；该逻辑不影响模块功能输出，只是显式引用这些仅在掩码实现中才有意义的输入，体现注释所说的“在非掩码实现中绑住未使用输入”的设计意图[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:77-92]。",
+  "guarantees": [
+    {
+      "property": "当 EnMasking=0 时，所有掩码相关控制输入和随机输入都会在本模块内被显式消耗，不会因未连接到功能路径而保持未引用状态。",
+      "output_signals": [
+        "unused_clk",
+        "unused_rst_n",
+        "unused_phase_sel",
+        "unused_dom_ctrl",
+        "unused_rand"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:80-91"
+      ]
+    },
+    {
+      "property": "模块的状态端口和内部 Keccak 中间数据通路的 share 数量由 EnMasking 唯一决定：EnMasking=1 时为双 share，EnMasking=0 时为单 share。",
+      "output_signals": [
+        "s_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:22-27,45-46,63-74"
+      ]
+    }
+  ],
+  "security_implications": "该片段本身未实现具体的安全变换，但它暴露了掩码实现所需的 DOM 控制和随机输入接口，并通过 EnMasking/Share 参数控制是否启用双 share 数据路径[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:22-27,35-42]。当 EnMasking=0 时，这些安全相关输入被明确丢弃而不参与功能逻辑[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:79-91]；因此若系统期望获得掩码防护，必须确保实例化配置为 EnMasking=1，否则外部提供的随机性和 DOM 控制不会产生任何安全效果。",
+  "assumptions": [
+    {
+      "constraint": "若系统功能或安全目标依赖 DOM 掩码运算、外部随机性注入或双 share 状态处理，则该模块必须以 EnMasking=1 实例化。",
+      "bug_relevance": "如果违反该前提，phase_sel_i、dom_* 和 rand_i 在本片段中会被当作未使用信号吸收而不进入功能路径，导致预期的掩码/随机化防护缺失，这更可能是集成或配置错误。",
+      "related_signals": [
+        "EnMasking",
+        "phase_sel_i",
+        "dom_out_low_i",
+        "dom_in_low_i",
+        "dom_in_rand_ext_i",
+        "dom_update_i",
+        "rand_i",
+        "s_i",
+        "s_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:22-27,35-46,79-91"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:13-27",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:35-46",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:51-74",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:77-92"
+  ],
+  "uncertain_points": [
+    "本片段只声明了 state_in/state_out、theta/rho/pi/chi/iota 和 phase1/phase2 等中间信号，未展示这些信号后续如何驱动 s_o 或参与轮函数，因此无法仅据此确认完整的 Keccak 数据流或 phase_sel_i 的实际功能效果。",
+    "注释说明 ForceRandExt 控制外部随机性与内部中间状态之间的切换[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:23-25]，但本片段未出现相应实现逻辑，因此无法确认该参数在后续代码中的具体行为。",
+    "lc_escalate_en_i 和 rnd_i 在接口中已声明[/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:31-33]，但本片段未使用，无法判断它们在后续逻辑中是功能必需还是仅用于断言/控制。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
+  "line_start": 8,
+  "line_end": 92
+}

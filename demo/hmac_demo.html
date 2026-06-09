@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSBC Demo: HMAC 010</title>
+  <link rel="stylesheet" href="demo_style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>CSBC Demo: HMAC 010 — SHA-512 Outer-Length Bug</h1>
+      <p class="subtitle">只使用两类块：<strong>FRAMEWORK</strong> 表示框架真实用到的输入/输出/证据；<strong>NOTE</strong> 表示为了汇报展示做的说明和串联。</p>
+      <div class="legend">
+        <span class="badge framework">FRAMEWORK</span>
+        <span class="badge note">NOTE</span>
+      </div>
+    </section>
+
+    <section class="block note">
+      <span class="tag note">NOTE</span>
+      <h2>Demo Message</h2>
+      <p>这个 case 展示的是：bug 的决定性线索来自 uncertain point；semantic AG 提供合法性上下文；Channel B 先写出 GAP finding；Phase3/Codex 再做源码级确认。</p>
+      <div class="flow">
+        <span>CFG.digest_size</span><span>digest_size_i</span><span>sha_msg_len</span><span>sha_message_length_o</span><span>final HMAC digest</span>
+      </div>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 1: RTL Chunks and Spec Inputs</h2>
+      <div class="grid two">
+        <div class="mini">
+          <h3>C1 Digest Size Cast, hmac.sv:297-309</h3>
+          <p>框架使用该 chunk 证明 <code>SHA2_512</code> 是合法、支持的 digest mode。</p>
+<pre><code>always_comb begin : cast_digest_size
+  digest_size = SHA2_None;
+
+  unique case (digest_size_supplied)
+    SHA2_256:  digest_size = SHA2_256;
+    SHA2_384:  digest_size = SHA2_384;
+    SHA2_512:  digest_size = SHA2_512;
+    default:   digest_size = SHA2_None;
+  endcase
+end</code></pre>
+        </div>
+        <div class="mini">
+          <h3>C2 Message Length Computation, hmac_core.sv:207-232</h3>
+          <p>bug 位于 final outer HMAC path。</p>
+<pre><code>always_comb begin : assign_sha_message_length
+  sha_msg_len = 64'd0;
+
+  if (!hmac_en_i) begin
+    sha_msg_len = message_length_i;
+  end else if (sel_msglen == SelIPadMsg) begin
+    unique case (digest_size_i)
+      SHA2_256: sha_msg_len = message_length_i + BlockSizeSHA256in64;
+      SHA2_384,
+      SHA2_512: sha_msg_len = message_length_i + BlockSizeSHA512in64;
+      default:  sha_msg_len = 64'd0;
+    endcase
+  end else begin
+    unique case (digest_size_i)
+      SHA2_256: sha_msg_len = BlockSizeSHA256in64 + 64'd256;
+      SHA2_384: sha_msg_len = BlockSizeSHA512in64 + 64'd384;
+<span class="bug-line">      default:  sha_msg_len = BlockSizeSHA512in64 + 64'd384;</span>
+    endcase
+  end
+end</code></pre>
+        </div>
+      </div>
+      <div class="grid three">
+        <div class="mini">
+          <h3>C3 Block Boundary Check, hmac_core.sv:236-244</h3>
+<pre><code>unique case (digest_size_i)
+  SHA2_256: txcnt_eq_blksz = ... BlockSizeBitsSHA256 ...;
+  SHA2_384: txcnt_eq_blksz = ... BlockSizeBitsSHA512 ...;
+  SHA2_512: txcnt_eq_blksz = ... BlockSizeBitsSHA512 ...;
+  default;
+endcase</code></pre>
+        </div>
+        <div class="mini">
+          <h3>C4 Digest Push Completion, hmac_core.sv:413-415</h3>
+<pre><code>if (fifo_wready_i &&
+    (((fifo_wdata_sel_o == 4'd7)  && (digest_size_i == SHA2_256)) ||
+     ((fifo_wdata_sel_o == 4'd15) && (digest_size_i == SHA2_512)) ||
+     ((fifo_wdata_sel_o == 4'd11) && (digest_size_i == SHA2_384)))) begin</code></pre>
+        </div>
+        <div class="mini">
+          <h3>C5 Register Spec, hmac/doc/registers.md:211-219</h3>
+<pre><code>CFG.digest_size supports:
+  SHA2_256  = 0x1
+  SHA2_384  = 0x2
+  SHA2_512  = 0x4
+  SHA2_None = 0x8</code></pre>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>Bug location:</strong> C2 final outer path 没有 SHA2_512 分支，合法 SHA2_512 会落入 <code>+384</code> default。
+      </div>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 2: LLM-Generated Structured Specs</h2>
+      <div class="grid two">
+        <div class="mini">
+          <h3>C2 assign_sha_message_length Spec</h3>
+          <p><strong>Summary:</strong> 根据 HMAC 使能状态、消息长度选择阶段和摘要算法类型，组合计算送往 SHA 的消息比特长度。</p>
+          <p><strong>Guarantee 0:</strong> 当 <code>hmac_en_i=0</code> 时，<code>sha_msg_len = message_length_i</code>。</p>
+          <p><strong>Guarantee 1:</strong> 当 <code>hmac_en_i=1</code> 且 <code>sel_msglen == SelIPadMsg</code> 时，SHA2_256 使用 512-bit block size，SHA2_384/SHA2_512 使用 1024-bit block size。</p>
+          <p><strong>Guarantee 2:</strong> 当 <code>hmac_en_i=1</code> 且 <code>sel_msglen != SelIPadMsg</code> 时，SHA2_256 → <code>+256</code>，SHA2_384 → <code>+384</code>，other/default → <code>+384</code>。</p>
+          <p><strong>Assumption:</strong> 在 HMAC 最终哈希路径中，<code>digest_size_i</code> 应只取该实现支持的合法编码；若期望 SHA2_512 语义，需要确认其不会依赖 default 的 384-bit 回退。</p>
+          <p><strong>Uncertain Point:</strong> 最终哈希长度计算中，SHA2_512 没有显式分支；default 返回 <code>BlockSizeSHA512in64 + 384</code>。这是否有意将 SHA2_512 与 SHA2_384 共享 384-bit 中间摘要长度，还是遗漏 512-bit 分支，需要结合上下文确认。</p>
+        </div>
+        <div class="mini">
+          <h3>C1 cast_digest_size Spec</h3>
+          <p><strong>Guarantee:</strong> 当 <code>digest_size_supplied</code> 为 SHA2_256、SHA2_384 或 SHA2_512 时，<code>digest_size</code> 一定分别输出对应合法枚举值。</p>
+          <p><strong>Why it matters:</strong> 该 guarantee 告诉下游 HMAC core，SHA2_512 是合法支持模式，不是应落入 defensive default 的非法值。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 3: Atom Extraction</h2>
+      <table>
+        <tr><th>Inventory</th><th>Count</th></tr>
+        <tr><td>spec files</td><td>68</td></tr>
+        <tr><td>assumption atoms</td><td>84</td></tr>
+        <tr><td>guarantee atoms</td><td>149</td></tr>
+        <tr><td>uncertain atoms</td><td>163</td></tr>
+        <tr><td>total atoms</td><td>396</td></tr>
+      </table>
+      <h3>Key atoms</h3>
+      <ul>
+        <li><strong>Uncertain:</strong> <code>hmac_core__always_comb__assign_sha_message_length__001::uncertain::0</code> — SHA2_512 has no explicit final-length branch; default returns <code>BlockSizeSHA512in64 + 384</code>.</li>
+        <li><strong>Assumption:</strong> <code>hmac_core__always_comb__assign_sha_message_length__001::assumption::0</code> — final HMAC path should not rely on 384-bit default when SHA2_512 semantics are expected.</li>
+        <li><strong>Guarantee:</strong> <code>hmac__always_comb__cast_digest_size__001::guarantee::0</code> — SHA2_512 is a legal digest mode.</li>
+        <li><strong>Guarantee:</strong> <code>hmac_core__continuous_region__batched_small_assigns__001::guarantee::0</code> — <code>sha_message_length_o</code> always equals internal <code>sha_msg_len</code>.</li>
+      </ul>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 4: Semantic AG Pairing + Uncertain Routing</h2>
+      <table>
+        <tr><th>Mode</th><th>Work items / hit</th></tr>
+        <tr><td>legacy AG only</td><td>265 work items; hit yes, best rank 147</td></tr>
+        <tr><td>legacy AG + uncertain</td><td>428 work items; uncertain hit rank 93</td></tr>
+        <tr><td>semantic paired only</td><td>135 query units; hit yes, best rank 5</td></tr>
+        <tr><td>semantic paired + unmatched U</td><td>232 work items; hit yes, best rank 5</td></tr>
+        <tr><td>unmatched uncertain</td><td>hit yes, rank 185</td></tr>
+      </table>
+      <h3>Most useful semantic AG pair</h3>
+      <table>
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>Query</td><td>Final HMAC path 中 <code>digest_size_i</code> 若为 SHA2_512，不能依赖 default 的 384-bit fallback。</td></tr>
+        <tr><td>Candidate</td><td><code>digest_size_supplied = SHA2_512</code> produces legal <code>digest_size = SHA2_512</code>.</td></tr>
+        <tr><td>Score</td><td>dense 0.856, signal 0.600, total 0.805, shared <code>digest_size / digest_size_i</code></td></tr>
+        <tr><td>Interpretation</td><td>这个 pair 证明 SHA2_512 是合法输入场景，因此 C2 的 default +384 不是安全非法输入 fallback。</td></tr>
+      </table>
+      <h3>Critical unmatched uncertain</h3>
+      <p><code>hmac_core__always_comb__assign_sha_message_length__001::uncertain::0</code> 直接指出：SHA2_512 has no explicit final-length branch; default returns <code>BlockSizeSHA512in64 + 384</code>. 这个 U point 会被送入后续 LLM mismatch 分析，形成 finding.json 中的候选 finding。</p>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 5: Channel B LLM Mismatch Analysis</h2>
+      <p><strong>Output file:</strong> <code>output/findings_hmac_curated_top10.json</code>. Channel B reads each selected AG/U work item and writes one finding entry per suspicious mismatch into <code>finding.json</code>-style output.</p>
+      <table>
+        <tr><th>finding_id</th><th>Channel B judgment written to finding.json</th></tr>
+        <tr>
+          <td>F-0025</td>
+          <td><strong>verdict=GAP</strong>, severity=HIGH, score=0.63. The LLM identifies that the final HMAC path only handles SHA2_256 and SHA2_384; other encodings fall back to <code>BlockSizeSHA512in64 + 384</code>. If SHA2_512 is legal, this is missing legal-mode coverage rather than a defensive default.</td>
+        </tr>
+      </table>
+      <p><strong>Evidence stored in finding.json:</strong> assumption says final SHA2_512 semantics must not rely on the 384-bit fallback; guarantee says the outer path maps SHA2_256 to <code>+256</code>, SHA2_384 to <code>+384</code>, and other/default to <code>+384</code>.</p>
+      <p><strong>Important:</strong> Channel B does not yet prove the RTL bug. It marks a candidate mismatch for Phase3/Codex source-level verification.</p>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 6: Phase3 Codex Source Confirmation</h2>
+      <p><strong>Input:</strong> Channel B finding F-0025 plus related RTL/spec context. Codex then checks source instead of trusting the pair-level mismatch alone.</p>
+      <p><strong>Final bug candidate:</strong> <code>hmac_bug_003</code>, status <code>proven</code> in <code>diff_bug_convergence/hmac/hmac_bug_003/proof_result_v1.json</code>.</p>
+      <p><strong>Codex confirmation:</strong> SHA2_512 is explicitly supported, but the final outer HMAC length computation collapses SHA2_512 to the SHA2_384 constant. Directed RTL proof observes SHA2_512 outer-round length as 1408 instead of expected 1536, and the software-visible witness reports a fully mismatched HMAC-SHA512 tag.</p>
+      <p><strong>Observed witness:</strong> SHA384 control passes on the same platform; SHA512 reports <code>mismatches=16</code>, with actual digest words differing from the expected known-answer vector.</p>
+    </section>
+
+    <section class="block framework">
+      <span class="tag framework">FRAMEWORK</span>
+      <h2>Step 7: Buggy vs Clean Comparison</h2>
+      <div class="comparison">
+        <div class="mini bad">
+          <h3>Buggy: opentitan/hmac_core.sv:223-230</h3>
+<pre><code>unique case (digest_size_i)
+  SHA2_256: sha_msg_len = BlockSizeSHA256in64 + 64'd256;
+  SHA2_384: sha_msg_len = BlockSizeSHA512in64 + 64'd384;
+<span class="bug-line">  default:  sha_msg_len = BlockSizeSHA512in64 + 64'd384;</span>
+endcase</code></pre>
+        </div>
+        <div class="mini good">
+          <h3>Clean: opentitan-refs/hmac_core.sv:225-233</h3>
+<pre><code>if (digest_size_i == SHA2_256) begin
+  sha_msg_len = BlockSizeSHA256in64 + 64'd256;
+end else if (digest_size_i == SHA2_384) begin
+  sha_msg_len = BlockSizeSHA512in64 + 64'd384;
+end else begin // SHA512
+  sha_msg_len = BlockSizeSHA512in64 + 64'd512;
+end</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="block note">
+      <span class="tag note">NOTE</span>
+      <h2>Takeaway</h2>
+      <p>这个 demo 的讲法：不是 Semantic AG 之后直接进入最终确认。正确流程是 Channel B 先把 pair/U 判断成 finding.json 里的 GAP 候选，Phase3/Codex 再对照源码、ref 和 witness 确认为最终 bug candidate。</p>
+      <p><strong>一句话：</strong> A/G pairing is useful, but U points capture design-intent gaps that would otherwise be missed or under-prioritized.</p>
+    </section>
+
+    <footer>Source markdown: demo/hmac_demo.md</footer>
+  </main>
+</body>
+</html>

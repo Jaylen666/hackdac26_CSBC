@@ -1,0 +1,64 @@
+{
+  "chunk_id": "hmac__continuous_region__declarations_or_instances__016",
+  "summary": "该片段主要通过形式断言约束 HMAC 配置/清零行为，并保证关键输出在复位后不出现未知值，同时要求寄存器写使能 onehot 错误触发告警。",
+  "behavior": "这段代码不实现新的功能数据通路，而是用断言刻画设计意图与可验证属性。首先，前一条跨行断言的尾部表明：当 hmac_en 发生变化时，设计要求当前不处于 in_process 且未处于 initiated 状态，意味着 HMAC 使能位不应在已启动或处理中途被切换 [947]。其次，针对敏感信息擦除，注释说明当 wipe_secret 拉高时，会把寄存器给出的 wipe_v 扩展后写入敏感内部变量；实际断言要求在 wipe_secret 之后，secret_key 必须等于由上一拍 wipe_v 按位宽重复拼接得到的值，从而验证密钥擦除确实覆盖整个 secret_key 宽度 [949-952]。此外，片段要求若干对外可见输出在复位后始终为已知值，不允许出现 X/Z，包括 intr_hmac_done_o、intr_fifo_empty_o、tl_o.d_valid、tl_o.a_ready 和 alert_tx_o [954-959]。最后，一条专用断言要求 u_reg 中 reg_we onehot 检查出错时必须触发 alert_tx_o[0]，将寄存器接口完整性错误与告警输出绑定 [964-965]。",
+  "guarantees": [
+    {
+      "property": "当 wipe_secret 触发擦除后，secret_key 必须被覆盖为由上一拍 wipe_v 按 secret_key 位宽重复扩展得到的模式。",
+      "output_signals": [
+        "secret_key"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:949-952"
+      ]
+    },
+    {
+      "property": "复位后，intr_hmac_done_o、intr_fifo_empty_o、tl_o.d_valid、tl_o.a_ready 和 alert_tx_o 均保证为已知值，不会输出 X/Z。",
+      "output_signals": [
+        "intr_hmac_done_o",
+        "intr_fifo_empty_o",
+        "tl_o.d_valid",
+        "tl_o.a_ready",
+        "alert_tx_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:954-959"
+      ]
+    },
+    {
+      "property": "寄存器写使能 onehot 检查错误会触发 alert_tx_o[0] 告警。",
+      "output_signals": [
+        "alert_tx_o[0]"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:964-965"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接涉及安全属性。wipe_secret 断言要求密钥材料在擦除请求后被统一覆盖为 wipe_v 扩展值，防止 secret_key 残留 [949-952]。同时，寄存器写使能 onehot 错误必须触发 alert，有助于检测总线/寄存器接口异常或故障注入行为 [964-965]。关键输出保持已知值也减少了复位后不确定状态传播到安全控制路径的风险 [954-959]。",
+  "assumptions": [
+    {
+      "constraint": "hmac_en 只能在模块未处于 in_process 且未 initiated 的空闲阶段切换；若在处理中改变，违反该行为契约。",
+      "bug_relevance": "如果违反该约束，可能导致处理中途改变使能配置，造成 HMAC 状态机或结果不一致；该断言把这种情况视为设计/使用错误，而非正常输入场景。",
+      "related_signals": [
+        "hmac_en",
+        "in_process",
+        "initiated"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:947"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:947-965"
+  ],
+  "uncertain_points": [
+    "第 947 行只给出了某条断言的尾部，完整前件在片段外，因此这里只能确认其意图是限制 hmac_en 变化时不得处于 in_process 或 initiated，无法从本片段单独恢复更完整的触发条件。",
+    "注释称“sensitive internal variables”会被清零，但本片段实际只明确断言了 secret_key 被 wipe_v 扩展值覆盖；其他敏感变量是否也会被同样处理需要依赖片段外代码确认 [949-952]。",
+    "ASSERT_KNOWN 宏的精确生效条件由宏定义决定；注释写的是‘after reset’，但具体是复位释放后立即检查还是在某个屏蔽窗口后检查，需要结合断言宏定义确认 [954-959]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 947,
+  "line_end": 966
+}

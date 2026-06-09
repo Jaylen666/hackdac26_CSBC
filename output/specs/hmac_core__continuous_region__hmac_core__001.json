@@ -1,0 +1,59 @@
+{
+  "chunk_id": "hmac_core__continuous_region__hmac_core__001",
+  "summary": "该片段定义了 HMAC 核心的主要内部状态/类型，并在组合上根据 hmac_en_i 在“直通 SHA 模式”和“HMAC 控制模式”之间切换哈希控制与完成信号，同时从 txcount 导出 pad 访问索引。",
+  "behavior": "该连续逻辑片段本身不实现状态转移，但建立了后续 HMAC 控制所依赖的数据通路和控制接口。首先，它声明了 SHA-256 和 SHA-512 的块大小及其相关位宽常量，以及 HMAC 处理中会用到的 ipad/opad 缓冲、发送计数 txcount、空闲/停止标志、轮次标志和状态机枚举，表明设计意图是通过状态机在 StIPad、StMsg、StPushToMsgFifo、StWaitResp、StOPad、StDone 等阶段驱动一次 HMAC 内外两轮哈希 [hmac_core.sv:48-57, 64-118]。在输出控制上，sha_hash_start_o 和 sha_hash_continue_o 在 hmac_en_i=1 时由内部状态机生成的 hash_start/hash_continue 驱动，否则直接透传寄存器接口 reg_hash_start_i/reg_hash_continue_i，说明关闭 HMAC 时该模块退化为对底层 SHA 控制的旁路 [hmac_core.sv:120-121]。sha_hash_process_o 在 HMAC 模式下是 reg_hash_process_i 与内部 hash_process 的或值，因此外部 process 请求即使在 HMAC 使能时也不会被屏蔽；在非 HMAC 模式下则直接等于 reg_hash_process_i [hmac_core.sv:123]。类似地，hash_done_o 在 HMAC 模式下输出内部完成标志 hmac_hash_done，在非 HMAC 模式下直接反映底层 SHA 的 sha_hash_done_i [hmac_core.sv:124]。此外，pad_index_512 和 pad_index_256 由 txcount 的高位切片得到，用于把按 32-bit 字计数的 txcount 映射为对应块大小下的 pad 字索引；索引使用 txcount 去掉低 HashWordBitsSHA256 位后的结果，表明 pad 访问粒度按 sha_word32_t 宽度组织 [hmac_core.sv:54, 69, 71-72, 126-127]。",
+  "guarantees": [
+    {
+      "property": "当 hmac_en_i 为 0 时，sha_hash_start_o、sha_hash_continue_o、sha_hash_process_o 和 hash_done_o 分别直接等于 reg_hash_start_i、reg_hash_continue_i、reg_hash_process_i 和 sha_hash_done_i。",
+      "output_signals": [
+        "sha_hash_start_o",
+        "sha_hash_continue_o",
+        "sha_hash_process_o",
+        "hash_done_o"
+      ],
+      "source_refs": [
+        "hmac_core.sv:120-124"
+      ]
+    },
+    {
+      "property": "当 hmac_en_i 为 1 时，sha_hash_start_o 和 sha_hash_continue_o 由内部 HMAC 控制信号驱动，且 sha_hash_process_o 至少在 reg_hash_process_i 或 hash_process 任一为 1 时为 1。",
+      "output_signals": [
+        "sha_hash_start_o",
+        "sha_hash_continue_o",
+        "sha_hash_process_o"
+      ],
+      "source_refs": [
+        "hmac_core.sv:120-123"
+      ]
+    }
+  ],
+  "security_implications": "该片段处于 HMAC/SHA 模式切换边界：hmac_en_i 直接决定哈希启动、继续、处理和完成信号是由内部 HMAC 流程控制还是由外部寄存器请求直通控制 [hmac_core.sv:120-124]。这意味着若模式控制或软件驱动不当，可能在应走 HMAC 密钥包裹流程时退化为普通 SHA 路径，从而绕过基于 secret_key_i 的预期认证语义；不过本片段本身未展示密钥如何参与计算。",
+  "assumptions": [
+    {
+      "constraint": "在 hmac_en_i=1 的合法 HMAC 使用场景下，外部对 reg_hash_start_i/reg_hash_continue_i/reg_hash_process_i 的驱动需与内部 HMAC 状态机语义兼容，尤其 reg_hash_process_i 不应在与内部 hash_process 冲突的时刻被随意拉高。",
+      "bug_relevance": "因为 sha_hash_process_o 在 HMAC 模式下是外部 reg_hash_process_i 与内部 hash_process 的或值，若软件/上游在不应处理的时刻拉高 reg_hash_process_i，可能导致底层 SHA 被额外触发，破坏 HMAC 流程序列；这更像行为契约而非防御性回退。",
+      "related_signals": [
+        "hmac_en_i",
+        "reg_hash_process_i",
+        "hash_process",
+        "sha_hash_process_o"
+      ],
+      "source_refs": [
+        "hmac_core.sv:123"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac_core.sv:48-57",
+    "hmac_core.sv:64-118",
+    "hmac_core.sv:120-127"
+  ],
+  "uncertain_points": [
+    "本片段只声明了状态机状态、round 和 ipad/opad 相关信号，未给出这些信号的具体更新和使用逻辑，因此只能确认设计意图是支持 HMAC 内外轮处理，无法仅凭本片段确定各状态的精确转换条件与输出行为 [hmac_core.sv:80-118]。",
+    "注释说明 secret_key_i 为“{word0, word1, ..., word7}”，但端口宽度为 1024 位，明显多于 8 个 32-bit word；该注释与位宽/布局可能不一致，密钥字顺序和有效长度需结合其他代码确认 [hmac_core.sv:11]。",
+    "pad_index_256/512 的切片显示 txcount 被按 sha_word32_t 粒度换算为 pad 索引，但 txcount 的单位是 bit、byte 还是 32-bit word 需要依赖后续逻辑确认；这里只能确认低 HashWordBitsSHA256 位被忽略用于索引计算 [hmac_core.sv:54, 69, 126-127]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 7,
+  "line_end": 127
+}

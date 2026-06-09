@@ -1,0 +1,73 @@
+{
+  "chunk_id": "hmac__continuous_region__declarations_or_instances__010",
+  "summary": "该片段生成若干配置/时机错误检测信号，用于标记在 SHA 被禁用、配置被锁定或 HMAC/SHA-2 参数非法时启动/继续哈希或接收消息的情况。",
+  "behavior": "该组合逻辑从软件控制位、配置状态和消息输入请求中派生出一组错误条件。`hash_start_sha_disabled` 在 `reg_hash_start` 或 `reg_hash_continue` 置位且 `sha_en` 为 0 时为真，表示请求启动/继续哈希时 SHA 功能被禁用（807, 811）。`hash_start_active` 在存在 `reg_hash_start` 或 `reg_hash_continue` 请求且 `cfg_block` 为真时为真，注释表明其含义是哈希已处于活动状态时又出现 start/continue 请求（808, 812）。`msg_push_not_allowed` 在有消息 FIFO 请求 `msg_fifo_req` 但 `msg_allowed` 为假时为真，用于标记当前状态下消息输入不被允许（809, 813）。`invalid_config` 用于统一表示 HMAC/SHA-2 配置非法或未配置：当 `digest_size` 为 `SHA2_None`，或在 HMAC 模式下 `key_length` 为 `Key_None`，或在 HMAC 模式下选择了 `SHA2_256` 却配置 `Key_1024` 时置位；注释说明最后一种情况非法是因为 SHA-256 仅支持最多 512-bit key（815-820）。`invalid_config_atstart` 进一步限定为仅在 `reg_hash_start` 或 `reg_hash_continue` 发生活动时才报告 `invalid_config`，注释表明该条件将向软件报错（822-823）。",
+  "guarantees": [
+    {
+      "property": "只要 `digest_size` 未配置、或 HMAC 模式下 `key_length` 未配置、或 HMAC-SHA256 选择了 1024-bit key，`invalid_config` 一定为 1。",
+      "output_signals": [
+        "invalid_config"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:818-820"
+      ]
+    },
+    {
+      "property": "当且仅当存在 `reg_hash_start` 或 `reg_hash_continue` 请求且 `invalid_config` 为 1 时，`invalid_config_atstart` 为 1。",
+      "output_signals": [
+        "invalid_config_atstart"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:822-823"
+      ]
+    },
+    {
+      "property": "当有消息 FIFO 请求且 `msg_allowed` 为 0 时，`msg_push_not_allowed` 一定为 1。",
+      "output_signals": [
+        "msg_push_not_allowed"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:813-813"
+      ]
+    }
+  ],
+  "security_implications": "该片段属于安全相关的输入/配置合法性防护逻辑。它阻止或至少标记在 SHA 被禁用、配置非法、密钥长度与摘要模式不兼容、或消息输入时机不合法的情况下继续操作，并将启动时的非法配置专门汇总为面向软件的错误条件（811-823）。这有助于避免在未正确配置密钥或算法模式时进行摘要/HMAC 计算，降低因配置错误导致的错误认证结果或状态机误用风险。",
+  "assumptions": [
+    {
+      "constraint": "`cfg_block` 需要确实表示“哈希已经活动/配置被阻塞”的状态；否则 `hash_start_active` 可能错误地把普通 start/continue 请求判定为活动期重复触发，或漏报该情况。",
+      "bug_relevance": "这是行为契约；若 `cfg_block` 语义与注释不一致，会导致后续依赖 `hash_start_active` 的错误处理或状态保护逻辑失效。",
+      "related_signals": [
+        "cfg_block",
+        "reg_hash_start",
+        "reg_hash_continue",
+        "hash_start_active"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:808-812"
+      ]
+    },
+    {
+      "constraint": "`msg_allowed` 应正确覆盖所有允许写入消息 FIFO 的合法阶段；不应发生合法消息请求 `msg_fifo_req` 与错误的 `msg_allowed=0` 组合。",
+      "bug_relevance": "这是行为契约；若违反，合法消息输入会被误标记为 `msg_push_not_allowed`，可能引发错误告警或丢弃正常事务。",
+      "related_signals": [
+        "msg_fifo_req",
+        "msg_allowed",
+        "msg_push_not_allowed"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:809-813"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:807-823"
+  ],
+  "uncertain_points": [
+    "`hash_start_active` 的实现是 `(reg_hash_start | reg_hash_continue) & cfg_block`，注释称其表示“hash already active”时收到 start/continue；但仅凭本片段无法确认 `cfg_block` 是否完全等价于“hash already active”，还是更广义的配置锁定/阻塞条件。",
+    "`invalid_config_atstart` 注释说会向软件报错，但本片段只生成条件信号，具体报错形式（状态位、中断、alert 或错误码）需由其他逻辑确认。",
+    "注释将 `invalid_config` 描述为 'Invalid/unconfigured HMAC/SHA-2'，但本片段只覆盖三类非法条件；是否还存在其他非法组合由片段外逻辑处理，单凭此处无法确定。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 807,
+  "line_end": 823
+}

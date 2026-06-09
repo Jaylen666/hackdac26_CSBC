@@ -1,0 +1,60 @@
+{
+  "chunk_id": "hmac_core__always_comb__assign_sha_message_length__001",
+  "summary": "根据 HMAC 使能状态、消息长度选择阶段和摘要算法类型，组合计算送往 SHA 的消息比特长度。",
+  "behavior": "该组合逻辑先将 sha_msg_len 缺省置为 0，然后按模式选择长度来源。在非 HMAC 模式下，sha_msg_len 直接透传 message_length_i，注释也明确表明这是“Simple pass-through in non-HMAC mode”[hmac_core.sv:208-212]。在 HMAC 模式下，如果 sel_msglen 选择 SelIPadMsg，则把原始消息长度加上内层密钥块长度作为中间哈希输入长度：SHA2_256 使用 BlockSizeSHA256in64，SHA2_384 和 SHA2_512 使用 BlockSizeSHA512in64；若 digest_size_i 落入 default，则回退为 0 [hmac_core.sv:214-221]。否则进入最终哈希长度计算路径，长度固定为“外层填充密钥块长度 + 内层摘要输出长度”：SHA2_256 为 BlockSizeSHA256in64 + 256，比特；SHA2_384 为 BlockSizeSHA512in64 + 384，比特；default 也返回 BlockSizeSHA512in64 + 384 [hmac_core.sv:223-230]。因此，该块在 HMAC 的两个阶段分别为“key block + message”和“outer key block + inner digest”选择不同的 SHA 输入长度；但对 SHA2_512，最终阶段的 default 分支与注释/命名可能存在歧义，因为代码未显式给出 512 比特摘要长度分支，而是落到 384 比特长度回退值 [hmac_core.sv:226-229]。",
+  "guarantees": [
+    {
+      "property": "当 hmac_en_i 为 0 时，sha_msg_len 一定等于 message_length_i，不附加任何 HMAC 相关块长度。",
+      "output_signals": [
+        "sha_msg_len"
+      ],
+      "source_refs": [
+        "hmac_core.sv:210-212"
+      ]
+    },
+    {
+      "property": "当 hmac_en_i 为 1 且 sel_msglen == SelIPadMsg 时，sha_msg_len 一定等于 message_length_i 加上与 digest_size_i 对应的 HMAC 内层密钥块长度；SHA2_256 使用 BlockSizeSHA256in64，SHA2_384/SHA2_512 使用 BlockSizeSHA512in64。",
+      "output_signals": [
+        "sha_msg_len"
+      ],
+      "source_refs": [
+        "hmac_core.sv:214-221"
+      ]
+    },
+    {
+      "property": "当 hmac_en_i 为 1 且 sel_msglen != SelIPadMsg 时，sha_msg_len 一定为固定的外层 HMAC 输入长度：SHA2_256 时为 BlockSizeSHA256in64 + 256，SHA2_384 时为 BlockSizeSHA512in64 + 384，其他编码回退为 BlockSizeSHA512in64 + 384。",
+      "output_signals": [
+        "sha_msg_len"
+      ],
+      "source_refs": [
+        "hmac_core.sv:223-230"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑决定 HMAC 两个阶段送入 SHA 的消息长度，直接影响填充边界和摘要计算输入范围。如果 digest_size_i 编码异常，SelIPadMsg 路径会把长度清零，而最终阶段会回退到 384 比特摘要长度模型；这类回退可避免未定义输出，但若上游错误地给出非法摘要模式，可能导致摘要语义与期望算法不一致。",
+  "assumptions": [
+    {
+      "constraint": "在 HMAC 最终哈希路径中，digest_size_i 应只取该实现支持的合法编码，并且若期望 SHA2_512 语义，需要确认其不会依赖 default 分支的 384 比特长度回退。",
+      "bug_relevance": "如果违反该约束，sha_msg_len 可能按 384 比特内层摘要长度计算，导致最终 HMAC 输入长度错误，进而产生错误摘要；若 digest_size_i 非法，这是设计上不应发生的输入，但本块有回退行为。",
+      "related_signals": [
+        "digest_size_i",
+        "hmac_en_i",
+        "sel_msglen",
+        "sha_msg_len"
+      ],
+      "source_refs": [
+        "hmac_core.sv:223-230"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac_core.sv:208-230"
+  ],
+  "uncertain_points": [
+    "最终哈希长度计算中，SHA2_512 没有显式分支；default 返回 BlockSizeSHA512in64 + 384 [hmac_core.sv:226-229]。这是否有意将 SHA2_512 与 SHA2_384 共享 384 比特中间摘要长度，还是遗漏了 512 比特分支，需要结合模块其余上下文确认。",
+    "代码注释称该路径处理“final hash computation with padded outer key”[hmac_core.sv:223-225]，从长度常数看意图是“外层块 + 内层摘要长度”，但具体单位是否全部为比特需依赖 BlockSizeSHA256in64/BlockSizeSHA512in64 的定义确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 207,
+  "line_end": 232
+}

@@ -1,0 +1,62 @@
+{
+  "chunk_id": "kmac_errchk__always_ff__line_243__001",
+  "summary": "在复位时将软件命令输出清空，否则仅在未阻塞软件命令时把输入命令寄存到输出。",
+  "behavior": "该寄存器过程维护软件命令输出 `sw_cmd_o`。当低有效复位 `rst_ni` 拉低时，`sw_cmd_o` 被置为 `CmdNone`，为复位后的默认无命令状态；在非复位情况下，只有当 `block_swcmd` 为假时才采样 `sw_cmd_i` 并更新 `sw_cmd_o`。如果 `block_swcmd` 为真，则该块没有赋值分支，`sw_cmd_o` 保持先前寄存值不变。这表明该片段实现了一个带阻塞/冻结控制的软件命令寄存器，阻塞期间不会接受新的 `sw_cmd_i`。",
+  "guarantees": [
+    {
+      "property": "当 `rst_ni` 为低时，`sw_cmd_o` 被强制置为 `CmdNone`。",
+      "output_signals": [
+        "sw_cmd_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:243-245"
+      ]
+    },
+    {
+      "property": "当未复位且 `block_swcmd` 为 0 时，`sw_cmd_o` 更新为 `sw_cmd_i`；当 `block_swcmd` 为 1 时，该块不会改写 `sw_cmd_o`。",
+      "output_signals": [
+        "sw_cmd_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:244-245"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑控制软件命令是否能进入后续逻辑。`block_swcmd` 置位时会冻结 `sw_cmd_o`，可防止在特定条件下继续接收新的软件命令；复位时清为 `CmdNone` 也避免系统启动后残留命令继续生效。若该信号链用于错误处理或敏感操作门控，则这是一个基础的命令抑制机制。",
+  "assumptions": [
+    {
+      "constraint": "`sw_cmd_i` 和 `CmdNone` 必须属于同一合法命令编码空间，且下游逻辑将 `CmdNone` 解释为无命令/空操作。",
+      "bug_relevance": "如果 `CmdNone` 不是被下游一致识别的空命令，复位后可能触发非预期命令；如果 `sw_cmd_i` 编码非法，则在未阻塞时会被原样寄存并传播成功能错误。这属于行为契约。",
+      "related_signals": [
+        "sw_cmd_i",
+        "sw_cmd_o",
+        "CmdNone"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:244-245"
+      ]
+    },
+    {
+      "constraint": "`block_swcmd` 应在需要禁止新软件命令进入时被正确拉高；阻塞期间输入侧不应依赖 `sw_cmd_o` 自动清空，而应接受其保持旧值的行为。",
+      "bug_relevance": "如果上层错误地认为阻塞会把输出清零，则在 `block_swcmd` 为 1 时旧命令持续保留，可能导致重复执行或状态判断错误；不过该片段对这种场景的回退行为是保持原值，属于防御性设计下的使用约束。",
+      "related_signals": [
+        "block_swcmd",
+        "sw_cmd_o",
+        "sw_cmd_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:245-246"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:243-246"
+  ],
+  "uncertain_points": [
+    "仅从该片段无法确认 `block_swcmd` 何时被置位、是否与错误状态或安全策略相关，需要结合其驱动逻辑判断设计意图。",
+    "无法仅凭该片段确认 `sw_cmd_o` 保持旧值是否会被下游解释为“命令仍然有效”还是仅作为最近一次命令的存档。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
+  "line_start": 243,
+  "line_end": 246
+}

@@ -1,0 +1,52 @@
+{
+  "chunk_id": "kmac_app__always_comb__line_720__001",
+  "summary": "该组合逻辑仅在软件被选为缓冲区输出且生命周期未升级告警时向软件暴露 Keccak 状态；若同时使用 keymgr 侧载密钥，则对状态中的 capacity 区域做按强度清零以隐藏密钥相关内部状态。",
+  "behavior": "该块默认将 `reg_state_valid` 置 0，并将 `reg_state_o` 全部清零，因而在未满足导出条件时软件侧看不到有效状态输出 [kmac_app.sv:721-722]。只有当 `mux_sel_buf_output == SelSw` 且 `lc_escalate_en_i` 通过 `lc_tx_test_false_strict()` 判定为严格 false 时，才把 `keccak_state_valid_i` 和 `keccak_state_i` 透传到 `reg_state_valid` 与 `reg_state_o` [kmac_app.sv:723-726]。在该透传路径上，如果 `keymgr_key_en_i` 置位，表示使用了侧载密钥且注释说明这是 KMAC 由软件发起的场景，则不会直接向软件暴露完整状态，而是对每个 share 的 `reg_state_o[i]` 按 `reg_keccak_strength_i` 选定的强度，将状态高位中对应的 capacity 比特段清零：L128/L224/L256/L384/L512 分别清零 `KeccakBitCapacity[...]` 指定宽度的最高位切片 [kmac_app.sv:727-736]。若强度值落入 default 分支，则该 share 的整个状态被清零，作为保守回退行为 [kmac_app.sv:737]。注释明确表明该清零的设计意图是“向软件隐藏 capacity”（与 sideload key 相关，见 #17508），而实际 RTL 通过覆盖 `reg_state_o` 的相应位实现该屏蔽 [kmac_app.sv:727-729]。",
+  "guarantees": [
+    {
+      "property": "当 `mux_sel_buf_output != SelSw` 或 `lc_escalate_en_i` 未被 `lc_tx_test_false_strict()` 判定为严格 false 时，`reg_state_valid` 一定为 0，且 `reg_state_o` 全零。",
+      "output_signals": [
+        "reg_state_valid",
+        "reg_state_o"
+      ],
+      "source_refs": [
+        "kmac_app.sv:721-725",
+        "kmac_app.sv:741-742"
+      ]
+    },
+    {
+      "property": "当软件输出路径打开且 `keymgr_key_en_i` 为 1 时，`reg_state_o` 不会向软件暴露所选强度对应的 capacity 位；若强度值不匹配任何显式枚举，则对应 share 的整个状态为 0。",
+      "output_signals": [
+        "reg_state_o"
+      ],
+      "source_refs": [
+        "kmac_app.sv:727-739"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接涉及状态可见性控制和密钥相关信息屏蔽。只有在软件被选中且生命周期升级未触发时，内部 Keccak 状态才可见；一旦使用 keymgr 侧载密钥，capacity 区域会被清零以避免软件观察到可能与密钥相关的内部状态 [kmac_app.sv:723-729]。在未知强度编码下回退为整 share 清零，也体现了失败安全的保守处理 [kmac_app.sv:737]。",
+  "assumptions": [
+    {
+      "constraint": "`reg_keccak_strength_i` 在 `keymgr_key_en_i` 为 1 且软件状态导出使能时，应为 `L128/L224/L256/L384/L512` 之一；default 分支虽然有安全回退，但该场景设计上不应发生。",
+      "bug_relevance": "若不满足则对应 share 的 `reg_state_o` 被整体清零，软件将无法获得预期的已屏蔽状态视图；这是防御性回退，不一定是安全漏洞，但通常意味着上游配置或编码异常。",
+      "related_signals": [
+        "reg_keccak_strength_i",
+        "keymgr_key_en_i",
+        "reg_state_o"
+      ],
+      "source_refs": [
+        "kmac_app.sv:729-739"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_app.sv:721-739"
+  ],
+  "uncertain_points": [
+    "注释称该逻辑适用于“key is sideloaded and KMAC is SW initiated”场景 [kmac_app.sv:727-729]，但本片段中实际只显式检查了 `keymgr_key_en_i`，并未单独看到“SW initiated”的独立判定；这可能由外层条件 `mux_sel_buf_output == SelSw` 或片段外上下文隐含保证，需结合周边代码确认。",
+    "capacity 被清零的位段具体为何选取 `reg_state_o[i][StateW-1-:KeccakBitCapacity[strength]]` 这一最高位切片，依赖 `keccak_state_i` 在状态向量中的位布局定义；本片段无法单独证明该切片恰好对应全部 capacity 区域，只能依据命名和注释推断。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
+  "line_start": 720,
+  "line_end": 742
+}

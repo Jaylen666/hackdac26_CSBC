@@ -1,0 +1,62 @@
+{
+  "chunk_id": "hmac_reg_top__always_comb__line_2009__001",
+  "summary": "该组合逻辑在寄存器写访问时检查字节使能是否满足目标寄存器的写许可掩码，并据此产生写错误信号 wr_err。",
+  "behavior": "wr_err 仅在 reg_we 为 1 的写访问期间可能置位；其对每个可能命中的寄存器槽位 addr_hit[0:58] 逐项检查对应的 HMAC_PERMIT 项。如果某个被命中的地址项存在至少一个“被该寄存器要求允许写入”的字节位在当前 reg_be 中未被使能，即 (HMAC_PERMIT[i] & ~reg_be) 有任一位为 1，则该项触发写错误，最终 wr_err 为这些命中项错误条件的按位或结果 [2010-2069]。因此，该逻辑实际是在防止对要求完整/特定字节写掩码的寄存器执行不满足许可掩码的部分写；若没有写请求，或命中的寄存器其许可字节全部被 reg_be 覆盖，则 wr_err 为 0 [2010-2069]。代码假定最多只有真正目标寄存器对应的 addr_hit 项参与此检查；若多个 addr_hit 同时有效，则 wr_err 会对这些项联合求或 [2011-2069]。",
+  "guarantees": [
+    {
+      "property": "当 reg_we 为 0 时，wr_err 一定为 0。",
+      "output_signals": [
+        "wr_err"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2010-2069"
+      ]
+    },
+    {
+      "property": "当某个命中的寄存器项 addr_hit[i] 为 1 且对应 HMAC_PERMIT[i] 的任一置位字节未被 reg_be 使能时，wr_err 一定为 1。",
+      "output_signals": [
+        "wr_err"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2011-2069"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑属于寄存器写访问约束的一部分，通过拒绝不满足字节写许可掩码的写操作，降低了对安全敏感寄存器进行异常部分写、字段撕裂或绕过预期更新粒度的风险。其安全效果依赖 HMAC_PERMIT 编码是否正确，以及地址译码是否只命中预期寄存器。",
+  "assumptions": [
+    {
+      "constraint": "对每次合法寄存器访问，addr_hit 应当至多有一个有效命中项，表示唯一目标寄存器。",
+      "bug_relevance": "如果多个 addr_hit 同时为 1，wr_err 会把多个寄存器的许可条件一起求或，可能对本应合法的写访问误报错误，或掩盖具体是哪一个地址译码异常；这通常表示地址译码/one-hot 约束被破坏，可能构成功能 bug。",
+      "related_signals": [
+        "addr_hit",
+        "wr_err"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2011-2069"
+      ]
+    },
+    {
+      "constraint": "HMAC_PERMIT[i] 需要正确表达每个寄存器允许或要求的字节写掩码语义；该逻辑按“许可位为 1 的字节必须在 reg_be 中被使能”来解释它。",
+      "bug_relevance": "如果 HMAC_PERMIT 的编码或语义与寄存器实际期望不一致，合法写可能被错误拒绝，或本应禁止的部分写被放行，从而导致寄存器字段更新错误，安全敏感寄存器上还可能带来访问控制弱化。",
+      "related_signals": [
+        "HMAC_PERMIT",
+        "reg_be",
+        "wr_err",
+        "addr_hit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2011-2069"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2009-2070"
+  ],
+  "uncertain_points": [
+    "仅从该片段无法确认 HMAC_PERMIT 的命名语义是“允许写的字节”还是“写该寄存器时必须被使能的字节”；实际逻辑使用的是后者，即只要 HMAC_PERMIT 中置位的字节没有出现在 reg_be 中就报错 [/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2011-2069]。",
+    "该片段只生成 wr_err，未显示 wr_err 后续是否阻止写入、返回总线错误，或仅用于状态上报，需要结合后续逻辑确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 2009,
+  "line_end": 2070
+}

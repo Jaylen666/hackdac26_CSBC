@@ -1,0 +1,51 @@
+{
+  "chunk_id": "rv_dm__continuous_region__int__002",
+  "summary": "将扫描模式解码为 testmode，并实例化多个同步器将异步或多比特生命周期/OTP 信号同步到本地时钟域，为后续 debug 使能门控提供安全的 raw 信号。",
+  "behavior": "本区域通过连续赋值和实例化完成三项工作：\n1. 将 scanmode_i 经 mubi4_test_true_strict 函数解码，产生单比特 testmode 信号（行 177-178）。\n2. 定义生命周期使能枚举 rv_dm_lc_en_e，其编码由 localparam LcEnDebugReqVal(=3) 和 LcEnResetReqVal（=LcEnDebugReqVal + NrHarts）决定，并用 $clog2 计算位宽 RvDmLcEnSize，同时用断言保证 LcEnDebugReq 枚举值与 LcEnDebugReqVal 相等（行 185-203）。\n3. 实例化四个同步器：prim_lc_sync（NumCopies=1）分别同步 lc_hw_debug_en_i 和 lc_dft_en_i，产生 lc_hw_debug_en 与 lc_dft_en；prim_mubi8_sync 同步 otp_dis_rv_dm_late_debug_i，输出多比特 otp_dis_rv_dm_late_debug；prim_mubi32_sync 以 AsyncOn=0 同步寄存器接口的 late_debug_enable，输出 late_debug_enable（行 205-244）。\n同步后的 lc_hw_debug_en 与 lc_dft_en 直接赋值给 raw 信号 lc_hw_debug_en_raw 和 lc_dft_en_raw；信号 lc_hw_debug_en_gated_raw 已声明但此处未被驱动（行 249-253）。",
+  "guarantees": [
+    {
+      "property": "testmode 在组合逻辑上等于 scanmode_i 的真值解码结果（仅当 scanmode_i 为有效 MuBi4 真值时 testmode 为 1，否则为 0）。",
+      "output_signals": [
+        "testmode"
+      ],
+      "source_refs": [
+        "rv_dm.sv:178"
+      ]
+    },
+    {
+      "property": "lc_hw_debug_en_raw 和 lc_dft_en_raw 与对应同步器输出 lc_hw_debug_en、lc_dft_en 完全一致，是经同步后的稳定信号。",
+      "output_signals": [
+        "lc_hw_debug_en_raw",
+        "lc_dft_en_raw"
+      ],
+      "source_refs": [
+        "rv_dm.sv:252-253"
+      ]
+    }
+  ],
+  "security_implications": "本区域属于调试系统生命周期安全门控的一部分（SEC_CM: DM_EN.CTRL.LC_GATED）。通过专用同步器引入 lc_hw_debug_en、lc_dft_en、OTP 延迟调试禁用和寄存器 late_debug_enable 等安全关键信号，并采用 MuBi 编码防止故障注入，确保 DM 使能判断基于可靠的硬件安全状态。",
+  "assumptions": [
+    {
+      "constraint": "scanmode_i 必须为合法的 mubi4 编码（表示真或假），非合法编码会被 mubi4_test_true_strict 解码为 0。",
+      "bug_relevance": "若 scanmode_i 出现非法值，testmode 会被去断言为 0，导致测试模式不可用，但这属于防御性设计，非法值在正常工作条件下不应出现。",
+      "related_signals": [
+        "scanmode_i",
+        "testmode"
+      ],
+      "source_refs": [
+        "rv_dm.sv:178"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "rv_dm.sv:177-253"
+  ],
+  "uncertain_points": [
+    "lc_hw_debug_en_gated_raw 仅在此声明但未驱动，驱动逻辑应在后续代码中。",
+    "testmode 信号的后续用途未在本片段体现，需结合外部上下文确认。",
+    "枚举 rv_dm_lc_en_e 的具体索引使用方式（用于访问哪个数组/信号）未在本片段给出。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
+  "line_start": 177,
+  "line_end": 253
+}

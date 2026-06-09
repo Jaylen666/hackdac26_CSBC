@@ -1,0 +1,67 @@
+{
+  "chunk_id": "hmac__continuous_region__declarations_or_instances__005",
+  "summary": "该片段将配置寄存器内容镜像到硬件寄存器接口，提取命令寄存器的有效写脉冲，并据此在配置合法且允许的条件下生成哈希控制信号。",
+  "behavior": "片段首先直接导出若干配置位：`endian_swap`、`digest_swap`、`key_swap`分别取自对应配置寄存器的 `.q` 值，用于后续数据/摘要/密钥字节序控制（336-338）。同时，它把当前生效的配置状态回写到 `hw2reg.cfg.*.d`，其中 `hmac_en`、`sha_en` 和三个 swap 位直接镜像自 `cfg_reg`，而 `digest_size`、`key_length`则由内部枚举/状态信号 `digest_size`、`key_length`强制转换后回写，表明软件侧读到的是硬件当前认定的配置而非原始写入值（340-346）。命令侧，`reg_hash_start`、`reg_hash_stop`、`reg_hash_continue`、`reg_hash_process`都定义为对应 `reg2hw.cmd.*` 的 `qe & q`，因此只有在该命令字段被写使能且写入值为 1 时才产生有效请求；单纯保持为 1 或写 0 都不会触发这些内部命令脉冲（348-351）。错误寄存器接口方面，`hw2reg.err_code.de`由 `err_valid` 驱动，`hw2reg.err_code.d`由 `err_code`提供，表示仅在错误有效时才请求更新错误码（354-355）。控制信号生成上，`hash_start`和`hash_continue`都要求相应寄存器命令有效、`sha_en`已开启、当前未被 `cfg_block` 阻止且不存在 `invalid_config`；而 `hash_process`要求命令有效、`sha_en`已开启、`cfg_block` 为真且同样不存在非法配置（360-362）。最后，`hash_start_or_continue`是 `hash_start` 与 `hash_continue` 的并集，向后级提供统一的“启动或续算”请求（363）。本片段中 `reg_hash_stop` 仅被提取，未在此处进一步参与控制，需由其他代码使用（349）。",
+  "guarantees": [
+    {
+      "property": "当 `hash_start` 为 1 时，必然同时满足：软件对 `cmd.hash_start` 发起了写 1 请求、`sha_en` 为 1、`cfg_block` 为 0、且 `invalid_config` 为 0。",
+      "output_signals": [
+        "hash_start"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:348-360"
+      ]
+    },
+    {
+      "property": "`hash_start_or_continue` 始终等于 `hash_start | hash_continue`，因此任一启动或续算请求成立时该信号必为 1。",
+      "output_signals": [
+        "hash_start_or_continue"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:360-363"
+      ]
+    },
+    {
+      "property": "错误码寄存器写数据始终由 `err_code` 提供，且仅在 `err_valid` 为 1 时请求更新。",
+      "output_signals": [
+        "hw2reg.err_code.de",
+        "hw2reg.err_code.d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:354-355"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及配置合法性与命令门控。`hash_start`、`hash_continue`、`hash_process`在 `invalid_config` 为真时都会被抑制，在 `cfg_block` 条件下还区分允许的命令类型，这有助于避免在非法配置或受限状态下启动/推进散列操作（360-362）。同时错误码更新通路（354-355）为外部软件提供了配置/命令异常的可观测性。由于 HMAC/SHA 配置和字节序控制会影响摘要结果，软件可读回的 `hw2reg.cfg.*` 镜像也有助于确认实际生效配置。",
+  "assumptions": [
+    {
+      "constraint": "软件/寄存器接口应以单次写 1 脉冲方式发出 `cmd.hash_start`、`cmd.hash_continue`、`cmd.hash_process`、`cmd.hash_stop` 命令，而不是依赖对应 `.q` 长时间保持为 1 来持续触发命令。",
+      "bug_relevance": "若不满足，则命令可能不会按预期重复触发，因为该逻辑只对 `qe & q` 为真的写事务产生内部请求；这属于该寄存器协议的行为契约，违反会导致启动/续算/处理命令丢失。",
+      "related_signals": [
+        "reg2hw.cmd.hash_start.qe",
+        "reg2hw.cmd.hash_start.q",
+        "reg2hw.cmd.hash_continue.qe",
+        "reg2hw.cmd.hash_continue.q",
+        "reg2hw.cmd.hash_process.qe",
+        "reg2hw.cmd.hash_process.q",
+        "reg2hw.cmd.hash_stop.qe",
+        "reg2hw.cmd.hash_stop.q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:348-351"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:336-363"
+  ],
+  "uncertain_points": [
+    "`hw2reg.cfg.*.d` 的赋值是否一定意味着软件可读回“当前生效配置”，还取决于对应寄存器字段的 `de`/硬件优先级及寄存器模板语义；本片段仅显示了 `d` 连接，未显示这些字段的完整更新条件（340-346）。",
+    "`cfg_block` 的具体含义未在本片段定义；这里只能确认它会禁止 `hash_start`/`hash_continue`，并要求 `hash_process` 仅在其为真时才允许（360-362）。",
+    "`reg_hash_stop` 在本片段中被生成但未使用，无法仅凭此处判断 stop 命令的后续效果或是否存在额外门控（349）。",
+    "`invalid_config` 的判定来源及其与注释/软件可见错误码的对应关系不在本片段中，无法确认所有非法配置是否都会同步反映到 `err_code`（354-355, 360-362）。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 336,
+  "line_end": 363
+}

@@ -1,0 +1,56 @@
+{
+  "chunk_id": "keccak_round__continuous_region__keccak_round__001",
+  "summary": "该片段定义了 keccak_round 模块的接口、主要控制/数据通路信号，以及一个用于判断是否到达最后一轮的组合条件，为后续 Keccak 轮函数状态机和随机数/掩码数据通路提供结构化控制基础。",
+  "behavior": "该连续逻辑片段本身没有实现完整的轮变换控制，而是声明了模块对外接口和内部控制意图，并给出一个实际生效的组合判断：当 round 的整数值等于 MaxRound-1 时，rnd_eq_end 置位，用于表示当前已到达最后一轮的轮号边界 [keccak_round.sv:141-145,177-177]。参数部分表明 MaxRound 由 Width 推导为 12+2*L，且 round 的位宽 RndW 足以表示到 MaxRound；数据输入被按 DInWidth 分块馈入，DInEntry 和 DInAddr 由 Width/DInWidth 推导 [keccak_round.sv:41-52]。注释还给出了设计意图：模块支持消息异或装载、内部状态清零、轮数递增/复位、两阶段 Keccak_p 数据路径选择，以及在启用掩码时对 DOM 乘法器上下半 lane 和随机数来源进行复用控制 [keccak_round.sv:101-155]。其中 complete_d/complete_o 的注释特别说明完成指示并不是在“最后一轮计算到达终点”的同一时刻有效，而是将状态机产生的 complete_d 锁存后，在下一拍形成完成脉冲；这表示完整完成通知相对内部到达终点存在 1 拍延后 [keccak_round.sv:146-155]。此外，状态机状态 keccak_st/keccak_st_d 通过稀疏 FSM 触发器宏实现，并以 KeccakStIdle 作为复位/默认状态，这暗示设计带有非法状态检测能力，但该片段尚未展开状态转移或错误输出如何驱动 [keccak_round.sv:173-179]。",
+  "guarantees": [
+    {
+      "property": "当 round 的当前值等于 MaxRound-1 时，rnd_eq_end 一定为 1；否则为 0。",
+      "output_signals": [
+        "rnd_eq_end"
+      ],
+      "source_refs": [
+        "keccak_round.sv:177-177"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及掩码与随机数相关控制意图：EnMasking、ForceRandExt、DOM 半 lane 选择以及外部随机数/中间结果复用控制都表明该模块带有侧信道防护路径 [keccak_round.sv:55-59,122-135]。另外，稀疏 FSM 寄存器和专门的 sparse_fsm_error_o 接口说明状态机非法状态检测被纳入安全/健壮性设计中 [keccak_round.sv:87-91,178-179]。不过本片段尚未展示这些安全相关信号的具体驱动策略，因此只能确认接口和设计意图，不能确认故障响应细节。",
+  "assumptions": [
+    {
+      "constraint": "若外部逻辑依赖 rnd_eq_end 作为“最后一轮”判据，则必须保证 round 始终编码为 0 到 MaxRound-1 的合法轮号范围内；该片段仅做相等比较，不展示越界或受损 round 的处置。",
+      "bug_relevance": "如果 round 越界或被破坏，rnd_eq_end 可能永远不置位或在错误时刻置位，导致轮结束控制或完成判定错误；这更像行为契约，因为错误轮号会直接破坏功能。",
+      "related_signals": [
+        "round",
+        "rnd_eq_end"
+      ],
+      "source_refs": [
+        "keccak_round.sv:164-177"
+      ]
+    },
+    {
+      "constraint": "若集成方依赖 complete_o 作为结果已可用的完成指示，则应遵守注释给出的时序契约：状态机内部到达末轮终点后，完成脉冲会在锁存 complete_d 后下一拍出现，而不是同拍出现。",
+      "bug_relevance": "如果外部把内部末轮到达与 complete_o 视为同拍事件，可能过早采样 state_o 或提前发起下一次操作，造成功能时序错误。",
+      "related_signals": [
+        "complete_d",
+        "complete_o",
+        "state_o"
+      ],
+      "source_refs": [
+        "keccak_round.sv:146-155"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keccak_round.sv:41-59",
+    "keccak_round.sv:64-97",
+    "keccak_round.sv:101-155",
+    "keccak_round.sv:161-179"
+  ],
+  "uncertain_points": [
+    "本片段只展示了 rnd_eq_end 的实际组合赋值，未展示 update_storage、rst_storage、xor_message、phase_sel、dom_update、inc_rnd_num、rst_rnd_num、rand_update_o、rand_consumed_o、complete_o、state_o、各错误输出的具体驱动，因此无法从该片段单独确认这些信号的行为。",
+    "注释说明 complete_d 会被锁存并在一拍后形成 complete_o 脉冲，但具体寄存器实现和脉冲宽度不在本片段中，需结合后续 always_ff/assign 代码确认。",
+    "注释称 DInWidth“currently only 64bit supported” [keccak_round.sv:50-50]，但该片段参数化写法允许其他值；仅凭本片段无法判断非 64 位配置是被其他逻辑拒绝、断言限制，还是只是未经验证。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
+  "line_start": 36,
+  "line_end": 180
+}
