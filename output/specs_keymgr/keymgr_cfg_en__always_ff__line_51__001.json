@@ -1,41 +1,129 @@
 {
   "chunk_id": "keymgr_cfg_en__always_ff__line_51__001",
-  "summary": "异步低复位使能寄存器，优先级顺序控制 keymgr 配置使能输出。",
-  "behavior": "该 always_ff 块描述 keymgr 配置使能信号 out_q 的更新行为。异步复位 rst_ni 低有效时，out_q 直接置 1（复位默认使能）。复位无效时，每个时钟上升沿按优先级评估：若 vld_dis 有效则 out_q 清 0；否则若 vld_set 有效则 out_q 置 1；否则若 out_clr 有效则 out_q 清 0；其他情况下 out_q 保持原值。需注意 vld_set 优先级高于 out_clr，当两者同时有效且 vld_dis 无效时，out_q 被置 1 而非清 0。",
+  "header": {
+    "module": "keymgr_cfg_en",
+    "block_kind": "always_ff",
+    "driven": [
+      "out_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "vld_dis",
+      "vld_set",
+      "out_clr"
+    ],
+    "modes": [],
+    "tags": [
+      "lifecycle",
+      "config"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 out_q 一定为 1；vld_dis 优先级高于 vld_set，vld_set 优先级高于 out_clr。当 vld_set 和 out_clr 同时有效且 vld_dis 无效时，out_q 将在下一时钟沿置 1 而非清 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (reset), out_q is set to 1'b1.",
+      "cond": "!rst_ni",
+      "signals": [
+        "out_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:52-53"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When vld_dis is asserted and not in reset, out_q is forced to 0 regardless of vld_set or out_clr.",
+      "cond": "!rst_ni && vld_dis",
+      "signals": [
+        "vld_dis",
         "out_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:51-61"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:54-55"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When vld_set is asserted and vld_dis is deasserted, out_q is set to 1 regardless of out_clr.",
+      "cond": "!rst_ni && !vld_dis && vld_set",
+      "signals": [
+        "vld_set",
+        "out_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:56-57"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When out_clr is asserted and both vld_dis and vld_set are deasserted, out_q is cleared to 0.",
+      "cond": "!rst_ni && !vld_dis && !vld_set && out_clr",
+      "signals": [
+        "out_clr",
+        "out_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:58-59"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When none of vld_dis, vld_set, or out_clr are asserted and no reset, out_q retains its previous value.",
+      "cond": "!rst_ni && !vld_dis && !vld_set && !out_clr",
+      "signals": [
+        "out_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:60"
       ]
     }
   ],
-  "security_implications": "out_q 直接驱动 keymgr 配置使能，复位后默认使能可能用于初始配置阶段。vld_dis 与 out_clr 均可禁用配置，用于后续锁定。若该信号被意外置位或优先级设计不当，可能导致未授权配置更改，影响密钥管理安全。",
-  "assumptions": [
+  "assumptions": [],
+  "uncertain_points": [
     {
-      "constraint": "rst_ni 的释放相对于 clk_i 上升沿必须满足恢复和移除时序要求。",
-      "bug_relevance": "若不满足恢复/移除时间，out_q 可能在复位释放后出现亚稳态或不确定初始值，导致配置使能状态错误。",
-      "related_signals": [
-        "rst_ni",
-        "clk_i",
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The priority order gives vld_set precedence over out_clr. If both are asserted in the same cycle, out_q goes high, overriding the clear intent of out_clr.",
+      "cond": "vld_set and out_clr both active",
+      "risk": "A simultaneous clear and set event may fail to disable the key manager configuration enable, potentially leaving sensitive features active when they should be cleared.",
+      "signals": [
+        "vld_set",
+        "out_clr",
         "out_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:51-53"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:56-59"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "out_q defaults to 1 on reset. If the intended safe state is disabled (0), this default actively enables the configuration, possibly before software or lifecycle has properly initialized the key manager.",
+      "cond": "rst_ni is asserted (reset release) with no further driving",
+      "risk": "An inadvertent enable after reset could expose key manager assets or allow unauthorized operations.",
+      "signals": [
+        "out_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:53"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:51-61"
   ],
-  "uncertain_points": [
-    "复位默认使能（1）的设计意图需要上下文确认（可能用于保证初始可配置状态）。",
-    "out_clr 与 vld_dis 功能均清除 out_q，两者区别及使用场景未在片段中体现，可能对应不同锁定阶段或源，需结合模块其他部分确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv",
   "line_start": 51,
-  "line_end": 61
+  "line_end": 61,
+  "security_implications": ""
 }

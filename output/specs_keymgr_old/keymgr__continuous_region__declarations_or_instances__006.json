@@ -1,0 +1,55 @@
+{
+  "chunk_id": "keymgr__continuous_region__declarations_or_instances__006",
+  "summary": "选择当前最大密钥版本，检查输入有效性，生成调试信号，并控制 KMAC 接口与侧加载密钥存储",
+  "behavior": "该连续区域首先为 Creator、OwnerInt 和 Owner 三个阶段分别输出最大密钥版本 max_key_versions，来源为相应的影子寄存器值。cur_max_key_version 根据 stage_sel 选择当前阶段的最大密钥版本。实例化的 keymgr_input_checks 模块对 rom_digest、cur_max_key_version、key_version、creator_seed、owner_seed、key、devid 和 health_state 进行有效性检查，产生对应的 _vld 信号。随后，将 hw2reg.debug 各 invalid_* 字段的数据固定为 1，并根据有效操作使能和阶段条件赋予使能信号，例如，当 adv_en 为高且 stage_sel 为 Creator 时，若 creator_seed_vld 无效则置位 invalid_creator_seed.de；类似的逻辑映射到所有输入检查结果。valid_op 定义为 adv_en、id_en 或 gen_en 的逻辑或。invalid_data 总线根据操作类型反映输入无效状态：OpAdvance 需要 key_vld 和当前阶段的 adv_dvalid；OpGenId 需要 key_vld；OpGenSwOut 和 OpGenHwOut 需要 key_vld 与 key_version_vld。keymgr_kmac_if 实例接收操作数据、使能信号和无效标记，管理 KMAC 处理并输出 kmac_data 及错误信号。同时，keymgr_sideload_key_ctrl 实例控制侧加载密钥的清除、选择与输出，根据 dest_sel 将最终密钥分发到 AES、OTBN 或 KMAC 接口，并产生对应的错误信号。",
+  "guarantees": [
+    {
+      "property": "cur_max_key_version 始终等于 stage_sel 所指向阶段的最大密钥版本",
+      "output_signals": [
+        "cur_max_key_version"
+      ],
+      "source_refs": [
+        "keymgr.sv:505"
+      ]
+    },
+    {
+      "property": "debug 信号 invalid_* 的使能条件精确反映在对应操作使能且阶段匹配时所需输入有效性的缺失状态",
+      "output_signals": [
+        "hw2reg.debug.invalid_creator_seed.de",
+        "hw2reg.debug.invalid_owner_seed.de",
+        "hw2reg.debug.invalid_dev_id.de",
+        "hw2reg.debug.invalid_health_state.de",
+        "hw2reg.debug.invalid_key_version.de",
+        "hw2reg.debug.invalid_key.de",
+        "hw2reg.debug.invalid_digest.de"
+      ],
+      "source_refs": [
+        "keymgr.sv:542-548"
+      ]
+    }
+  ],
+  "security_implications": "输入有效性检查防止使用无效的种子、设备 ID 或健康状态参与密钥生成，避免安全漏洞。侧加载密钥控制模块确保硬件密钥仅由硬件路径管理，软件无法直接访问（SW_NOACCESS），并包含冗余控制信号，保护输出密钥的安全性。",
+  "assumptions": [
+    {
+      "constraint": "stage_sel 必须为 Creator、OwnerInt 或 Owner 之一，以确保 max_key_versions 数组访问合法且调试条件正确",
+      "bug_relevance": "若 stage_sel 取非法值，cur_max_key_version 将未定义，并可能导致 debug 信号错误或后续密钥操作异常",
+      "related_signals": [
+        "stage_sel",
+        "max_key_versions"
+      ],
+      "source_refs": [
+        "keymgr.sv:500-502",
+        "keymgr.sv:505"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr.sv:500-610"
+  ],
+  "uncertain_points": [
+    "adv_dvalid[stage_sel] 的来源和计算不在本片段内，其正确性直接影响 invalid_data 的判断效果"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
+  "line_start": 500,
+  "line_end": 610
+}

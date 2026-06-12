@@ -1,27 +1,122 @@
 {
   "chunk_id": "keymgr_kmac_if__always_ff__line_379__001",
-  "summary": "三个错误标志寄存器的同步复位寄存器组，在时钟上升沿采样对应组合输入，复位时清零。",
-  "behavior": "该 always_ff 块在复位（rst_ni 为低）时，将 one_hot_err_q、kmac_done_err_q 和 cmd_consty_err_q 三个寄存器同步清零。复位释放后，每个时钟上升沿将组合输入 one_hot_err_d、kmac_done_err_d 和 cmd_consty_err_d 采样到对应寄存器中，产生一拍的延迟输出。",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "always_ff",
+    "driven": [
+      "one_hot_err_q",
+      "kmac_done_err_q",
+      "cmd_consty_err_q"
+    ],
+    "used": [
+      "one_hot_err_d",
+      "kmac_done_err_d",
+      "cmd_consty_err_d",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "fault",
+      "integrity",
+      "key",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 one_hot_err_q、kmac_done_err_q、cmd_consty_err_q 一定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, one_hot_err_q, kmac_done_err_q, and cmd_consty_err_q are cleared to 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
         "one_hot_err_q",
         "kmac_done_err_q",
         "cmd_consty_err_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:380-383"
+      "refs": [
+        "file:380-383"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high, on every positive edge of clk_i, one_hot_err_q follows one_hot_err_d, kmac_done_err_q follows kmac_done_err_d, and cmd_consty_err_q follows cmd_consty_err_d.",
+      "cond": "rst_ni == 1",
+      "signals": [
+        "one_hot_err_q",
+        "kmac_done_err_q",
+        "cmd_consty_err_q",
+        "one_hot_err_d",
+        "kmac_done_err_d",
+        "cmd_consty_err_d"
+      ],
+      "refs": [
+        "file:384-388"
       ]
     }
   ],
-  "security_implications": "该片段寄存的错误标志（one_hot_err、kmac_done_err、cmd_consty_err）可能与密钥管理器内的安全操作相关，但本块仅提供标准同步寄存，无额外安全逻辑。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:379-389"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "The asynchronous reset input rst_ni must meet standard recovery/removal timing with respect to the clk_i positive edge to avoid metastable error register values.",
+      "cond": "when rst_ni deasserts (rising edge).",
+      "risk": "Metastable one_hot_err_q, kmac_done_err_q, or cmd_consty_err_q could propagate incorrect error status to key manager control logic, potentially causing false error handling or missing real faults.",
+      "signals": [
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "file:379"
+      ]
+    }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The error registers update every cycle without latching; if the _d inputs are combinational error conditions that de-assert after the condition clears, the _q outputs also de-assert immediately. The design intent on error persistence (sticky until cleared) is unclear, risking transient errors being missed by software or error handling logic.",
+      "cond": "When an error event is transient.",
+      "risk": "Transient integrity errors (one-hot, kmac done, command constancy) may be lost, leading to undetected faults during key management operations.",
+      "signals": [
+        "one_hot_err_q",
+        "kmac_done_err_q",
+        "cmd_consty_err_q",
+        "one_hot_err_d",
+        "kmac_done_err_d",
+        "cmd_consty_err_d"
+      ],
+      "refs": [
+        "file:385-388"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "Errors asserted while rst_ni is low will not be captured because the registers are held in reset; after reset deassertion, only error conditions present at or after the first post-reset clock edge are registered. This creates a window where a persistent error active during reset could be missed.",
+      "cond": "When an error condition exists during reset.",
+      "risk": "A latent fault present at startup (e.g., a stuck-at error) may be missed, allowing key management operations to proceed in a faulty state.",
+      "signals": [
+        "one_hot_err_d",
+        "kmac_done_err_d",
+        "cmd_consty_err_d",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:380-383",
+        "file:385-388"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:379-389"
+  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 379,
-  "line_end": 389
+  "line_end": 389,
+  "security_implications": ""
 }

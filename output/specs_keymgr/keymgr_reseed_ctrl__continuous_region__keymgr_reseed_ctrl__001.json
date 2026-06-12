@@ -1,18 +1,77 @@
 {
   "chunk_id": "keymgr_reseed_ctrl__continuous_region__keymgr_reseed_ctrl__001",
-  "summary": "定义 reseed 控制模块接口以及两个组合信号：edn_done 指示 EDN 请求‑应答握手完成，local_req 由软件配置的重播种间隔与当前计数器比较产生。",
-  "behavior": "模块 keymgr_reseed_ctrl 包含接口声明与两个连续赋值。assign edn_done = edn_req & edn_ack 产生组合信号 edn_done，仅当 edn 请求 (edn_req) 和应答 (edn_ack) 同时为 1 时才为 1，否则为 0。assign local_req = reseed_cnt >= reseed_interval_i 产生组合信号 local_req，当内部 16 位计数器 reseed_cnt 达到或超过软件配置的 reseed_interval_i 时为 1，否则为 0。这两个信号在模块内部用于控制后续逻辑，但生成 edn_req、edn_ack 和 reseed_cnt 的时序逻辑不在此片段内。",
-  "guarantees": [],
-  "security_implications": "重播种请求信号 local_req 和 EDN 握手完成信号 edn_done 参与密钥管理敏感流程，但该片段仅包含直接组合逻辑，本身不引入安全风险。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:43-46"
+  "header": {
+    "module": "keymgr_reseed_ctrl",
+    "block_kind": "assign",
+    "driven": [
+      "edn_done",
+      "local_req"
+    ],
+    "used": [
+      "edn_req",
+      "edn_ack",
+      "reseed_cnt",
+      "reseed_interval_i"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "counter"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "edn_done is driven to the logical AND of edn_req and edn_ack",
+      "cond": "always",
+      "signals": [
+        "edn_done",
+        "edn_req",
+        "edn_ack"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:43"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "local_req is asserted when reseed_cnt is greater than or equal to reseed_interval_i",
+      "cond": "always",
+      "signals": [
+        "local_req",
+        "reseed_cnt",
+        "reseed_interval_i"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:46"
+      ]
+    }
   ],
+  "assumptions": [],
   "uncertain_points": [
-    "片段仅包含声明和两个 assign，reseed_cnt 的更新、edn_req 和 edn_ack 的生成逻辑未包含，其行为需结合模块其余部分。",
-    "LfsrWidth 参数定义来自 keymgr_pkg 或其他包，但片段未明确其值。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The reseed_cnt generation logic (not present in this chunk) directly determines local_req; if the counter does not increment or reset according to the intended keymgr reseed interval policy, local_req may be asserted at incorrect times.",
+      "cond": "when reseed_cnt logic deviates from expected count/reset behavior",
+      "risk": "Premature or delayed reseed requests could disrupt key manager security timing, potentially allowing weak keys or missing reseed cycles.",
+      "signals": [
+        "reseed_cnt",
+        "local_req"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:40-46"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_reseed_ctrl.sv:8-46"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
   "line_start": 8,
-  "line_end": 46
+  "line_end": 46,
+  "security_implications": ""
 }

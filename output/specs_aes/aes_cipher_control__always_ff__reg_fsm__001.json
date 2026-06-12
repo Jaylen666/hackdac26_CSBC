@@ -1,27 +1,150 @@
 {
   "chunk_id": "aes_cipher_control__always_ff__reg_fsm__001",
-  "summary": "寄存器复位块，在异步复位时清零三个清除控制信号，否则在每个时钟上升沿将组合逻辑预驱动值锁存到寄存器输出。",
-  "behavior": "always_ff 过程块 reg_fsm 在时钟上升沿或下降沿 rst_ni 触发：当 rst_ni 为低时，三个寄存器 prng_reseed_q、key_clear_q 和 data_out_clear_q 被异步复位为 0；否则，在时钟上升沿将它们更新为组合逻辑产生的 prng_reseed_d、key_clear_d 和 data_out_clear_d。这三个寄存器提供的是其他逻辑使用的一拍延迟清除控制信号。",
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "always_ff",
+    "driven": [
+      "prng_reseed_q",
+      "key_clear_q",
+      "data_out_clear_q"
+    ],
+    "used": [
+      "prng_reseed_d",
+      "key_clear_d",
+      "data_out_clear_d",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "secret",
+      "key",
+      "wipe",
+      "entropy",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在 rst_ni 有效（低电平）期间，prng_reseed_q、key_clear_q 和 data_out_clear_q 必定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, prng_reseed_q, key_clear_q, and data_out_clear_q are asynchronously cleared to 1'b0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "prng_reseed_q",
+        "key_clear_q",
+        "data_out_clear_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:361-364"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On the rising edge of clk_i, when rst_ni is high, prng_reseed_q, key_clear_q, and data_out_clear_q are updated with the values of prng_reseed_d, key_clear_d, and data_out_clear_d respectively.",
+      "cond": "posedge clk_i && rst_ni",
+      "signals": [
+        "prng_reseed_q",
+        "key_clear_q",
+        "data_out_clear_q",
+        "prng_reseed_d",
+        "key_clear_d",
+        "data_out_clear_d",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:365-368"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "prng_reseed_d, key_clear_d, and data_out_clear_d are sourced from combinational logic or other registers that assert them only when a reseed, key clear, or data-out clear is truly intended and safe.",
+      "cond": "always when the FSM uses these _d signals",
+      "risk": "A glitch or logic bug causing an unintended high on any _d signal would set the corresponding flag, potentially triggering an unnecessary key wipe, data output clear, or PRNG reseed, compromising data confidentiality or integrity.",
+      "signals": [
+        "prng_reseed_d",
+        "key_clear_d",
+        "data_out_clear_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:366-368"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The generation of prng_reseed_d, key_clear_d, and data_out_clear_d is outside this chunk; their driving logic must be verified to ensure no spurious or premature assertion of these security-critical flags.",
+      "cond": "unknown",
+      "risk": "If the driving FSM allows a clear or reseed at an unsafe time, key material or output data could be wiped before it is used, or the PRNG could be reseeded improperly.",
+      "signals": [
+        "prng_reseed_d",
+        "key_clear_d",
+        "data_out_clear_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:366-368"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The timing relationship between the assertion of key_clear_q/data_out_clear_q and the actual clearing of key/output storage is unknown; a window may exist where sensitive data remains accessible.",
+      "cond": "after a clear flag is asserted",
+      "risk": "Sensitive key or output data could persist after a supposed clear, leading to leakage if power or debug access occurs.",
+      "signals": [
+        "key_clear_q",
+        "data_out_clear_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:363-364"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The intended policy for PRNG reseed (prng_reseed_q) is not documented in this chunk; it is unclear when reseeding should occur and what side effects are acceptable.",
+      "cond": "unknown",
+      "risk": "Inappropriate reseed timing could degrade randomness quality or cause unnecessary entropy consumption.",
+      "signals": [
+        "prng_reseed_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:362"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "It is not visible in this chunk whether prng_reseed_q, key_clear_q, or data_out_clear_q are actually used downstream to gate/reset other logic; if unused, they are dead flops.",
+      "cond": "if these signals are not read by any other logic",
+      "risk": "Dead logic wastes area and may mask verification gaps; if they are used, the downstream usage must be verified for correctness.",
+      "signals": [
         "prng_reseed_q",
         "key_clear_q",
         "data_out_clear_q"
       ],
-      "source_refs": [
-        "aes_cipher_control.sv:361-364"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:362-364"
       ]
     }
   ],
-  "security_implications": "这些清除信号（prng_reseed_q、key_clear_q、data_out_clear_q）很可能用于触发 PRNG 重播种、密钥清除和数据输出清除等安全相关操作。异步复位强制将其置零，可确保在复位期间及复位后这些清除操作不被误触发，保持安全默认状态。",
-  "assumptions": [],
   "evidence_refs": [
-    "aes_cipher_control.sv:360-370"
+    "output/aes_mini_rtl/aes_cipher_control.sv:360-370"
   ],
-  "uncertain_points": [],
   "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
   "line_start": 360,
-  "line_end": 370
+  "line_end": 370,
+  "security_implications": ""
 }

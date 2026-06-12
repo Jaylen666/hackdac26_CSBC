@@ -1,20 +1,152 @@
 {
   "chunk_id": "keymgr__continuous_region__declarations_or_instances__006",
-  "summary": "选择当前最大密钥版本，检查输入有效性，生成调试信号，并控制 KMAC 接口与侧加载密钥存储",
-  "behavior": "该连续区域首先为 Creator、OwnerInt 和 Owner 三个阶段分别输出最大密钥版本 max_key_versions，来源为相应的影子寄存器值。cur_max_key_version 根据 stage_sel 选择当前阶段的最大密钥版本。实例化的 keymgr_input_checks 模块对 rom_digest、cur_max_key_version、key_version、creator_seed、owner_seed、key、devid 和 health_state 进行有效性检查，产生对应的 _vld 信号。随后，将 hw2reg.debug 各 invalid_* 字段的数据固定为 1，并根据有效操作使能和阶段条件赋予使能信号，例如，当 adv_en 为高且 stage_sel 为 Creator 时，若 creator_seed_vld 无效则置位 invalid_creator_seed.de；类似的逻辑映射到所有输入检查结果。valid_op 定义为 adv_en、id_en 或 gen_en 的逻辑或。invalid_data 总线根据操作类型反映输入无效状态：OpAdvance 需要 key_vld 和当前阶段的 adv_dvalid；OpGenId 需要 key_vld；OpGenSwOut 和 OpGenHwOut 需要 key_vld 与 key_version_vld。keymgr_kmac_if 实例接收操作数据、使能信号和无效标记，管理 KMAC 处理并输出 kmac_data 及错误信号。同时，keymgr_sideload_key_ctrl 实例控制侧加载密钥的清除、选择与输出，根据 dest_sel 将最终密钥分发到 AES、OTBN 或 KMAC 接口，并产生对应的错误信号。",
+  "header": {
+    "module": "keymgr",
+    "block_kind": "mixed",
+    "driven": [
+      "max_key_versions[Creator]",
+      "max_key_versions[OwnerInt]",
+      "max_key_versions[Owner]",
+      "cur_max_key_version",
+      "hw2reg.debug.invalid_creator_seed.d",
+      "hw2reg.debug.invalid_owner_seed.d",
+      "hw2reg.debug.invalid_dev_id.d",
+      "hw2reg.debug.invalid_health_state.d",
+      "hw2reg.debug.invalid_key_version.d",
+      "hw2reg.debug.invalid_key.d",
+      "hw2reg.debug.invalid_digest.d",
+      "valid_op",
+      "hw2reg.debug.invalid_creator_seed.de",
+      "hw2reg.debug.invalid_owner_seed.de",
+      "hw2reg.debug.invalid_dev_id.de",
+      "hw2reg.debug.invalid_health_state.de",
+      "hw2reg.debug.invalid_key_version.de",
+      "hw2reg.debug.invalid_key.de",
+      "hw2reg.debug.invalid_digest.de",
+      "invalid_data"
+    ],
+    "used": [
+      "stage_sel",
+      "key_version_vld",
+      "key_vld",
+      "adv_en",
+      "id_en",
+      "gen_en",
+      "creator_seed_vld",
+      "owner_seed_vld",
+      "devid_vld",
+      "health_state_vld",
+      "rom_digest_vld",
+      "adv_dvalid",
+      "reg2hw.max_creator_key_ver_shadowed.q",
+      "reg2hw.max_owner_int_key_ver_shadowed.q",
+      "reg2hw.max_owner_key_ver_shadowed.q",
+      "rom_digest_i",
+      "creator_seed",
+      "owner_seed",
+      "kmac_key_o",
+      "otp_device_id_i",
+      "lc_keymgr_div_i",
+      "reg2hw.key_version",
+      "adv_matrix",
+      "id_matrix",
+      "gen_in",
+      "dest_sel",
+      "hw_key_sel",
+      "data_hw_en",
+      "data_valid",
+      "data_rand",
+      "init",
+      "wipe_key",
+      "reg2hw.sideload_clear.q",
+      "kmac_data",
+      "kmac_key"
+    ],
+    "modes": [
+      "OpAdvance",
+      "OpGenId",
+      "OpGenSwOut",
+      "OpGenHwOut",
+      "Creator",
+      "OwnerInt",
+      "Owner"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "integrity",
+      "error",
+      "lifecycle",
+      "access_control",
+      "handshake",
+      "parameterization",
+      "masking"
+    ]
+  },
   "guarantees": [
     {
-      "property": "cur_max_key_version 始终等于 stage_sel 所指向阶段的最大密钥版本",
-      "output_signals": [
-        "cur_max_key_version"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "max_key_versions for Creator, OwnerInt, and Owner are directly driven by their corresponding reg2hw shadowed CSRs.",
+      "cond": "always",
+      "signals": [
+        "max_key_versions[Creator]",
+        "max_key_versions[OwnerInt]",
+        "max_key_versions[Owner]"
       ],
-      "source_refs": [
-        "keymgr.sv:505"
+      "refs": [
+        "keymgr.sv:500-502"
       ]
     },
     {
-      "property": "debug 信号 invalid_* 的使能条件精确反映在对应操作使能且阶段匹配时所需输入有效性的缺失状态",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "cur_max_key_version is the max_key_versions entry selected by stage_sel.",
+      "cond": "always",
+      "signals": [
+        "cur_max_key_version",
+        "stage_sel",
+        "max_key_versions"
+      ],
+      "refs": [
+        "keymgr.sv:504-505"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "hw2reg.debug.invalid_*.d signals are wired to 1'b1, forcing the data input of these debug status registers to '1' (invalid).",
+      "cond": "always",
+      "signals": [
+        "hw2reg.debug.invalid_creator_seed.d",
+        "hw2reg.debug.invalid_owner_seed.d",
+        "hw2reg.debug.invalid_dev_id.d",
+        "hw2reg.debug.invalid_health_state.d",
+        "hw2reg.debug.invalid_key_version.d",
+        "hw2reg.debug.invalid_key.d",
+        "hw2reg.debug.invalid_digest.d"
+      ],
+      "refs": [
+        "keymgr.sv:532-538"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "The write-enables for the debug invalid_* status registers are conditionally asserted based on operation type, stage, and validity signals, e.g., invalid_creator_seed.de = adv_en & (stage_sel == Creator) & ~creator_seed_vld.",
+      "cond": "when the corresponding logical condition is true",
+      "signals": [
+        "adv_en",
+        "id_en",
+        "gen_en",
+        "stage_sel",
+        "creator_seed_vld",
+        "owner_seed_vld",
+        "devid_vld",
+        "health_state_vld",
+        "key_version_vld",
+        "key_vld",
+        "rom_digest_vld",
         "hw2reg.debug.invalid_creator_seed.de",
         "hw2reg.debug.invalid_owner_seed.de",
         "hw2reg.debug.invalid_dev_id.de",
@@ -23,33 +155,229 @@
         "hw2reg.debug.invalid_key.de",
         "hw2reg.debug.invalid_digest.de"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr.sv:542-548"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "valid_op is asserted if any of adv_en, id_en, or gen_en is high.",
+      "cond": "always",
+      "signals": [
+        "valid_op",
+        "adv_en",
+        "id_en",
+        "gen_en"
+      ],
+      "refs": [
+        "keymgr.sv:540-541"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "invalid_data is computed per operation: OpAdvance invalid when key_vld is deasserted or adv_dvalid[stage_sel] is deasserted; OpGenId invalid when key_vld is deasserted; OpGenSwOut/OpGenHwOut invalid when key_vld or key_version_vld is deasserted.",
+      "cond": "always",
+      "signals": [
+        "invalid_data",
+        "key_vld",
+        "adv_dvalid",
+        "stage_sel",
+        "key_version_vld"
+      ],
+      "refs": [
+        "keymgr.sv:554-558"
       ]
     }
   ],
-  "security_implications": "输入有效性检查防止使用无效的种子、设备 ID 或健康状态参与密钥生成，避免安全漏洞。侧加载密钥控制模块确保硬件密钥仅由硬件路径管理，软件无法直接访问（SW_NOACCESS），并包含冗余控制信号，保护输出密钥的安全性。",
   "assumptions": [
     {
-      "constraint": "stage_sel 必须为 Creator、OwnerInt 或 Owner 之一，以确保 max_key_versions 数组访问合法且调试条件正确",
-      "bug_relevance": "若 stage_sel 取非法值，cur_max_key_version 将未定义，并可能导致 debug 信号错误或后续密钥操作异常",
-      "related_signals": [
-        "stage_sel",
-        "max_key_versions"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The shadowed CSRs reg2hw.max_creator_key_ver_shadowed.q, reg2hw.max_owner_int_key_ver_shadowed.q, and reg2hw.max_owner_key_ver_shadowed.q contain correct, authorized maximum key version values.",
+      "cond": "whenever max_key_versions is used for key version enforcement",
+      "risk": "If corrupted or misconfigured, max_key_versions could be wrong, allowing use of outdated or unauthorized keys.",
+      "signals": [
+        "reg2hw.max_creator_key_ver_shadowed.q",
+        "reg2hw.max_owner_int_key_ver_shadowed.q",
+        "reg2hw.max_owner_key_ver_shadowed.q"
       ],
-      "source_refs": [
-        "keymgr.sv:500-502",
-        "keymgr.sv:505"
+      "refs": [
+        "keymgr.sv:500-502"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "stage_sel is restricted to the valid enum values Creator, OwnerInt, Owner, and that max_key_versions and adv_dvalid arrays are dimensioned to support all those values.",
+      "cond": "when cur_max_key_version or adv_dvalid is selected",
+      "risk": "An out-of-range stage_sel leads to undefined/X index, potentially bypassing key version checks and causing incorrect KMAC input invalidation.",
+      "signals": [
+        "stage_sel",
+        "cur_max_key_version",
+        "max_key_versions",
+        "adv_dvalid"
+      ],
+      "refs": [
+        "keymgr.sv:505,555"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "keymgr_input_checks (u_checks) correctly implements the SEC_CM consistency checks and drives creator_seed_vld, owner_seed_vld, devid_vld, health_state_vld, rom_digest_vld, key_version_vld, and key_vld faithfully.",
+      "cond": "always when its inputs are valid",
+      "risk": "Invalid inputs could be accepted as valid, allowing key derivation with bad seeds, fake device ID, wrong health state, etc., breaking security.",
+      "signals": [
+        "u_checks",
+        "creator_seed_vld",
+        "owner_seed_vld",
+        "devid_vld",
+        "health_state_vld",
+        "rom_digest_vld",
+        "key_version_vld",
+        "key_vld"
+      ],
+      "refs": [
+        "keymgr.sv:511-530"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "lc_keymgr_div_i is sized so that HealthStateWidth'(lc_keymgr_div_i) captures all meaningful life cycle state information without truncation loss.",
+      "cond": "when health_state_i is used for health state validation",
+      "risk": "If lc_keymgr_div_i is wider than HealthStateWidth and higher bits encode important state, the cast may discard them, allowing operations in unauthorized life cycle states.",
+      "signals": [
+        "lc_keymgr_div_i",
+        "health_state_i"
+      ],
+      "refs": [
+        "keymgr.sv:522"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "handshake",
+      "claim": "The enable signals adv_en, id_en, gen_en are glitch-free and correctly reflect the intended operations.",
+      "cond": "during clock edges where debug de or valid_op are sampled",
+      "risk": "Glitches could falsely trigger debug status writes or cause spurious valid_op assertions, leading to incorrect error logging or invalid operation handling.",
+      "signals": [
+        "adv_en",
+        "id_en",
+        "gen_en"
+      ],
+      "refs": [
+        "keymgr.sv:541-548"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "stage_sel is used as an array index without bounds checking, and no default or assertion verifies it stays within {Creator, OwnerInt, Owner}.",
+      "cond": "if stage_sel takes an illegal value",
+      "risk": "cur_max_key_version and adv_dvalid indexing could be out-of-bounds, causing X propagation or bypassing key version/advance validation.",
+      "signals": [
+        "stage_sel",
+        "cur_max_key_version",
+        "adv_dvalid"
+      ],
+      "refs": [
+        "keymgr.sv:505,555"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Debug invalid flags are only gated with specific operation enables (e.g., invalid_creator_seed.de only during adv_en & Creator), so invalid conditions occurring outside these windows are not captured.",
+      "cond": "when an invalid condition exists but the corresponding operation is not active",
+      "risk": "Security violations (e.g., bad creator seed during id_en or gen_en) may go undetected, allowing operations to proceed with compromised inputs.",
+      "signals": [
+        "adv_en",
+        "id_en",
+        "gen_en",
+        "stage_sel",
+        "hw2reg.debug.invalid_creator_seed.de",
+        "hw2reg.debug.invalid_owner_seed.de",
+        "hw2reg.debug.invalid_dev_id.de",
+        "hw2reg.debug.invalid_health_state.de",
+        "hw2reg.debug.invalid_key_version.de",
+        "hw2reg.debug.invalid_key.de",
+        "hw2reg.debug.invalid_digest.de"
+      ],
+      "refs": [
+        "keymgr.sv:542-548"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "No clear mechanism is visible for the hw2reg.debug.invalid_* registers after being set; if sticky, they cannot capture new errors until reset or explicit firmware clear.",
+      "cond": "after a first invalid event sets the register",
+      "risk": "Subsequent security faults may be masked, reducing debug visibility and fault detection coverage.",
+      "signals": [
+        "hw2reg.debug.invalid_creator_seed",
+        "hw2reg.debug.invalid_owner_seed",
+        "hw2reg.debug.invalid_dev_id",
+        "hw2reg.debug.invalid_health_state",
+        "hw2reg.debug.invalid_key_version",
+        "hw2reg.debug.invalid_key",
+        "hw2reg.debug.invalid_digest"
+      ],
+      "refs": [
+        "keymgr.sv:532-548"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The HealthStateWidth'(lc_keymgr_div_i) cast truncates lc_keymgr_div_i; the design intent for the upper bits is unclear.",
+      "cond": "if lc_keymgr_div_i is wider than HealthStateWidth",
+      "risk": "Important life cycle state information could be lost, potentially allowing key manager operations in an unauthorized state.",
+      "signals": [
+        "lc_keymgr_div_i",
+        "health_state_i"
+      ],
+      "refs": [
+        "keymgr.sv:522"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The correctness of input validation, KMAC control, and sideload key handling depends on the internal implementations of keymgr_input_checks, keymgr_kmac_if, and keymgr_sideload_key_ctrl.",
+      "cond": "always during key operations",
+      "risk": "Bugs in those sub-modules could propagate invalid data, bypass masking, or leak keys without detection by this chunk.",
+      "signals": [
+        "u_checks",
+        "u_kmac_if",
+        "u_sideload_ctrl",
+        "creator_seed_vld",
+        "kmac_input_invalid",
+        "kmac_done",
+        "kmac_data",
+        "aes_key_o",
+        "otbn_key_o",
+        "kmac_key_o"
+      ],
+      "refs": [
+        "keymgr.sv:511-583, 590-610"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr.sv:500-610"
   ],
-  "uncertain_points": [
-    "adv_dvalid[stage_sel] 的来源和计算不在本片段内，其正确性直接影响 invalid_data 的判断效果"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 500,
-  "line_end": 610
+  "line_end": 610,
+  "security_implications": ""
 }

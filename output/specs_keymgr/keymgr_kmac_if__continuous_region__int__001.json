@@ -1,53 +1,211 @@
 {
   "chunk_id": "keymgr_kmac_if__continuous_region__int__001",
-  "summary": "定义与 KMAC 接口交互所需的参数、状态编码、数据宽度调整、计数器实例及控制信号，为多轮 KMAC 数据传输做好准备。",
-  "behavior": "该连续区域定义了一系列编译期参数和组合逻辑，用于支持 KMAC 数据包的多次分片传输。状态机采用 data_state_e 枚举，各状态被赋予特定的10-bit非连续编码（StIdle=0x3A2, StTx=0x09B, StTxLast=0x140, StOpWait=0x229, StClean=0x3FD, StError=0x0EE），可能用于提高汉明距离以增强错误检测能力。首先计算三种数据宽度（adv/id/gen）在 KMAC 接口宽度下的剩余字节数 AdvRem、IdRem、GenRem，随后通过编译期断言保证这些余数均为整字节（能被8整除）。然后确定各类型数据所需传输轮次 AdvRounds、IdRounds、GenRounds，以及最大可能轮次 MaxRounds。根据接口宽度派生计数器位宽 CntWidth、字节数 IfBytes 以及诱饵副本数 DecoyCopies、DecoyOutputCopies。利用轮次计算最后一轮的轮次索引常量（LastAdvRoundInt等），并截断到 CntWidth 位宽得到 LastAdvRound、LastIdRound、LastGenRound；同时根据剩余字节计算最后一拍的字选通掩码 AdvByteMask、IdByteMask、GenByteMask，当余数为 0 时掩码全 1，否则为对应有效字节位的全 1 掩码。声明数组 adv_data/id_data/gen_data、计数值 cnt、当前轮次数 rounds、诱饵数据 decoy_data、valid/last/strb 输出、计数器控制信号 cnt_clr/cnt_set/cnt_en、start 和 kmac_done_vld 等。组合赋值将输入 adv_data_i、id_data_i、gen_data_i 零扩展至 KDFMaxWidth 宽度，赋值给对应数组。start 信号由 adv_en_i、id_en_i、gen_en_i 相或产生。最后例化了一个带有冗余校验的递减计数器 prim_count，复位时加载全 1，clr_i 清零，set_i 时加载 rounds 值，decr_en_i 使能递减，步长为 1，输出当前计数值 cnt 以及错误标志 cnt_err。",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "mixed",
+    "driven": [
+      "adv_data",
+      "id_data",
+      "gen_data",
+      "start",
+      "cnt",
+      "cnt_err"
+    ],
+    "used": [
+      "adv_data_i",
+      "id_data_i",
+      "gen_data_i",
+      "adv_en_i",
+      "id_en_i",
+      "gen_en_i",
+      "clk_i",
+      "rst_ni",
+      "cnt_clr",
+      "cnt_set",
+      "rounds",
+      "cnt_en"
+    ],
+    "modes": [
+      "StIdle",
+      "StTx",
+      "StTxLast",
+      "StOpWait",
+      "StClean",
+      "StError"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "mask",
+      "entropy",
+      "error",
+      "integrity",
+      "counter",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "start 信号在任一 KMAC 操作使能（adv_en_i, id_en_i, gen_en_i）有效时立即置 1。",
-      "output_signals": [
-        "start"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "adv_data is always assigned KDFMaxWidth'(adv_data_i), zero-padding to KDFMaxWidth bits.",
+      "cond": "always",
+      "signals": [
+        "adv_data",
+        "adv_data_i"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:139"
+      "refs": [
+        "135"
       ]
     },
     {
-      "property": "adv_data, id_data, gen_data 分别为对应输入的 KDFMaxWidth 零扩展版本，确保高位恒为 0（若输入位宽小于 KDFMaxWidth）。",
-      "output_signals": [
-        "adv_data",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "id_data is always assigned KDFMaxWidth'(id_data_i), zero-padding to KDFMaxWidth bits.",
+      "cond": "always",
+      "signals": [
         "id_data",
-        "gen_data"
+        "id_data_i"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:135-137"
+      "refs": [
+        "136"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "gen_data is always assigned KDFMaxWidth'(gen_data_i), zero-padding to KDFMaxWidth bits.",
+      "cond": "always",
+      "signals": [
+        "gen_data",
+        "gen_data_i"
+      ],
+      "refs": [
+        "137"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "start is the logical OR of adv_en_i, id_en_i, and gen_en_i.",
+      "cond": "always",
+      "signals": [
+        "start",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "139"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "generate_param",
+      "claim": "A prim_count instance u_cnt is connected with incr_en_i = 0, decr_en_i = cnt_en, commit_i = 1, step_i = 1, and driven by clr_i, set_i, set_cnt_i. It outputs cnt and a redundancy check cnt_err.",
+      "cond": "always",
+      "signals": [
+        "cnt",
+        "cnt_err",
+        "cnt_en",
+        "cnt_clr",
+        "cnt_set",
+        "rounds"
+      ],
+      "refs": [
+        "143-159"
       ]
     }
   ],
-  "security_implications": "状态编码使用了非连续且汉明距离较大的 10-bit 值，配合注释 SEC_CM: KMAC_IF.CTR.REDUN 的冗余计数器，可检测某些单比特翻转。诱饵副本参数 DecoyCopies 和 DecoyOutputCopies 暗示与随机数位宽配合，可能在后续逻辑中用于对抗侧信道分析。",
   "assumptions": [
     {
-      "constraint": "adv_data_i, id_data_i, gen_data_i 的实际位宽必须不大于 KDFMaxWidth，否则零扩展时高位将被截断。",
-      "bug_relevance": "若违反，零扩展会丢高位数据，导致 KMAC 输入数据不完整，但设计上这些输入位宽应由上层保证 ≤ KDFMaxWidth。",
-      "related_signals": [
-        "adv_data_i",
-        "id_data_i",
-        "gen_data_i"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "MaxAdvDataWidth, IdDataWidth, GenDataWidth are such that AdvRem, IdRem, GenRem are multiples of 8 bits (checked at compile time).",
+      "cond": "always",
+      "risk": "If not true, the derived byte masks (AdvByteMask etc.) would be misaligned, leading to incorrect byte enables on the last KMAC data transfer and data corruption.",
+      "signals": [
+        "AdvRem",
+        "IdRem",
+        "GenRem",
+        "AdvByteMask",
+        "IdByteMask",
+        "GenByteMask"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:135-137"
+      "refs": [
+        "87-89",
+        "111-113"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "External logic drives cnt_clr, cnt_set, rounds, and cnt_en correctly such that the counter decrements at the appropriate times and correctly identifies the last round.",
+      "cond": "when KMAC interface FSM is active",
+      "risk": "If these control signals are driven incorrectly, the counter may clear/set/decrement at wrong times, causing misaligned data transfers or failing to detect the last round, potentially leading to cryptographic misoperation.",
+      "signals": [
+        "cnt_clr",
+        "cnt_set",
+        "rounds",
+        "cnt_en"
+      ],
+      "refs": [
+        "147-154"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Decoy copies are computed as DecoyCopies = KmacDataIfWidth / RandWidth (integer division). If KmacDataIfWidth is not a multiple of RandWidth, the division truncates, leaving some data bits without decoy coverage.",
+      "cond": "when KmacDataIfWidth is not an integer multiple of RandWidth",
+      "risk": "Incomplete decoy masking could expose sensitive key material through side channels.",
+      "signals": [
+        "DecoyCopies",
+        "KmacDataIfWidth",
+        "RandWidth"
+      ],
+      "refs": [
+        "100"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "cnt_err from the redundant counter is not processed in this chunk. Its connection to error handling or alarm logic is unknown.",
+      "cond": "when cnt_err is asserted",
+      "risk": "A counter redundancy failure could go undetected, allowing a fault to corrupt KMAC data transfers without any reaction.",
+      "signals": [
+        "cnt_err"
+      ],
+      "refs": [
+        "158",
+        "142"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "decoy_data is declared but not driven in this chunk; its generation logic is in another part of the module.",
+      "cond": "always",
+      "risk": "Without seeing how decoy_data is produced and inserted, we cannot verify it properly masks all sensitive data paths.",
+      "signals": [
+        "decoy_data"
+      ],
+      "refs": [
+        "120"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_kmac_if.sv:72-159"
-  ],
-  "uncertain_points": [
-    "prim_count 内部冗余校验的具体检测逻辑和 cnt_err 置位的精确条件未在此片段中体现。",
-    "诱饵副本 DecoyCopies/DecoyOutputCopies 的具体使用方式（是否用于数据随机乱序或时间加扰）需在后续逻辑中确认。",
-    "状态编码非连续值的汉明距离设计是否确实用于安全或仅作为编码习惯，注释未明确说明。"
+    "72-159"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 72,
-  "line_end": 159
+  "line_end": 159,
+  "security_implications": ""
 }

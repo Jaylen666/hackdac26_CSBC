@@ -112,6 +112,10 @@ def main() -> None:
         "--delay", type=float, default=0.3,
         help="Seconds between LLM calls to avoid rate-limiting (default: 0.3)",
     )
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help="Parallel workers for spec generation (default: 1 = sequential)",
+    )
     args = parser.parse_args()
 
     # --- Load config ----------------------------------------------------------
@@ -140,43 +144,63 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     all_targets = normal + batched
-    ok_count = 0
+    # Filter out already-existing specs
+    pending = []
     skip_count = 0
-    fail_count = 0
-
-    for i, chunk in enumerate(all_targets):
+    for chunk in all_targets:
         out_path = out_dir / f"{chunk.chunk_id}.json"
-
         if out_path.exists():
-            print(f"[{i+1:3d}/{total_calls}] SKIP  {chunk.chunk_id}  (already exists)")
             skip_count += 1
-            continue
+        else:
+            pending.append((chunk, out_path))
 
-        print(
-            f"[{i+1:3d}/{total_calls}] GEN   {chunk.chunk_id}  "
-            f"({chunk.line_end - chunk.line_start + 1}L) ...",
-            end=" ", flush=True,
-        )
+    print(f"  Already exist (skip): {skip_count}")
+    print(f"  To generate:          {len(pending)}")
+    print()
+
+    ok_count = 0
+    fail_count = 0
+    total_pending = len(pending)
+    lock = __import__('threading').Lock()
+
+    def _generate_one(chunk, out_path, idx):
+        nonlocal ok_count, fail_count
+        lines = chunk.line_end - chunk.line_start + 1
         try:
-            spec = generate_chunk_spec(chunk, client)
+            spec = generate_chunk_spec(chunk, client, max_tokens=12000)
             out_path.write_text(
                 json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8"
             )
-            print("OK")
-            ok_count += 1
+            with lock:
+                ok_count += 1
+            print(f"[{ok_count + fail_count + skip_count:3d}/{total_calls}] OK    {chunk.chunk_id}  ({lines}L)")
+            return True
         except Exception as exc:
-            print(f"FAIL  ({exc})")
+            with lock:
+                fail_count += 1
             out_path.write_text(
-                json.dumps(
-                    {"chunk_id": chunk.chunk_id, "error": str(exc)},
-                    ensure_ascii=False, indent=2,
-                )
+                json.dumps({"chunk_id": chunk.chunk_id, "error": str(exc)},
+                          ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
-            fail_count += 1
+            print(f"[{ok_count + fail_count + skip_count:3d}/{total_calls}] FAIL  {chunk.chunk_id}  ({exc})")
+            return False
 
-        # Polite delay to avoid rate-limiting
-        if args.delay > 0:
-            time.sleep(args.delay)
+    if args.workers > 1 and pending:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        print(f"  Running with {args.workers} workers ...")
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(_generate_one, chunk, out_path, i): chunk
+                for i, (chunk, out_path) in enumerate(pending)
+            }
+            for future in as_completed(futures):
+                future.result()  # raise on error within the thread
+    else:
+        for i, (chunk, out_path) in enumerate(pending):
+            if args.delay > 0:
+                time.sleep(args.delay)
+            _generate_one(chunk, out_path, i)
 
     # --- Summary --------------------------------------------------------------
     print()

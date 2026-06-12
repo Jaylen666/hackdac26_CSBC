@@ -1,37 +1,198 @@
 {
   "chunk_id": "keymgr_err__continuous_region__declarations_or_instances__001",
-  "summary": "组合逻辑将同步错误历史与当前同步错误合并，驱动异步错误的影子更新位，并在 err_vld 有效时将硬件故障传递到同步故障向量。",
-  "behavior": "同步错误输出 sync_err_o 被赋值为 sync_err_q 与 sync_err_d 的按位或，即输出同时反映已寄存的历史同步错误和当前组合的同步错误输入。异步错误输出特定位 async_err_o[AsyncErrShadowUpdate] 直接由 shadowed_update_err_i 驱动。同步故障向量 sync_fault_d 的三个位分别由 err_vld 与 kmac_op_err_i、invalid_kmac_out_i、sideload_sel_err_i 相与得到；因此只有当 err_vld 有效时，对应的硬件故障才会被传递到 sync_fault_d，否则相应位保持为 0。所有赋值均为组合逻辑，无延迟。",
+  "header": {
+    "module": "keymgr_err",
+    "block_kind": "assign",
+    "driven": [
+      "sync_err_o",
+      "async_err_o[AsyncErrShadowUpdate]",
+      "sync_fault_d[SyncFaultKmacOp]",
+      "sync_fault_d[SyncFaultKmacOut]",
+      "sync_fault_d[SyncFaultSideSel]"
+    ],
+    "used": [
+      "sync_err_q",
+      "sync_err_d",
+      "shadowed_update_err_i",
+      "err_vld",
+      "kmac_op_err_i",
+      "invalid_kmac_out_i",
+      "sideload_sel_err_i"
+    ],
+    "modes": [
+      "AsyncErrShadowUpdate",
+      "SyncFaultKmacOp",
+      "SyncFaultKmacOut",
+      "SyncFaultSideSel"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "security"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 err_vld 为 0 时，sync_fault_d[SyncFaultKmacOp]、sync_fault_d[SyncFaultKmacOut] 和 sync_fault_d[SyncFaultSideSel] 一定均为 0，不论错误输入为何。",
-      "output_signals": [
-        "sync_fault_d"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "sync_err_o is the bitwise OR of sync_err_q and sync_err_d",
+      "cond": "always",
+      "signals": [
+        "sync_err_o",
+        "sync_err_q",
+        "sync_err_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv:92-94"
+      "refs": [
+        "file:86"
       ]
     },
     {
-      "property": "async_err_o[AsyncErrShadowUpdate] 始终等于输入 shadowed_update_err_i。",
-      "output_signals": [
-        "async_err_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "async_err_o[AsyncErrShadowUpdate] equals shadowed_update_err_i",
+      "cond": "always",
+      "signals": [
+        "async_err_o",
+        "shadowed_update_err_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv:89"
+      "refs": [
+        "file:89"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "sync_fault_d[SyncFaultKmacOp] is the logical AND of err_vld and kmac_op_err_i",
+      "cond": "always",
+      "signals": [
+        "sync_fault_d",
+        "err_vld",
+        "kmac_op_err_i"
+      ],
+      "refs": [
+        "file:92"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "sync_fault_d[SyncFaultKmacOut] is the logical AND of err_vld and invalid_kmac_out_i",
+      "cond": "always",
+      "signals": [
+        "sync_fault_d",
+        "err_vld",
+        "invalid_kmac_out_i"
+      ],
+      "refs": [
+        "file:93"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "sync_fault_d[SyncFaultSideSel] is the logical AND of err_vld and sideload_sel_err_i",
+      "cond": "always",
+      "signals": [
+        "sync_fault_d",
+        "err_vld",
+        "sideload_sel_err_i"
+      ],
+      "refs": [
+        "file:94"
       ]
     }
   ],
-  "security_implications": "sync_fault_d 承载 KMAC 操作错误、无效 KMAC 输出和侧载选择错误等安全关键故障，且其传递受 err_vld 控制。若 err_vld 被错误地保持为低，这些硬件故障将被隐蔽，可能破坏密钥管理器对故障的检测能力，导致安全事件未被响应。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv:86-94"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "err_vld is glitch-free and synchronous to the same clock domain as the error inputs",
+      "cond": "when err_vld qualifies sync fault assertions",
+      "risk": "glitches on err_vld can cause spurious fault assertions, leading to unnecessary security response",
+      "signals": [
+        "err_vld",
+        "kmac_op_err_i",
+        "invalid_kmac_out_i",
+        "sideload_sel_err_i"
+      ],
+      "refs": [
+        "file:92-94"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "shadowed_update_err_i is either glitch-free or the receiver of async_err_o can tolerate glitches",
+      "cond": "always",
+      "risk": "glitches on async_err_o could cause false async error detection, disrupting key-manager operation",
+      "signals": [
+        "shadowed_update_err_i",
+        "async_err_o"
+      ],
+      "refs": [
+        "file:89"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "sync_err_q and sync_err_d are stable synchronous signals to avoid glitches on sync_err_o",
+      "cond": "always",
+      "risk": "glitches on sync_err_o may propagate to error handling logic",
+      "signals": [
+        "sync_err_q",
+        "sync_err_d",
+        "sync_err_o"
+      ],
+      "refs": [
+        "file:86"
+      ]
+    }
   ],
   "uncertain_points": [
-    "sync_err_d 和 sync_err_q 的组合来源不明，无法确认是否会引入组合毛刺；sync_err_o 的最终使用可能依赖稳定要求。",
-    "err_vld 的生成逻辑不在此片段内，无法确认其是否在安全时序窗内保持稳定，或是否可能产生毛刺导致 sync_fault_d 的短暂捕获。"
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "sync_fault_d bits are combinational AND of err_vld and error inputs without edge detection or persistence; the timing of err_vld relative to error conditions may lead to missed or repeated fault indications",
+      "cond": "when err_vld is level-based and error inputs may toggle",
+      "risk": "could cause incorrect fault reporting, missing critical security faults or generating false alarms",
+      "signals": [
+        "err_vld",
+        "kmac_op_err_i",
+        "invalid_kmac_out_i",
+        "sideload_sel_err_i",
+        "sync_fault_d"
+      ],
+      "refs": [
+        "file:92-94"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "async_err_o directly passes shadowed_update_err_i without synchronization; the destination's handling of potential metastability or glitches is unknown",
+      "cond": "when shadowed_update_err_i changes",
+      "risk": "could cause metastability or incorrect error handling if not properly synchronized",
+      "signals": [
+        "shadowed_update_err_i",
+        "async_err_o"
+      ],
+      "refs": [
+        "file:89"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:86",
+    "file:89",
+    "file:92",
+    "file:93",
+    "file:94"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 86,
-  "line_end": 94
+  "line_end": 94,
+  "security_implications": ""
 }

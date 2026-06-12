@@ -1,4 +1,226 @@
 {
   "chunk_id": "keymgr_kmac_if__always_comb__line_330__001",
-  "error": "Expecting ',' delimiter: line 41 column 6 (char 1716)"
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "always_comb",
+    "driven": [
+      "kmac_data_o.data"
+    ],
+    "used": [
+      "decoy_data",
+      "cmd_error_o",
+      "inputs_invalid_o",
+      "fsm_error_o",
+      "valid",
+      "adv_en_i",
+      "adv_data",
+      "adv_sel",
+      "id_en_i",
+      "id_data",
+      "id_sel",
+      "gen_en_i",
+      "gen_data",
+      "gen_sel"
+    ],
+    "modes": [
+      "error_override",
+      "valid_priority_mux"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "data_path",
+      "mux"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When any of cmd_error_o, inputs_invalid_o, or fsm_error_o is asserted (non-zero), kmac_data_o.data is forced to decoy_data, overriding all other conditions.",
+      "cond": "|cmd_error_o || inputs_invalid_o || fsm_error_o",
+      "signals": [
+        "kmac_data_o.data",
+        "decoy_data",
+        "cmd_error_o",
+        "inputs_invalid_o",
+        "fsm_error_o"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:332-333"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "If no error condition is true, and valid and adv_en_i are true, kmac_data_o.data is assigned adv_data[adv_sel].",
+      "cond": "~error & valid & adv_en_i",
+      "signals": [
+        "kmac_data_o.data",
+        "valid",
+        "adv_en_i",
+        "adv_data",
+        "adv_sel"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:334-335"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "If no error condition is true, valid is true, adv_en_i is false, and id_en_i is true, kmac_data_o.data is assigned id_data[id_sel].",
+      "cond": "~error & valid & ~adv_en_i & id_en_i",
+      "signals": [
+        "kmac_data_o.data",
+        "valid",
+        "adv_en_i",
+        "id_en_i",
+        "id_data",
+        "id_sel"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:336-337"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "If no error condition is true, valid is true, both adv_en_i and id_en_i are false, and gen_en_i is true, kmac_data_o.data is assigned gen_data[gen_sel].",
+      "cond": "~error & valid & ~adv_en_i & ~id_en_i & gen_en_i",
+      "signals": [
+        "kmac_data_o.data",
+        "valid",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i",
+        "gen_data",
+        "gen_sel"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:338-339"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "In the absence of any active error, valid, and enable condition, kmac_data_o.data remains as decoy_data (the default assignment).",
+      "cond": "~error & ~(valid & (adv_en_i | id_en_i | gen_en_i))",
+      "signals": [
+        "kmac_data_o.data",
+        "decoy_data",
+        "valid",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:331",
+        "keymgr_kmac_if.sv:340"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The index signals adv_sel, id_sel, gen_sel must be within the valid index range of the corresponding arrays adv_data, id_data, gen_data.",
+      "cond": "When the respective enable (adv_en_i, id_en_i, gen_en_i) is active and valid is true",
+      "risk": "Out-of-bounds index can cause simulation X‑propagation or undefined hardware behavior.",
+      "signals": [
+        "adv_sel",
+        "id_sel",
+        "gen_sel",
+        "adv_data",
+        "id_data",
+        "gen_data"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:335",
+        "keymgr_kmac_if.sv:337",
+        "keymgr_kmac_if.sv:339"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When valid is asserted, at most one of adv_en_i, id_en_i, gen_en_i is asserted, or the fixed priority order (adv > id > gen) is acceptable to the design intent.",
+      "cond": "valid == 1'b1",
+      "risk": "If multiple enables are asserted unintentionally, lower-priority sources are silently ignored, possibly causing a functional bug (e.g., missed ID or GEN data).",
+      "signals": [
+        "valid",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:334-339"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "decoy_data must be a safe value (e.g., constant, zeroized, or random) that does not expose sensitive state when error conditions force it onto the output.",
+      "cond": "|cmd_error_o || inputs_invalid_o || fsm_error_o",
+      "risk": "If decoy_data contains secret intermediate bits, the error path may leak sensitive information on kmac_data_o.",
+      "signals": [
+        "decoy_data",
+        "kmac_data_o.data",
+        "cmd_error_o",
+        "inputs_invalid_o",
+        "fsm_error_o"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:331-333"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "It is unclear if decoy_data is securely sourced (cleared, constant, or truly random) so that error conditions do not leak secret state via kmac_data_o.",
+      "cond": "When any of cmd_error_o, inputs_invalid_o, or fsm_error_o is active",
+      "risk": "An unsafe decoy_data could expose key material or intermediate values on the KMAC data output during error handling.",
+      "signals": [
+        "decoy_data",
+        "kmac_data_o.data",
+        "cmd_error_o",
+        "inputs_invalid_o",
+        "fsm_error_o"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:331-333"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The select indices adv_sel, id_sel, gen_sel are used to index arrays without local range protection; upstream logic must guarantee they remain within bounds.",
+      "cond": "When corresponding enable and valid are true",
+      "risk": "An out-of-bound index could cause simulation mismatches or hardware misread, potentially corrupting data selection.",
+      "signals": [
+        "adv_sel",
+        "id_sel",
+        "gen_sel",
+        "adv_data",
+        "id_data",
+        "gen_data"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:335",
+        "keymgr_kmac_if.sv:337",
+        "keymgr_kmac_if.sv:339"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_kmac_if.sv:330-341"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
+  "line_start": 330,
+  "line_end": 341,
+  "security_implications": ""
 }

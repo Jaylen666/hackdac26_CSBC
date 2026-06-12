@@ -1,0 +1,41 @@
+{
+  "chunk_id": "keymgr_reseed_ctrl__always_ff__line_48__001",
+  "summary": "控制 EDN 请求信号 edn_req，在复位、EDN 完成或空闲时根据重播种/本地请求发起新请求",
+  "behavior": "always_ff 块在时钟上升沿或异步复位下降沿更新 edn_req。复位（rst_ni=0）时 edn_req 清零。退出复位后，若 edn_done 有效，同样清零 edn_req，表示当前 EDN 请求完成。否则，若 edn_req 当前为 0 且 reseed_req_i 或 local_req 为高，则将 edn_req 置为 1，发起一次新的 EDN 请求。注意 edn_done 的清除优先级高于新请求置位：若 edn_done 与 !edn_req && (reseed_req_i || local_req) 条件同时成立，edn_req 将被清零而不会置位；此时若请求源仍保持有效，下一个时钟上升沿可重新将 edn_req 拉高。",
+  "guarantees": [
+    {
+      "property": "当 edn_req 为 1 时，保证此前曾在 edn_req=0 时出现 reseed_req_i 或 local_req 为 1，且 edn_req 将保持为 1 直到 edn_done 有效将其清除（或异步复位有效）",
+      "output_signals": [
+        "edn_req"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:48-57"
+      ]
+    }
+  ],
+  "security_implications": "edn_req 控制向熵分发网络请求重播种熵，若该信号异常（如丢失请求、无法清除或错误置位），可能导致密钥管理器无法获得所需的新随机种子，进而削弱生成的密钥安全性。该逻辑通过异步复位和 edn_done 清除确保请求不会卡死，但仍依赖外部信号时序以避免请求丢失。",
+  "assumptions": [
+    {
+      "constraint": "reseed_req_i 和 local_req 不应在 edn_done 有效的同一时钟周期内首次有效，否则该时钟周期的请求将被忽略（清零优先级高于置位）。若要可靠发起请求，这两个信号应保持至少两个时钟周期或者与 edn_done 互斥。",
+      "bug_relevance": "若请求源仅发出单周期脉冲且恰好与 edn_done 同时，则请求丢失，导致重播种操作被推迟甚至永远无法发起，影响密钥管理器的安全刷新。",
+      "related_signals": [
+        "reseed_req_i",
+        "local_req",
+        "edn_done",
+        "edn_req"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:51-55"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:48-57"
+  ],
+  "uncertain_points": [
+    "若 reseed_req_i 或 local_req 为单周期脉冲且与 edn_done 同时到达，请求会被忽略，需要确认设计规范是否允许此冲突场景，或要求请求源维持足够长的时间以确保请求被捕获。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
+  "line_start": 48,
+  "line_end": 57
+}

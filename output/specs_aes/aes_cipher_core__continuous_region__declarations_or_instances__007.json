@@ -1,40 +1,96 @@
 {
   "chunk_id": "aes_cipher_core__continuous_region__declarations_or_instances__007",
-  "summary": "产生同步 PRD 写使能信号并实例化 aes_key_expand 模块以实现密钥扩展数据通路。",
-  "behavior": "该区域生成组合信号 key_expand_prd_we，当 key_full_we 等于 SP2V_HIGH（逻辑高电平）时驱动为 1，否则为 0，其意图是确保 S‑Box 数据/掩码输入更新时内部缓冲的 PRD 同步更新（行 491 及注释）。同时，实例化 aes_key_expand 模块，将时钟、复位、配置有效、操作码、使能、prd_we、输出握手、清除、轮次、密钥长度、输入密钥（key_full_q）、输出密钥、PRD 输入和错误输出等信号对应连接，并通过参数 AES192Enable、SecMasking 和 SecSBoxImpl 控制密钥扩展的行为（行 493‑514）。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "mixed",
+    "driven": [
+      "key_expand_prd_we",
+      "key_expand_out_req",
+      "key_expand_out",
+      "key_expand_err"
+    ],
+    "used": [
+      "key_full_we",
+      "SP2V_HIGH",
+      "clk_i",
+      "rst_ni",
+      "cfg_valid",
+      "key_expand_op",
+      "key_expand_en",
+      "key_expand_out_ack",
+      "key_expand_clear",
+      "key_expand_round",
+      "key_len_i",
+      "key_full_q",
+      "prd_key_expand"
+    ],
+    "modes": [
+      "AES192Enable",
+      "SecMasking",
+      "SecSBoxImpl"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "mask",
+      "error"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 key_full_we 等于 SP2V_HIGH 时，key_expand_prd_we 一定为 1；否则为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "key_expand_prd_we is assigned 1 when key_full_we equals SP2V_HIGH, otherwise 0.",
+      "cond": "always (combinational)",
+      "signals": [
+        "key_full_we",
+        "SP2V_HIGH",
         "key_expand_prd_we"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_cipher_core.sv:491"
       ]
     }
   ],
-  "security_implications": "密钥扩展模块通过 SecMasking 和 SecSBoxImpl 参数支持掩码和可选的安全 S‑Box 实现，可提供侧信道（如功耗分析）防护能力；若参数禁用相关特性，则存在密钥信息泄露风险。",
   "assumptions": [
     {
-      "constraint": "SP2V_HIGH 宏/参数必须定义为代表逻辑 1 的电平值（通常为 1'b1）。",
-      "bug_relevance": "若 SP2V_HIGH 未定义为 1，则当 key_full_we 在该电平上被驱动时，key_expand_prd_we 将被错误地置为 0，导致 S‑Box 内部 PRD 更新丢失，可能造成错误的 S‑Box 输出。该场景在工程设计上不应发生。",
-      "related_signals": [
-        "key_expand_prd_we",
-        "key_full_we"
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Whenever the data/mask inputs of the S‑Boxes update, key_full_we must be equal to SP2V_HIGH so that key_expand_prd_we is asserted and the internally buffered PRD is updated in sync.",
+      "cond": "When data/mask inputs change (external event)",
+      "risk": "If key_full_we does not match SP2V_HIGH, key_expand_prd_we stays 0, PRD is not updated, leading to mask desynchronization and potential leakage of side‑channel information.",
+      "signals": [
+        "key_full_we",
+        "SP2V_HIGH",
+        "key_expand_prd_we"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_cipher_core.sv:489-491"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comparison key_full_we == SP2V_HIGH assumes a specific multi‑bit token; the width of key_full_we and the definition of SP2V_HIGH are not apparent from this chunk. It is unclear whether other legal values of key_full_we also require a PRD update.",
+      "cond": "When key_full_we takes a value different from SP2V_HIGH but a data/mask update occurs.",
+      "risk": "If a valid update condition is missed, the PRD will not be refreshed in time, potentially breaking the masking scheme.",
+      "signals": [
+        "key_full_we",
+        "SP2V_HIGH"
+      ],
+      "refs": [
         "output/aes_cipher_core.sv:491"
       ]
     }
   ],
   "evidence_refs": [
-    "output/aes_cipher_core.sv:491-514"
-  ],
-  "uncertain_points": [
-    "SP2V_HIGH 的具体值未在本片段定义，依赖于外部包或宏定义。",
-    "key_full_we 的生成逻辑和它与 key_full_q 的时序关系未在此片段体现，而 PRD 同步的前提是 key_full_we 在密钥更新时恰好有效，实际是否满足需检查上层逻辑。"
+    "output/aes_cipher_core.sv:487-514"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 487,
-  "line_end": 514
+  "line_end": 514,
+  "security_implications": ""
 }

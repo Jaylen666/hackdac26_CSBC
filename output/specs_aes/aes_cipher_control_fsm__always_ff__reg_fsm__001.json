@@ -1,29 +1,112 @@
 {
   "chunk_id": "aes_cipher_control_fsm__always_ff__reg_fsm__001",
-  "summary": "将上一级组合逻辑输出的下一状态信号寄存为当前状态，并在复位时清零所有寄存器。",
-  "behavior": "该 always_ff 块在时钟上升沿或异步复位下降沿触发。当 rst_ni 为低时，三个寄存器被清零（prng_reseed_done_q 置 0，rnd_ctr_q 和 num_rounds_q 置全零）。否则，将组合逻辑准备好的下一状态信号 prng_reseed_done_d、rnd_ctr_d、num_rounds_d 寄存到对应输出，实现标准的主从状态更新。",
+  "header": {
+    "module": "aes_cipher_control_fsm",
+    "block_kind": "always_ff",
+    "driven": [
+      "prng_reseed_done_q",
+      "rnd_ctr_q",
+      "num_rounds_q"
+    ],
+    "used": [
+      "prng_reseed_done_d",
+      "rnd_ctr_d",
+      "num_rounds_d",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [
+      "reset",
+      "normal"
+    ],
+    "tags": [
+      "reset",
+      "counter",
+      "lifecycle",
+      "entropy"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位完成后，prng_reseed_done_q 一定为 0，rnd_ctr_q 和 num_rounds_q 一定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (asynchronous reset), prng_reseed_done_q is set to 1'b0, rnd_ctr_q is cleared to all zeros ('0), and num_rounds_q is cleared to all zeros ('0).",
+      "cond": "rst_ni = 0",
+      "signals": [
         "prng_reseed_done_q",
         "rnd_ctr_q",
         "num_rounds_q"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:455-458"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:456-458"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On every posedge clk_i when rst_ni is high, prng_reseed_done_q is updated with prng_reseed_done_d, rnd_ctr_q with rnd_ctr_d, and num_rounds_q with num_rounds_d.",
+      "cond": "rst_ni high and posedge clk_i",
+      "signals": [
+        "prng_reseed_done_q",
+        "prng_reseed_done_d",
+        "rnd_ctr_q",
+        "rnd_ctr_d",
+        "num_rounds_q",
+        "num_rounds_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:460-462"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "num_rounds_d must be a valid AES round count (e.g., 10, 12, or 14) because the stored value will be used by downstream FSM logic to determine the number of encryption rounds.",
+      "cond": "when rst_ni is high and a clock edge occurs",
+      "risk": "An invalid round count could cause encryption with wrong number of rounds, leading to incorrect ciphertext/plaintext and possibly breaking AES security guarantees.",
+      "signals": [
+        "num_rounds_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:462"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "rnd_ctr_d must remain within the proper range (typically 0 to num_rounds−1) to avoid overflow or illegal state progression; the register does not check bounds.",
+      "cond": "when rst_ni is high and a clock edge occurs",
+      "risk": "If rnd_ctr_d exceeds num_rounds_d, the round counter may overrun, causing the FSM to loop indefinitely or access an undefined state, potentially stalling the cipher or exposing intermediate values.",
+      "signals": [
+        "rnd_ctr_d",
+        "num_rounds_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:461-462"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "prng_reseed_done_d must be asserted only after the PRNG reseed operation has truly completed and the entropy source is stable; the register latches the value without qualification.",
+      "cond": "when the design exits reset and begins operation",
+      "risk": "A glitch or premature assertion could set prng_reseed_done_q high, allowing the cipher to start before sufficient entropy is available, compromising the security of key derivation or masking.",
+      "signals": [
+        "prng_reseed_done_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:460"
+      ]
+    }
+  ],
+  "uncertain_points": [],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_control_fsm.sv:454-464"
   ],
-  "uncertain_points": [
-    "rnd_ctr_q 和 num_rounds_q 的位宽未在本片段指定，'0 赋值依赖上下文宽度匹配，但这是 Verilog 常规用法，应已在声明中确定。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control_fsm.sv",
   "line_start": 454,
-  "line_end": 464
+  "line_end": 464,
+  "security_implications": ""
 }

@@ -133,12 +133,21 @@ class SignalGraph:
                     continue
 
                 for assumption in consumer_spec.get("assumptions", []):
-                    related = assumption.get("related_signals", [])
+                    related = (
+                        assumption.get("signals") or
+                        assumption.get("related_signals") or []
+                    )
                     if signal not in related:
                         continue
 
-                    constraint = assumption.get("constraint", "")
-                    bug_rel = assumption.get("bug_relevance", "")
+                    constraint = (
+                        assumption.get("claim") or
+                        assumption.get("constraint") or ""
+                    )
+                    bug_rel = (
+                        assumption.get("risk") or
+                        assumption.get("bug_relevance") or ""
+                    )
                     cls = _classify_assumption(constraint + " " + bug_rel)
 
                     if filter_mode == "behavioral" and cls == "structural":
@@ -151,7 +160,11 @@ class SignalGraph:
                         if not driver_spec:
                             continue
                         for g in driver_spec.get("guarantees", []):
-                            if signal in g.get("output_signals", []):
+                            g_sigs = (
+                                g.get("signals") or
+                                g.get("output_signals") or []
+                            )
+                            if signal in g_sigs:
                                 driver_guarantees.append(
                                     {
                                         "spec_id": driver_id,
@@ -277,17 +290,19 @@ class SignalGraph:
             # --- structured match ---
             if signals_lower:
                 for sig in signals_lower:
-                    # Check guarantees.output_signals
+                    # Check guarantee signals (new: signals, old: output_signals)
                     for g in spec.get("guarantees", []):
-                        for out_sig in g.get("output_signals", []):
+                        g_sigs = g.get("signals") or g.get("output_signals") or []
+                        for out_sig in g_sigs:
                             if sig in out_sig.lower():
                                 score += 3
                                 match_reasons.append(
-                                    f"guarantee.output_signal matches {sig}"
+                                    f"guarantee.signal matches {sig}"
                                 )
-                    # Check assumptions.related_signals
+                    # Check assumption signals (new: signals, old: related_signals)
                     for a in spec.get("assumptions", []):
-                        for rel_sig in a.get("related_signals", []):
+                        a_sigs = a.get("signals") or a.get("related_signals") or []
+                        for rel_sig in a_sigs:
                             if sig in rel_sig.lower():
                                 score += 2
                                 match_reasons.append(
@@ -447,14 +462,16 @@ def build_signal_graph(specs_dir: str | Path) -> SignalGraph:
 
         # From guarantees → driver
         for g in spec.get("guarantees", []):
-            for sig_name in g.get("output_signals", []):
+            g_sigs = g.get("signals") or g.get("output_signals") or []
+            for sig_name in g_sigs:
                 sig_name = _normalize_signal(sig_name)
                 signals.add(sig_name)
                 _ensure_signal(graph, sig_name).drivers.append(chunk_id)
 
         # From assumptions → consumer
         for a in spec.get("assumptions", []):
-            for sig_name in a.get("related_signals", []):
+            a_sigs = a.get("signals") or a.get("related_signals") or []
+            for sig_name in a_sigs:
                 sig_name = _normalize_signal(sig_name)
                 signals.add(sig_name)
                 _ensure_signal(graph, sig_name).consumers.append(chunk_id)

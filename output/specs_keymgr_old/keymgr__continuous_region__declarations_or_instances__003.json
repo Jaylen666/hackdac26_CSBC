@@ -1,0 +1,51 @@
+{
+  "chunk_id": "keymgr__continuous_region__declarations_or_instances__003",
+  "summary": "根据配置选择 creator seed 的硬件来源（OTP 或 flash），同时为未使用的源提供侧连接以避免 lint 警告。",
+  "behavior": "该片段通过 generate‑if 实现两个 assign 对。当编译常量 UseOtpSeedsInsteadOfFlash 为真时，creator_seed 取自 otp_key_i.creator_seed，unused_creator_seed 取 flash 侧 CreatorSeedIdx 种子与 otp 有效标志的按位异或归约；否则 creator_seed 取自 flash_i.seeds[CreatorSeedIdx]，unused_creator_seed 取 otp 种子与其有效标志的按位异或归约。两者均为组合逻辑，随输入即时变化。unused_creator_seed 本身不参与功能逻辑，仅用于‘吃掉’未使用路径的输入信号。",
+  "guarantees": [
+    {
+      "property": "当 UseOtpSeedsInsteadOfFlash 为真时，creator_seed 必定等于 otp_key_i.creator_seed；否则 creator_seed 必定等于 flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]。",
+      "output_signals": [
+        "creator_seed"
+      ],
+      "source_refs": [
+        "keymgr.sv:413-423"
+      ]
+    }
+  ],
+  "security_implications": "creator seed 作为密钥派生种子，其来源直接影响 key manager 的安全性。该逻辑根据配置选择 OTP 或 flash 提供种子，未使用的源虽被连接至 unused_creator_seed，但仅做异或归约，不保证数据被清零或掩藏，存在残留或可观测风险。需在系统级确认所选种子的安全等级以及未使用种子的访问控制是否满足整体威胁模型。",
+  "assumptions": [
+    {
+      "constraint": "UseOtpSeedsInsteadOfFlash 必须为编译期常量（非动态信号），使 generate 在综合/仿真前唯一确定分支。",
+      "bug_relevance": "若非编译期常量，generate 会歧义或多驱动，导致综合或仿真失败。",
+      "related_signals": [
+        "UseOtpSeedsInsteadOfFlash"
+      ],
+      "source_refs": [
+        "keymgr.sv:415,419"
+      ]
+    },
+    {
+      "constraint": "otp_key_i.creator_seed 和 flash_i.seeds[CreatorSeedIdx] 的位宽必须与 KeyWidth 匹配，否则高位截断或补零将导致种子值改变。",
+      "bug_relevance": "位宽不匹配会截断种子，产生错误的密钥源，导致后续密钥派生错误，构成功能与安全缺陷。",
+      "related_signals": [
+        "otp_key_i.creator_seed",
+        "flash_i.seeds",
+        "KeyWidth"
+      ],
+      "source_refs": [
+        "keymgr.sv:413,418,422"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr.sv:413-423"
+  ],
+  "uncertain_points": [
+    "unused_creator_seed 是否仅用于 lint 抑制，还是为了阻止未使用输入路径被综合优化（可能导致安全信息泄露），设计文档未明确说明。",
+    "编译常量 UseOtpSeedsInsteadOfFlash 的定义和作用域未在片段中给出，需外部确认是否保证与 keymgr 的其他配置一致。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
+  "line_start": 413,
+  "line_end": 423
+}

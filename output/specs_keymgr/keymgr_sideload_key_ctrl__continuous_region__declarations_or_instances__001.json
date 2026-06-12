@@ -1,52 +1,170 @@
 {
   "chunk_id": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__001",
-  "summary": "根据 wipe_key_i 或 clr_key_i 的合法/非法值生成各侧加载密钥槽的清除请求和全局清除信号。",
-  "behavior": "该片段组合生成全局清除标志 clr_all_keys，当 wipe_key_i 有效或 clr_key_i 不属于 {SideLoadClrIdle, SideLoadClrAes, SideLoadClrKmac, SideLoadClrOtbn} 中的任何值时，clr_all_keys 为 1（78-82 行）。slot_clr 按位定义：slot_clr[AesIdx] = clr_all_keys | (clr_key_i == SideLoadClrAes)，slot_clr[KmacIdx] 和 slot_clr[OtbnIdx] 同理（84-86 行）。因此 wipe_key_i 或非法 clr_key_i 会同时置位所有密钥槽清除请求；合法 clr_key_i 只会置位对应的单个槽清除请求。最终输出 clr = |slot_clr，只要任一槽请求清除即有效（89 行）。",
+  "header": {
+    "module": "keymgr_sideload_key_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "clr_all_keys",
+      "slot_clr",
+      "clr"
+    ],
+    "used": [
+      "wipe_key_i",
+      "clr_key_i",
+      "SideLoadClrIdle",
+      "SideLoadClrAes",
+      "SideLoadClrKmac",
+      "SideLoadClrOtbn",
+      "AesIdx",
+      "KmacIdx",
+      "OtbnIdx"
+    ],
+    "modes": [],
+    "tags": [
+      "key",
+      "wipe"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 clr_all_keys 为 1 时，slot_clr 的所有对应 AesIdx、KmacIdx、OtbnIdx 的位置均为 1。",
-      "output_signals": [
-        "slot_clr"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "clr_all_keys is asserted when wipe_key_i is high OR clr_key_i is not one of the defined sideload clear targets (SideLoadClrIdle, SideLoadClrAes, SideLoadClrKmac, SideLoadClrOtbn).",
+      "cond": "always",
+      "signals": [
+        "clr_all_keys",
+        "wipe_key_i",
+        "clr_key_i",
+        "SideLoadClrIdle",
+        "SideLoadClrAes",
+        "SideLoadClrKmac",
+        "SideLoadClrOtbn"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:84-86"
+      "refs": [
+        "78-82"
       ]
     },
     {
-      "property": "clr 为 1 当且仅当 slot_clr 的任意一位为 1（即至少一个槽清除请求有效）。",
-      "output_signals": [
-        "clr"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "slot_clr[AesIdx] is asserted when clr_all_keys is high OR clr_key_i equals SideLoadClrAes.",
+      "cond": "always",
+      "signals": [
+        "slot_clr",
+        "AesIdx",
+        "clr_all_keys",
+        "clr_key_i",
+        "SideLoadClrAes"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:89"
+      "refs": [
+        "84"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "slot_clr[KmacIdx] is asserted when clr_all_keys is high OR clr_key_i equals SideLoadClrKmac.",
+      "cond": "always",
+      "signals": [
+        "slot_clr",
+        "KmacIdx",
+        "clr_all_keys",
+        "clr_key_i",
+        "SideLoadClrKmac"
+      ],
+      "refs": [
+        "85"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "slot_clr[OtbnIdx] is asserted when clr_all_keys is high OR clr_key_i equals SideLoadClrOtbn.",
+      "cond": "always",
+      "signals": [
+        "slot_clr",
+        "OtbnIdx",
+        "clr_all_keys",
+        "clr_key_i",
+        "SideLoadClrOtbn"
+      ],
+      "refs": [
+        "86"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "clr is asserted when any bit of slot_clr is high (OR reduction).",
+      "cond": "always",
+      "signals": [
+        "clr",
+        "slot_clr"
+      ],
+      "refs": [
+        "89"
       ]
     }
   ],
-  "security_implications": "该逻辑属于密钥管理中的侧载密钥清除控制，clr_all_keys 强制清除所有密钥是一种安全擦除设计；当 clr_key_i 为未定义值时清除所有密钥，可防止因攻击者注入非法编码而泄露密钥。",
   "assumptions": [
     {
-      "constraint": "AesIdx、KmacIdx、OtbnIdx 必须在 slot_clr 的位宽范围内（小于 LastIdx），且互不相同。",
-      "bug_relevance": "若索引越界或重复，会导致 slot_clr 比特写入越界或同一槽对应多个清除源，功能错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Parameters AesIdx, KmacIdx, OtbnIdx must be distinct and each less than LastIdx to avoid multiple drivers or out-of-bound indexing on slot_clr.",
+      "cond": "at design configuration",
+      "risk": "Multiple drivers on same bit or out-of-bound assignment can cause X propagation or functional failure in key clearing logic.",
+      "signals": [
         "AesIdx",
         "KmacIdx",
         "OtbnIdx",
         "LastIdx",
         "slot_clr"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:77,84-86"
+      "refs": [
+        "77",
+        "84-86"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "When clr_key_i is not a recognized sideload clear target (outside {SideLoadClrIdle, SideLoadClrAes, SideLoadClrKmac, SideLoadClrOtbn}), clr_all_keys is asserted, clearing all keys. It is unclear if this is an intentional fail-safe erasure or an unintended fault that could deny service.",
+      "cond": "if clr_key_i takes an invalid value (attacker inﬂuence, glitch, or software error)",
+      "risk": "Unintended clearing of all keys could impact system availability, cause denial of service, or disclose erasure behavior.",
+      "signals": [
+        "clr_key_i",
+        "clr_all_keys"
+      ],
+      "refs": [
+        "78-82",
+        "84-86"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The mapping of AesIdx, KmacIdx, OtbnIdx to actual sideload key instances is determined at a higher integration level. Incorrect mapping could cause clearing of wrong keys or leaving sensitive keys uncleared.",
+      "cond": "during top-level instantiation",
+      "risk": "Security-critical key clearing may be misdirected, compromising confidentiality or availability.",
+      "signals": [
+        "AesIdx",
+        "KmacIdx",
+        "OtbnIdx"
+      ],
+      "refs": [
+        "84-86"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_sideload_key_ctrl.sv:76-89"
-  ],
-  "uncertain_points": [
-    "AesIdx、KmacIdx、OtbnIdx 的具体数值以及 LastIdx 的定义未在片段中给出，slot_clr 的位宽由 LastIdx 决定。",
-    "SideLoadClrIdle、SideLoadClrAes、SideLoadClrKmac、SideLoadClrOtbn 的枚举值范围未定义，clr_all_keys 的非法检测行为依赖于这些枚举是否覆盖所有可能值。"
+    "76-89"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
   "line_start": 76,
-  "line_end": 89
+  "line_end": 89,
+  "security_implications": ""
 }

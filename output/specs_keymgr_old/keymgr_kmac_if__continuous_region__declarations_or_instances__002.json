@@ -1,0 +1,60 @@
+{
+  "chunk_id": "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+  "summary": "根据 start 与 done_o 条件选择输出真实摘要拼接或基于熵的诱饵数据。",
+  "behavior": "这是一个组合 assign，立即选择输出。当 start 与 done_o 同时有效时，data_o 等于 {kmac_data_i.digest_share1, kmac_data_i.digest_share0}，即真实摘要的共享值拼接；否则 data_o 等于 {{DecoyOutputCopies{entropy_i[1]}}, {DecoyOutputCopies{entropy_i[0]}}}，即利用每个熵位复制 DecoyOutputCopies 次形成的诱饵向量。该设计意图在未启动或未完成时用随机诱饵掩盖真实摘要，避免在接口总线暴漏敏感数据。",
+  "guarantees": [
+    {
+      "property": "当 start 与 done_o 均为高时，data_o 一定输出真实摘要拼接值 {kmac_data_i.digest_share1, kmac_data_i.digest_share0}，无组合延迟。",
+      "output_signals": [
+        "data_o"
+      ],
+      "source_refs": [
+        "keymgr_kmac_if.sv:288-290"
+      ]
+    },
+    {
+      "property": "当 start 或 done_o 为低时，data_o 仅输出基于 entropy_i 的诱饵值，不含真实摘要信息。",
+      "output_signals": [
+        "data_o"
+      ],
+      "source_refs": [
+        "keymgr_kmac_if.sv:291-292"
+      ]
+    }
+  ],
+  "security_implications": "在未完成/未启动时用诱饵替代真实摘要输出，防止通过 data_o 探测或侧信道泄露密钥/摘要。属于接口层防御设计，确保只在合法访问时刻暴露真实数据。",
+  "assumptions": [
+    {
+      "constraint": "参数 DecoyOutputCopies 必须等于 kmac_data_i.digest_share1 和 digest_share0 各自的位宽，且两者位宽相等，以保证 data_o 在两种条件下的位宽一致。",
+      "bug_relevance": "若位宽不匹配，会导致组合赋值拼接位宽错误，破坏数据完整性，可能引发综合错误或功能错误。",
+      "related_signals": [
+        "kmac_data_i",
+        "entropy_i",
+        "data_o"
+      ],
+      "source_refs": [
+        "keymgr_kmac_if.sv:288-292"
+      ]
+    },
+    {
+      "constraint": "entropy_i 位宽至少为 2，其位索引 [1] 和 [0] 有效。",
+      "bug_relevance": "若位宽不足，将导致数组索引越界，引发仿真或综合错误，诱饵输出无效。",
+      "related_signals": [
+        "entropy_i"
+      ],
+      "source_refs": [
+        "keymgr_kmac_if.sv:291-292"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_kmac_if.sv:288-292"
+  ],
+  "uncertain_points": [
+    "DecoyOutputCopies 与 digest_share1/0 位宽是否确相等未在片段中定义，需结合上下文确认。",
+    "entropy_i 的确切宽度和来源不确定，片段仅使用 [1] 和 [0]，需要外部保证宽度 ≥2。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
+  "line_start": 288,
+  "line_end": 292
+}

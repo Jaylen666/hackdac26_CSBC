@@ -1,47 +1,209 @@
 {
   "chunk_id": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
-  "summary": "组合逻辑：汇总输入无效标志、生成诱饵熵数据并复制、计算剩余轮数选择信号",
-  "behavior": "该区域为纯组合逻辑。inputs_invalid_o 由 inputs_invalid_d 所有位按位或（reduce OR）生成，用于全局无效指示。decoy_entropy 通过对 entropy_i[1]（Share 1）应用 perm_data 置换（参数 RndCnstRandPerm）得到，然后将其复制 DecoyCopies 次形成 decoy_data，作为侧信道诱饵。adv_sel、id_sel、gen_sel 分别由 LastAdvRound - cnt、LastIdRound - cnt、LastGenRound - cnt 无符号减法产生，表示当前 cnt 距离各阶段最后轮次的剩余差值，可能用于轮数控制或地址选择。",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "mixed",
+    "driven": [
+      "inputs_invalid_o",
+      "decoy_entropy",
+      "decoy_data",
+      "adv_sel",
+      "id_sel",
+      "gen_sel"
+    ],
+    "used": [
+      "inputs_invalid_d",
+      "entropy_i",
+      "RndCnstRandPerm",
+      "DecoyCopies",
+      "cnt",
+      "LastAdvRound",
+      "LastIdRound",
+      "LastGenRound"
+    ],
+    "modes": [
+      "RandWidth",
+      "CntWidth",
+      "DecoyCopies",
+      "RndCnstRandPerm",
+      "LastAdvRound",
+      "LastIdRound",
+      "LastGenRound"
+    ],
+    "tags": [
+      "entropy",
+      "mask",
+      "error",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "inputs_invalid_o 始终等于 inputs_invalid_d 所有位的逻辑或。",
-      "output_signals": [
-        "inputs_invalid_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "inputs_invalid_o is the bitwise OR reduction of all bits in inputs_invalid_d.",
+      "cond": "always",
+      "signals": [
+        "inputs_invalid_o",
+        "inputs_invalid_d"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:314"
+      "refs": [
+        "314:314"
       ]
     },
     {
-      "property": "decoy_data 的每一位均源自 decoy_entropy 对应位，并满足 decoy_entropy = perm_data(entropy_i[1], RndCnstRandPerm)，整体数据宽度为 DecoyCopies * RandWidth。",
-      "output_signals": [
-        "decoy_data"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "decoy_entropy is the result of applying the perm_data function to entropy_i[1] with permutation constant RndCnstRandPerm.",
+      "cond": "always",
+      "signals": [
+        "decoy_entropy",
+        "entropy_i",
+        "RndCnstRandPerm"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:319-320"
+      "refs": [
+        "319:319"
       ]
     },
     {
-      "property": "adv_sel/id_sel/gen_sel 分别严格等于 LastAdvRound - cnt、LastIdRound - cnt、LastGenRound - cnt，使用无符号算术。",
-      "output_signals": [
+      "id": "G3",
+      "type": "assignment",
+      "claim": "decoy_data is formed by concatenating DecoyCopies copies of decoy_entropy.",
+      "cond": "always",
+      "signals": [
+        "decoy_data",
+        "decoy_entropy",
+        "DecoyCopies"
+      ],
+      "refs": [
+        "320:320"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "adv_sel equals LastAdvRound minus cnt.",
+      "cond": "always",
+      "signals": [
+        "adv_sel",
+        "LastAdvRound",
+        "cnt"
+      ],
+      "refs": [
+        "323:323"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "id_sel equals LastIdRound minus cnt.",
+      "cond": "always",
+      "signals": [
+        "id_sel",
+        "LastIdRound",
+        "cnt"
+      ],
+      "refs": [
+        "324:324"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "gen_sel equals LastGenRound minus cnt.",
+      "cond": "always",
+      "signals": [
+        "gen_sel",
+        "LastGenRound",
+        "cnt"
+      ],
+      "refs": [
+        "325:325"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "cnt must be ≤ LastAdvRound, ≤ LastIdRound, and ≤ LastGenRound at all times to avoid subtraction underflow.",
+      "cond": "when adv_sel, id_sel, or gen_sel are used downstream",
+      "risk": "underflow wraps to large values, causing out-of-bounds selects and incorrect key/material access.",
+      "signals": [
+        "cnt",
+        "LastAdvRound",
+        "LastIdRound",
+        "LastGenRound",
         "adv_sel",
         "id_sel",
         "gen_sel"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:323-325"
+      "refs": [
+        "323:323",
+        "324:324",
+        "325:325"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "perm_data function and constant RndCnstRandPerm must implement a non‑trivial permutation of entropy_i[1] sufficient for side‑channel decoy masking.",
+      "cond": "always, when decoy_data is used",
+      "risk": "weak or constant permutation may produce predictable decoy values, reducing masking effectiveness and leaking information.",
+      "signals": [
+        "perm_data",
+        "RndCnstRandPerm",
+        "decoy_entropy",
+        "decoy_data"
+      ],
+      "refs": [
+        "319:319",
+        "320:320"
       ]
     }
   ],
-  "security_implications": "decoy_data 通过 perm_data 对 Share 1 进行额外置换并复制生成，可能用于产生诱饵操作以对抗侧信道分析；inputs_invalid_o 可用于标记敏感输入的无效状态，辅助安全报警或错误处理。",
-  "assumptions": [],
-  "evidence_refs": [
-    "keymgr_kmac_if.sv:314-325"
-  ],
   "uncertain_points": [
-    "当 cnt 大于 LastAdvRound/LastIdRound/LastGenRound 时，无符号减法会产生大整数（下溢），此行为是否被设计允许未知；若允许，可能影响后续基于这些选择信号的控制逻辑。"
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If cnt exceeds LastAdvRound, LastIdRound, or LastGenRound, the subtraction wraps and produces out‑of‑range select values without any local containment or error flag.",
+      "cond": "cnt > LastAdvRound (or other round limits)",
+      "risk": "incorrect selection can lead to functional errors and potentially expose key material if used in security‑critical paths.",
+      "signals": [
+        "cnt",
+        "LastAdvRound",
+        "adv_sel"
+      ],
+      "refs": [
+        "323:323",
+        "324:324",
+        "325:325"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "The decoy data generation uses a constant permutation RndCnstRandPerm; it is unclear whether this constant is chip‑unique, boot‑randomized, or fixed, and therefore its masking strength is uncertain.",
+      "cond": "always",
+      "risk": "a fixed, known permutation would allow an attacker to model the decoy, weakening side‑channel protection.",
+      "signals": [
+        "RndCnstRandPerm",
+        "decoy_entropy",
+        "decoy_data"
+      ],
+      "refs": [
+        "319:319",
+        "320:320"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "314:325"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 314,
-  "line_end": 325
+  "line_end": 325,
+  "security_implications": ""
 }

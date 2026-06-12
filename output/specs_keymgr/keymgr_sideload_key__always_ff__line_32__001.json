@@ -1,25 +1,142 @@
 {
   "chunk_id": "keymgr_sideload_key__always_ff__line_32__001",
-  "summary": "控制 sideload key 有效标志寄存器 valid_q 的置位与清零逻辑。",
-  "behavior": "异步复位（rst_ni 为低）时将 valid_q 清零。当复位释放后，在时钟上升沿采样：若 en_i 为 0 或 clr_i 为 1，则将 valid_q 置为 0；否则若 set_i 为 1，则将 valid_q 置为 1；其他情况下 valid_q 保持原值。此逻辑意味着 clr_i 拥有高于 set_i 的优先级，且 en_i 为 0 时视为 disable 并强制清零。",
+  "header": {
+    "module": "keymgr_sideload_key",
+    "block_kind": "always_ff",
+    "driven": [
+      "valid_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "en_i",
+      "clr_i",
+      "set_i"
+    ],
+    "modes": [],
+    "tags": [
+      "key",
+      "secret",
+      "register",
+      "handshake",
+      "valid"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 clr_i=0 且 en_i=1 时，若在时钟上升沿 set_i=1，则 valid_q 在下一拍被置为 1 并保持至清除条件出现；一旦出现 clr_i=1 或 en_i=0，valid_q 在下一拍被清除为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When rst_ni is low, valid_q is forced to 0 regardless of other inputs.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "valid_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:32-40"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:33-34"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When en_i is low or clr_i is high (and not in reset), valid_q is forced to 0.",
+      "cond": "!en_i || clr_i",
+      "signals": [
+        "en_i",
+        "clr_i",
+        "valid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:35-36"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When set_i is high and en_i is high and clr_i is low (and not in reset), valid_q is set to 1.",
+      "cond": "set_i && en_i && !clr_i",
+      "signals": [
+        "set_i",
+        "en_i",
+        "clr_i",
+        "valid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:37-38"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When en_i is high, clr_i is low, set_i is low, and no reset, valid_q retains its previous value.",
+      "cond": "en_i && !clr_i && !set_i",
+      "signals": [
+        "en_i",
+        "clr_i",
+        "set_i",
+        "valid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:39"
       ]
     }
   ],
-  "security_implications": "valid_q 作为 sideload key 有效标志，其置位与清零逻辑直接影响 key 的可用性。复位或 clr_i/en_i 无效时可靠清零，有助于防止残余有效信号导致 key 被非法使用。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "set_i is asserted only when a valid sideload key is actually present and stable.",
+      "cond": "whenever set_i is high",
+      "risk": "If set_i is spuriously asserted, valid_q will be set, possibly leading to downstream acceptance of an invalid or zeroized key, compromising security.",
+      "signals": [
+        "set_i",
+        "valid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:37-38"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "valid_q is cleared by !en_i or clr_i, but the actual sideload key data may not be cleared simultaneously; a mismatch can occur where valid=0 while key data remains stale.",
+      "cond": "when en_i goes low or clr_i is asserted",
+      "risk": "After re-enable, a consumer may see valid=1 but the key data has not been refreshed or is still the old secret, potentially using an unintended key.",
+      "signals": [
+        "valid_q",
+        "en_i",
+        "clr_i",
+        "key_data (external)"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:35-36"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "When valid_q is cleared (by reset, !en_i, or clr_i), the associated key storage is not wiped by this chunk; it relies entirely on external logic to clear secret material.",
+      "cond": "any clear condition (!rst_ni, !en_i, or clr_i)",
+      "risk": "If external clear of key data is incomplete or omitted, secret key values may persist and be vulnerable to extraction or later misuse.",
+      "signals": [
+        "valid_q",
+        "key_data (external)"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:34",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:36"
+      ]
+    }
+  ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:32-40"
   ],
-  "uncertain_points": [],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv",
   "line_start": 32,
-  "line_end": 40
+  "line_end": 40,
+  "security_implications": ""
 }

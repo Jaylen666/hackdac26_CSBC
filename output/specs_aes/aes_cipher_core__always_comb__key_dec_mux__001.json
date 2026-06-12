@@ -1,27 +1,86 @@
 {
   "chunk_id": "aes_cipher_core__always_comb__key_dec_mux__001",
-  "summary": "组合选择器：根据 key_dec_sel 将 key_d 驱动为 key_expand_out 或伪随机清除数据 prd_clearing_key_i。",
-  "behavior": "该 always_comb 块实现一个多路选择器。当 key_dec_sel 等于 KEY_DEC_EXPAND 或 KEY_DEC_CLEAR 时，key_dec_d 被赋值为 key_expand_out；任何其他取值（包括未定义编码）均落入 default 分支，将 key_dec_d 驱动为 prd_clearing_key_i。由此确保在所有控制状态下输出均被定义，且在非预期状态下自动使用随机数据覆盖。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "key_dec_d"
+    ],
+    "used": [
+      "key_dec_sel",
+      "key_expand_out",
+      "prd_clearing_key_i"
+    ],
+    "modes": [
+      "KEY_DEC_EXPAND",
+      "KEY_DEC_CLEAR",
+      "default"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "decryption",
+      "mux",
+      "security"
+    ]
+  },
   "guarantees": [
     {
-      "property": "key_dec_d 始终被驱动，不会出现高阻或未初始化状态；当 key_dec_sel 不是 KEY_DEC_EXPAND 也不是 KEY_DEC_CLEAR 时，key_dec_d 必定为 prd_clearing_key_i（伪随机清除数据）。",
-      "output_signals": [
-        "key_dec_d"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "key_dec_d is assigned key_expand_out when key_dec_sel equals KEY_DEC_EXPAND or KEY_DEC_CLEAR; otherwise assigned prd_clearing_key_i.",
+      "cond": "always (combinational case)",
+      "signals": [
+        "key_dec_d",
+        "key_dec_sel",
+        "key_expand_out",
+        "prd_clearing_key_i"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:459-465"
       ]
     }
   ],
-  "security_implications": "default 分支将未预料的选择状态导向 prd_clearing_key_i，避免在控制信号异常时 key_dec_d 保持稳定密钥值，降低了密钥残留或侧信道泄露风险。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When key_dec_sel takes a value other than KEY_DEC_EXPAND or KEY_DEC_CLEAR, prd_clearing_key_i must provide a safe cleared key value.",
+      "cond": "key_dec_sel not in {KEY_DEC_EXPAND, KEY_DEC_CLEAR}",
+      "risk": "If prd_clearing_key_i is not a safe cleared key, key_dec_d may output sensitive material or invalid key data.",
+      "signals": [
+        "prd_clearing_key_i",
+        "key_dec_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:463"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "KEY_DEC_CLEAR mode selects key_expand_out, which may contain sensitive key material, contradicting the likely intent to output a cleared key (e.g., prd_clearing_key_i).",
+      "cond": "key_dec_sel == KEY_DEC_CLEAR",
+      "risk": "Sensitive key data may be passed to key_dec_d when clearing was expected, leading to potential key leakage.",
+      "signals": [
+        "key_dec_sel",
+        "key_expand_out",
+        "prd_clearing_key_i",
+        "key_dec_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:460-462"
+      ]
+    }
+  ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:459-465"
   ],
-  "uncertain_points": [
-    "KEY_DEC_CLEAR 与 KEY_DEC_EXPAND 均选择 key_expand_out，而 KEY_DEC_CLEAR 从命名看可能意为“清除”，通常应使用随机数据 prd_clearing_key_i。当前行为是有意设计（清除状态仍需扩展输出）还是遗漏，无法从片段本身确认。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 459,
-  "line_end": 465
+  "line_end": 465,
+  "security_implications": ""
 }

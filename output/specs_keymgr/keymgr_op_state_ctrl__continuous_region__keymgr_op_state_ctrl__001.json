@@ -1,37 +1,162 @@
 {
   "chunk_id": "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
-  "summary": "定义操作状态机的稀疏编码状态类型和状态寄存器，并为 ID 与 generic 操作输出门控使能信号",
-  "behavior": "该连续区域定义了 8 位稀疏编码的状态枚举 state_e，包含 StIdle(8'b10010101)、StAdv(8'b00101000)、StAdvAck(8'b01000011)、StWait(8'b11111110) 四个状态（行 36-41）。通过宏 `PRIM_FLOP_SPARSE_FSM` 实例化状态寄存器，将下一状态 state_d 按 clk_i 沿寄存到 state_q，并复位至 StIdle（行 44）。同时，两条组合赋值产生输出使能：id_en_o 仅在内部 gen_en 有效且 id_req_i 为高时置位；gen_en_o 仅在 gen_en 有效且 gen_req_i 为高时置位（行 47-48）。",
+  "header": {
+    "module": "keymgr_op_state_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "state_q",
+      "id_en_o",
+      "gen_en_o"
+    ],
+    "used": [
+      "gen_en",
+      "id_req_i",
+      "gen_req_i",
+      "state_d",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [
+      "StIdle",
+      "StAdv",
+      "StAdvAck",
+      "StWait"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "state_machine",
+      "security_control",
+      "key_manager"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 gen_en 为 0 时，id_en_o 保证为 0；当 gen_en 为 1 且 id_req_i 为 1 时，id_en_o 保证为 1",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "id_en_o is asserted when both gen_en and id_req_i are high; otherwise it is deasserted.",
+      "cond": "always (continuous assignment)",
+      "signals": [
+        "gen_en",
+        "id_req_i",
         "id_en_o"
       ],
-      "source_refs": [
-        "file:47"
+      "refs": [
+        "47:47"
       ]
     },
     {
-      "property": "当 gen_en 为 0 时，gen_en_o 保证为 0；当 gen_en 为 1 且 gen_req_i 为 1 时，gen_en_o 保证为 1",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "gen_en_o is asserted when both gen_en and gen_req_i are high; otherwise it is deasserted.",
+      "cond": "always (continuous assignment)",
+      "signals": [
+        "gen_en",
+        "gen_req_i",
         "gen_en_o"
       ],
-      "source_refs": [
-        "file:48"
+      "refs": [
+        "48:48"
       ]
     }
   ],
-  "security_implications": "状态编码采用 8 位稀疏码型，配合宏 `PRIM_FLOP_SPARSE_FSM` 可能提供翻转检测或安全状态寄存器特性，以降低单粒子翻转导致非法状态跳变的风险，保护密钥管理状态机完整性。",
-  "assumptions": [],
-  "evidence_refs": [
-    "file:8-48"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "gen_en must be driven to a known logic value by external logic within the module.",
+      "cond": "always",
+      "risk": "If gen_en is undriven, id_en_o and gen_en_o will be X, potentially enabling key operations unintentionally.",
+      "signals": [
+        "gen_en"
+      ],
+      "refs": [
+        "46:46"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "state_d must be a valid state_e encoding on every clock edge to ensure the FSM remains in a defined state.",
+      "cond": "on positive edge of clk_i when rst_ni is high",
+      "risk": "An invalid state_d value could cause the sparse FSM to enter an illegal state, leading to undefined control behavior.",
+      "signals": [
+        "state_d",
+        "state_q"
+      ],
+      "refs": [
+        "43:44",
+        "44:44"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "id_req_i and gen_req_i must be synchronous and glitch-free with respect to clk_i.",
+      "cond": "always",
+      "risk": "Glitches or asynchronous transitions could produce spurious pulses on id_en_o or gen_en_o, causing unwanted key operations.",
+      "signals": [
+        "id_req_i",
+        "gen_req_i"
+      ],
+      "refs": [
+        "47:48"
+      ]
+    }
   ],
   "uncertain_points": [
-    "宏 `PRIM_FLOP_SPARSE_FSM` 的确切实现（是否包含冗余、错误检测等）未在该片段中展开，依赖外部定义。",
-    "gen_en 信号的驱动逻辑不在本片段内，无法确定其产生条件。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "gen_en has no driver within this chunk; its source and controlling logic are unknown.",
+      "cond": "unknown",
+      "risk": "If gen_en is not properly controlled, id_en_o and gen_en_o may be incorrectly asserted or deasserted.",
+      "signals": [
+        "gen_en"
+      ],
+      "refs": [
+        "46:46"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "Outputs op_ack_o, op_busy_o, op_update_o, adv_en_o, and op_fsm_err_o are declared but not driven in this chunk.",
+      "cond": "always",
+      "risk": "If not driven elsewhere in the module, these outputs would be undriven, leading to synthesis warnings or X-propagation.",
+      "signals": [
+        "op_ack_o",
+        "op_busy_o",
+        "op_update_o",
+        "adv_en_o",
+        "op_fsm_err_o"
+      ],
+      "refs": [
+        "22:31"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The state_e enumeration uses a sparse 8-bit encoding, but no illegal-state detection or transition logic is visible in this chunk.",
+      "cond": "on any clock edge",
+      "risk": "A single-event upset could flip state_q into an illegal encoding; without detection or safe fallback, the key manager may enter an unsafe state.",
+      "signals": [
+        "state_q",
+        "state_e"
+      ],
+      "refs": [
+        "36:41"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "8:48"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_op_state_ctrl.sv",
   "line_start": 8,
-  "line_end": 48
+  "line_end": 48,
+  "security_implications": ""
 }

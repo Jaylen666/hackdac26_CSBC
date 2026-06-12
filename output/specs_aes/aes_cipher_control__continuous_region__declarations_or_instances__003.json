@@ -1,39 +1,210 @@
 {
   "chunk_id": "aes_cipher_control__continuous_region__declarations_or_instances__003",
-  "summary": "将内部状态和控制信号直接输出给主控制器，并基于解密密钥生成条件与仅正向配置生成密钥扩展操作码",
-  "behavior": "该组合逻辑块将多个内部寄存器（crypt_q、dec_key_gen_q、prng_reseed_q、key_clear_q、data_out_clear_q）直通到对应输出，供主控制器获取当前状态。key_expand_round_o 直接跟随 rnd_ctr。key_expand_op_o 的生成逻辑为：若解密密钥生成请求信号（dec_key_gen_d 或 dec_key_gen_q）为高，或模块配置为仅正向操作（CiphOpFwdOnly 为真），则强制输出正向操作码 CIPH_FWD；否则透传输入 op_i。这一强制正向逻辑确保在解密密钥扩展相关操作中总是使用正向密钥扩展路径。所有 assign 立即生效，无额外延迟。",
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "assign",
+    "driven": [
+      "key_expand_op_o",
+      "key_expand_round_o",
+      "crypt_o",
+      "dec_key_gen_o",
+      "prng_reseed_o",
+      "key_clear_o",
+      "data_out_clear_o"
+    ],
+    "used": [
+      "dec_key_gen_d",
+      "SP2V_HIGH",
+      "dec_key_gen_q",
+      "CiphOpFwdOnly",
+      "CIPH_FWD",
+      "op_i",
+      "rnd_ctr",
+      "crypt_q",
+      "prng_reseed_q",
+      "key_clear_q",
+      "data_out_clear_q"
+    ],
+    "modes": [
+      "SP2V_HIGH",
+      "CiphOpFwdOnly",
+      "CIPH_FWD"
+    ],
+    "tags": [
+      "key",
+      "wipe",
+      "parameterization",
+      "error"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 dec_key_gen_d == SP2V_HIGH 或 dec_key_gen_q == SP2V_HIGH 或 CiphOpFwdOnly 为真时，key_expand_op_o 一定等于 CIPH_FWD",
-      "output_signals": [
-        "key_expand_op_o"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "key_expand_op_o is CIPH_FWD if (dec_key_gen_d == SP2V_HIGH or dec_key_gen_q == SP2V_HIGH) or CiphOpFwdOnly is true; otherwise key_expand_op_o equals op_i.",
+      "cond": "always combinational",
+      "signals": [
+        "key_expand_op_o",
+        "dec_key_gen_d",
+        "SP2V_HIGH",
+        "dec_key_gen_q",
+        "CiphOpFwdOnly",
+        "CIPH_FWD",
+        "op_i"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control.sv:373-374"
       ]
     },
     {
-      "property": "key_expand_round_o 始终等于 rnd_ctr",
-      "output_signals": [
-        "key_expand_round_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "key_expand_round_o equals rnd_ctr at all times.",
+      "cond": "always",
+      "signals": [
+        "key_expand_round_o",
+        "rnd_ctr"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:375"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "crypt_o equals crypt_q.",
+      "cond": "always",
+      "signals": [
+        "crypt_o",
+        "crypt_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:378"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "dec_key_gen_o equals dec_key_gen_q.",
+      "cond": "always",
+      "signals": [
+        "dec_key_gen_o",
+        "dec_key_gen_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:379"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "prng_reseed_o equals prng_reseed_q.",
+      "cond": "always",
+      "signals": [
+        "prng_reseed_o",
+        "prng_reseed_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:380"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "key_clear_o equals key_clear_q.",
+      "cond": "always",
+      "signals": [
+        "key_clear_o",
+        "key_clear_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:381"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "data_out_clear_o equals data_out_clear_q.",
+      "cond": "always",
+      "signals": [
+        "data_out_clear_o",
+        "data_out_clear_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:382"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "When dec_key_gen is not active (dec_key_gen_d and dec_key_gen_q are not SP2V_HIGH) and CiphOpFwdOnly is false, op_i must carry a valid cipher operation direction (e.g., CIPH_FWD or its inverse).",
+      "cond": "key expansion direction is not forced to forward",
+      "risk": "key_expand_op_o becomes undefined or wrong, leading to incorrect key schedule and potential data corruption or exposure.",
+      "signals": [
+        "op_i",
+        "CiphOpFwdOnly",
+        "dec_key_gen_d",
+        "dec_key_gen_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:373-374"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "rnd_ctr must remain within the valid key expansion round range defined by the parameterized key length.",
+      "cond": "always",
+      "risk": "out-of-bounds access into key expansion memory, corrupting the key schedule.",
+      "signals": [
+        "rnd_ctr"
+      ],
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control.sv:375"
       ]
     }
   ],
-  "security_implications": "解密密钥生成期间强制密钥扩展使用正向操作码，避免在此敏感阶段意外使用反向操作码，从而降低密钥扩展路径被恶意利用或引发功能错误的风险。同时，密钥与数据清除状态（key_clear_o、data_out_clear_o）的透传使主控制器能及时实施安全擦除策略。",
-  "assumptions": [],
-  "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_control.sv:373-375",
-    "output/aes_mini_rtl/aes_cipher_control.sv:377-382"
-  ],
   "uncertain_points": [
-    "assign 表达式优先级与括号：源码为 (dec_key_gen_d == SP2V_HIGH  || dec_key_gen_q == SP2V_HIGH) || CiphOpFwdOnly ? CIPH_FWD : op_i，按 Verilog 规则正确执行，但可读性依赖优先级，确认综合结果与意图一致。",
-    "CiphOpFwdOnly 的本质：可能是预处理器常量或参数，需在外层确认其是否恒定，以判断该条件为静态选择。",
-    "输入 op_i 的合法范围未在片段内约束，假设在非强制模式下 op_i 由其他逻辑保证为有效操作码。"
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "op_i is not validated; an X or illegal value will propagate directly to key_expand_op_o without any error detection, potentially corrupting the key expansion direction.",
+      "cond": "op_i carries an illegal or undefined value",
+      "risk": "incorrect key schedule, leading to wrong encryption/decryption and possible secret exposure.",
+      "signals": [
+        "op_i",
+        "key_expand_op_o"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:373-374"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "key_clear_o and data_out_clear_o are directly driven by key_clear_q and data_out_clear_q flops; without seeing the flop update logic and sequencing, it is uncertain whether the wipe assertions guarantee complete clearing of sensitive state (e.g., all key/data registers).",
+      "cond": "when clear is asserted",
+      "risk": "incomplete wipe could leave residual secret key or plaintext/ciphertext in internal state.",
+      "signals": [
+        "key_clear_o",
+        "data_out_clear_o",
+        "key_clear_q",
+        "data_out_clear_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:381-382"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "output/aes_mini_rtl/aes_cipher_control.sv:373-382"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
   "line_start": 373,
-  "line_end": 382
+  "line_end": 382,
+  "security_implications": ""
 }

@@ -1,40 +1,99 @@
 {
   "chunk_id": "aes_cipher_core__always_ff__reg_sp_enc_err__001",
-  "summary": "实现一个粘性错误标志寄存器，被置位后仅异步复位能清除。",
-  "behavior": "该 always_ff 块实现一个带异步复位、上升沿触发的 sticky-bit 寄存器。当异步复位 rst_ni 为低时，输出 sp_enc_err_q 被清零；否则，在时钟上升沿，若输入 sp_enc_err_d 为高，sp_enc_err_q 被置为 1。当 sp_enc_err_d 为低且无复位时，寄存器保持当前值不变，因此一旦被置 1，即使 sp_enc_err_d 后续变低，也会一直保持 1，直到下一次复位。没有其他条件清除 sp_enc_err_q。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "sp_enc_err_q"
+    ],
+    "used": [
+      "sp_enc_err_d"
+    ],
+    "modes": [],
+    "tags": [
+      "error"
+    ]
+  },
   "guarantees": [
     {
-      "property": "sp_enc_err_q 一旦在非复位状态下被置 1，将保持为 1，不会因 sp_enc_err_d 的后续下降沿而自动清零，直到异步复位生效。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "sp_enc_err_q is cleared to 0 when rst_ni is low.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "sp_enc_err_q"
       ],
-      "source_refs": [
-        "aes_cipher_core.sv:772-778"
+      "refs": [
+        "773-774"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "sp_enc_err_q is set to 1 when sp_enc_err_d is high and not in reset.",
+      "cond": "sp_enc_err_d && rst_ni",
+      "signals": [
+        "sp_enc_err_d",
+        "sp_enc_err_q"
+      ],
+      "refs": [
+        "775-776"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "sp_enc_err_q retains its previous value when sp_enc_err_d is low (after reset), making the error flag sticky until reset.",
+      "cond": "!sp_enc_err_d && rst_ni",
+      "signals": [
+        "sp_enc_err_d",
+        "sp_enc_err_q"
+      ],
+      "refs": [
+        "772-778"
       ]
     }
   ],
-  "security_implications": "sp_enc_err_q 是粘性错误标志，可能用于指示加密操作中的致命错误，其只能通过复位清除的特性有助于错误状态的持久保留，防止误清除导致的安全隐患。",
   "assumptions": [
     {
-      "constraint": "sp_enc_err_d 必须是与 clk_i 同步的信号，或在 clk_i 上升沿时满足建立/保持时间，以避免亚稳态捕获。",
-      "bug_relevance": "若违反，sp_enc_err_q 可能错误地置 1 或产生亚稳态，导致系统误判错误状态或功能异常。",
-      "related_signals": [
-        "sp_enc_err_d",
-        "clk_i",
+      "id": "A1",
+      "type": "lifecycle",
+      "claim": "sp_enc_err_q can only be cleared by asserting rst_ni; there is no other clear mechanism in this logic.",
+      "cond": "always",
+      "risk": "If external logic expects to clear the error flag without a reset, the flag will remain stuck, potentially masking new errors or causing incorrect system behavior.",
+      "signals": [
+        "rst_ni",
         "sp_enc_err_q"
       ],
-      "source_refs": [
-        "aes_cipher_core.sv:772-778"
+      "refs": [
+        "772-778"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "sp_enc_err_q lacks a dedicated clear signal; it is unknown whether the design intentionally requires a full reset to clear the error or if a software-clearable register is needed.",
+      "cond": "after sp_enc_err_q is set to 1",
+      "risk": "If the specification expects error clearing without system reset, this latch may cause a persistent error condition and hinder recovery.",
+      "signals": [
+        "sp_enc_err_q",
+        "sp_enc_err_d",
+        "rst_ni"
+      ],
+      "refs": [
+        "772-778"
       ]
     }
   ],
   "evidence_refs": [
-    "aes_cipher_core.sv:772-778"
-  ],
-  "uncertain_points": [
-    "sp_enc_err_q 是否可以通过其他路径（如软件写 1 清除）被清零未知；本寄存器仅支持异步复位清除。sp_enc_err_d 的来源与生成逻辑未提供，其是否为组合输出还是已同步信号尚不明确。"
+    "772-778"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 772,
-  "line_end": 778
+  "line_end": 778,
+  "security_implications": ""
 }

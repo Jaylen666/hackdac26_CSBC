@@ -1,4 +1,261 @@
 {
   "chunk_id": "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
-  "error": "Expecting value: line 1 column 1 (char 0)"
+  "header": {
+    "module": "keymgr",
+    "block_kind": "mixed",
+    "driven": [
+      "lfsr_en",
+      "ctrl_rand",
+      "data_rand",
+      "reseed_ack",
+      "reseed_done",
+      "seed_en",
+      "seed",
+      "reseed_cnt_err",
+      "lfsr"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "ctrl_lfsr_en",
+      "data_lfsr_en",
+      "sideload_lfsr_en",
+      "reg2hw.reseed_interval_shadowed.q",
+      "edn_o",
+      "edn_i",
+      "RndCnstLfsrSeed",
+      "RndCnstLfsrPerm",
+      "RndCnstRandPerm",
+      "perm_data",
+      "LfsrWidth",
+      "Shares",
+      "RandWidth",
+      "reseed_req"
+    ],
+    "modes": [
+      "LfsrWidth==64"
+    ],
+    "tags": [
+      "entropy",
+      "reseed",
+      "lfsr",
+      "handshake",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "lfsr_en is the OR of ctrl_lfsr_en, data_lfsr_en, and sideload_lfsr_en.",
+      "cond": "always",
+      "signals": [
+        "lfsr_en",
+        "ctrl_lfsr_en",
+        "data_lfsr_en",
+        "sideload_lfsr_en"
+      ],
+      "refs": [
+        "keymgr.sv:213"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "ctrl_rand[0] is lfsr[63:32] and ctrl_rand[1] is perm_data(lfsr[31:0], RndCnstRandPerm).",
+      "cond": "always",
+      "signals": [
+        "ctrl_rand",
+        "lfsr",
+        "perm_data",
+        "RndCnstRandPerm"
+      ],
+      "refs": [
+        "keymgr.sv:237-238"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "data_rand[0] is lfsr[31:0] and data_rand[1] is perm_data(lfsr[63:32], RndCnstRandPerm).",
+      "cond": "always",
+      "signals": [
+        "data_rand",
+        "lfsr",
+        "perm_data",
+        "RndCnstRandPerm"
+      ],
+      "refs": [
+        "keymgr.sv:240-241"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "The LFSR's entropy_i input is permanently tied to '0; no external entropy is used.",
+      "cond": "always",
+      "signals": [
+        "entropy_i",
+        "lfsr"
+      ],
+      "refs": [
+        "keymgr.sv:228"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "generate_param",
+      "claim": "The LFSR is configured with DefaultSeed=RndCnstLfsrSeed, StatePerm=RndCnstLfsrPerm, NonLinearOut=1, and LfsrDw=LfsrWidth.",
+      "cond": "always",
+      "signals": [
+        "RndCnstLfsrSeed",
+        "RndCnstLfsrPerm",
+        "LfsrDw",
+        "LfsrWidth"
+      ],
+      "refs": [
+        "keymgr.sv:215-222"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "Compile-time assertion `LfsrWidth_A` enforces LfsrWidth == 64.",
+      "cond": "always",
+      "signals": [
+        "LfsrWidth"
+      ],
+      "refs": [
+        "keymgr.sv:231"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "ctrl_lfsr_en, data_lfsr_en, and sideload_lfsr_en are correctly driven to enable LFSR advancement during relevant operations.",
+      "cond": "operational phases where LFSR updates are required",
+      "risk": "If any enable is stuck inactive, the LFSR does not advance, breaking reseed timing and producing weak/predictable outputs.",
+      "signals": [
+        "ctrl_lfsr_en",
+        "data_lfsr_en",
+        "sideload_lfsr_en"
+      ],
+      "refs": [
+        "keymgr.sv:212-213"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "reg2hw.reseed_interval_shadowed.q holds a valid reseed interval within expected bounds.",
+      "cond": "when reseed_ctrl evaluates the interval",
+      "risk": "An invalid interval may cause reseeding too late (risk of LFSR repeat) or too early (unnecessary power/performance impact).",
+      "signals": [
+        "reg2hw.reseed_interval_shadowed.q"
+      ],
+      "refs": [
+        "keymgr.sv:202"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "edn_o and edn_i obey the EDN request/ack protocol expected by reseed_ctrl.",
+      "cond": "when a reseed is requested",
+      "risk": "Protocol violation may cause seed_en/seed to be incorrect or silently skipped, leading to LFSR reseed failure.",
+      "signals": [
+        "edn_o",
+        "edn_i"
+      ],
+      "refs": [
+        "keymgr.sv:203-204"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "reseed_req is asserted externally to trigger reseeding in a timely manner.",
+      "cond": "when LFSR reseed is needed",
+      "risk": "If never asserted, the LFSR may exhaust its period and repeat, compromising randomness.",
+      "signals": [
+        "reseed_req"
+      ],
+      "refs": [
+        "keymgr.sv:199"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "security_precondition",
+      "claim": "RndCnstLfsrSeed, RndCnstLfsrPerm, and RndCnstRandPerm are static correct constants for the intended security level.",
+      "cond": "during LFSR operation",
+      "risk": "Weak or erroneous constants may reduce LFSR output entropy or create exploitable bias.",
+      "signals": [
+        "RndCnstLfsrSeed",
+        "RndCnstLfsrPerm",
+        "RndCnstRandPerm"
+      ],
+      "refs": [
+        "keymgr.sv:218-220",
+        "keymgr.sv:238,241"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The chunk uses direct bit selects [63:32] and [31:0] on lfsr, with an assertion enforcing LfsrWidth==64; if the assertion were removed and LfsrWidth changed, these selections would be out-of-bounds.",
+      "cond": "if assertion is bypassed or LfsrWidth is not 64",
+      "risk": "Silent width mismatches could corrupt randomness assignments or cause synthesis errors.",
+      "signals": [
+        "lfsr",
+        "LfsrWidth"
+      ],
+      "refs": [
+        "keymgr.sv:231",
+        "keymgr.sv:237-241"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "ctrl_rand and data_rand derive from opposite halves of the LFSR, with one output permuted; it is unclear whether this asymmetry is deliberate to avoid correlation or is an artifact.",
+      "cond": "always",
+      "risk": "If unintended, it may produce inconsistent randomness quality between control and data paths.",
+      "signals": [
+        "ctrl_rand",
+        "data_rand",
+        "lfsr"
+      ],
+      "refs": [
+        "keymgr.sv:237-241"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "reseed_cnt_err is output from reseed_ctrl but its usage is not visible in this chunk; if not acted upon elsewhere, a reseed counter error may be silently ignored.",
+      "cond": "when reseed_cnt_err is asserted",
+      "risk": "Silent reseed errors could allow the LFSR to run with stale or no seed, compromising randomness and any derived keys.",
+      "signals": [
+        "reseed_cnt_err"
+      ],
+      "refs": [
+        "keymgr.sv:208,192"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr.sv:186-271"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
+  "line_start": 186,
+  "line_end": 271,
+  "security_implications": ""
 }

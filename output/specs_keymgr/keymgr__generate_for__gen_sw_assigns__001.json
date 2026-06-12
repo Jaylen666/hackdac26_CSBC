@@ -1,4 +1,193 @@
 {
   "chunk_id": "keymgr__generate_for__gen_sw_assigns__001",
-  "error": "Expecting ',' delimiter: line 20 column 6 (char 1238)"
+  "header": {
+    "module": "keymgr",
+    "block_kind": "generate",
+    "driven": [
+      "hw2reg.sw_share0_output[7:0].d",
+      "hw2reg.sw_share0_output[7:0].de",
+      "hw2reg.sw_share1_output[7:0].d",
+      "hw2reg.sw_share1_output[7:0].de"
+    ],
+    "used": [
+      "data_sw_en",
+      "wipe_key",
+      "data_rand",
+      "kmac_data",
+      "data_valid",
+      "hw_key_sel",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [
+      "wipe_key",
+      "data_sw_en",
+      "hw_key_sel"
+    ],
+    "tags": [
+      "key",
+      "wipe",
+      "mask",
+      "redundancy",
+      "software_output",
+      "mubi",
+      "secret"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each i (0..7), hw2reg.sw_share0_output[i].d is driven to data_rand[0] when (~data_sw_en | wipe_key) is true, otherwise to kmac_data[0][i*32+:32].",
+      "cond": "always",
+      "signals": [
+        "hw2reg.sw_share0_output[i].d",
+        "data_sw_en",
+        "wipe_key",
+        "data_rand[0]",
+        "kmac_data[0]"
+      ],
+      "refs": [
+        "629:631"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "For each i (0..7), hw2reg.sw_share1_output[i].d is driven to data_rand[1] when (~data_sw_en | wipe_key) is true, otherwise to kmac_data[1][i*32+:32].",
+      "cond": "always",
+      "signals": [
+        "hw2reg.sw_share1_output[i].d",
+        "data_sw_en",
+        "wipe_key",
+        "data_rand[1]",
+        "kmac_data[1]"
+      ],
+      "refs": [
+        "636:638"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "For each i (0..7), hw2reg.sw_share0_output[i].de is driven (through prim_sec_anchor_buf) to (wipe_key | (data_valid & mubi4_test_false_strict(hw_key_sel_buf[0]))).",
+      "cond": "always",
+      "signals": [
+        "hw2reg.sw_share0_output[i].de",
+        "wipe_key",
+        "data_valid",
+        "hw_key_sel_buf"
+      ],
+      "refs": [
+        "640:645"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "For each i (0..7), hw2reg.sw_share1_output[i].de is driven (through prim_sec_anchor_buf) to (wipe_key | (data_valid & mubi4_test_false_strict(hw_key_sel_buf[1]))).",
+      "cond": "always",
+      "signals": [
+        "hw2reg.sw_share1_output[i].de",
+        "wipe_key",
+        "data_valid",
+        "hw_key_sel_buf"
+      ],
+      "refs": [
+        "647:652"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "hw_key_sel must always carry a stable, valid mubi4_t value; its false/true encoding must match the intended key selection protocol used by the de logic.",
+      "cond": "when data_valid may be asserted or wipe_key deasserted",
+      "risk": "If hw_key_sel contains a glitch or invalid encoding, mubi4_test_false_strict may mis-evaluate and cause the sw output register to capture random data when a key is selected, or to ignore a valid key, leading to key integrity failure.",
+      "signals": [
+        "hw_key_sel",
+        "hw_key_sel_buf"
+      ],
+      "refs": [
+        "621",
+        "643",
+        "650"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "data_valid must be asserted only when kmac_data contains a valid key that should be latched by software, and must be correctly aligned with hw_key_sel and data_sw_en according to the de contract.",
+      "cond": "when a key output transfer is intended",
+      "risk": "Spurious assertion could cause capture of random data (when hw_key_sel is false) without key exposure; misalignment may lead to missing or duplicate captures.",
+      "signals": [
+        "data_valid",
+        "hw_key_sel",
+        "wipe_key"
+      ],
+      "refs": [
+        "643",
+        "650"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "wipe_key must be asserted only during designated secure wipe sequences and deasserted in normal operation.",
+      "cond": "whenever a wipe is required or not",
+      "risk": "Stuck-at-1 wipe_key permanently randomizes all sw key outputs, denying any key delivery. Stuck-at-0 during a wipe request may leave residual key bits in the sw output registers.",
+      "signals": [
+        "wipe_key"
+      ],
+      "refs": [
+        "629",
+        "636",
+        "643",
+        "650"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "data_rand must deliver strong, independent random data (e.g. from TRNG) to effectively obscure key material during wipe and when data_sw_en is inactive.",
+      "cond": "when wipe_key or ~data_sw_en force data_rand onto the output data path",
+      "risk": "Predictable or constant data_rand could allow extraction of key residues after a wipe or reveal patterns of the disabled output.",
+      "signals": [
+        "data_rand"
+      ],
+      "refs": [
+        "629:631",
+        "636:638"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The de generation uses mubi4_test_false_strict(hw_key_sel_buf[...]), which returns true only when hw_key_sel is the false encoding (e.g. 4’b0000). Consequently, when a valid key is selected (hw_key_sel is a true mubi4 encoding), de will be low unless wipe_key is active. This prevents the software register from latching the actual key data, effectively blocking all key outputs to software.",
+      "cond": "wipe_key=0, data_valid=1, and hw_key_sel encodes a valid key (any non‑false mubi4 value)",
+      "risk": "If the behaviour is as observed, the chip may never deliver hardware output keys through the sw_share registers; this likely represents a functional bug or a severe security fault (denial of service / inability to fetch keys).",
+      "signals": [
+        "hw_key_sel_buf",
+        "data_valid",
+        "wipe_key",
+        "hw2reg.sw_share0_output[i].de",
+        "hw2reg.sw_share1_output[i].de"
+      ],
+      "refs": [
+        "643",
+        "650"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "612:653"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
+  "line_start": 612,
+  "line_end": 653,
+  "security_implications": ""
 }

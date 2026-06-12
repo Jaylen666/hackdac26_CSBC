@@ -1,37 +1,150 @@
 {
   "chunk_id": "keymgr_err__always_ff__line_77__001",
-  "summary": "管理同步错误状态寄存器 sync_err_q 的更新与清零，实现操作完成时清零、操作更新时加载新错误状态的策略，未命中时保持原值。",
-  "behavior": "该 always_ff 块在异步复位或 op_done_i 有效时将 sync_err_q 清零。若 op_done_i 无效但 op_update_i 有效，则将输入 sync_err_d 的值加载到 sync_err_q。其余情况保持当前值不变。优先级为：复位与 op_done_i 优先级相同（异步复位和同步清零在描述中同时覆盖），op_done_i 优先级高于 op_update_i，因此当 op_done_i 和 op_update_i 同时有效时，sync_err_q 被清零，sync_err_d 的值被丢弃。",
+  "header": {
+    "module": "keymgr_err",
+    "block_kind": "always_ff",
+    "driven": [
+      "sync_err_q"
+    ],
+    "used": [
+      "rst_ni",
+      "clk_i",
+      "op_done_i",
+      "op_update_i",
+      "sync_err_d"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "fault",
+      "handshake",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当复位或操作完成信号 op_done_i 有效后，sync_err_q 的输出一定为全零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "sync_err_q is cleared to 0 when rst_ni is low.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "sync_err_q"
       ],
-      "source_refs": [
-        "keymgr_err.sv:78-81"
+      "refs": [
+        "keymgr_err.sv:78-79"
       ]
     },
     {
-      "property": "当 op_done_i 无效且 op_update_i 有效时，sync_err_q 的值等于 sync_err_d，且在下一个时钟上升沿更新。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "sync_err_q is cleared to 0 when op_done_i is high (and rst_ni high).",
+      "cond": "op_done_i && rst_ni",
+      "signals": [
+        "op_done_i",
         "sync_err_q"
       ],
-      "source_refs": [
+      "refs": [
+        "keymgr_err.sv:80-81"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When op_done_i is low and op_update_i is high, sync_err_q is updated with the current value of sync_err_d.",
+      "cond": "!op_done_i && op_update_i && rst_ni",
+      "signals": [
+        "op_update_i",
+        "sync_err_d",
+        "sync_err_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:82-83"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and neither op_done_i nor op_update_i is asserted, sync_err_q retains its previous value.",
+      "cond": "rst_ni && !op_done_i && !op_update_i",
+      "signals": [
+        "sync_err_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:77-85"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "sync_err_d must be stable and valid at the rising clock edge when op_update_i is asserted.",
+      "cond": "op_update_i is high",
+      "risk": "If sync_err_d changes coincident with the update pulse, sync_err_q may capture a metastable or incorrect value.",
+      "signals": [
+        "sync_err_d",
+        "op_update_i",
+        "clk_i"
+      ],
+      "refs": [
         "keymgr_err.sv:82-83"
       ]
     }
   ],
-  "security_implications": "sync_err_q 用于记录或传播密钥管理器的错误状态。若错误状态因优先级处理（op_done_i 强于 op_update_i）导致更新丢失，可能掩盖真实错误，影响安全关键操作，需确保控制信号语义与硬件行为严格匹配。",
-  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The priority of op_done_i over op_update_i may cause loss of a new error assertion when an operation completes simultaneously.",
+      "cond": "op_done_i and op_update_i both high in the same cycle",
+      "risk": "A valid synchronous error (sync_err_d) could be cleared before the error is processed or logged, leading to undetected faults.",
+      "signals": [
+        "op_done_i",
+        "op_update_i",
+        "sync_err_d",
+        "sync_err_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:80-83"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If op_done_i remains asserted for multiple cycles, any op_update_i during that window is ignored, suppressing error capture.",
+      "cond": "op_done_i = 1 for two or more consecutive cycles",
+      "risk": "Errors occurring while an operation is marked done may be silently discarded, weakening fault detection during operation tails.",
+      "signals": [
+        "op_done_i"
+      ],
+      "refs": [
+        "keymgr_err.sv:80-81"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The mutual exclusion or pulse width of op_done_i and op_update_i is not locally enforced; the behavior relies on external control logic.",
+      "cond": "External generation of op_done_i and op_update_i",
+      "risk": "If the external protocol allows overlapping or long-lasting assertions, error clearing/update semantics become ambiguous.",
+      "signals": [
+        "op_done_i",
+        "op_update_i"
+      ],
+      "refs": [
+        "keymgr_err.sv:80-83"
+      ]
+    }
+  ],
   "evidence_refs": [
     "keymgr_err.sv:77-85"
   ],
-  "uncertain_points": [
-    "op_done_i 与 op_update_i 同时有效的条件是否设计预期：当前实现中 op_done_i 优先，sync_err_d 被丢弃，若该场景本不应发生则行为无妨；若确需同时更新后再清零，则当前逻辑存在缺陷，需上下文确认。",
-    "sync_err_d 的来源及其在 op_update_i 有效时的时序有效性未在片段内体现，无法判断是否需要额外的同步或保持约束。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 77,
-  "line_end": 85
+  "line_end": 85,
+  "security_implications": ""
 }

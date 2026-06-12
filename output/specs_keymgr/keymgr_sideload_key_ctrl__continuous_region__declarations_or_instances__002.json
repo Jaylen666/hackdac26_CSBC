@@ -1,58 +1,162 @@
 {
   "chunk_id": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
-  "summary": "组合逻辑收集各硬件子密钥的有效标志，检测有效窗口违规，选择KMAC密钥源，并输出PRNG使能。",
-  "behavior": "声明多比特向量 valids，并将 AES、KMAC、OTBN 三个硬核 sideload 密钥的有效标志分别赋值到对应索引位（第204-207行）。sideload_sel_err_o 通过对 valid_tracking_q 的按位取反与 valids 相与后缩减或生成：当任一密钥的有效标志在其不在 valid_tracking_q 允许的窗口内出现时，错误信号立即置位（第214行）。kmac_key_o 由一个复用器驱动：若 key_i.valid 为真，则选择 key_i，否则选择 kmac_sideload_key（第217行）。prng_en_o 直接由 clr 驱动（第220行）。此外，包含一条并发断言，要求每当 data_valid_i 有效时，同一周期 key_i.valid 也必须为真（第228行）。所有赋值均为组合逻辑，无时序延迟。",
+  "header": {
+    "module": "keymgr_sideload_key_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "valids",
+      "sideload_sel_err_o",
+      "kmac_key_o",
+      "prng_en_o"
+    ],
+    "used": [
+      "aes_key_o.valid",
+      "kmac_sideload_key.valid",
+      "otbn_key_o.valid",
+      "valid_tracking_q",
+      "key_i.valid",
+      "key_i",
+      "kmac_sideload_key",
+      "clr",
+      "data_valid_i"
+    ],
+    "modes": [
+      "AesIdx",
+      "KmacIdx",
+      "OtbnIdx",
+      "LastIdx"
+    ],
+    "tags": [
+      "key",
+      "error",
+      "handshake",
+      "fault",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "kmac_key_o 始终等于 key_i（若 key_i.valid 为真），否则等于 kmac_sideload_key。",
-      "output_signals": [
-        "kmac_key_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "valids bits are driven by the .valid fields of aes_key_o, kmac_sideload_key, and otbn_key_o using indices AesIdx, KmacIdx, OtbnIdx.",
+      "cond": "always",
+      "signals": [
+        "valids",
+        "aes_key_o.valid",
+        "kmac_sideload_key.valid",
+        "otbn_key_o.valid"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:217"
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:205-207"
       ]
     },
     {
-      "property": "sideload_sel_err_o 为 1 当且仅当存在任何 valids 位在其对应 valid_tracking_q 位为 0 时被置位。",
-      "output_signals": [
-        "sideload_sel_err_o"
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "sideload_sel_err_o is asserted when any bit of (~valid_tracking_q & valids) is high, indicating a sideload key valid outside the allowed window.",
+      "cond": "combinational",
+      "signals": [
+        "sideload_sel_err_o",
+        "valid_tracking_q",
+        "valids"
       ],
-      "source_refs": [
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:209-214"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "kmac_key_o selects key_i when key_i.valid is true, otherwise selects kmac_sideload_key.",
+      "cond": "always",
+      "signals": [
+        "kmac_key_o",
+        "key_i.valid",
+        "key_i",
+        "kmac_sideload_key"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:216-217"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "prng_en_o is assigned the value of clr, enabling PRNG when clearing.",
+      "cond": "always",
+      "signals": [
+        "prng_en_o",
+        "clr"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:219-220"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assertion",
+      "claim": "The module asserts that data_valid_i high implies key_i.valid high in the same cycle.",
+      "cond": "each cycle",
+      "signals": [
+        "data_valid_i",
+        "key_i.valid"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:227-228"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "valid_tracking_q correctly indicates the allowed window for sideload key valid signals.",
+      "cond": "during sideload operations",
+      "risk": "False sideload error reporting or missed detection of illegal key valid.",
+      "signals": [
+        "valid_tracking_q"
+      ],
+      "refs": [
         "keymgr_sideload_key_ctrl.sv:214"
       ]
     },
     {
-      "property": "prng_en_o 始终等于 clr。",
-      "output_signals": [
-        "prng_en_o"
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "key_i.valid accurately reflects when key_i contains a valid internal key.",
+      "cond": "when key_i.valid is used for mux or assertion",
+      "risk": "Incorrect kmac key source selection leading to use of wrong key and potential security breach.",
+      "signals": [
+        "key_i.valid",
+        "key_i",
+        "kmac_key_o"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:220"
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:217,227-228"
       ]
     }
   ],
-  "security_implications": "sideload_sel_err_o 的错误检测确保 sideload 密钥有效信号只在预期的时间窗口内出现，防止因时序异常或攻击导致密钥在非授权时刻被使用。kmac_key_o 的选择基于 key_i.valid 实现内部密钥优先，若该有效标志意外丢失，可能自动回退到外部 kmac_sideload_key，可能带来信息泄露风险。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "当 data_valid_i 为真时，key_i.valid 必须在同一周期为真。",
-      "bug_relevance": "若违反，kmac_key_o 将错误地选择 kmac_sideload_key 而非 key_i，导致送往 KMAC 的密钥出错。",
-      "related_signals": [
-        "data_valid_i",
-        "key_i.valid",
-        "kmac_key_o"
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The parameters AesIdx, KmacIdx, OtbnIdx must be unique to avoid multiple drivers on the same valids bit.",
+      "cond": "if any two parameters are equal",
+      "risk": "Multiple combinational drivers cause X or conflict in simulation/synthesis.",
+      "signals": [
+        "valids"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:228"
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:205-207"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr_sideload_key_ctrl.sv:204-230"
   ],
-  "uncertain_points": [
-    "valid_tracking_q 的来源及索引与 valids 的对应关系不在本片段内，无法确认其生成逻辑。AesIdx、KmacIdx、OtbnIdx 的具体值及 LastIdx 的定义依赖外部参数。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
   "line_start": 204,
-  "line_end": 230
+  "line_end": 230,
+  "security_implications": ""
 }

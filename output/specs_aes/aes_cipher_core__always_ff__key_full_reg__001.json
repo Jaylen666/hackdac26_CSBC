@@ -1,36 +1,135 @@
 {
   "chunk_id": "aes_cipher_core__always_ff__key_full_reg__001",
-  "summary": "复位清零、写使能控制的密钥寄存器",
-  "behavior": "在 clk_i 上升沿，若 rst_ni 为低，key_full_q 被异步复位置为全零；否则当 key_full_we 等于 SP2V_HIGH 时，用 key_full_d 更新 key_full_q；若写使能条件不成立，key_full_q 保持上一拍值。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "key_full_q"
+    ],
+    "used": [
+      "rst_ni",
+      "key_full_we",
+      "SP2V_HIGH",
+      "key_full_d"
+    ],
+    "modes": [],
+    "tags": [
+      "key",
+      "secret",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "异步复位释放后首个时钟沿之前，key_full_q 一定为全零",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (asynchronous reset), key_full_q is cleared to all zeros.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "key_full_q"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:448-450"
+      "refs": [
+        "output/aes_cipher_core.sv:449-450"
       ]
     },
     {
-      "property": "当 key_full_we 不等于 SP2V_HIGH 时，key_full_q 的值在连续时钟周期内保持不变",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and key_full_we equals SP2V_HIGH, at rising edge of clk_i, key_full_q is assigned the value of key_full_d.",
+      "cond": "rst_ni && (key_full_we == SP2V_HIGH)",
+      "signals": [
+        "rst_ni",
+        "key_full_we",
+        "key_full_d",
         "key_full_q"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:451-453"
+      "refs": [
+        "output/aes_cipher_core.sv:451-452"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high but key_full_we is not equal to SP2V_HIGH, key_full_q retains its previous value (no update).",
+      "cond": "rst_ni && (key_full_we != SP2V_HIGH)",
+      "signals": [
+        "key_full_we",
+        "key_full_q"
+      ],
+      "refs": [
+        "output/aes_cipher_core.sv:448-454"
       ]
     }
   ],
-  "security_implications": "key_full_q 存储完整密钥，异步复位清零提供了一种安全擦除手段，可防止密钥残留。",
-  "assumptions": [],
-  "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:448-454"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When key_full_we is SP2V_HIGH, the input key_full_d must be a stable, correct key value at the active clock edge.",
+      "cond": "key_full_we == SP2V_HIGH",
+      "risk": "If key_full_d is invalid or glitching, the key register captures corrupt secret data, leading to AES misoperation or key exposure.",
+      "signals": [
+        "key_full_we",
+        "key_full_d",
+        "key_full_q"
+      ],
+      "refs": [
+        "output/aes_cipher_core.sv:451-452"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "rst_ni must be asserted low for a sufficient duration to asynchronously clear key_full_q to all zeros, preventing key remnants after reset.",
+      "cond": "Reset phase",
+      "risk": "Incomplete reset could leave residual key bits in the register, violating a clear secrets requirement.",
+      "signals": [
+        "rst_ni",
+        "key_full_q"
+      ],
+      "refs": [
+        "output/aes_cipher_core.sv:449-450"
+      ]
+    }
   ],
   "uncertain_points": [
-    "SP2V_HIGH 的具体数值（例如 1'b1 或其他高电平表示）未在片段中定义，确定其含义需查看参数或宏定义。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The write-enable signal key_full_we must be controlled by the AES state machine to update the key only at the correct cipher steps; stray assertions could corrupt the key schedule.",
+      "cond": "Outside this block; unknown gating logic.",
+      "risk": "Key update at an unintended time may inject wrong round keys, breaking the cipher or exposing state.",
+      "signals": [
+        "key_full_we",
+        "clk_i"
+      ],
+      "refs": [
+        "output/aes_cipher_core.sv:451-452"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "No parity, ECC, or integrity check is performed on key_full_d before the register latches it; any corruptions from upstream are silently stored.",
+      "cond": "key_full_we == SP2V_HIGH and key_full_d has a fault.",
+      "risk": "Silent key corruption could persist across many cipher operations, undermining confidentiality.",
+      "signals": [
+        "key_full_d",
+        "key_full_q"
+      ],
+      "refs": [
+        "output/aes_cipher_core.sv:451-452"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "output/aes_cipher_core.sv:448-454"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 448,
-  "line_end": 454
+  "line_end": 454,
+  "security_implications": ""
 }

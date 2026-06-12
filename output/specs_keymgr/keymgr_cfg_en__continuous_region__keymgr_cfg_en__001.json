@@ -1,4 +1,230 @@
 {
   "chunk_id": "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
-  "error": "Expecting ',' delimiter: line 45 column 6 (char 1654)"
+  "header": {
+    "module": "keymgr_cfg_en",
+    "block_kind": "mixed",
+    "driven": [
+      "out_o",
+      "vld_clr",
+      "vld_set",
+      "vld_dis",
+      "out_clr"
+    ],
+    "used": [
+      "init_q",
+      "clr_i",
+      "set_i",
+      "en_i",
+      "NonInitClr",
+      "out_q"
+    ],
+    "modes": [
+      "NonInitClr"
+    ],
+    "tags": [
+      "access_control",
+      "lifecycle",
+      "security",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "out_clr is assigned to clr_i when parameter NonInitClr is 1'b1, else to (init_q && clr_i) when NonInitClr is 1'b0.",
+      "cond": "always",
+      "signals": [
+        "NonInitClr",
+        "clr_i",
+        "init_q",
+        "out_clr"
+      ],
+      "refs": [
+        "37"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "out_o is assigned the logical AND of ~out_clr, out_q, and en_i.",
+      "cond": "always",
+      "signals": [
+        "out_clr",
+        "out_q",
+        "en_i",
+        "out_o"
+      ],
+      "refs": [
+        "38"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "vld_clr is assigned to init_q && clr_i.",
+      "cond": "always",
+      "signals": [
+        "init_q",
+        "clr_i",
+        "vld_clr"
+      ],
+      "refs": [
+        "30"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "vld_set is assigned to init_q && set_i.",
+      "cond": "always",
+      "signals": [
+        "init_q",
+        "set_i",
+        "vld_set"
+      ],
+      "refs": [
+        "31"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "vld_dis is assigned to init_q && !en_i.",
+      "cond": "always",
+      "signals": [
+        "init_q",
+        "en_i",
+        "vld_dis"
+      ],
+      "refs": [
+        "32"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "init_q is a valid logic value driven by sequential logic and correctly reflects the initialization state (e.g., a flopped version of init_i).",
+      "cond": "always",
+      "risk": "If init_q is X, stuck, or misaligned, out_clr and out_o may misbehave, potentially enabling configuration outside intended lifecycle phases.",
+      "signals": [
+        "init_q"
+      ],
+      "refs": [
+        "24",
+        "30-32",
+        "37"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "out_q is a stable registered output without combinational glitches, used in out_o computation.",
+      "cond": "always",
+      "risk": "Glitches on out_q could propagate to out_o, causing unintended enable pulses.",
+      "signals": [
+        "out_q"
+      ],
+      "refs": [
+        "23",
+        "38"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "Inputs en_i, set_i, clr_i are glitch-free and meet required stability periods for the intended application (synchronous to clk_i if used by downstream registers).",
+      "cond": "always",
+      "risk": "Glitches on these inputs can create erroneous vld_set/vld_dis/out_o values.",
+      "signals": [
+        "en_i",
+        "set_i",
+        "clr_i"
+      ],
+      "refs": [
+        "17-19",
+        "30-32",
+        "38"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "When NonInitClr=0, the clear input clr_i only affects out_o when init_q=1; during non-init (init_q=0) clear is ignored. The comment at lines 34-35 states clear should block future configuration, but this may be violated if NonInitClr is parameterized to 0.",
+      "cond": "NonInitClr = 1'b0 and init_q = 0",
+      "risk": "Configuration may remain enabled after initialization, undermining a safety or security clear mechanism.",
+      "signals": [
+        "NonInitClr",
+        "init_q",
+        "clr_i",
+        "out_clr",
+        "out_o"
+      ],
+      "refs": [
+        "34-35",
+        "37-38"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "Signals vld_set and vld_dis are assigned but not read in this continuous region. They may be unused or intended for other parts of the design, but their absence risks missing intended set/disable functionality.",
+      "cond": "always",
+      "risk": "Set and disable logic may be incomplete; vld_set and vld_dis might control other critical paths that are left unconnected.",
+      "signals": [
+        "vld_set",
+        "vld_dis"
+      ],
+      "refs": [
+        "27-28",
+        "31-32"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The generation and usage of init_q and out_q are not shown; their sequential behavior determines the exact timing of output enable. Need to review the full module for potential races or latencies.",
+      "cond": "always",
+      "risk": "Incorrect init_q state machine could cause premature or stale configuration enables.",
+      "signals": [
+        "init_q",
+        "out_q"
+      ],
+      "refs": [
+        "23-24",
+        "30-32",
+        "38"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The relationship between en_i and vld_dis is not used locally; the comment about disabling future configuration might imply vld_dis should gate something, but no code uses it.",
+      "cond": "en_i low and init_q high",
+      "risk": "Disable intent may be partially implemented, leaving a gap in configuration blocking.",
+      "signals": [
+        "en_i",
+        "vld_dis"
+      ],
+      "refs": [
+        "32",
+        "34-35"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "8-38"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv",
+  "line_start": 8,
+  "line_end": 38,
+  "security_implications": ""
 }

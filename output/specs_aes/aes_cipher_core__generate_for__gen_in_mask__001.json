@@ -1,51 +1,110 @@
 {
   "chunk_id": "aes_cipher_core__generate_for__gen_in_mask__001",
-  "summary": "Generate four parallel data_in_mask assignments using PRD LSB extraction.",
-  "behavior": "The generate loop creates four continuous assignments (i=0..3). Each data_in_mask[i] is driven by the combinatorial result of the function aes_prd_get_lsbs applied to a WidthPRDRow‑bit slice of prd_sub_bytes starting at bit index i*WidthPRDRow. Outputs update immediately with any change on prd_sub_bytes.",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "assign",
+    "driven": [
+      "data_in_mask[0]",
+      "data_in_mask[1]",
+      "data_in_mask[2]",
+      "data_in_mask[3]"
+    ],
+    "used": [
+      "prd_sub_bytes",
+      "WidthPRDRow",
+      "aes_prd_get_lsbs"
+    ],
+    "modes": [
+      "parameter WidthPRDRow"
+    ],
+    "tags": [
+      "mask",
+      "parameterization",
+      "generate"
+    ]
+  },
   "guarantees": [
     {
-      "property": "data_in_mask[i] always equals aes_prd_get_lsbs(prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow]) with zero additional delay.",
-      "output_signals": [
-        "data_in_mask"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Each data_in_mask[i] (i=0..3) is continuously assigned the output of function aes_prd_get_lsbs(prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow]).",
+      "cond": "always (combinational)",
+      "signals": [
+        "data_in_mask",
+        "prd_sub_bytes",
+        "aes_prd_get_lsbs"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
       ]
     }
   ],
-  "security_implications": "If data_in_mask is part of a masking countermeasure, any deviation in the production of the mask could weaken side‑channel resistance. The correctness of the mask extraction is critical for the security of the overall masking scheme, but the exact risk depends on the integration context.",
   "assumptions": [
     {
-      "constraint": "prd_sub_bytes has a total width of at least 4*WidthPRDRow so that all slices i*WidthPRDRow +: WidthPRDRow are within bounds.",
-      "bug_relevance": "If the condition is violated, out‑of‑range indexing may occur, leading to undefined or erroneous mask values.",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "WidthPRDRow must be a positive integer such that 4*WidthPRDRow does not exceed the bit-width of prd_sub_bytes.",
+      "cond": "during synthesis/simulation",
+      "risk": "Out-of-bounds part-select leads to X or synthesis error, breaking mask generation.",
+      "signals": [
         "prd_sub_bytes",
         "WidthPRDRow"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:372"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
       ]
     },
     {
-      "constraint": "aes_prd_get_lsbs behaves as intended (extracts the required LSBs) and returns a value compatible with the element width of data_in_mask.",
-      "bug_relevance": "A wrong function implementation would propagate incorrect masks, potentially breaking the masking countermeasure.",
-      "related_signals": [
-        "aes_prd_get_lsbs",
-        "data_in_mask"
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The function aes_prd_get_lsbs must produce an output width compatible with data_in_mask elements (likely 1-bit per index).",
+      "cond": "always",
+      "risk": "Compilation failure if width mismatch; if masked, unexpected masking bits could propagate.",
+      "signals": [
+        "data_in_mask",
+        "aes_prd_get_lsbs"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:372"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The loop unrolls to 4 iterations using WidthPRDRow as the slice width. If WidthPRDRow is configured larger than allowed by prd_sub_bytes, part-select exceeds bounds.",
+      "cond": "when 4*WidthPRDRow > $bits(prd_sub_bytes)",
+      "risk": "Out-of-range access during mask extraction could corrupt data_in_mask and break S-box masking, enabling side-channel leakage.",
+      "signals": [
+        "prd_sub_bytes",
+        "WidthPRDRow"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The function aes_prd_get_lsbs is not defined in this chunk; its exact behavior (which bits are extracted, function of the input width) is unknown.",
+      "cond": "always",
+      "risk": "If the function does not extract LSBs correctly for mask application, the mask may be incorrect, potentially compromising the side-channel resistance of the AES cipher.",
+      "signals": [
+        "aes_prd_get_lsbs"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
       ]
     }
   ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
   ],
-  "uncertain_points": [
-    "The exact functionality of aes_prd_get_lsbs is unknown from this snippet alone.",
-    "The bit width of data_in_mask elements and the final use of the mask signals are not defined in the given lines."
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 371,
-  "line_end": 373
+  "line_end": 373,
+  "security_implications": ""
 }

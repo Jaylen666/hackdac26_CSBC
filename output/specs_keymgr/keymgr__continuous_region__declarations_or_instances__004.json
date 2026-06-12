@@ -1,63 +1,281 @@
 {
   "chunk_id": "keymgr__continuous_region__declarations_or_instances__004",
-  "summary": "生成密钥派生各阶段所需的组合数据向量 adv_matrix 及对应有效指示 adv_dvalid，其中 Creator/OwnerInt/Owner 阶段使用不同的输入种子和有效性条件。",
-  "behavior": "该连续赋值块为密钥管理器的 adv_matrix 和 adv_dvalid 提供组合输出。对于 Creator 阶段，adv_matrix[Creator] 由 sw_binding、otp_device_id_i、lc_keymgr_div_i、rom_digest_i.data 和 revision_seed 拼接而成，经 AdvDataWidth 转换；其有效指示 adv_dvalid[Creator] 同时要求 creator_seed_vld、devid_vld、health_state_vld 和 rom_digest_vld 均为 1。对于 OwnerInt 阶段，adv_matrix[OwnerInt] 为 sw_binding 与 creator_seed 的拼接，有效取决于 owner_seed_vld。Owner 阶段的 adv_matrix[Owner] 为 sw_binding 与 owner_seed 的拼接，且 adv_dvalid[Owner] 常为 1，表示该阶段数据始终可用。owner_seed 的来源由参数 UseOtpSeedsInsteadOfFlash 决定：为真时取自 otp_key_i.owner_seed，否则取自 flash_i.seeds[OwnerSeedIdx]；同时生成 unused_owner_seed 消耗另一来源的种子与有效信号，以消除 lint 未用警告。所有赋值均为组合逻辑立即生效，无额外延迟。",
+  "header": {
+    "module": "keymgr",
+    "block_kind": "mixed",
+    "driven": [
+      "adv_matrix[Creator]",
+      "adv_dvalid[Creator]",
+      "owner_seed",
+      "unused_owner_seed",
+      "adv_matrix[OwnerInt]",
+      "adv_dvalid[OwnerInt]",
+      "adv_matrix[Owner]",
+      "adv_dvalid[Owner]"
+    ],
+    "used": [
+      "sw_binding",
+      "otp_device_id_i",
+      "lc_keymgr_div_i",
+      "rom_digest_i.data",
+      "revision_seed",
+      "creator_seed_vld",
+      "devid_vld",
+      "health_state_vld",
+      "rom_digest_vld",
+      "KeyWidth",
+      "UseOtpSeedsInsteadOfFlash",
+      "flash_i.seeds",
+      "flash_ctrl_pkg::OwnerSeedIdx",
+      "otp_key_i.owner_seed_valid",
+      "otp_key_i.owner_seed",
+      "AdvDataWidth",
+      "creator_seed",
+      "owner_seed_vld"
+    ],
+    "modes": [
+      "UseOtpSeedsInsteadOfFlash",
+      "Creator",
+      "OwnerInt",
+      "Owner"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "lifecycle",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "adv_dvalid[Owner] 恒为 1，因此下游逻辑可无需等待直接使用 adv_matrix[Owner] 的数据。",
-      "output_signals": [
-        "adv_dvalid[Owner]"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "adv_matrix[Creator] is always assigned AdvDataWidth'({sw_binding, otp_device_id_i, lc_keymgr_div_i, rom_digest_i.data, revision_seed}).",
+      "cond": "always",
+      "signals": [
+        "adv_matrix",
+        "Creator",
+        "sw_binding",
+        "otp_device_id_i",
+        "lc_keymgr_div_i",
+        "rom_digest_i",
+        "revision_seed"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:467"
+      "refs": [
+        "file:439-443"
       ]
     },
     {
-      "property": "adv_dvalid[Creator] 仅在所有输入有效指示（creator_seed_vld、devid_vld、health_state_vld、rom_digest_vld）同时为 1 时才为 1，否则为 0，保证该阶段的数据仅在输入全部稳定时被标记为有效。",
-      "output_signals": [
-        "adv_dvalid[Creator]"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:445-448"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑直接参与密钥派生数据路径：adv_matrix 中拼接了设备 ID、生命周期分频值、ROM 摘要、软件绑定及种子等敏感信息。owner_seed 选择逻辑决定从 OTP 或 Flash 中获取，该选择可能影响安全强度或侧信道泄露面，需确保编译期参数 UseOtpSeedsInsteadOfFlash 与芯片安全策略一致。unused_owner_seed 的缩位异或仅用于避免 lint 警告而未被功能使用，若综合工具将其优化，可能仍会引起未使用信号警告，但对实际安全无直接影响。",
-  "assumptions": [
-    {
-      "constraint": "creator_seed_vld、devid_vld、health_state_vld、rom_digest_vld 在系统准备就绪后应全部有效，否则 adv_dvalid[Creator] 将一直为 0，导致 Creator 阶段无法推进。",
-      "bug_relevance": "如果其中任意一个有效信号因误逻辑或未初始化而长期为 0，密钥管理器将卡在 Creator 阶段之前。",
-      "related_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "adv_dvalid[Creator] is always assigned creator_seed_vld & devid_vld & health_state_vld & rom_digest_vld.",
+      "cond": "always",
+      "signals": [
+        "adv_dvalid",
+        "Creator",
         "creator_seed_vld",
         "devid_vld",
         "health_state_vld",
         "rom_digest_vld"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:445-448"
+      "refs": [
+        "file:445-448"
       ]
     },
     {
-      "constraint": "当 UseOtpSeedsInsteadOfFlash 为真时，otp_key_i.owner_seed 必须提供正确的种子值；否则 flash_i.seeds[OwnerSeedIdx] 必须有效。",
-      "bug_relevance": "错误的选择或无效的种子将导致 Owner 阶段使用错误的密钥材料，造成整个派生链不可信。",
-      "related_signals": [
+      "id": "G3",
+      "type": "generate_param",
+      "claim": "owner_seed is driven by otp_key_i.owner_seed if UseOtpSeedsInsteadOfFlash is true; otherwise it is driven by flash_i.seeds[flash_ctrl_pkg::OwnerSeedIdx].",
+      "cond": "always (parameter choice)",
+      "signals": [
+        "owner_seed",
+        "UseOtpSeedsInsteadOfFlash",
         "otp_key_i.owner_seed",
         "flash_i.seeds",
+        "OwnerSeedIdx"
+      ],
+      "refs": [
+        "file:453-461"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "adv_matrix[OwnerInt] is always assigned AdvDataWidth'({sw_binding, creator_seed}).",
+      "cond": "always",
+      "signals": [
+        "adv_matrix",
+        "OwnerInt",
+        "sw_binding",
+        "creator_seed"
+      ],
+      "refs": [
+        "file:462"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "adv_dvalid[OwnerInt] is always assigned owner_seed_vld.",
+      "cond": "always",
+      "signals": [
+        "adv_dvalid",
+        "OwnerInt",
+        "owner_seed_vld"
+      ],
+      "refs": [
+        "file:463"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "adv_matrix[Owner] is always assigned AdvDataWidth'({sw_binding, owner_seed}).",
+      "cond": "always",
+      "signals": [
+        "adv_matrix",
+        "Owner",
+        "sw_binding",
+        "owner_seed"
+      ],
+      "refs": [
+        "file:466"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "adv_dvalid[Owner] is always assigned 1'b1.",
+      "cond": "always",
+      "signals": [
+        "adv_dvalid",
+        "Owner"
+      ],
+      "refs": [
+        "file:467"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Data signals used in adv_matrix[Creator] (otp_device_id_i, lc_keymgr_div_i, rom_digest_i.data, revision_seed) are stable and valid when the corresponding valid signals (devid_vld, health_state_vld, rom_digest_vld) are asserted.",
+      "cond": "when any of the constituent valid signals are high",
+      "risk": "If data changes while valid is high, adv_matrix captures corrupted values, leading to incorrect key derivation for Creator.",
+      "signals": [
+        "otp_device_id_i",
+        "lc_keymgr_div_i",
+        "rom_digest_i.data",
+        "revision_seed",
+        "devid_vld",
+        "health_state_vld",
+        "rom_digest_vld"
+      ],
+      "refs": [
+        "file:439-448"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "When UseOtpSeedsInsteadOfFlash is true, otp_key_i.owner_seed is valid and stable before it is used as owner_seed for Owner adv_matrix.",
+      "cond": "when UseOtpSeedsInsteadOfFlash is true",
+      "risk": "An invalid or stale owner_seed would compromise the derived owner key, as adv_dvalid[Owner] is always 1.",
+      "signals": [
+        "otp_key_i.owner_seed",
         "UseOtpSeedsInsteadOfFlash"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:453-461"
+      "refs": [
+        "file:453-456,466-467"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "When UseOtpSeedsInsteadOfFlash is false, flash_i.seeds[flash_ctrl_pkg::OwnerSeedIdx] provides a correct and valid seed.",
+      "cond": "when UseOtpSeedsInsteadOfFlash is false",
+      "risk": "If the flash seed is not valid, the owner key derivation will use garbage, as adv_dvalid[Owner] is always 1.",
+      "signals": [
+        "flash_i.seeds",
+        "OwnerSeedIdx",
+        "UseOtpSeedsInsteadOfFlash"
+      ],
+      "refs": [
+        "file:458-461,466-467"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "adv_matrix[OwnerInt] data uses creator_seed, but its valid signal (adv_dvalid[OwnerInt]) is owner_seed_vld, not a validity related to creator_seed. This mismatch may cause the state machine to be gated by an unrelated seed validity.",
+      "cond": "when the state machine evaluates adv_dvalid[OwnerInt]",
+      "risk": "The OwnerInt advance could be asserted before creator_seed is stable, or stalled despite a valid creator_seed, leading to incorrect intermediate key derivation.",
+      "signals": [
+        "adv_matrix[OwnerInt]",
+        "adv_dvalid[OwnerInt]",
+        "owner_seed_vld",
+        "creator_seed"
+      ],
+      "refs": [
+        "file:462-463"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "adv_dvalid[Owner] is tied high independently of the validity of owner_seed. The chunk does not check any validity signal for the seed before allowing Owner advance.",
+      "cond": "always",
+      "risk": "If owner_seed is invalid or not yet provisioned, the owner key derivation will proceed with garbage, potentially producing a weak or known key.",
+      "signals": [
+        "adv_dvalid[Owner]",
+        "owner_seed"
+      ],
+      "refs": [
+        "file:466-467"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The selection of owner_seed source relies on UseOtpSeedsInsteadOfFlash, but this block does not verify that the chosen seed (otp_key_i.owner_seed or flash_i.seeds) is available and non-trash at the moment the keymgr state machine reads Owner adv_matrix.",
+      "cond": "when keymgr state machine is ready to advance to Owner",
+      "risk": "If the external seed provisioning is misaligned, the owner key derivation could use a default or uninitialized seed, undermining key integrity.",
+      "signals": [
+        "UseOtpSeedsInsteadOfFlash",
+        "otp_key_i.owner_seed",
+        "flash_i.seeds"
+      ],
+      "refs": [
+        "file:453-461"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The signal unused_owner_seed is assigned but never used in the design. It may be intended to prevent optimization of the referenced signals (flash_i.seeds, otp_key_i.owner_seed_valid), which could hint at a missing functional dependency.",
+      "cond": "always",
+      "risk": "If the signal is truly dead, it wastes resources; if it was meant to gate something, the design may have a correctness gap.",
+      "signals": [
+        "unused_owner_seed"
+      ],
+      "refs": [
+        "file:452-460"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:439-467"
-  ],
-  "uncertain_points": [
-    "AdvDataWidth 的具体位宽未知，无法判断拼接后的强制类型转换是否可能产生截断或扩展，需结合外部定义确认。",
-    "unused_owner_seed 的缩位异或是否被后续逻辑使用（代码中未见连接），仅用于消除 lint 警告，其存在性可能被综合工具优化，设计意图是否为强制保留需确认。"
+    "file:439-467"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 439,
-  "line_end": 467
+  "line_end": 467,
+  "security_implications": ""
 }

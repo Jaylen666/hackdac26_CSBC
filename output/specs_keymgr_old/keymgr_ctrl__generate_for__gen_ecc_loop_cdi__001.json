@@ -1,0 +1,40 @@
+{
+  "chunk_id": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+  "summary": "对密钥状态中每个 CDI 份额的每个 ECC 字进行 SECDED 解码，生成组合错误标志 ecc_errs。",
+  "behavior": "通过三层 generate 循环，将 key_state_ecc_q[i][j][k] 与 key_state_q[i][j][k] 拼接为 72 位输入，送入 prim_secded_inv_72_64_dec 解码器。解码器的 2 位 errs 输出经过按位或（|errs）后驱动 ecc_errs[i][j][k]。因此，对于任一 (i,j,k) 组合，只要解码器判定存在任何错误（无论可纠正或不可纠正），ecc_errs 对应比特即为 1。被忽略的 data_o 与 syndrome_o 不影响本片段行为。所有信号均为组合逻辑，随输入立即变化。",
+  "guarantees": [
+    {
+      "property": "当 key_state_ecc_q[i][j][k] 和 key_state_q[i][j][k] 不变时，ecc_errs[i][j][k] 的值完全由 prim_secded_inv_72_64_dec 的 err_o 按位或决定，无额外延迟或状态。",
+      "output_signals": [
+        "ecc_errs"
+      ],
+      "source_refs": [
+        "keymgr_ctrl.sv:321-334"
+      ]
+    }
+  ],
+  "security_implications": "CDI 份额的秘密钥材料易受物理攻击，ECC 错误检测是完整性保护的一部分。ecc_errs 信号可能用于触发密钥擦除或告警，因此其正确、及时的组合行为对安全响应至关重要。若解码器 err_o 的编码与期望不符，可能漏报或误报错误。",
+  "assumptions": [
+    {
+      "constraint": "${key_state_ecc_q[i][j][k], key_state_q[i][j][k]} 拼接形成的 72 位数据必须与 prim_secded_inv_72_64_dec 要求的（校验位，数据）顺序一致，且模块的 err_o 在无错误时为 2'b00，有任何错误时至少有一位为 1。",
+      "bug_relevance": "若不满足，ecc_errs 可能不反映真实 ECC 状态，导致完整性监控失效（例如可纠正错误被忽略或不可纠正错误未检出），进而损害密钥保护。",
+      "related_signals": [
+        "key_state_ecc_q",
+        "key_state_q",
+        "ecc_errs"
+      ],
+      "source_refs": [
+        "keymgr_ctrl.sv:325-331"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_ctrl.sv:321-334"
+  ],
+  "uncertain_points": [
+    "prim_secded_inv_72_64_dec 的 err_o 具体编码未给出；当前设计对 errs 两位进行或运算，可能无法区分可纠正错误与不可纠正错误，需结合顶层使用方式确认设计意图。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
+  "line_start": 321,
+  "line_end": 334
+}

@@ -1,50 +1,180 @@
 {
   "chunk_id": "keymgr_ctrl__always_comb__key_output_ctrl__001",
-  "summary": "组合逻辑控制密钥输出，根据操作请求、阶段有效性和控制状态选择密钥份额或熵掩码。",
-  "behavior": "该 always_comb 块将输入 op_req 直接赋给 key_o.valid（行 279）。cdi_sel_o 根据 advance_sel 选择：若 advance_sel 为 1，则使用 cdi_cnt，否则使用 op_cdi_sel_i（行 282）。invalid_stage_sel_o 表示 stage_sel_o 不在合法集合 {Creator, OwnerInt, Owner} 内（行 285）。对于每个密钥份额 i（0 至 Shares-1），输出 key_o.key[i] 由条件决定：若 stage_sel_o 无效且当前状态为 StCtrlInvalid，则直接输出 key_state_q[cdi_sel_o][i]，即未掩码密钥（行 291-292）；否则，若 stage_sel_o 无效但状态非 StCtrlInvalid，则输出经 EntropyRounds 次重复的 entropy_i[i]（行 294-295）；若 stage_sel_o 有效，则输出 key_state_q[cdi_sel_o][i]（行 296）。注释指出在无效状态与特定条件组合下会跳过熵 XOR，暴露未掩码密钥（行 289-290）。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "always_comb",
+    "driven": [
+      "key_o.valid",
+      "key_o.key",
+      "cdi_sel_o",
+      "invalid_stage_sel_o"
+    ],
+    "used": [
+      "op_req",
+      "advance_sel",
+      "cdi_cnt",
+      "op_cdi_sel_i",
+      "stage_sel_o",
+      "state_q",
+      "key_state_q",
+      "entropy_i",
+      "Creator",
+      "OwnerInt",
+      "Owner",
+      "StCtrlInvalid",
+      "Shares",
+      "EntropyRounds"
+    ],
+    "modes": [
+      "stage_sel_o inside {Creator, OwnerInt, Owner}",
+      "state_q == StCtrlInvalid",
+      "advance_sel",
+      "op_req"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "mask",
+      "entropy",
+      "error",
+      "fault",
+      "sparse_fsm"
+    ]
+  },
   "guarantees": [
     {
-      "property": "key_o.valid 始终等于 op_req 的组合值",
-      "output_signals": [
-        "key_o.valid"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "key_o.valid is continuously assigned to op_req.",
+      "cond": "always",
+      "signals": [
+        "key_o.valid",
+        "op_req"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:279"
+      "refs": [
+        "keymgr_ctrl.sv:279"
       ]
     },
     {
-      "property": "cdi_sel_o 在 advance_sel 为真时等于 cdi_cnt，否则等于 op_cdi_sel_i",
-      "output_signals": [
-        "cdi_sel_o"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "cdi_sel_o is assigned to cdi_cnt when advance_sel is true, else to op_cdi_sel_i.",
+      "cond": "always",
+      "signals": [
+        "cdi_sel_o",
+        "advance_sel",
+        "cdi_cnt",
+        "op_cdi_sel_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:282"
+      "refs": [
+        "keymgr_ctrl.sv:282"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "invalid_stage_sel_o is 1 when stage_sel_o is not inside {Creator, OwnerInt, Owner}, else 0.",
+      "cond": "always",
+      "signals": [
+        "invalid_stage_sel_o",
+        "stage_sel_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:285"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "For each share i, key_o.key[i] is driven: (1) if invalid_stage_sel_o and state_q == StCtrlInvalid, then key_state_q[cdi_sel_o][i] (unmasked). (2) else if invalid_stage_sel_o, then {EntropyRounds{entropy_i[i]}} (masked with entropy). (3) otherwise, key_state_q[cdi_sel_o][i].",
+      "cond": "always",
+      "signals": [
+        "key_o.key",
+        "invalid_stage_sel_o",
+        "state_q",
+        "key_state_q",
+        "cdi_sel_o",
+        "entropy_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:291-296"
       ]
     }
   ],
-  "security_implications": "注释指出‘Subtle bug’，当 invalid_stage_sel_o 有效且状态为 StCtrlInvalid 时，直接暴露 key_state_q 中的未掩码密钥而不经熵 XOR，可能构成密钥泄露风险。需审查该路径是否为有意设计弱点或需修复的漏洞。",
   "assumptions": [
     {
-      "constraint": "stage_sel_o 应始终为合法值 {Creator, OwnerInt, Owner}，设计不应产生无效选择",
-      "bug_relevance": "若 stage_sel_o 非法，invalid_stage_sel_o 为高，可能根据状态输出未掩码密钥（当 state_q == StCtrlInvalid）或全熵掩码，违背密钥保护预期，且可能导致密钥信息泄露。",
-      "related_signals": [
+      "id": "A1",
+      "type": "handshake",
+      "claim": "Downstream consumer must only sample key_o.key when key_o.valid is asserted, because key_o.key may carry sensitive unmasked key material even when valid is low.",
+      "cond": "when key_o.valid is 0 but key output logic drives key_state_q directly (especially in StCtrlInvalid state).",
+      "risk": "Sampling key_o.key without valid could capture raw key material during invalid state, causing sensitive data leakage.",
+      "signals": [
+        "key_o.valid",
+        "key_o.key"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:279,291-296"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The system must avoid the simultaneous condition where state_q == StCtrlInvalid and stage_sel_o is invalid (invalid_stage_sel_o == 1) while key output is intended to be masked, because the RTL bypasses entropy masking in that case and exposes raw key material.",
+      "cond": "when state_q == StCtrlInvalid and stage_sel_o outside {Creator, OwnerInt, Owner}.",
+      "risk": "Otherwise, key_o.key carries raw key_state_q[cdi_sel_o] without entropy XOR, directly exposing sensitive key material.",
+      "signals": [
+        "state_q",
         "stage_sel_o",
         "invalid_stage_sel_o",
-        "state_q"
+        "key_o.key"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:285-297"
+      "refs": [
+        "keymgr_ctrl.sv:291-292"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The RTL implements a path where key_o.key outputs key_state_q[cdi_sel_o] without entropy masking when invalid_stage_sel_o && state_q == StCtrlInvalid. The comment labels this a 'subtle bug', but it is unclear if this is an intentional backdoor or an implementation flaw.",
+      "cond": "when invalid_stage_sel_o is true and state_q == StCtrlInvalid.",
+      "risk": "If this is unintended, it constitutes a critical key leakage vulnerability during invalid states.",
+      "signals": [
+        "invalid_stage_sel_o",
+        "state_q",
+        "key_o.key",
+        "key_state_q",
+        "entropy_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:289-292"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "When the controller enters StCtrlInvalid state and stage_sel_o is invalid, key material is exposed unmasked on the output. There is no containment mechanism (e.g., output zeroization, error notification, or blocking valid) to prevent propagation of the raw key.",
+      "cond": "state_q == StCtrlInvalid and invalid_stage_sel_o == 1.",
+      "risk": "Sensitive key material reaches output ports without any masking or blocking, potentially reaching untrusted destinations.",
+      "signals": [
+        "state_q",
+        "invalid_stage_sel_o",
+        "key_o.key",
+        "key_o.valid"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:279,288-298"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:277-299"
-  ],
-  "uncertain_points": [
-    "注释所指‘Subtle bug’是开发中标记的已知漏洞还是故意的调试入口，需要进一步上下文确认。",
-    "EntropyRounds 扩展后的位宽是否与 key_state_q 份额位宽一致，需确认设计参数匹配。"
+    "keymgr_ctrl.sv:277-299"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 277,
-  "line_end": 299
+  "line_end": 299,
+  "security_implications": ""
 }

@@ -1,30 +1,107 @@
 {
   "chunk_id": "aes_cipher_core__continuous_region__batched_small_assigns__001",
-  "summary": "定义局部参数和条件生成块，用于根据 CiphOpFwdOnly 模式声明未使用的信号或生成密钥解密逻辑的开头。",
-  "behavior": "定义局部参数 WidthPRDRow = 4*WidthPRDSBox（行371）。根据参数 CiphOpFwdOnly 生成不同的硬件块：当 CiphOpFwdOnly 为假时，生成块标签 gen_key_dec（行373，内部逻辑未提供）；当 CiphOpFwdOnly 为真时，生成块 gen_unused_key_mix_columns_out，并在其内部声明三个未使用的信号：unused_key_mix_columns_out（1位）、unused_prd_masking（WidthPRDMasking位）和 unused_prd_msbs（4x4x(WidthPRDSBox-8)位），意图将这些悬空信号绑定以消除 lint 警告（行375-380）。这些声明本身不驱动任何逻辑，仅定义信号存在。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "mixed",
+    "driven": [],
+    "used": [
+      "WidthPRDSBox",
+      "WidthPRDMasking",
+      "CiphOpFwdOnly"
+    ],
+    "modes": [
+      "CiphOpFwdOnly"
+    ],
+    "tags": [
+      "parameterization",
+      "mask",
+      "generate",
+      "tie-off"
+    ]
+  },
   "guarantees": [],
-  "security_implications": "",
   "assumptions": [
     {
-      "constraint": "WidthPRDSBox >= 8，否则 (WidthPRDSBox-8) 维度为负数导致非法声明。",
-      "bug_relevance": "若 WidthPRDSBox < 8，编译将失败或产生意外行为，无法满足信号宽度定义。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Parameter WidthPRDSBox must be greater than 8 for the declaration of unused_prd_msbs to be valid; otherwise the range (WidthPRDSBox-8)-1:0 is illegal.",
+      "cond": "Whenever WidthPRDSBox is used as a compile-time constant and this chunk is instantiated.",
+      "risk": "Compilation or synthesis failure, or a silent zero-width tie-off that may hide unintended masking behavior.",
+      "signals": [
+        "WidthPRDSBox",
+        "unused_prd_msbs"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:380"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "CiphOpFwdOnly is a compile-time parameter that selects forward-only mode (1) or encryption/decryption mode (0), and the generate blocks rely on its constant value.",
+      "cond": "During elaboration of the module.",
+      "risk": "If CiphOpFwdOnly is not a compile constant, generate condition fails; if misconfigured, unused key mix columns out may be asserted/disconnected incorrectly.",
+      "signals": [
+        "CiphOpFwdOnly"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:373",
+        "output/aes_mini_rtl/aes_cipher_core.sv:375"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "The parameter WidthPRDMasking is defined and non-negative; the declaration unused_prd_masking has width WidthPRDMasking-1:0.",
+      "cond": "When the generate block gen_unused_key_mix_columns_out is active (CiphOpFwdOnly=1).",
+      "risk": "If WidthPRDMasking is negative or undefined, compilation error; a zero-width tie-off is legal but may mask intent.",
+      "signals": [
+        "WidthPRDMasking",
+        "unused_prd_masking"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:379"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "The signal unused_prd_msbs ties off the MSBs above bit 7 of the PRD per S-box (dimensions 4x4). This suggests only 8 bits per S-box masking byte are used. If the masking scheme expects wider entropy, ignoring upper bits may reduce side-channel resistance.",
+      "cond": "When PRD masking width is greater than 8 bits per S-box.",
+      "risk": "Side-channel leakage if mask entropy is discarded; functional masking may be insufficient.",
+      "signals": [
+        "unused_prd_msbs",
         "WidthPRDSBox"
       ],
-      "source_refs": [
-        "aes_cipher_core.sv:380"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:380"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The generate block gen_key_dec (enabled when !CiphOpFwdOnly) contains the key expansion logic for decryption. Its content is not included in this chunk and must be reviewed to ensure correct and secure inverse key schedule.",
+      "cond": "When the core is configured for encryption+decryption mode (CiphOpFwdOnly=0).",
+      "risk": "A bug in key decryption logic could leak key material or produce incorrect ciphertext, breaking confidentiality.",
+      "signals": [
+        "gen_key_dec"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:373"
       ]
     }
   ],
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:370-380"
-  ],
-  "uncertain_points": [
-    "gen_key_dec 块 (行373) 内部逻辑未给出，不确定是否有其他逻辑或 end 闭合，只能看到块开头。",
-    "gen_unused_key_mix_columns_out 块内的三个信号仅声明，未显式赋值为0（tie-off），可能在其他未显示的部分有 assign 语句连接至0或悬空，本片段不足以确认实际连接状态。",
-    "localparam WidthPRDRow 是否在 generate 或其他层级内部？片段未显示完整上下文，可能影响其可见性。"
+    "output/aes_mini_rtl/aes_cipher_core.sv:371",
+    "output/aes_mini_rtl/aes_cipher_core.sv:373-378",
+    "output/aes_mini_rtl/aes_cipher_core.sv:379-380"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 370,
-  "line_end": 918
+  "line_end": 918,
+  "security_implications": ""
 }

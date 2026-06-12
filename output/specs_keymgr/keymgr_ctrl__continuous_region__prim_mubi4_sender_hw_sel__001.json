@@ -1,36 +1,236 @@
 {
   "chunk_id": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
-  "summary": "实例化一个安全计数器和一个 mubi4 发送器，并生成状态推进、完成与无效的组合控制信号。",
-  "behavior": "该区域例化一个 prim_count 计数器 u_cnt，在 op_ack 或 random_ack 有效时清零，在 op_update 或 random_req 有效时递增步长 1；当计数器溢出时，err_o 输出 cnt_err。同时例化 prim_mubi4_sender u_hw_sel，将输入布尔信号 gen_out_hw_sel 转换为多比特 mubi4 输出 hw_sel_o。组合逻辑生成三个状态控制信号：adv_state = op_ack & adv_req & ~op_err；dis_state = op_ack & dis_req；inv_state = |fault_o，满足 SEC_CM: CTRL.FSM.LOCAL_ESC 要求，异步故障立即生效，同步故障在事务边界生效。操作完成信号 op_done_o 被定义为：当存在未完成请求 op_req 时等于 op_ack，否则直接由 init_o | invalid_op 决定。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "cnt",
+      "cnt_err",
+      "hw_sel_o",
+      "op_done_o",
+      "adv_state",
+      "dis_state",
+      "inv_state"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "op_ack",
+      "random_ack",
+      "op_update",
+      "random_req",
+      "op_req",
+      "init_o",
+      "invalid_op",
+      "adv_req",
+      "op_err",
+      "dis_req",
+      "fault_o",
+      "gen_out_hw_sel"
+    ],
+    "modes": [
+      "CntWidth"
+    ],
+    "tags": [
+      "counter",
+      "handshake",
+      "error",
+      "lifecycle",
+      "sparse_fsm",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 fault_o 任意比特为高时，inv_state 一定为高，用于立即触发状态无效化。",
-      "output_signals": [
-        "inv_state"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When op_req is asserted, op_done_o equals op_ack; otherwise op_done_o equals the logical OR of init_o and invalid_op.",
+      "cond": "continuous",
+      "signals": [
+        "op_done_o",
+        "op_req",
+        "op_ack",
+        "init_o",
+        "invalid_op"
       ],
-      "source_refs": [
+      "refs": [
+        "keymgr_ctrl.sv:448-449"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "adv_state is asserted when op_ack and adv_req are both high and op_err is low.",
+      "cond": "continuous",
+      "signals": [
+        "adv_state",
+        "op_ack",
+        "adv_req",
+        "op_err"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:459"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "dis_state is asserted when op_ack and dis_req are both high.",
+      "cond": "continuous",
+      "signals": [
+        "dis_state",
+        "op_ack",
+        "dis_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:460"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "inv_state is the bitwise OR reduction of fault_o; it is asserted whenever any bit of fault_o is high.",
+      "cond": "continuous",
+      "signals": [
+        "inv_state",
+        "fault_o"
+      ],
+      "refs": [
         "keymgr_ctrl.sv:466"
       ]
     },
     {
-      "property": "hw_sel_o 为 gen_out_hw_sel 的 mubi4 编码，任何单比特翻转都会产生非法码字。",
-      "output_signals": [
+      "id": "G5",
+      "type": "assignment",
+      "claim": "The prim_count instance u_cnt has clr_i wired to (op_ack | random_ack) and incr_en_i wired to (op_update | random_req), with decr_en_i tied to 0 and set_i/set_cnt_i tied to 0.",
+      "cond": "always",
+      "signals": [
+        "u_cnt",
+        "op_ack",
+        "random_ack",
+        "op_update",
+        "random_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:421-436"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "The prim_mubi4_sender instance u_hw_sel receives mubi_i = prim_mubi_pkg::mubi4_bool_to_mubi(gen_out_hw_sel) and drives hw_sel_o from its mubi_o output.",
+      "cond": "continuous",
+      "signals": [
+        "u_hw_sel",
+        "gen_out_hw_sel",
         "hw_sel_o"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_ctrl.sv:439-444"
       ]
     }
   ],
-  "security_implications": "inv_state 由故障信号 fault_o 实时生成，用于状态机进入无效路径以响应故障（LOCAL_ESC）。hw_sel_o 采用 mubi4 编码，可抵抗单比特瞬时故障造成错误硬件选择，增强控制信号的稳健性。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "adv_req, dis_req, and op_err must be stable and valid around the assertion of op_ack.",
+      "cond": "when op_ack is high",
+      "risk": "Glitches on adv_req or dis_req during op_ack could cause erroneous pulses on adv_state or dis_state, leading to unintended FSM transitions.",
+      "signals": [
+        "adv_req",
+        "dis_req",
+        "op_err",
+        "op_ack",
+        "adv_state",
+        "dis_state"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:459-460"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "The fault_o vector must correctly reflect all fault conditions; any true fault must set the corresponding bit, and the vector must be glitch-free.",
+      "cond": "always",
+      "risk": "A missed fault bit leaves inv_state low, violating the requirement for immediate invalidation on async faults (SEC_CM: CTRL.FSM.LOCAL_ESC).",
+      "signals": [
+        "fault_o",
+        "inv_state"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:462-466"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "gen_out_hw_sel must be a valid 1-bit logic value (0 or 1) when it is sampled.",
+      "cond": "when the prim_mubi4_sender registers the input",
+      "risk": "If gen_out_hw_sel is X or Z, mubi4_bool_to_mubi may produce an invalid multi-bit encoding, causing hw_sel_o to be invalid and downstream components may misinterpret the hardware select signal, breaking integrity.",
+      "signals": [
+        "gen_out_hw_sel",
+        "hw_sel_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:442-443"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The SEC_CM comment states 'sync faults only invalidate on transaction boundaries', but the RTL makes inv_state = |fault_o, which would cause immediate invalidation if sync faults are included in fault_o.",
+      "cond": "when a sync fault bit in fault_o becomes high",
+      "risk": "Premature state invalidation may violate a design intent that allows recovery at transaction boundaries, potentially causing unnecessary denial of service or incorrect security state transitions.",
+      "signals": [
+        "inv_state",
+        "fault_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:462-466"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The prim_count instance output cnt_err is driven but not used or checked within this chunk.",
+      "cond": "when u_cnt detects an error condition",
+      "risk": "Counter errors (e.g., overflow) may go undetected, potentially corrupting state-dependent operations (such as timing measurements) without triggering a fault response.",
+      "signals": [
+        "cnt_err"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:435"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "adv_state is blocked while op_err is high; if op_err remains asserted after a transaction, the FSM may never advance.",
+      "cond": "when op_err is high and not cleared",
+      "risk": "The FSM can deadlock, requiring external reset to recover; this could be exploited or could cause a denial of service.",
+      "signals": [
+        "op_err",
+        "adv_state",
+        "op_ack",
+        "adv_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:459"
+      ]
+    }
+  ],
   "evidence_refs": [
     "keymgr_ctrl.sv:421-466"
   ],
-  "uncertain_points": [
-    "当 op_ack 与 op_update（或 random_ack 与 random_req）同时有效时，prim_count 内部清零与递增的优先级未在本片段指定，依赖 prim_count 的实现。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 421,
-  "line_end": 466
+  "line_end": 466,
+  "security_implications": ""
 }

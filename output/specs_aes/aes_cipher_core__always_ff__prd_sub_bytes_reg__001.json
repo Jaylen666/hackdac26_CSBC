@@ -1,36 +1,109 @@
 {
   "chunk_id": "aes_cipher_core__always_ff__prd_sub_bytes_reg__001",
-  "summary": "异步复位、条件更新的寄存器，在 state_we 等于 SP2V_HIGH 时载入 prd_sub_bytes_d，否则保持。",
-  "behavior": "always_ff 块在异步复位 rst_ni 低有效时将 prd_sub_bytes_q 清零；否则在时钟上升沿，当 state_we 与参数 SP2V_HIGH 相等时，将 prd_sub_bytes_d 的值存入 prd_sub_bytes_q，其他情况下寄存器保持原值。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "prd_sub_bytes_q"
+    ],
+    "used": [
+      "state_we",
+      "SP2V_HIGH",
+      "prd_sub_bytes_d"
+    ],
+    "modes": [
+      "SP2V_HIGH"
+    ],
+    "tags": [
+      "secret",
+      "reg_update",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "异步复位（rst_ni 为低）后，prd_sub_bytes_q 必定为 0。",
-      "output_signals": [
-        "prd_sub_bytes_q"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (active reset), prd_sub_bytes_q is asynchronously cleared to zero.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "prd_sub_bytes_q",
+        "rst_ni"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:336-337"
       ]
     },
     {
-      "property": "在时钟上升沿之后，若 state_we 不等于 SP2V_HIGH，prd_sub_bytes_q 保持前一拍的值不变。",
-      "output_signals": [
-        "prd_sub_bytes_q"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On rising edge of clk_i, if rst_ni is high and state_we equals SP2V_HIGH, prd_sub_bytes_q is updated with prd_sub_bytes_d.",
+      "cond": "rst_ni && state_we == SP2V_HIGH",
+      "signals": [
+        "prd_sub_bytes_q",
+        "prd_sub_bytes_d",
+        "state_we",
+        "SP2V_HIGH",
+        "clk_i"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:338-339"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "On rising edge of clk_i, if rst_ni is high and state_we is not equal to SP2V_HIGH, prd_sub_bytes_q retains its previous value (no assignment).",
+      "cond": "rst_ni && state_we != SP2V_HIGH",
+      "signals": [
+        "prd_sub_bytes_q",
+        "state_we",
+        "SP2V_HIGH",
+        "clk_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:338-341"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When state_we == SP2V_HIGH at the rising clock edge, prd_sub_bytes_d must be valid and stable, representing the intended next value for prd_sub_bytes_q.",
+      "cond": "state_we == SP2V_HIGH",
+      "risk": "Capture of invalid or stale data may corrupt the AES round state.",
+      "signals": [
+        "prd_sub_bytes_d",
+        "state_we",
+        "SP2V_HIGH",
+        "clk_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:338-339"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "lifecycle",
+      "claim": "rst_ni must be asserted (low) before first normal operation to initialize prd_sub_bytes_q to a known value; otherwise the register may hold X or unknown state after power-up.",
+      "cond": "initialization or power-up",
+      "risk": "Uninitialized secret round state could lead to incorrect encryption or information leakage.",
+      "signals": [
+        "rst_ni",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:336-337"
+      ]
+    }
+  ],
+  "uncertain_points": [],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:335-341"
   ],
-  "uncertain_points": [
-    "SP2V_HIGH 的具体数值和语义（例如是否仅代表高电平 1'b1 或某种多值编码）未在片段中给出，需结合模块上下文确定。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 335,
-  "line_end": 341
+  "line_end": 341,
+  "security_implications": ""
 }

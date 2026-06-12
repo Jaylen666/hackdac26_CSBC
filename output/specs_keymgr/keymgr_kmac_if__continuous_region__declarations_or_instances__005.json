@@ -1,62 +1,146 @@
 {
   "chunk_id": "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
-  "summary": "Sticky error detection for command consistency and one-hot encoding violations.",
-  "behavior": "This continuous region implements sticky error flags for two conditions. The combinational next-state signal cmd_consty_err_d captures a command consistency error: when cmd_chk is asserted and the current enables (enables_q) differ from the expected enables (enables_d), the error is set; otherwise it retains the latched value from cmd_consty_err_q. The signal one_hot_err_d detects a one-hot error: if the bitwise AND of enables_d and enables_sub is non-zero (indicating more than one enable bit is active), the error is set; otherwise it retains one_hot_err_q. Both errors are sticky—once triggered, the _d signals stay high as long as the _q states are fed back, providing a permanent latch unless cleared by external logic (not in this fragment).",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "mixed",
+    "driven": [
+      "cmd_consty_err_d",
+      "one_hot_err_d"
+    ],
+    "used": [
+      "cmd_chk",
+      "enables_q",
+      "enables_d",
+      "cmd_consty_err_q",
+      "enables_sub",
+      "one_hot_err_q"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "fault",
+      "integrity",
+      "latch",
+      "one_hot",
+      "consistency",
+      "sec_cm"
+    ]
+  },
   "guarantees": [
     {
-      "property": "Once a command consistency error is detected, cmd_consty_err_d remains asserted (sticky) until explicitly reset.",
-      "output_signals": [
-        "cmd_consty_err_d"
+      "id": "G1",
+      "type": "error_detection",
+      "claim": "cmd_consty_err_d is a latched consistency error: it asserts when cmd_chk is high and enables_q differs from enables_d, and holds once asserted by OR‑ing the previous cmd_consty_err_q.",
+      "cond": "when cmd_chk is active",
+      "signals": [
+        "cmd_chk",
+        "enables_q",
+        "enables_d",
+        "cmd_consty_err_d",
+        "cmd_consty_err_q"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_kmac_if.sv:370-371"
       ]
     },
     {
-      "property": "Once a one-hot error is detected, one_hot_err_d remains asserted (sticky) until explicitly reset.",
-      "output_signals": [
-        "one_hot_err_d"
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "one_hot_err_d is a latched one‑hot error: it asserts when any bit of enables_d is set that also has the corresponding enables_sub bit set, and holds once asserted by OR‑ing the previous one_hot_err_q.",
+      "cond": "always",
+      "signals": [
+        "enables_d",
+        "enables_sub",
+        "one_hot_err_d",
+        "one_hot_err_q"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_kmac_if.sv:376-377"
       ]
     }
   ],
-  "security_implications": "These sticky error detectors are marked as a security countermeasure (SEC_CM: KMAC_IF_CMD.CTRL.CONSISTENCY). They guard against fault-induced multi-command activation or unexpected command changes. A latched error can be used to block subsequent operations or raise an alarm, preventing safety/security policy violations.",
   "assumptions": [
     {
-      "constraint": "enables_sub must be a mask selecting all enable bits except the currently expected active one, such that a non-zero (enables_d & enables_sub) indicates a multi-enable violation.",
-      "bug_relevance": "If enables_sub is incorrectly defined, one-hot errors may be falsely triggered or missed, compromising the safety mechanism.",
-      "related_signals": [
-        "enables_sub",
+      "id": "A1",
+      "type": "handshake",
+      "claim": "cmd_chk must be asserted only when enables_q and enables_d are stable and represent the intended command‑consistency state.",
+      "cond": "before command processing",
+      "risk": "spurious consistency error latch due to transient mismatch between enables_q and enables_d.",
+      "signals": [
+        "cmd_chk",
+        "enables_q",
+        "enables_d"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:370"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "enables_sub must be a correct mask indicating which bits of enables_d are required to be mutually exclusive (one‑hot).",
+      "cond": "always",
+      "risk": "failure to detect one‑hot violations (false negatives) or false one‑hot errors (false positives) compromising the security countermeasure.",
+      "signals": [
+        "enables_sub"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:374-376"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "cmd_consty_err_q and one_hot_err_q must be reset to 0 before normal operation.",
+      "cond": "at reset",
+      "risk": "permanent error indication from startup, potentially blocking key‑manager operation.",
+      "signals": [
+        "cmd_consty_err_q",
+        "one_hot_err_q"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:370-377"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The one‑hot error detection `|(enables_d & enables_sub)` asserts when any bit overlap occurs, not only when multiple bits are set. It is unclear whether the intended check is for multiple one‑hot bits, or whether enables_sub itself encodes a different condition, which could leave real one‑hot violations undetected.",
+      "cond": "always",
+      "risk": "false sense of security that one‑hot violations are being latched, potentially allowing illegal command combinations to propagate.",
+      "signals": [
         "enables_d",
+        "enables_sub",
         "one_hot_err_d"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_kmac_if.sv:374-377"
       ]
     },
     {
-      "constraint": "enables_q and enables_d must have identical width and represent the same set of enable signals; otherwise the consistency check may produce incorrect results.",
-      "bug_relevance": "Width mismatch or semantic misalignment can cause false/stuck errors or allow undetected command inconsistency.",
-      "related_signals": [
-        "enables_q",
-        "enables_d",
-        "cmd_consty_err_d"
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Both error latches (cmd_consty_err_d, one_hot_err_d) are permanently sticky once set. It is unclear whether a clearing mechanism (reset, software clear, or error‑handler) exists outside this chunk to recover from a transient fault.",
+      "cond": "after an error is latched",
+      "risk": "the key manager could become permanently faulted after a single transient error, causing denial of service or stuck insecure state.",
+      "signals": [
+        "cmd_consty_err_q",
+        "one_hot_err_q"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:370-371"
+      "refs": [
+        "keymgr_kmac_if.sv:370-377"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr_kmac_if.sv:370-377"
   ],
-  "uncertain_points": [
-    "The clearing/reset condition for cmd_consty_err_q and one_hot_err_q is not defined in this fragment; it is unclear whether a system reset or a state-machine action clears them.",
-    "The exact definition of enables_sub (its bit mapping relative to enables_d) is not provided here; it must be inferred from surrounding logic."
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 370,
-  "line_end": 377
+  "line_end": 377,
+  "security_implications": ""
 }

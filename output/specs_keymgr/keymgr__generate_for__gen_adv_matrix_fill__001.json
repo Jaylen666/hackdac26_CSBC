@@ -1,43 +1,118 @@
 {
   "chunk_id": "keymgr__generate_for__gen_adv_matrix_fill__001",
-  "summary": "为超出实际密钥阶段数量的额外 adv_matrix 条目填充随机数据并标记为始终有效，以防御侧信道分析。",
-  "behavior": "该 generate-for 循环在参数化索引范围 [KeyMgrStages, 2**StageWidth-1] 内为 adv_matrix 和 adv_dvalid 创建组合赋值。对于每个索引 i，adv_matrix[i] 的所有 AdvLfsrCopies 个比特位被连续赋值为 data_rand[0]（一位随机源），即每个矩阵条目统一取相同的随机位；adv_dvalid[i] 被固定赋值为 1’b1。因此，这些填充条目总是显示为有效数据，且数据内容跟随 data_rand[0] 实时变化，与上层逻辑的实际阶段数据无关。",
+  "header": {
+    "module": "keymgr",
+    "block_kind": "generate",
+    "driven": [
+      "adv_matrix[i]",
+      "adv_dvalid[i]"
+    ],
+    "used": [
+      "data_rand[0]"
+    ],
+    "modes": [
+      "KeyMgrStages",
+      "StageWidth",
+      "AdvLfsrCopies"
+    ],
+    "tags": [
+      "parameterization",
+      "sparse_fsm",
+      "security"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在 i ∈ [KeyMgrStages, 2**StageWidth-1] 范围内，adv_dvalid[i] 始终为 1，adv_matrix[i] 的每一位均等于 data_rand[0]。",
-      "output_signals": [
-        "adv_dvalid[i]",
-        "adv_matrix[i]"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_matrix[i] is assigned {AdvLfsrCopies{data_rand[0]}}.",
+      "cond": "always",
+      "signals": [
+        "adv_matrix[i]",
+        "data_rand[0]"
       ],
-      "source_refs": [
-        "keymgr.sv:406-409"
+      "refs": [
+        "file:406-409"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_dvalid[i] is assigned 1'b1.",
+      "cond": "always",
+      "signals": [
+        "adv_dvalid[i]"
+      ],
+      "refs": [
+        "file:406-409"
       ]
     }
   ],
-  "security_implications": "该填充操作将未使用的密钥阶段条目覆盖为总是有效的随机值，使得攻击者无法通过监控有效信号或矩阵数据上的功耗/时序变化来推断实际使用的阶段数量，从而提升侧信道抗性。",
   "assumptions": [
     {
-      "constraint": "参数 KeyMgrStages ≤ 2**StageWidth，以保证所有 adv_matrix 和 adv_dvalid 的位均被驱动。",
-      "bug_relevance": "如果 KeyMgrStages > 2**StageWidth，该 generate 块将不生成任何赋值，导致对应索引的 adv_matrix 和 adv_dvalid 条目悬空（高阻态），可能引起功能错误或安全风险。",
-      "related_signals": [
-        "KeyMgrStages",
-        "StageWidth",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "KeyMgrStages < 2**StageWidth, so that the loop body executes and the padding entries are driven.",
+      "cond": "parameter instantiation",
+      "risk": "If violated, the loop does not execute, leaving adv_matrix and adv_dvalid entries beyond KeyMgrStages undriven (x) and potentially causing downstream silent failures.",
+      "signals": [
         "adv_matrix",
         "adv_dvalid"
       ],
-      "source_refs": [
-        "keymgr.sv:406-406"
+      "refs": [
+        "file:406"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "AdvLfsrCopies matches the declared bit width of each adv_matrix entry and is positive (>=1).",
+      "cond": "synthesis/elaboration",
+      "risk": "If AdvLfsrCopies is 0, replication yields a zero-width vector; if mismatch, width extension/truncation may corrupt data or cause elaboration errors.",
+      "signals": [
+        "adv_matrix"
+      ],
+      "refs": [
+        "file:407"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "adv_dvalid is forced to 1 for all padding entries (i >= KeyMgrStages), making them appear as valid stages. It is unclear whether the design intends to treat them as invalid to prevent accidental stage activation or key access.",
+      "cond": "When any logic iterates over adv_dvalid to determine active stages",
+      "risk": "A buggy or malicious use of adv_dvalid could accept a padding entry as a legitimate key stage, potentially bypassing stage count checks and exposing secret material.",
+      "signals": [
+        "adv_dvalid"
+      ],
+      "refs": [
+        "file:408"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "The padding data is a single random bit data_rand[0] replicated AdvLfsrCopies times. This may not provide sufficient entropy for masking, especially if the bit is predictable or has low toggle rate.",
+      "cond": "during operation when padding entries are read",
+      "risk": "If these dummy entries are used for side-channel resistance, a weak random pattern could leak information through power/EM analysis.",
+      "signals": [
+        "data_rand[0]",
+        "adv_matrix"
+      ],
+      "refs": [
+        "file:407"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr.sv:406-409"
-  ],
-  "uncertain_points": [
-    "data_rand[0] 的来源与更新时序未在该片段内定义，影响 adv_matrix 条目随机值的变化模式。",
-    "为何将 AdvLfsrCopies 宽度的所有位设置为相同的 data_rand[0]，而不是采用多比特随机数，本片段未给出理由。"
+    "file:406-409"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 406,
-  "line_end": 409
+  "line_end": 409,
+  "security_implications": ""
 }

@@ -1,40 +1,194 @@
 {
   "chunk_id": "aes_cipher_control__continuous_region__declarations_or_instances__005",
-  "summary": "将稀疏编码校验信号 `sp2v_sig_chk` 分解为独立的控制与握手信号，收集各来源的编码错误，并对密码操作码做有效性断言。",
-  "behavior": "七条 assign 语句将 `sp2v_sig_chk` 的对应位直接驱动到 `in_valid`、`out_ready`、`crypt`、`dec_key_gen`、`crypt_q`、`dec_key_gen_q`、`sub_bytes_out_req` 和 `key_expand_out_req`（行 461-468）。稀疏编码错误指示 `sp_enc_err` 由 `sp2v_sig_err` 的全部位与外部输入 `sp_enc_err_i` 经过逻辑或产生（行 473）。一个断言 `AesCiphOpValid` 检查当 `cfg_valid_i` 有效时，`op_i` 必须是 `CIPH_FWD` 或 `CIPH_INV`（行 479-483）。片段中不含时序逻辑，所有赋值均为组合逻辑。",
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "mixed",
+    "driven": [
+      "in_valid",
+      "out_ready",
+      "crypt",
+      "dec_key_gen",
+      "crypt_q",
+      "dec_key_gen_q",
+      "sub_bytes_out_req",
+      "key_expand_out_req",
+      "sp_enc_err"
+    ],
+    "used": [
+      "sp2v_sig_chk",
+      "sp2v_sig_err",
+      "sp_enc_err_i",
+      "cfg_valid_i",
+      "op_i",
+      "CIPH_FWD",
+      "CIPH_INV"
+    ],
+    "modes": [
+      "CIPH_FWD",
+      "CIPH_INV",
+      "cfg_valid_i"
+    ],
+    "tags": [
+      "sparse_encoding",
+      "error",
+      "assertion",
+      "control_decode"
+    ]
+  },
   "guarantees": [
     {
-      "property": "sp_enc_err 实时反映来自 sp2v_sig_err 或 sp_enc_err_i 的任何编码错误，即只要其中任一位为高，sp_enc_err 即被置为高。",
-      "output_signals": [
-        "sp_enc_err"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "in_valid, out_ready, crypt, dec_key_gen, crypt_q, dec_key_gen_q, sub_bytes_out_req, key_expand_out_req are each directly assigned to the corresponding bit of sp2v_sig_chk (bits 0 through 7).",
+      "cond": "always",
+      "signals": [
+        "in_valid",
+        "out_ready",
+        "crypt",
+        "dec_key_gen",
+        "crypt_q",
+        "dec_key_gen_q",
+        "sub_bytes_out_req",
+        "key_expand_out_req",
+        "sp2v_sig_chk"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:461-468"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "sp_enc_err is the logical OR of the entire sp2v_sig_err vector and the input sp_enc_err_i, asserting high whenever any encoding error is detected locally or elsewhere in the core.",
+      "cond": "always",
+      "signals": [
+        "sp_enc_err",
+        "sp2v_sig_err",
+        "sp_enc_err_i"
+      ],
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control.sv:473"
       ]
     }
   ],
-  "security_implications": "聚合的 `sp_enc_err` 信号为稀疏编码故障（如故障注入）提供了单一检测点，可用于触发安全对策（例如报警或擦除）。操作码有效性断言防止密码核心在未定义的非法模式下运行，保障加解密功能的完整性。",
   "assumptions": [
     {
-      "constraint": "当 `cfg_valid_i` 为高电平时，`op_i` 必须为 `CIPH_FWD` 或 `CIPH_INV`。",
-      "bug_relevance": "若违反此约束，密码核心可能执行未定义的操作（非法模式），导致功能错误或安全漏洞；断言在仿真或形式验证中用于检测此类非法状态。",
-      "related_signals": [
-        "cfg_valid_i",
-        "op_i"
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "sp2v_sig_chk must correctly decode the sparse signals into valid logical 0/1 values; the decoded control outputs are used without further local validation.",
+      "cond": "always",
+      "risk": "Corrupted cipher operation due to wrong control signal states (e.g., incorrect valid/ready/crypt mode).",
+      "signals": [
+        "sp2v_sig_chk"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:461-468"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "sp2v_sig_err must reliably assert a non-zero value whenever the sparse checker detects an encoding error, so that sp_enc_err is raised.",
+      "cond": "when a sparse encoding error occurs",
+      "risk": "Encoding errors may be missed, masking security-critical faults.",
+      "signals": [
+        "sp2v_sig_err",
+        "sp_enc_err"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:473"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "sp_enc_err_i must correctly accumulate encoding errors from other parts of the cipher core and be stable in time so that sp_enc_err accurately reflects the total error state.",
+      "cond": "always",
+      "risk": "Undetected errors could propagate silently, potentially leading to silent data corruption or security violations.",
+      "signals": [
+        "sp_enc_err_i",
+        "sp_enc_err"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:473"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "When cfg_valid_i is asserted, op_i must be one of CIPH_FWD or CIPH_INV; no other values are allowed.",
+      "cond": "cfg_valid_i == 1",
+      "risk": "An invalid operation mode could cause undefined cipher behavior, possibly exposing secret data or breaking integrity.",
+      "signals": [
+        "cfg_valid_i",
+        "op_i",
+        "CIPH_FWD",
+        "CIPH_INV"
+      ],
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control.sv:479-483"
       ]
     }
   ],
-  "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_control.sv:461-485"
-  ],
   "uncertain_points": [
-    "`ASSERT` 宏的具体实现（是否仅用于仿真/形式验证，或影响综合）未给出，需从项目约定确认。",
-    "`sp2v_sig_chk` 与 `sp2v_sig_err` 的完整位宽定义及错误位映射不在本片段内，具体行为依赖于上游稀疏编码检查模块。"
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The assertion AesCiphOpValid restricts op_i to only CIPH_FWD and CIPH_INV when cfg_valid_i is high. It is unclear whether other operation codes are legal under different cfg_valid_i conditions or if these two are exhaustive.",
+      "cond": "cfg_valid_i == 1",
+      "risk": "If other legal modes exist, the assertion would produce false violations; if a malicious or erroneous invalid mode appears outside cfg_valid_i, it could be accepted by downstream logic.",
+      "signals": [
+        "op_i",
+        "cfg_valid_i",
+        "CIPH_FWD",
+        "CIPH_INV"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:479-483"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "sp_enc_err_i is an external error signal; the relative timing of its update versus sp2v_sig_err is unknown. A temporal mismatch could cause sp_enc_err to miss an error or glitch.",
+      "cond": "during cipher operation",
+      "risk": "An encoding error could be momentarily missed or a spurious error pulse could propagate, affecting error handling logic.",
+      "signals": [
+        "sp_enc_err_i",
+        "sp2v_sig_err",
+        "sp_enc_err"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:473"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "sp2v_sig_chk bits are used directly as control signals without any glitch-filtering or qualification. The checker's output stability must be guaranteed by the sparse checker instantiation elsewhere.",
+      "cond": "any time sp2v_sig_chk changes",
+      "risk": "Transient glitches on decoded signals could cause false control events, leading to state machine hazards or data corruption.",
+      "signals": [
+        "sp2v_sig_chk",
+        "in_valid",
+        "out_ready",
+        "crypt"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:461-468"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "output/aes_mini_rtl/aes_cipher_control.sv:461-468",
+    "output/aes_mini_rtl/aes_cipher_control.sv:473",
+    "output/aes_mini_rtl/aes_cipher_control.sv:479-483"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
   "line_start": 461,
-  "line_end": 485
+  "line_end": 485,
+  "security_implications": ""
 }

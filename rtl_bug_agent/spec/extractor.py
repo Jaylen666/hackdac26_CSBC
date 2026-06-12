@@ -10,14 +10,14 @@ from rtl_bug_agent.schema import RtlChunk
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/chunk_spec.md"
+DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/chunk_spec_agu_structured_slim_en.md"
 
 
 def generate_chunk_spec(
     chunk: RtlChunk,
     client: OpenAICompatibleClient,
     prompt_path: str | Path = DEFAULT_PROMPT,
-    max_tokens: int = 3500,
+    max_tokens: int = 6000,
 ) -> dict[str, Any]:
     prompt = Path(prompt_path).read_text(encoding="utf-8")
     user_payload = {

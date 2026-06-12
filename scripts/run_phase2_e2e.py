@@ -83,7 +83,10 @@ def main() -> None:
     parser.add_argument("--semantic-max-signal-roots", type=int, default=4)
     parser.add_argument("--force", action="store_true",
                         help="Ignore checkpoints, re-run all channels")
+    parser.add_argument("--channels", default="B,C,D,L2",
+                        help="Comma-separated channels to run: B,C,D,L2 (default: B,C,D,L2)")
     args = parser.parse_args()
+    channels_to_run = set(c.strip() for c in args.channels.split(",") if c.strip())
     ip = args.ip
     specs_dir = args.specs_dir or f"output/specs_{ip}"
     out_path = Path(f"output/findings_{ip}.json")
@@ -203,40 +206,52 @@ def main() -> None:
             checkpoint_path=str(_ckpt_path(ip, "B"))
         )
 
-    # ── Channel C ──────────────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("Layer 1 — Channel C: Coverage Gap Detection")
-    print("=" * 60)
-    findings_c = run_channel_c(
-        graph, client, workers=args.workers,
-        checkpoint_path=str(_ckpt_path(ip, "C"))
-    )
-
-    # ── Channel D ──────────────────────────────────────────────────
-    findings_d = None if args.force else _load_ckpt(ip, "D")
-    if findings_d is not None:
-        print(f"Channel D: loaded {len(findings_d)} findings from checkpoint")
-    else:
+    # ── Channel C ──
+    findings_c = []
+    if "C" in channels_to_run:
         print("\n" + "=" * 60)
-        print("Layer 1 — Channel D: Temporal Consistency")
+        print("Layer 1 — Channel C: Coverage Gap Detection")
         print("=" * 60)
-        findings_d = run_channel_d(graph, client)
-        _save_ckpt(ip, "D", findings_d)
-        print(f"  Checkpoint saved ({len(findings_d)} findings)")
+        findings_c = run_channel_c(
+            graph, client, workers=args.workers,
+            checkpoint_path=str(_ckpt_path(ip, "C"))
+        )
+    else:
+        print("\nChannel C: skipped (--channels)")
 
-    # ── Layer 2 ────────────────────────────────────────────────────
-    findings_g = None if args.force else _load_ckpt(ip, "G")
+    # ── Channel D ──
+    findings_d = []
+    if "D" in channels_to_run:
+        findings_d = None if args.force else _load_ckpt(ip, "D")
+        if findings_d is not None:
+            print(f"Channel D: loaded {len(findings_d)} findings from checkpoint")
+        else:
+            print("\n" + "=" * 60)
+            print("Layer 1 — Channel D: Temporal Consistency")
+            print("=" * 60)
+            findings_d = run_channel_d(graph, client)
+            _save_ckpt(ip, "D", findings_d)
+            print(f"  Checkpoint saved ({len(findings_d)} findings)")
+    else:
+        print("\nChannel D: skipped (--channels)")
+
+    # ── Layer 2 ──
+    findings_g = []
     claims = None
-    if findings_g is not None:
-        print(f"Layer 2: loaded {len(findings_g)} findings from checkpoint")
+    if "L2" in channels_to_run:
+        findings_g = None if args.force else _load_ckpt(ip, "G")
+        if findings_g is not None:
+            print(f"Layer 2: loaded {len(findings_g)} findings from checkpoint")
+        else:
+            print("\n" + "=" * 60)
+            print("Layer 2 — Official Spec Alignment")
+            print("=" * 60)
+            claims = extract_claims_for_ip(ip, client)
+            findings_g = run_layer2(claims, graph, client)
+            _save_ckpt(ip, "G", findings_g)
+            print(f"  Checkpoint saved ({len(findings_g)} findings)")
     else:
-        print("\n" + "=" * 60)
-        print("Layer 2 — Official Spec Alignment")
-        print("=" * 60)
-        claims = extract_claims_for_ip(ip, client)
-        findings_g = run_layer2(claims, graph, client)
-        _save_ckpt(ip, "G", findings_g)
-        print(f"  Checkpoint saved ({len(findings_g)} findings)")
+        print("\nLayer 2: skipped (--channels)")
 
     # ── Pass 3: Fusion ─────────────────────────────────────────────
     print("\n" + "=" * 60)
@@ -289,8 +304,10 @@ def main() -> None:
     print(f"  {'Total tokens':20s}: {s['total_tokens']:,}")
     print(f"  {'Wall time':20s}: {elapsed_total:.0f}s ({elapsed_total/60:.1f}min)")
 
-    # ── Phase 3 ─────────────────────────────────────────────────────
-    if args.phase3_top_n > 0:
+    # ── Phase 3 ──
+    if args.phase3_top_n > 0 and "L2" not in channels_to_run:
+        print("\nPhase 3: skipped (Layer 2 required for official claims, but L2 is disabled)")
+    elif args.phase3_top_n > 0:
         print("\n" + "=" * 60)
         print(f"Phase 3: Source-Level Verification (top {args.phase3_top_n})")
         print("=" * 60)

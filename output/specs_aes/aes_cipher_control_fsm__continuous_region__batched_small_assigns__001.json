@@ -1,51 +1,130 @@
 {
   "chunk_id": "aes_cipher_control_fsm__continuous_region__batched_small_assigns__001",
-  "summary": "实例化稀疏 FSM 状态寄存器并将轮计数器输出位直接透传。",
-  "behavior": "通过 `PRIM_FLOP_SPARSE_FSM` 宏创建了控制 FSM 的状态寄存器，该寄存器以 `aes_cipher_ctrl_ns` 为次态，生成当前状态 `aes_cipher_ctrl_cs`，并由 `aes_cipher_ctrl_e` 控制更新使能，复位时回到 `CIPHER_CTRL_IDLE` 状态。同时，将内部的 `rnd_ctr_q` 值直接通过组合赋值输出到 `rnd_ctr_o`。",
+  "header": {
+    "module": "aes_cipher_control_fsm",
+    "block_kind": "mixed",
+    "driven": [
+      "u_state_regs",
+      "rnd_ctr_o"
+    ],
+    "used": [
+      "aes_cipher_ctrl_ns",
+      "aes_cipher_ctrl_cs",
+      "aes_cipher_ctrl_e",
+      "CIPHER_CTRL_IDLE",
+      "rnd_ctr_q",
+      "SecSBoxImpl",
+      "SBoxImplDom"
+    ],
+    "modes": [
+      "CIPHER_CTRL_IDLE",
+      "SecSBoxImpl",
+      "SBoxImplDom"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "rnd_ctr_o 恒等于 rnd_ctr_q，无延迟。",
-      "output_signals": [
-        "rnd_ctr_o"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "u_state_regs (aes_cipher_ctrl_cs) is updated from aes_cipher_ctrl_ns on every clock edge where aes_cipher_ctrl_e is high, and resets to CIPHER_CTRL_IDLE.",
+      "cond": "always (synchronous update)",
+      "signals": [
+        "u_state_regs",
+        "aes_cipher_ctrl_ns",
+        "aes_cipher_ctrl_e",
+        "aes_cipher_ctrl_cs",
+        "CIPHER_CTRL_IDLE"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:452-453"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "rnd_ctr_o is continuously assigned to equal rnd_ctr_q.",
+      "cond": "always",
+      "signals": [
+        "rnd_ctr_o",
+        "rnd_ctr_q"
+      ],
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control_fsm.sv:455"
       ]
     },
     {
-      "property": "aes_cipher_ctrl_cs 在复位后等于 CIPHER_CTRL_IDLE。",
-      "output_signals": [
-        "aes_cipher_ctrl_cs"
+      "id": "G3",
+      "type": "generate_param",
+      "claim": "The generate block gen_cyc_ctr exists only when elaboration-time parameter SecSBoxImpl equals SBoxImplDom.",
+      "cond": "at elaboration",
+      "signals": [],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:457"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "aes_cipher_ctrl_ns must be a legal one-hot (sparse) encoding for the FSM state vector at all times.",
+      "cond": "when aes_cipher_ctrl_e is high and state update occurs",
+      "risk": "If violated, the FSM may enter an invalid state, causing unpredictable control behavior or violating security properties (no local detection of invalid state).",
+      "signals": [
+        "aes_cipher_ctrl_ns",
+        "u_state_regs"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control_fsm.sv:452-453"
       ]
     }
   ],
-  "security_implications": "采用稀疏 FSM 编码可增加对故障注入攻击的抵抗力，防止状态机被单点错误跳转到非法状态。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "PRIM_FLOP_SPARSE_FSM 宏的实现遵循标准稀疏 FSM 编码寄存器行为，正确处理使能、复位与保持。",
-      "bug_relevance": "若宏实现异常（如未正确复位到 IDLE 或使能关闭时出现亚稳态），可能导致状态机失控或进入非法状态，破坏 AES 安全操作。",
-      "related_signals": [
-        "aes_cipher_ctrl_cs",
-        "aes_cipher_ctrl_ns",
-        "aes_cipher_ctrl_e"
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The logic inside generate block gen_cyc_ctr (likely a cycle counter) is not included in this chunk. Its effect on rnd_ctr_q and other control signals (e.g., round counting or handshake) cannot be verified without the rest of the block.",
+      "cond": "elaboration when SecSBoxImpl == SBoxImplDom",
+      "risk": "Missing or misbehaving cycle counter could lead to incorrect round termination or data leakage/overwrite.",
+      "signals": [
+        "gen_cyc_ctr",
+        "rnd_ctr_q",
+        "rnd_ctr_o",
+        "SecSBoxImpl",
+        "SBoxImplDom"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:457"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The macro PRIM_FLOP_SPARSE_FSM may include an illegal-state checker, but without its full definition it is unknown whether an invalid next-state value (aes_cipher_ctrl_ns) causes a detectable fault (e.g., assertion or alert) or leads to silent corruption of the FSM state.",
+      "cond": "when aes_cipher_ctrl_ns is an illegal one-hot value",
+      "risk": "If no check exists, a glitch or logic bug could permanently corrupt the control state without detection, potentially enabling unauthorized operations or leaking secret material.",
+      "signals": [
+        "aes_cipher_ctrl_ns",
+        "u_state_regs"
+      ],
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_control_fsm.sv:452-453"
       ]
     }
   ],
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:451-456"
-  ],
-  "uncertain_points": [
-    "PRIM_FLOP_SPARSE_FSM 宏的具体 RTL 实现未知，是否包含同步复位、是否使用 one-hot/稀疏编码等未明确。",
-    "if (SecSBoxImpl == SBoxImplDom) 块未完整，该分支是否生成计数器逻辑不确定。",
-    "rnd_ctr_q 的来源与更新逻辑未包含在此片段中。"
+    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:452-453",
+    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:455",
+    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:457"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control_fsm.sv",
   "line_start": 451,
-  "line_end": 468
+  "line_end": 468,
+  "security_implications": ""
 }

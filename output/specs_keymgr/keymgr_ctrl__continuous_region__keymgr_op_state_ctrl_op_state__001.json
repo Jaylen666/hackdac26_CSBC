@@ -1,55 +1,219 @@
 {
   "chunk_id": "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
-  "summary": "操作状态控制与错误交叉检查组合逻辑，根据状态和故障条件选择密钥更新类型，并检测有效状态变化。",
-  "behavior": "该区域实例化 keymgr_op_state_ctrl 管理操作请求与使能（adv_req/dis_req/id_req/gen_req、cdi_cnt），输出握手信号（op_ack、op_busy、op_update）及操作使能（adv_en_o、id_en_o、gen_en_o）和操作 FSM 错误 op_fsm_err。组合逻辑生成操作状态交叉检查错误 op_state_cmd_err：当 adv_en_o 有效但 advance_sel 与 disable_sel 均无效，或 gen_en_o 有效但 gen_op 无效时，该信号置 1（行778-779）。op_update_sel 按优先级选择密钥更新操作：在 op_ack 或 op_update 有效时，若信号 invalid 为真则选 KeyUpdateKmac；若 op_fault_err 为真则选 KeyUpdateWipe；若 disabled 为真则选 KeyUpdateKmac；若 op_err 为真则选 KeyUpdateIdle；其余有效情况选 KeyUpdateKmac，无效时选 KeyUpdateIdle（行784-788）。实例化 keymgr_data_en_state 根据使能（adv_en_o 等）和 op_done_o 控制数据使能（data_hw_en_o、data_sw_en_o）并产生 data_fsm_err。vld_state_change_d 在状态变化且目标状态属于 {StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey} 时置 1（行815-818）。所有组合信号无额外延迟，立即反映输入变化。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "op_state_cmd_err",
+      "op_update_sel",
+      "vld_state_change_d",
+      "op_ack",
+      "op_busy",
+      "op_update",
+      "adv_en_o",
+      "id_en_o",
+      "gen_en_o",
+      "op_fsm_err",
+      "data_hw_en_o",
+      "data_sw_en_o",
+      "data_fsm_err"
+    ],
+    "used": [
+      "adv_req",
+      "dis_req",
+      "id_req",
+      "gen_req",
+      "cdi_cnt",
+      "kmac_done_i",
+      "invalid",
+      "op_fault_err",
+      "disabled",
+      "op_err",
+      "state_d",
+      "state_q",
+      "advance_sel",
+      "disable_sel",
+      "gen_op",
+      "op_ack",
+      "op_update",
+      "hw_sel_o",
+      "op_done_o",
+      "op_start_i"
+    ],
+    "modes": [
+      "StCtrlRootKey",
+      "StCtrlCreatorRootKey",
+      "StCtrlOwnerIntKey",
+      "StCtrlOwnerKey",
+      "KeyUpdateKmac",
+      "KeyUpdateWipe",
+      "KeyUpdateIdle",
+      "invalid",
+      "disabled",
+      "op_fault_err",
+      "op_err"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "error",
+      "fault",
+      "integrity",
+      "lifecycle"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 (op_ack|op_update) 有效且 invalid 为真时，op_update_sel 输出 KeyUpdateKmac；当 op_fault_err 为真时输出 KeyUpdateWipe；当 op_err 为真时输出 KeyUpdateIdle。",
-      "output_signals": [
-        "op_update_sel"
-      ],
-      "source_refs": [
-        "keymgr_ctrl.sv:784-788"
-      ]
-    },
-    {
-      "property": "adv_en_o 有效且 advance_sel 与 disable_sel 均为低，或 gen_en_o 有效且 gen_op 为低时，op_state_cmd_err 上升为 1。",
-      "output_signals": [
-        "op_state_cmd_err"
-      ],
-      "source_refs": [
-        "keymgr_ctrl.sv:778-779"
-      ]
-    }
-  ],
-  "security_implications": "操作错误处理直接关联密钥更新类型：invalid 状态强制执行 Kmac 更新，faul_err 触发 Wipe 擦除操作，避免了在异常状态下泄露或残留密钥材料。交叉检查错误 op_state_cmd_err 和状态变化检测 vld_state_change_d 可作为安全监控点，用于捕获非法操作序列。",
-  "assumptions": [
-    {
-      "constraint": "外部应保证 advance_sel 或 disable_sel 在 adv_en_o 有效时至少一个为真，且 gen_op 在 gen_en_o 有效时为真，否则 op_state_cmd_err 将置 1。",
-      "bug_relevance": "若不满足，op_state_cmd_err 可能被记录为错误并影响后续 op_err 组合，进而改变 op_update_sel 选择，可能导致密钥状态机意外进入 Idle 或其他恢复流程。",
-      "related_signals": [
+      "id": "G1",
+      "type": "error_detection",
+      "claim": "op_state_cmd_err is asserted when adv_en_o is high but neither advance_sel nor disable_sel is set, or when gen_en_o is high but gen_op is low.",
+      "cond": "always combinatorial",
+      "signals": [
+        "op_state_cmd_err",
         "adv_en_o",
         "advance_sel",
         "disable_sel",
         "gen_en_o",
-        "gen_op",
-        "op_state_cmd_err"
+        "gen_op"
       ],
-      "source_refs": [
-        "keymgr_ctrl.sv:778-779"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:778-779"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "op_update_sel is combinatorially driven as a priority mux: if (op_ack | op_update) and invalid → KeyUpdateKmac; else if (op_ack | op_update) and op_fault_err → KeyUpdateWipe; else if (op_ack | op_update) and disabled → KeyUpdateKmac; else if (op_ack | op_update) and op_err → KeyUpdateIdle; else if (op_ack | op_update) → KeyUpdateKmac; else → KeyUpdateIdle.",
+      "cond": "always combinatorial",
+      "signals": [
+        "op_update_sel",
+        "op_ack",
+        "op_update",
+        "invalid",
+        "op_fault_err",
+        "disabled",
+        "op_err"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:784-788"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "vld_state_change_d is asserted when state_d differs from state_q and state_d is inside {StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey}.",
+      "cond": "always combinatorial",
+      "signals": [
+        "vld_state_change_d",
+        "state_d",
+        "state_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:815-818"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "advance_sel, disable_sel, and gen_op must be valid and correctly reflect the requested operation when adv_en_o or gen_en_o are high.",
+      "cond": "during active operational state cross-check",
+      "risk": "spurious assertion of op_state_cmd_err or failure to detect an illegal command, potentially allowing unauthorized key state transitions.",
+      "signals": [
+        "advance_sel",
+        "disable_sel",
+        "gen_op",
+        "adv_en_o",
+        "gen_en_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:778-779"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "invalid, disabled, op_fault_err, and op_err statuses accurately reflect the current operational and fault state of the key manager.",
+      "cond": "when op_update_sel is evaluated during ack or update",
+      "risk": "incorrect key update action (Kmac vs Wipe vs Idle) leading to key corruption, secret exposure, or failed wipe on fault.",
+      "signals": [
+        "invalid",
+        "disabled",
+        "op_fault_err",
+        "op_err"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:784-788"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "state_d and state_q encodings must match the enumeration set used in the inside check.",
+      "cond": "continuous evaluation of vld_state_change_d",
+      "risk": "vld_state_change_d may fail to assert for intended transitions or assert erratically, breaking state change tracking.",
+      "signals": [
+        "state_d",
+        "state_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:815-818"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The cross-check for op_state_cmd_err only considers advance and generate operations; an id_en_o without a corresponding id_req condition is not checked, possibly allowing illegal ID operations to proceed undetected.",
+      "cond": "when id_en_o is asserted",
+      "risk": "Unchecked ID operations could lead to unauthorized identity key updates or state corruption.",
+      "signals": [
+        "id_en_o",
+        "id_req"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:778-779"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "In op_update_sel priority, invalid state takes precedence over op_fault_err, so a fault occurring while in invalid state selects KeyUpdateKmac instead of KeyUpdateWipe; this may bypass a required wipe under fault.",
+      "cond": "when invalid and op_fault_err are both true during ack or update",
+      "risk": "Could leave key material un-wiped after a fault, potential secret leakage.",
+      "signals": [
+        "invalid",
+        "op_fault_err"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:784"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "vld_state_change_d only asserts on transitions to four specific root-key states; transitions to other states (e.g., StCtrlDisabled, StCtrlInit) are excluded, which may omit necessary tracking for security counters or events.",
+      "cond": "on any other state transition",
+      "risk": "Missed valid state change detection could affect audit or fault logging, weakening traceability.",
+      "signals": [
+        "state_d",
+        "state_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:815-818"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_ctrl.sv:756-819"
-  ],
-  "uncertain_points": [
-    "op_err 信号的组成（是否包含 op_state_cmd_err、op_fsm_err 等）未在本片段定义，影响 op_update_sel 的优先级分支行为。",
-    "state_d、state_q 以及枚举 StCtrlRootKey 等状态值来源于顶层 FSM，本片段仅进行子集检测，完整状态转换逻辑需参考外部。",
-    "op_update_sel 的下游连接（如驱动何种密钥更新硬件）未展示，无法确认 KeyUpdateWipe/KeyUpdateKmac 的实际影响。",
-    "vld_state_change_d 的后续使用（如锁存为 vld_state_change_q）未在本片段给出，可能用于错误注入或门控。"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:756-819"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 756,
-  "line_end": 819
+  "line_end": 819,
+  "security_implications": ""
 }

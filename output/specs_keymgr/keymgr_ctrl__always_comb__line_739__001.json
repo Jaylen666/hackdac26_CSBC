@@ -1,47 +1,119 @@
 {
   "chunk_id": "keymgr_ctrl__always_comb__line_739__001",
-  "summary": "组合逻辑输出当前操作状态：Idle、Wip 或完成成功/失败。",
-  "behavior": "该 always_comb 块生成 status_o 信号。默认输出 OpIdle。当操作完成信号 op_done_o 有效时，status_o 根据 error_o 和 fault_o 的或运算取 OpDoneFail 或 OpDoneSuccess；若 op_done_o 无效但 op_start_i 有效，则输出 OpWip。注释指出，op_done_o 可能与使能信号下降沿同时出现，但优先级确保完成状态优先于 Wip 状态。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "always_comb",
+    "driven": [
+      "status_o"
+    ],
+    "used": [
+      "op_done_o",
+      "error_o",
+      "fault_o",
+      "op_start_i"
+    ],
+    "modes": [
+      "OpIdle",
+      "OpDoneFail",
+      "OpDoneSuccess",
+      "OpWip"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "handshake",
+      "status"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 op_done_o 有效时，status_o 一定为 OpDoneFail 或 OpDoneSuccess，具体由 error_o 与 fault_o 的 OR 结果决定。",
-      "output_signals": [
-        "status_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "status_o is combinatorially assigned: OpDoneFail when op_done_o && (error_o || fault_o); OpDoneSuccess when op_done_o && !(error_o || fault_o); OpWip else if op_start_i; OpIdle otherwise.",
+      "cond": "always",
+      "signals": [
+        "status_o",
+        "op_done_o",
+        "error_o",
+        "fault_o",
+        "op_start_i"
       ],
-      "source_refs": [
+      "refs": [
+        "file:740-748"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When op_done_o is high, error_o and fault_o must be valid Boolean values (no X/Z).",
+      "cond": "op_done_o asserted",
+      "risk": "If undefined, status_o becomes X, potentially propagating to downstream safety/error logic.",
+      "signals": [
+        "op_done_o",
+        "error_o",
+        "fault_o"
+      ],
+      "refs": [
         "file:741-745"
       ]
     },
     {
-      "property": "当 op_done_o 无效且 op_start_i 有效时，status_o 一定为 OpWip；否则为 OpIdle。",
-      "output_signals": [
+      "id": "A2",
+      "type": "handshake",
+      "claim": "op_start_i must be externally gated by the enable signal (en_i) such that it only asserts when the interface is truly active.",
+      "cond": "normal operation",
+      "risk": "If op_start_i asserts spuriously (when en_i low), status_o will show OpWip, fooling downstream logic into thinking an operation is in progress.",
+      "signals": [
+        "op_start_i",
         "status_o"
       ],
-      "source_refs": [
-        "file:740,746-748"
+      "refs": [
+        "file:742-744",
+        "file:746-747"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "在 op_done_o 有效期间，error_o 和 fault_o 必须已经稳定且反映操作的真实最终结果。",
-      "bug_relevance": "若 error_o 或 fault_o 在 op_done_o 有效后延迟变化，可能导致 status_o 报告错误的完成状态，使上层逻辑误判操作成功或失败，进而影响密钥管理流程的完整性。",
-      "related_signals": [
-        "error_o",
-        "fault_o",
-        "op_done_o"
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The comment describes a one‑cycle‑behind main FSM and an enable signal (en_i) not present in this block; it is unclear whether status_o aligns correctly with the enabled FSM state when en_i goes low the same cycle op_done_o asserts.",
+      "cond": "op_done_o asserts in the cycle en_i goes low",
+      "risk": "The consumer may interpret a done/fail status while the interface is disabled, leading to incorrect state transitions or missed operations.",
+      "signals": [
+        "status_o",
+        "op_done_o",
+        "en_i (implied)"
       ],
-      "source_refs": [
-        "file:745"
+      "refs": [
+        "file:742-744"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "op_done_o is likely a single‑cycle assertion; status_o will only indicate done/fail for that one cycle before falling back to OpIdle or OpWip, risking a missed status if the consumer samples later.",
+      "cond": "op_done_o is a pulse",
+      "risk": "A critical error/fault indication could be lost, preventing proper error handling or recovery.",
+      "signals": [
+        "op_done_o",
+        "status_o"
+      ],
+      "refs": [
+        "file:741-745",
+        "file:749"
       ]
     }
   ],
   "evidence_refs": [
     "file:739-749"
   ],
-  "uncertain_points": [],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 739,
-  "line_end": 749
+  "line_end": 749,
+  "security_implications": ""
 }

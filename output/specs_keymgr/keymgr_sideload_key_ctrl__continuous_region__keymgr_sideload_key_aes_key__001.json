@@ -1,4 +1,216 @@
 {
   "chunk_id": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
-  "error": "Expecting ',' delimiter: line 27 column 6 (char 1774)"
+  "header": {
+    "module": "keymgr_sideload_key_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "hw_key_sel",
+      "slot_sel",
+      "aes_key_o",
+      "otbn_key_o",
+      "kmac_sideload_key"
+    ],
+    "used": [
+      "dest_sel_i",
+      "hw_key_sel_i",
+      "clk_i",
+      "rst_ni",
+      "keys_en",
+      "data_en_i",
+      "data_valid_i",
+      "slot_clr",
+      "entropy_i",
+      "data_truncated",
+      "data_i",
+      "AesIdx",
+      "KmacIdx",
+      "OtbnIdx",
+      "LastIdx",
+      "OtbnKeyWidth",
+      "Aes",
+      "Kmac",
+      "Otbn",
+      "mubi4_test_true_strict"
+    ],
+    "modes": [
+      "Aes",
+      "Kmac",
+      "Otbn"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "entropy",
+      "integrity",
+      "access_control",
+      "handshake",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "slot_sel is a combinational decoder: slot_sel[AesIdx] = (dest_sel_i == Aes) & mubi4_test_true_strict(hw_key_sel[AesIdx]), similarly for KmacIdx and OtbnIdx.",
+      "cond": "always",
+      "signals": [
+        "slot_sel",
+        "dest_sel_i",
+        "hw_key_sel",
+        "AesIdx",
+        "KmacIdx",
+        "OtbnIdx"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:144-146"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "instance",
+      "claim": "Each keymgr_sideload_key instance (u_aes_key, u_otbn_key, u_kmac_key) has its set_i input gated by data_valid_i AND the respective slot_sel bit, so data is loaded only when data_valid_i is high and the destination slot is selected.",
+      "cond": "always",
+      "signals": [
+        "data_valid_i",
+        "slot_sel",
+        "u_aes_key",
+        "u_otbn_key",
+        "u_kmac_key"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:153",
+        "keymgr_sideload_key_ctrl.sv:168",
+        "keymgr_sideload_key_ctrl.sv:182"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "instance",
+      "claim": "hw_key_sel is connected to the mubi_o output of prim_mubi4_sync instance u_mubi_buf, which samples hw_key_sel_i synchronously.",
+      "cond": "always",
+      "signals": [
+        "hw_key_sel",
+        "hw_key_sel_i",
+        "u_mubi_buf"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:133-141"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "instance",
+      "claim": "Each keymgr_sideload_key instance's clr_i input is directly connected to the corresponding bit of slot_clr, allowing external per-slot clear control.",
+      "cond": "always",
+      "signals": [
+        "slot_clr",
+        "u_aes_key",
+        "u_otbn_key",
+        "u_kmac_key"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:154",
+        "keymgr_sideload_key_ctrl.sv:169",
+        "keymgr_sideload_key_ctrl.sv:183"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "hw_key_sel_i must be a properly encoded mubi4 signal whose encoding is maintained by the upstream driver, so that mubi4_test_true_strict correctly enforces the hardware key gating policy.",
+      "cond": "always",
+      "risk": "If hw_key_sel_i is corrupted or not mubi4-encoded, an attacker might manipulate the permission check, allowing unauthorized sideload of keys.",
+      "signals": [
+        "hw_key_sel_i"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:144-146"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "External logic must ensure that for a given slot, slot_clr and set_i (data_valid_i & slot_sel) are not asserted simultaneously, or keymgr_sideload_key must safely handle concurrent set/clear.",
+      "cond": "when a sideload or clear operation is active",
+      "risk": "Concurrent set and clear may result in undefined key register state, potentially exposing partial key material or corrupting the stored key.",
+      "signals": [
+        "slot_clr",
+        "data_valid_i",
+        "slot_sel"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:153-154",
+        "keymgr_sideload_key_ctrl.sv:168-169",
+        "keymgr_sideload_key_ctrl.sv:182-183"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "dest_sel_i must be one of Aes, Kmac, or Otbn for a sideload to occur; any other value results in no key loading (all slot_sel bits low).",
+      "cond": "when a valid sideload is expected",
+      "risk": "If dest_sel_i is invalid, no key is loaded, leading to a system-level functional failure but no direct security leakage.",
+      "signals": [
+        "dest_sel_i"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:144-146"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal valid_tracking_q is declared but not assigned or used in this continuous region; its purpose and connection are unclear.",
+      "cond": "unknown",
+      "risk": "If intended for tracking key validity, the missing logic may cause the module to miss a critical side‑effect, potentially leaving stale key state undetected.",
+      "signals": [
+        "valid_tracking_q"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:190"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "prim_mubi4_sync is instantiated with AsyncOn=0, and the comment says clock/reset are only for SVAs; the intent appears to be reusing mubi4 assertion infrastructure without actual CDC, but the exact functional benefit is unclear.",
+      "cond": "always",
+      "risk": "Design may be unnecessarily complex or could mask a missing CDC requirement if later the interface becomes asynchronous.",
+      "signals": [
+        "u_mubi_buf"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:133-141"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The OTBN key path uses data_i while AES and KMAC use data_truncated; the relationship and width consistency between these inputs is not defined in this chunk, potentially causing incorrect or truncated key material for OTBN.",
+      "cond": "when OTBN key is loaded",
+      "risk": "If data_i and data_truncated have different widths or truncation policies, the loaded OTBN key may not match the intended full key, leading to crypto failures or weakened security.",
+      "signals": [
+        "data_i",
+        "data_truncated",
+        "OtbnKeyWidth"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:148-174"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_sideload_key_ctrl.sv:131-190"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
+  "line_start": 131,
+  "line_end": 190,
+  "security_implications": ""
 }

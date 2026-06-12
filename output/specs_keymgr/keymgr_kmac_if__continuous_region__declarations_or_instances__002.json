@@ -1,60 +1,179 @@
 {
   "chunk_id": "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
-  "summary": "根据 start 与 done_o 条件选择输出真实摘要拼接或基于熵的诱饵数据。",
-  "behavior": "这是一个组合 assign，立即选择输出。当 start 与 done_o 同时有效时，data_o 等于 {kmac_data_i.digest_share1, kmac_data_i.digest_share0}，即真实摘要的共享值拼接；否则 data_o 等于 {{DecoyOutputCopies{entropy_i[1]}}, {DecoyOutputCopies{entropy_i[0]}}}，即利用每个熵位复制 DecoyOutputCopies 次形成的诱饵向量。该设计意图在未启动或未完成时用随机诱饵掩盖真实摘要，避免在接口总线暴漏敏感数据。",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "assign",
+    "driven": [
+      "data_o"
+    ],
+    "used": [
+      "start",
+      "done_o",
+      "kmac_data_i",
+      "entropy_i",
+      "DecoyOutputCopies"
+    ],
+    "modes": [
+      "digest_mode (start && done_o)",
+      "decoy_mode (! (start && done_o))"
+    ],
+    "tags": [
+      "secret",
+      "digest",
+      "entropy",
+      "mask",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 start 与 done_o 均为高时，data_o 一定输出真实摘要拼接值 {kmac_data_i.digest_share1, kmac_data_i.digest_share0}，无组合延迟。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When start and done_o are both true, data_o outputs the concatenation of kmac_data_i.digest_share1 and kmac_data_i.digest_share0.",
+      "cond": "start && done_o",
+      "signals": [
+        "start",
+        "done_o",
+        "kmac_data_i",
         "data_o"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:288-290"
+      "refs": [
+        "file:288-290"
       ]
     },
     {
-      "property": "当 start 或 done_o 为低时，data_o 仅输出基于 entropy_i 的诱饵值，不含真实摘要信息。",
-      "output_signals": [
-        "data_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "Otherwise, data_o outputs a decoy value consisting of DecoyOutputCopies copies of entropy_i[1] concatenated with DecoyOutputCopies copies of entropy_i[0].",
+      "cond": "! (start && done_o)",
+      "signals": [
+        "data_o",
+        "entropy_i",
+        "DecoyOutputCopies"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:291-292"
+      "refs": [
+        "file:291-292"
       ]
     }
   ],
-  "security_implications": "在未完成/未启动时用诱饵替代真实摘要输出，防止通过 data_o 探测或侧信道泄露密钥/摘要。属于接口层防御设计，确保只在合法访问时刻暴露真实数据。",
   "assumptions": [
     {
-      "constraint": "参数 DecoyOutputCopies 必须等于 kmac_data_i.digest_share1 和 digest_share0 各自的位宽，且两者位宽相等，以保证 data_o 在两种条件下的位宽一致。",
-      "bug_relevance": "若位宽不匹配，会导致组合赋值拼接位宽错误，破坏数据完整性，可能引发综合错误或功能错误。",
-      "related_signals": [
-        "kmac_data_i",
-        "entropy_i",
-        "data_o"
+      "id": "A1",
+      "type": "handshake",
+      "claim": "start and done_o must accurately indicate that the KMAC operation is complete and the digest shares are valid.",
+      "cond": "When start && done_o is used to gate digest output.",
+      "risk": "If start or done_o are mis-timed or glitch, the real digest could be output prematurely or a stale digest could be output, causing security violations.",
+      "signals": [
+        "start",
+        "done_o"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:288-292"
+      "refs": [
+        "file:288"
       ]
     },
     {
-      "constraint": "entropy_i 位宽至少为 2，其位索引 [1] 和 [0] 有效。",
-      "bug_relevance": "若位宽不足，将导致数组索引越界，引发仿真或综合错误，诱饵输出无效。",
-      "related_signals": [
-        "entropy_i"
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "kmac_data_i.digest_share1 and digest_share0 must contain valid digest shares when start && done_o is true.",
+      "cond": "start && done_o",
+      "risk": "If the shares are not yet valid or are corrupted, data_o may output incorrect digest data, potentially impacting key derivation.",
+      "signals": [
+        "kmac_data_i",
+        "start",
+        "done_o"
       ],
-      "source_refs": [
-        "keymgr_kmac_if.sv:291-292"
+      "refs": [
+        "file:288-290"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "entropy_i must provide sufficient randomness and toggling to serve as an effective decoy mask on the output.",
+      "cond": "Always, but especially when outputting decoy (i.e., when not outputting real digest).",
+      "risk": "If entropy_i is static or predictable, the decoy output may leak information about the operational state and fail to mask side-channel emissions.",
+      "signals": [
+        "entropy_i",
+        "data_o"
+      ],
+      "refs": [
+        "file:291-292"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "The parameter DecoyOutputCopies must equal the bit-width of each digest share (digest_share1 and digest_share0) to ensure correct output width.",
+      "cond": "When the module is instantiated.",
+      "risk": "A mismatch would cause truncation or width extension of the digest signal on data_o, leading to functional failure.",
+      "signals": [
+        "DecoyOutputCopies",
+        "kmac_data_i.digest_share1",
+        "kmac_data_i.digest_share0",
+        "data_o"
+      ],
+      "refs": [
+        "file:288-292"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The condition start && done_o may become true before kmac_data_i.digest_share* are stable, causing data_o to briefly output invalid digest shares.",
+      "cond": "When start && done_o transitions to true.",
+      "risk": "Downstream logic might capture a transient wrong digest, leading to key derivation errors or security bypass.",
+      "signals": [
+        "start",
+        "done_o",
+        "kmac_data_i",
+        "data_o"
+      ],
+      "refs": [
+        "file:288-290"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "The decoy value is only a replication of two single entropy bits, which may not provide sufficient switching factor to mask the output data bus transitions.",
+      "cond": "When decoy mode is active.",
+      "risk": "Side-channel analysis might distinguish decoy output from real digest output or infer entropy bit values, reducing protection.",
+      "signals": [
+        "data_o",
+        "entropy_i",
+        "DecoyOutputCopies"
+      ],
+      "refs": [
+        "file:291-292"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "No compile-time check ensures that DecoyOutputCopies equals the width of kmac_data_i.digest_share1 (and share0), so a mismatch may go undetected.",
+      "cond": "When DecoyOutputCopies is set incorrectly relative to digest share widths.",
+      "risk": "Size mismatch on the data_o bus could cause functional failure or silent data corruption.",
+      "signals": [
+        "DecoyOutputCopies",
+        "kmac_data_i",
+        "data_o"
+      ],
+      "refs": [
+        "file:288-292"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_kmac_if.sv:288-292"
-  ],
-  "uncertain_points": [
-    "DecoyOutputCopies 与 digest_share1/0 位宽是否确相等未在片段中定义，需结合上下文确认。",
-    "entropy_i 的确切宽度和来源不确定，片段仅使用 [1] 和 [0]，需要外部保证宽度 ≥2。"
+    "file:288-292"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 288,
-  "line_end": 292
+  "line_end": 292,
+  "security_implications": ""
 }

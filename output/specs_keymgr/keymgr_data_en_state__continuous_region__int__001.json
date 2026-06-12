@@ -1,38 +1,111 @@
 {
   "chunk_id": "keymgr_data_en_state__continuous_region__int__001",
-  "summary": "定义数据使能状态机的稀疏编码状态并例化受保护的状态寄存器。",
-  "behavior": "该片段定义了 6 个数据控制状态，使用 10 位稀疏编码（StCtrlDataIdle、StCtrlDataHwEn、StCtrlDataSwEn、StCtrlDataDis、StCtrlDataWait、StCtrlDataInvalid），并将下一状态 state_d 通过 `PRIM_FLOP_SPARSE_FSM` 寄存器例化到当前状态 state_q，复位值为 StCtrlDataIdle。设计意图是通过稀疏编码实现安全状态机（SEC_CM: DATA.FSM.SPARSE），宏内部可能包含非法状态检测与保护逻辑。",
+  "header": {
+    "module": "keymgr_data_en_state",
+    "block_kind": "mixed",
+    "driven": [
+      "state_q"
+    ],
+    "used": [
+      "state_d",
+      "StCtrlDataIdle",
+      "state_e"
+    ],
+    "modes": [
+      "StCtrlDataIdle",
+      "StCtrlDataHwEn",
+      "StCtrlDataSwEn",
+      "StCtrlDataDis",
+      "StCtrlDataWait",
+      "StCtrlDataInvalid"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "state_machine",
+      "key",
+      "security"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位解除后，state_q 被初始化为 StCtrlDataIdle。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "state_q is the registered version of state_d, resetting synchronously to StCtrlDataIdle.",
+      "cond": "Every clock edge (and async/sync reset if implemented inside the macro).",
+      "signals": [
+        "state_d",
         "state_q"
       ],
-      "source_refs": [
+      "refs": [
+        "keymgr_data_en_state.sv:69"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "The PRIM_FLOP_SPARSE_FSM macro enforces that state_q never holds an illegal 10-bit encoding outside the six defined state_e members; on detection of an invalid encoding it forces state_q to StCtrlDataIdle.",
+      "cond": "If state_d or state_q ever becomes a value not in {StCtrlDataIdle, StCtrlDataHwEn, StCtrlDataSwEn, StCtrlDataDis, StCtrlDataWait, StCtrlDataInvalid}.",
+      "signals": [
+        "state_q",
+        "state_e"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:68-69"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "During normal operation, the combinational logic driving state_d produces only one of the six valid state_e encodings.",
+      "cond": "Always when the key manager is not in error recovery.",
+      "risk": "If an invalid value is driven onto state_d, the PRIM_FLOP_SPARSE_FSM will detect it and force state_q to StCtrlDataIdle, potentially disrupting the data‑enable state machine and causing loss of key‑management control.",
+      "signals": [
+        "state_d"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:66",
         "keymgr_data_en_state.sv:69"
       ]
     }
   ],
-  "security_implications": "状态机采用 10 位稀疏编码（汉明距离较大），并配合 `PRIM_FLOP_SPARSE_FSM` 宏提供故障注入防护。非法状态或单点翻转很可能被检测，属于数据通路安全关键部件。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "驱动到 state_d 的组合逻辑必须始终输出合法状态值，即 StCtrlDataIdle、StCtrlDataHwEn、StCtrlDataSwEn、StCtrlDataDis、StCtrlDataWait 或 StCtrlDataInvalid 之一。",
-      "bug_relevance": "若 state_d 为非法值，可能触发宏内的非法状态检测并发出安全警告，或导致状态机进入无效状态，违背安全契约。",
-      "related_signals": [
-        "state_d"
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The exact error‑reporting mechanism (alert, fatal flag, etc.) inside PRIM_FLOP_SPARSE_FSM is not visible from this chunk; an illegal state encoding may be silently forced to Idle without notifying the system.",
+      "cond": "Whenever state_d or state_q becomes corrupted.",
+      "risk": "A temporary or permanent FSM corruption could go undetected, leading to unauthorized key‑manager operations or deadlock.",
+      "signals": [
+        "state_q",
+        "unconnected alert from macro (if any)"
       ],
-      "source_refs": [
-        "keymgr_data_en_state.sv:58-64"
+      "refs": [
+        "keymgr_data_en_state.sv:68-69"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If the macro resets state_q to StCtrlDataIdle after detecting an invalid encoding, there is no visible sideband signal (e.g., error status, interrupt) propagated outside this module to inform higher‑level key manager logic.",
+      "cond": "After a fault injection or SEU flips state bits.",
+      "risk": "The data‑enable state machine may silently restart from Idle, possibly leaving data paths in an inconsistent security state or causing glitches in key access control.",
+      "signals": [
+        "state_q"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:68-69"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr_data_en_state.sv:56-69"
   ],
-  "uncertain_points": [
-    "PRIM_FLOP_SPARSE_FSM 宏的具体实现未显示，无法确定非法状态检测的具体行为（是否仅报警、是否锁定状态等）；复位信号来源及同步方式未知。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv",
   "line_start": 56,
-  "line_end": 69
+  "line_end": 69,
+  "security_implications": ""
 }

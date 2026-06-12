@@ -1,37 +1,163 @@
 {
   "chunk_id": "keymgr_cfg_en__always_ff__line_40__001",
-  "summary": "一个标志寄存器 init_q，在使能有效期间捕获 init_i 脉冲，使能撤销时自动清零。",
-  "behavior": "在时钟上升沿或复位下降沿触发。复位（rst_ni=0）时 init_q 清零；否则若 init_q 当前为 1 但使能 en_i 为 0，则将 init_q 清零；否则若输入 init_i 与 en_i 同时有效，将 init_q 置 1；其余情况 init_q 保持原值。",
+  "header": {
+    "module": "keymgr_cfg_en",
+    "block_kind": "always_ff",
+    "driven": [
+      "init_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "init_i",
+      "en_i",
+      "init_q"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "lifecycle",
+      "key"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位释放后第一个时钟沿，init_q 一定为 0",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When rst_ni is low, init_q is cleared to 0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "init_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:42"
+      "refs": [
+        "40:42"
       ]
     },
     {
-      "property": "当 en_i 为 0 且 init_q 为 1 时，下一个时钟沿 init_q 一定变为 0",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When init_q is high and en_i is low, init_q is cleared to 0.",
+      "cond": "init_q && !en_i",
+      "signals": [
+        "init_q",
+        "en_i"
+      ],
+      "refs": [
+        "43:44"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When init_i and en_i are both high, init_q is set to 1.",
+      "cond": "init_i && en_i",
+      "signals": [
+        "init_i",
+        "en_i",
         "init_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:43-44"
+      "refs": [
+        "45:46"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "In all other cases (no reset, not init_q&&!en_i, not init_i&&en_i), init_q retains its previous value.",
+      "cond": "else (implicit)",
+      "signals": [
+        "init_q"
+      ],
+      "refs": [
+        "47"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv:40-48"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "External logic must ensure that when init_i is asserted, en_i is also asserted; otherwise init_q will not be set.",
+      "cond": "when init_i is asserted",
+      "risk": "Missed initialization may leave the key manager in an unconfigured state.",
+      "signals": [
+        "init_i",
+        "en_i",
+        "init_q"
+      ],
+      "refs": [
+        "45:46"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "External logic must ensure en_i remains asserted throughout the initialization period, because any deassertion of en_i while init_q is high will clear init_q.",
+      "cond": "when init_q is high",
+      "risk": "Premature clearing of init_q could abort initialization, leaving partial or unsafe state.",
+      "signals": [
+        "en_i",
+        "init_q"
+      ],
+      "refs": [
+        "43:44"
+      ]
+    }
   ],
   "uncertain_points": [
-    "init_q 在 en_i 无效时自动清零的设计意图不确定，可能需要结合 keymgr 整体控制流程来确认该行为是否符合预期（例如是否用于重新武装初始化）。",
-    "当 init_i 保持高电平且 en_i 有效时，init_q 会持续置 1，若 init_i 为持续信号而非脉冲，则行为可能偏离预期，需确认上层逻辑性质。"
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The intended behavior of init_q (sticky flag, pulse, or level-sensitive status) is unclear. The clearing on !en_i suggests en_i serves as an active-low clear, but the overall protocol is ambiguous.",
+      "cond": "unknown",
+      "risk": "Incorrect integration with other blocks could lead to unexpected init_q toggling or missed initialization sequences.",
+      "signals": [
+        "init_q",
+        "en_i",
+        "init_i"
+      ],
+      "refs": [
+        "40:48"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "When init_q is high and en_i is high, init_q remains 1 regardless of init_i. If en_i never goes low, init_q stays high permanently, potentially acting as a stuck enable. Is this intended?",
+      "cond": "init_q == 1 and en_i == 1 and init_i == 0 (or any init_i)",
+      "risk": "A stuck init_q could permanently enable a critical path or mask re-initialization requests.",
+      "signals": [
+        "init_q",
+        "en_i",
+        "init_i"
+      ],
+      "refs": [
+        "43:47"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "The usage of init_q outside this module is not visible; it likely gates other logic. Need to verify that the clearing condition (en_i deassertion) does not violate assumptions of downstream consumers.",
+      "cond": "when init_q changes",
+      "risk": "If downstream logic expects init_q to remain set until explicit clear, unexpected deassertion could cause data corruption.",
+      "signals": [
+        "init_q"
+      ],
+      "refs": [
+        "40:48"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "40:48"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv",
   "line_start": 40,
-  "line_end": 48
+  "line_end": 48,
+  "security_implications": ""
 }

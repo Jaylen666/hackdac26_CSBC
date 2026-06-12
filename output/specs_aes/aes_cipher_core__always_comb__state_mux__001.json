@@ -1,28 +1,130 @@
 {
   "chunk_id": "aes_cipher_core__always_comb__state_mux__001",
-  "summary": "根据 state_sel 选择下一状态 state_d，并在未定义选择值时根据密钥长度决定是清除还是保持。",
-  "behavior": "该组合块实现一个多路选择器：当 state_sel 等于 STATE_INIT 时 state_d 输出 state_init_i；等于 STATE_ROUND 时输出 add_round_key_out；等于 STATE_CLEAR 时输出 prd_clearing_state_i。对于其他未匹配的 state_sel 值，若 key_len_i 等于 AES_256 则输出 prd_clearing_state_i，否则 state_d 保持原值（即通过组合反馈维持）。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "state_d"
+    ],
+    "used": [
+      "state_sel",
+      "state_init_i",
+      "add_round_key_out",
+      "prd_clearing_state_i",
+      "key_len_i"
+    ],
+    "modes": [
+      "STATE_INIT",
+      "STATE_ROUND",
+      "STATE_CLEAR",
+      "AES_256 (parameter)"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "secret",
+      "key",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 state_sel 等于 STATE_INIT、STATE_ROUND 或 STATE_CLEAR 之一时，state_d 一定等于对应的输入信号。",
-      "output_signals": [
-        "state_d"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When state_sel equals STATE_INIT, state_d is assigned state_init_i.",
+      "cond": "state_sel == STATE_INIT",
+      "signals": [
+        "state_sel",
+        "state_d",
+        "state_init_i"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:249-252"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:250"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When state_sel equals STATE_ROUND, state_d is assigned add_round_key_out.",
+      "cond": "state_sel == STATE_ROUND",
+      "signals": [
+        "state_sel",
+        "state_d",
+        "add_round_key_out"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:251"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When state_sel equals STATE_CLEAR, state_d is assigned prd_clearing_state_i.",
+      "cond": "state_sel == STATE_CLEAR",
+      "signals": [
+        "state_sel",
+        "state_d",
+        "prd_clearing_state_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:252"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "For any other state_sel value, state_d is assigned prd_clearing_state_i if key_len_i equals AES_256; otherwise state_d is assigned to itself (combinational latch).",
+      "cond": "state_sel not in {STATE_INIT, STATE_ROUND, STATE_CLEAR}",
+      "signals": [
+        "state_sel",
+        "state_d",
+        "prd_clearing_state_i",
+        "key_len_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:253"
       ]
     }
   ],
-  "security_implications": "default 分支在 key_len_i 为 AES_256 时强制输出 prd_clearing_state_i，可能是为了防止非法状态选择值下敏感状态数据泄露；但若 key_len_i 不为 AES_256，状态将保持原值，有可能保留敏感数据。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The controlling FSM ensures state_sel stays within {STATE_INIT, STATE_ROUND, STATE_CLEAR} during normal operation.",
+      "cond": "always during normal operation",
+      "risk": "If state_sel takes an unexpected value and key_len_i != AES_256, state_d latches its previous value, which could retain secret intermediate AES state and expose it to later read or side-channel analysis.",
+      "signals": [
+        "state_sel",
+        "state_d",
+        "key_len_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:253"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Default case latches state_d when key_len_i != AES_256, potentially retaining sensitive round or clearing state. The asymmetry between key lengths suggests either a missing clear or an intentional hold that may leak secrets.",
+      "cond": "state_sel is an undefined value and key_len_i != AES_256",
+      "risk": "If verified, latched state could be read later or leak via power/timing, violating secure wipe expectations.",
+      "signals": [
+        "state_d",
+        "key_len_i",
+        "state_sel"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:253"
+      ]
+    }
+  ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:247-255"
   ],
-  "uncertain_points": [
-    "default 分支中 state_d 保持原值（state_d = state_d）可能推断出组合锁存器，与纯 always_comb 设计意图有潜在冲突，需确认该反馈是否可取。",
-    "prd_clearing_state_i 的具体来源和清零值语义未定义，其安全属性依赖上下文。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 247,
-  "line_end": 255
+  "line_end": 255,
+  "security_implications": ""
 }

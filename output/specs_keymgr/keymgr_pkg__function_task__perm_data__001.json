@@ -1,50 +1,124 @@
 {
   "chunk_id": "keymgr_pkg__function_task__perm_data__001",
-  "summary": "组合逻辑位排列函数：根据 perm_sel 选择 data 中的位重新排列输出。",
-  "behavior": "该函数通过一个由 32 个元素组成的排列选择器 perm_sel 将输入 data 的位重新映射到输出。对于每个输出位索引 k（0 到 31），perm_data[k] 直接取自 data 的 bit[perm_sel[k]]。函数为组合逻辑，无状态、无延迟，调用后立即返回新的位序。循环体固定迭代 32 次，与 RandWidth 可能一致。",
+  "header": {
+    "module": "keymgr_pkg",
+    "block_kind": "declaration",
+    "driven": [
+      "perm_data"
+    ],
+    "used": [
+      "data",
+      "perm_sel",
+      "k",
+      "RandWidth"
+    ],
+    "modes": [],
+    "tags": [
+      "secret",
+      "key",
+      "permutation",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "输出宽度与输入 data 相同，为 RandWidth 位，且输出的每个位都来自输入 data 的某一特定位（由 perm_sel 完全决定）。",
-      "output_signals": [
-        "perm_data (返回值)"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:264-271"
-      ]
-    }
-  ],
-  "security_implications": "",
-  "assumptions": [
-    {
-      "constraint": "perm_sel 中的每一个索引值都必须在 0 到 RandWidth-1 的范围内，否则 data 索引越界。",
-      "bug_relevance": "索引越界可能导致仿真出现 X 或不定态，综合可能产生不可预测的硬件行为。该场景设计上不应发生。",
-      "related_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each integer k from 0 to 31, output bit perm_data[k] is assigned the value of data[perm_sel[k]].",
+      "cond": "always during function evaluation.",
+      "signals": [
+        "perm_data",
+        "data",
         "perm_sel",
-        "data"
+        "k"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:268"
+      "refs": [
+        "keymgr_pkg.sv:267-269"
       ]
     },
     {
-      "constraint": "参数 RandWidth 必须等于 32，因为循环体硬编码了 32 次迭代且直接使用 k 作为输出位索引，否则出现位宽不匹配。",
-      "bug_relevance": "若 RandWidth 不等于 32，会造成部分输出位未赋值或写入越界，导致功能错误。",
-      "related_signals": [
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "Output bits perm_data[RandWidth-1:32] (if RandWidth > 32) are not driven by any assignment within the function, leaving them undriven (X).",
+      "cond": "when parameter RandWidth is greater than 32.",
+      "signals": [
+        "perm_data",
         "RandWidth"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:264,267"
+      "refs": [
+        "keymgr_pkg.sv:264-271"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The function assumes RandWidth >= 32 so that the loop index k (0..31) does not exceed the output bit range.",
+      "cond": "always required for correct synthesis/simulation.",
+      "risk": "If RandWidth < 32, accessing perm_data[k] for k>=RandWidth is an out-of-bounds error; if RandWidth > 32, high bits remain undriven.",
+      "signals": [
+        "RandWidth",
+        "perm_data"
+      ],
+      "refs": [
+        "keymgr_pkg.sv:264-268"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The perm_sel array must contain valid indices into data, i.e., for all k in 0..31, perm_sel[k] must be in range 0 to RandWidth-1.",
+      "cond": "always when the function is called.",
+      "risk": "If any perm_sel[k] is out-of-range, data[perm_sel[k]] yields X, corrupting the permuted output and potentially leaking secrets.",
+      "signals": [
+        "perm_sel",
+        "data",
+        "RandWidth"
+      ],
+      "refs": [
+        "keymgr_pkg.sv:268"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The hardcoded loop bound of 32 conflicts with parameterized RandWidth; if RandWidth != 32, the function's behavior is incorrect (out-of-range access or undriven high bits).",
+      "cond": "If RandWidth is set to any value other than 32.",
+      "risk": "Out-of-range access for low bits or undriven high bits could leak X values or cause functional failure in secret-key permutation.",
+      "signals": [
+        "RandWidth",
+        "perm_data",
+        "perm_sel"
+      ],
+      "refs": [
+        "keymgr_pkg.sv:264-271"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The definition of rand_perm_t type is not visible; its width determines whether perm_sel has exactly 32 elements and if element values are constrained.",
+      "cond": "any call to perm_data with a perm_sel that does not match the assumed 32-element array with valid indices.",
+      "risk": "Undefined behavior if perm_sel has fewer than 32 elements or element bits exceed RandWidth.",
+      "signals": [
+        "perm_sel",
+        "rand_perm_t"
+      ],
+      "refs": [
+        "keymgr_pkg.sv:265"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:264-271"
-  ],
-  "uncertain_points": [
-    "参数 RandWidth 的取值与循环硬编码 32 之间的关系未在片段内明确，依赖调用上下文确保一致。",
-    "rand_perm_t 类型的具体定义（如每个元素的位宽）未给出，无法验证 perm_sel[k] 是否能直接用于 data 的位选择而不进行额外转换。"
+    "keymgr_pkg.sv:264-271"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv",
   "line_start": 264,
-  "line_end": 271
+  "line_end": 271,
+  "security_implications": ""
 }

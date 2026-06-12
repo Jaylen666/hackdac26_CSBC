@@ -1,53 +1,159 @@
 {
   "chunk_id": "aes_cipher_control__generate_for__gen_sel_buf_chk__001",
-  "summary": "生成一组安全选择检查器，对 sp2v 选择信号做完整性检查，并输出检查后的选择信号和错误标志。",
-  "behavior": "该 generate-for 循环实例化 NumSp2VSig 个 aes_sel_buf_chk 模块。每个实例 i 的参数 Num、Width 与模块级常量 Sp2VNum、Sp2VWidth 相同，而 EnSecBuf 由数组 Sp2VEnSecBuf[i] 给出。这些实例共用 clk_i 与 rst_ni，其 sel_i 连接 sp2v_sig[i]，sel_o 输出命名为 sp2v_sig_chk_raw[i]，err_o 输出 sp2v_sig_err[i]。随后，一个组合 assign 将 sp2v_sig_chk_raw[i] 通过类型转换 sp2v_e' 转换为 sp2v_sig_chk[i]。整个过程为每个索引提供独立、并行的检查路径，无额外时序延迟。",
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "generate_for",
+    "driven": [
+      "sp2v_sig_chk_raw[i]",
+      "sp2v_sig_err[i]",
+      "sp2v_sig_chk[i]"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "sp2v_sig[i]",
+      "Sp2VNum",
+      "Sp2VWidth",
+      "Sp2VEnSecBuf[i]"
+    ],
+    "modes": [
+      "Sp2VNum",
+      "Sp2VWidth",
+      "Sp2VEnSecBuf"
+    ],
+    "tags": [
+      "error",
+      "integrity",
+      "security",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对于每个有效的 i (0 ≤ i < NumSp2VSig)，sp2v_sig_chk[i] 仅由对应 u_aes_sp2v_sig_buf_chk_i 实例的 sel_o 输出经类型转换驱动，sp2v_sig_err[i] 仅由同一实例的 err_o 驱动，不存在其他驱动源。",
-      "output_signals": [
-        "sp2v_sig_chk",
-        "sp2v_sig_err"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each i < NumSp2VSig, sp2v_sig_chk[i] is continuously assigned as sp2v_e'(sp2v_sig_chk_raw[i]) (type cast from raw checker output).",
+      "cond": "always",
+      "signals": [
+        "sp2v_sig_chk[i]",
+        "sp2v_sig_chk_raw[i]"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_control.sv:446-459"
-      ]
-    }
-  ],
-  "security_implications": "每个实例的 EnSecBuf 参数可启用安全缓冲特性，加强对选择信号的完整性保护。错误输出 sp2v_sig_err 很可能连接到安全响应逻辑，任何检测到的选择信号异常都可能触发安全报警或擦除操作。",
-  "assumptions": [
-    {
-      "constraint": "Sp2VEnSecBuf 数组的维度至少为 NumSp2VSig，以保证索引 i 不越界。",
-      "bug_relevance": "若维度不足，索引越界会在仿真/综合时引发错误，导致未知连接。",
-      "related_signals": [
-        "Sp2VEnSecBuf",
-        "NumSp2VSig"
-      ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_control.sv:446-450"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:458"
       ]
     },
     {
-      "constraint": "aes_sel_buf_chk 实例输出的 sp2v_sig_chk_raw[i] 值必须落在 sp2v_e 枚举类型的合法范围内。",
-      "bug_relevance": "若超出合法范围，SystemVerilog 的枚举转换会将其截断或产生不确定的值，导致 sp2v_sig_chk[i] 携带错误的选择信息，可能破坏安全路径的正确性。",
-      "related_signals": [
-        "sp2v_sig_chk_raw",
-        "sp2v_sig_chk"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "Each instance u_aes_sp2v_sig_buf_chk_i of aes_sel_buf_chk drives sp2v_sig_chk_raw[i] from its sel_o port and sp2v_sig_err[i] from its err_o port, with parameters Num = Sp2VNum, Width = Sp2VWidth, EnSecBuf = Sp2VEnSecBuf[i].",
+      "cond": "always",
+      "signals": [
+        "sp2v_sig_chk_raw[i]",
+        "sp2v_sig_err[i]",
+        "clk_i",
+        "rst_ni",
+        "sp2v_sig[i]"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_control.sv:455-458"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:447-457"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "aes_sel_buf_chk implements correct selection-buffer checking; its sel_o and err_o are trustworthy under normal operation with the provided parameters.",
+      "cond": "when the design relies on sp2v_sig_chk and sp2v_sig_err for security-critical control or error response",
+      "risk": "Flawed checker may silently propagate corrupted sp2v signals (e.g., due to fault injection) without detection, breaking integrity or confidentiality.",
+      "signals": [
+        "sp2v_sig_chk[i]",
+        "sp2v_sig_err[i]"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:447-457"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The bit width of sp2v_sig_chk_raw[i] must match the encoding width of enum type sp2v_e so that the cast does not truncate, extend, or misinterpret bits.",
+      "cond": "always",
+      "risk": "Mismatched width could silently assign wrong tag values to sp2v_sig_chk[i], possibly enabling incorrect control paths.",
+      "signals": [
+        "sp2v_sig_chk_raw[i]",
+        "sp2v_sig_chk[i]"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:458"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The raw output sp2v_sig_chk_raw[i] may hold a value that is not a legal member of sp2v_e; the blind cast sp2v_e'(...) would then propagate an illegal enum value silently.",
+      "cond": "when aes_sel_buf_chk outputs a bit pattern not defined in sp2v_e",
+      "risk": "Downstream logic using sp2v_sig_chk[i] (e.g., access control or data routing) may misbehave, potentially leaking secrets or bypassing protections.",
+      "signals": [
+        "sp2v_sig_chk_raw[i]",
+        "sp2v_sig_chk[i]"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:458"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The EnSecBuf parameter controls a security buffer inside aes_sel_buf_chk; when EnSecBuf is 0, the checker may operate without glitch/fault hardening, exposing sp2v_sig_chk to transient attacks.",
+      "cond": "if Sp2VEnSecBuf[i] == 0 and sp2v_sig[i] toggles in a susceptible domain",
+      "risk": "select output could glitch, possibly selecting unintended sp2v mapping and leaking cipher state or violating integrity.",
+      "signals": [
+        "Sp2VEnSecBuf[i]"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:450"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "sp2v_sig_err[i] is generated but not used locally; it is unclear whether the aggregated error leads to a safe reaction (e.g., alert, reset, or data wipe).",
+      "cond": "when any sp2v_sig_err[i] asserts",
+      "risk": "Silent error accumulation may delay or skip containment, allowing compromised signals to persist.",
+      "signals": [
+        "sp2v_sig_err[i]"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:456"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "Parameters Sp2VNum and Sp2VWidth are passed to aes_sel_buf_chk but the design does not locally verify that they are within the checker's supported ranges; a legal but extreme parameterization could break internal checker assumptions.",
+      "cond": "if Sp2VNum or Sp2VWidth are changed to extreme values",
+      "risk": "aes_sel_buf_chk may malfunction (e.g., miscount, overflow) causing sp2v_sig_chk to carry wrong values without raising an error.",
+      "signals": [
+        "Sp2VNum",
+        "Sp2VWidth"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:448-449"
       ]
     }
   ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_control.sv:446-459"
   ],
-  "uncertain_points": [
-    "aes_sel_buf_chk 模块的内部检查逻辑（如双缓冲、纠错、安全特性）未知，无法描述具体行为。",
-    "sp2v_e 类型的定义及其枚举值未提供，类型转换的具体截断行为依赖于该定义。",
-    "Sp2VEnSecBuf 数组的内容和来源未定义，无法判断各实例的安全缓冲是否均匀使能。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
   "line_start": 446,
-  "line_end": 459
+  "line_end": 459,
+  "security_implications": ""
 }

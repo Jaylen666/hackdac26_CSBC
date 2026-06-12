@@ -1,36 +1,125 @@
 {
   "chunk_id": "keymgr_input_checks__generate_for__gen_key_chk__001",
-  "summary": "为每一个密钥份额实例化 MSB 扩展并进行有效性检查，产生组合密钥检查信号。",
-  "behavior": "该 generate for 循环对 KeyShares 个密钥份额 (i = 0..KeyShares-1) 分别实例化 prim_msb_extend 模块，将 KeyWidth 位的输入 key_i.key[i] 符号扩展到 MaxWidth 位，输出为 key_padded[i]。随后通过组合函数 valid_chk 对 key_padded[i] 进行检查，产生 key_chk[i] 信号。所有逻辑均为组合逻辑，无寄存器延迟。",
+  "header": {
+    "module": "keymgr_input_checks",
+    "block_kind": "generate",
+    "driven": [
+      "key_padded[i]",
+      "key_chk[i]"
+    ],
+    "used": [
+      "key_i.key[i]",
+      "valid_chk"
+    ],
+    "modes": [
+      "KeyShares",
+      "KeyWidth",
+      "MaxWidth"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "mask",
+      "integrity",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "key_padded[i] 恒等于 key_i.key[i] 的符号扩展（MSB 填充到 MaxWidth 位）。",
-      "output_signals": [
-        "key_padded[i]"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each share i, key_padded[i] is the MSB-extended version of key_i.key[i] from KeyWidth to MaxWidth using prim_msb_extend.",
+      "cond": "always (for each i in gen_key_chk)",
+      "signals": [
+        "key_i.key[i]",
+        "key_padded[i]",
+        "KeyWidth",
+        "MaxWidth"
       ],
-      "source_refs": [
-        "keymgr_input_checks.sv:88-94"
+      "refs": [
+        "87-94"
       ]
     },
     {
-      "property": "key_chk[i] 为 valid_chk 函数对 key_padded[i] 的组合评估结果，用于指示密钥份额有效性。",
-      "output_signals": [
-        "key_chk[i]"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "For each share i, key_chk[i] is assigned the result of the valid_chk function applied to key_padded[i].",
+      "cond": "always",
+      "signals": [
+        "key_padded[i]",
+        "key_chk[i]",
+        "valid_chk"
       ],
-      "source_refs": [
-        "keymgr_input_checks.sv:96"
+      "refs": [
+        "96"
       ]
     }
   ],
-  "security_implications": "key_chk 信号是密钥份额有效性检查的初级防线，可用于检测篡改、错误或非法密钥数据，上层控制器可依据这些信号决定是否触发安全擦除、告警或拒绝操作，因此该逻辑的正确实现和时序收敛对密钥管理安全至关重要。",
-  "assumptions": [],
-  "evidence_refs": [
-    "keymgr_input_checks.sv:87-97"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The external function valid_chk correctly identifies invalid key patterns (e.g., all-zero, all-one) and returns a de-asserted valid signal for such inputs.",
+      "cond": "when key integrity checks are required",
+      "risk": "Invalid key material could be marked as valid, compromising key-dependent security operations.",
+      "signals": [
+        "valid_chk"
+      ],
+      "refs": [
+        "96"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "Parameter MaxWidth must be >= KeyWidth, as required by the MSB-extend primitive contract.",
+      "cond": "when KeyWidth > MaxWidth",
+      "risk": "key_padded[i] would be truncated, potentially evaluating a shorter key and allowing an invalid full key to pass the check.",
+      "signals": [
+        "MaxWidth",
+        "KeyWidth"
+      ],
+      "refs": [
+        "88-94"
+      ]
+    }
   ],
   "uncertain_points": [
-    "valid_chk 函数的具体检查条件（如必须非零、特定编码等）未在本片段展示，无法确定有效性的精确定义。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The valid_chk function implementation is not provided here; its actual key validity criteria must be verified against keymgr security requirements (e.g., rejecting all-zero or weak keys).",
+      "cond": "when key checking is expected to reject certain patterns",
+      "risk": "A permissive valid_chk could allow compromised or degenerate keys to proceed, breaking key integrity.",
+      "signals": [
+        "valid_chk"
+      ],
+      "refs": [
+        "96"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If MaxWidth is configured smaller than KeyWidth, prim_msb_extend will truncate high-order bits; the key_chk result is then based on a truncated key.",
+      "cond": "top-level configuration where MaxWidth may be set below KeyWidth",
+      "risk": "A truncated key could appear valid while the original full-width key is invalid, weakening key strength checks.",
+      "signals": [
+        "MaxWidth",
+        "KeyWidth"
+      ],
+      "refs": [
+        "88-94"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "87-97"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv",
   "line_start": 87,
-  "line_end": 97
+  "line_end": 97,
+  "security_implications": ""
 }

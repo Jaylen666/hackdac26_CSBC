@@ -1,29 +1,125 @@
 {
   "chunk_id": "aes_cipher_core__continuous_region__declarations_or_instances__004",
-  "summary": "为密文数据通路实例化 a e s _ s u b _ b y t e s 模块，并重新排列输入掩码 data_in_mask 的顺序以适配下游格式。",
-  "behavior": "该区域包含一条组合赋值和一个子模块实例化。assign 语句将 data_in_mask 按字节索引 1、0、3、2 的顺序重新拼接，生成 data_in_mask_o，可能用于将掩码对齐到 S u b B y t e s 所要求的字节序。实例化 a e s _ s u b _ b y t e s 模块，通过参数 S e c S B o x I m p l 选择具体 S 盒硬件实现。其端口连接关系如下：时钟和复位来自顶层 cl k _ i、r s t _ n i；使能信号 sub_bytes_en；握手信号 sub_bytes_out_req 和 sub_bytes_out_ack；操作码 op_i；输入数据为 state_q 的第 0 个轮次状态（state_q[0]）；输入掩码 sb_in_mask；伪随机输入 prd_sub_bytes_q；输出数据 sub_bytes_out、输出掩码 sb_out_mask 以及错误标志 sub_bytes_err。该实例本身不定义内部时序，其内部延迟由 a e s _ s u b _ b y t e s 模块决定。assign 对应的掩码重排是纯组合逻辑，无额外延迟。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "mixed",
+    "driven": [
+      "data_in_mask_o",
+      "sub_bytes_out",
+      "sb_out_mask",
+      "sub_bytes_err",
+      "sub_bytes_out_req"
+    ],
+    "used": [
+      "data_in_mask",
+      "clk_i",
+      "rst_ni",
+      "sub_bytes_en",
+      "sub_bytes_out_ack",
+      "op_i",
+      "state_q",
+      "sb_in_mask",
+      "prd_sub_bytes_q"
+    ],
+    "modes": [],
+    "tags": [
+      "mask",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "data_in_mask_o 始终等于 {data_in_mask[1], data_in_mask[0], data_in_m a s k [3], data_in_mask[2]} 的拼接结果。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "data_in_mask_o is continuously assigned as the bit-swapped concatenation {data_in_mask[1], data_in_mask[0], data_in_mask[3], data_in_mask[2]}.",
+      "cond": "always",
+      "signals": [
+        "data_in_mask_o",
+        "data_in_mask"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:377"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The u_aes_sub_bytes instance connects all ports as coded, driving sub_bytes_out, sb_out_mask, sub_bytes_err, and sub_bytes_out_req according to the aes_sub_bytes module implementation given the listed inputs.",
+      "cond": "always",
+      "signals": [
+        "sub_bytes_out",
+        "sb_out_mask",
+        "sub_bytes_err",
+        "sub_bytes_out_req",
+        "clk_i",
+        "rst_ni",
+        "sub_bytes_en",
+        "sub_bytes_out_ack",
+        "op_i",
+        "state_q",
+        "sb_in_mask",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:380-395"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "External logic must adhere to the handshake protocol of aes_sub_bytes: sub_bytes_en must be asserted appropriately to initiate a computation, and sub_bytes_out_ack must acknowledge when output is accepted.",
+      "cond": "when sub_bytes is in use (en_i transitions or out_req_o asserted)",
+      "risk": "Violating handshake may cause the sub_bytes module to stall, produce incorrect outputs, or miss data acceptance, leading to data corruption or loss of synchronization.",
+      "signals": [
+        "sub_bytes_en",
+        "sub_bytes_out_req",
+        "sub_bytes_out_ack"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:380-395"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "Inputs sb_in_mask, prd_sub_bytes_q, and state_q[0] must be valid and correctly masked/prd-conditioned as expected by the aes_sub_bytes implementation to ensure proper error detection and security.",
+      "cond": "always during operation",
+      "risk": "If masks or PRD are invalid, the sub_bytes module may fail to detect faults or may leak sensitive information through outputs (sub_bytes_out, sb_out_mask, sub_bytes_err).",
+      "signals": [
+        "sb_in_mask",
+        "prd_sub_bytes_q",
+        "state_q",
+        "sub_bytes_err"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:380-395"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The permutation of data_in_mask bits (swap [1] with [0] and [3] with [2]) to produce data_in_mask_o may be intended for alignment with data byte ordering, but without surrounding context it is unclear whether this permutation matches the data permutation.",
+      "cond": "when mask and data are combined/unmasked",
+      "risk": "If the mask permutation does not correspond to the data permutation, unmasking may produce incorrect plaintext, potentially leaking intermediate values or causing functional faults.",
+      "signals": [
+        "data_in_mask",
         "data_in_mask_o"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:377"
       ]
     }
   ],
-  "security_implications": "片段中大量使用掩码信号（data_in_mask、sb_in_mask、sb_out_mask、prd_sub_bytes_q）以及错误报告信号 sub_bytes_err。这通常是为了抵御功耗/电磁侧信道攻击和故障注入攻击而引入的防御措施。掩码重排（data_in_mask_o 的生成）可能属于掩码预计算或字节序适配的一部分，错误输出可用于检测运行时异常。具体安全强度依赖于 a e s _ s u b _ b y t e s 内部实现以及掩码方案的整体设计，本片段仅提供连接关系。",
-  "assumptions": [],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:377-395"
   ],
-  "uncertain_points": [
-    "data_in_mask 的位宽未在本片段中显式定义，无从确认拼接的合法性；后续假设其为至少 4 位的向量。",
-    "掩码重排 {data_in_mask[1], data_in_mask[0], d a t a _ i n _ m a s k [3], data_in_mask[2]} 的具体动机（字节序转换、抗攻击特性等）仅靠本片段无法断定。",
-    "aes_sub_bytes 的内部流水线深度、err_o 的具体错误检出条件以及输出掩码 sb_out_mask 与数据输出的时序关系不在本片段范围内，需查看子模块定义。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 377,
-  "line_end": 395
+  "line_end": 395,
+  "security_implications": ""
 }

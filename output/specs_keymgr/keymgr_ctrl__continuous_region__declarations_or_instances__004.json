@@ -1,4 +1,151 @@
 {
   "chunk_id": "keymgr_ctrl__continuous_region__declarations_or_instances__004",
-  "error": "Expecting ',' delimiter: line 23 column 6 (char 1225)"
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "unused_otp_sigs",
+      "root_key_valid_q",
+      "cdi_cnt"
+    ],
+    "used": [
+      "root_key_i.creator_seed",
+      "root_key_i.creator_seed_valid",
+      "root_key_i.owner_seed",
+      "root_key_i.owner_seed_valid",
+      "root_key_i.creator_root_key_share0_valid",
+      "root_key_i.creator_root_key_share1_valid",
+      "op_req",
+      "cnt[CdiWidth-1:0]",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [
+      "CdiWidth"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "clock_domain",
+      "reset"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "unused_otp_sigs is always the XOR of root_key_i.creator_seed, creator_seed_valid, owner_seed, owner_seed_valid.",
+      "cond": "always",
+      "signals": [
+        "root_key_i.creator_seed",
+        "root_key_i.creator_seed_valid",
+        "root_key_i.owner_seed",
+        "root_key_i.owner_seed_valid",
+        "unused_otp_sigs"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:338-341"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "root_key_valid_q is the double-synchronized version of (root_key_i.creator_root_key_share0_valid && root_key_i.creator_root_key_share1_valid).",
+      "cond": "on every clock edge when rst_ni is de-asserted",
+      "signals": [
+        "root_key_i.creator_root_key_share0_valid",
+        "root_key_i.creator_root_key_share1_valid",
+        "root_key_valid_q"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:346-357"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "cdi_cnt is assigned cnt[CdiWidth-1:0] when op_req is true, otherwise '0.",
+      "cond": "always",
+      "signals": [
+        "op_req",
+        "cnt",
+        "cdi_cnt"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:361"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "root_key_i.creator_root_key_share0_valid and share1_valid are flopped outputs from OTP_CTRL and only transition from 0 to 1 once, so AND before synchronizer is glitch-free.",
+      "cond": "after OTP programming",
+      "risk": "If the signals contain glitches or multiple transitions, the synchronizer may sample a false high and set root_key_valid_q incorrectly.",
+      "signals": [
+        "root_key_i.creator_root_key_share0_valid",
+        "root_key_i.creator_root_key_share1_valid",
+        "root_key_valid_q"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:351-355"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "cnt has a bit width of at least CdiWidth, so that cnt[CdiWidth-1:0] is a legal bit-select.",
+      "cond": "always",
+      "risk": "If CdiWidth exceeds the width of cnt, the select is out of range and cdi_cnt will be X, breaking the function.",
+      "signals": [
+        "cnt",
+        "cdi_cnt"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:361"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "Seeds (creator_seed, owner_seed) are XORed into unused_otp_sigs, which is deliberately unused; this may leak secret values through power/EM side channels if the signal toggles.",
+      "cond": "when root_key_i inputs change",
+      "risk": "Potential information leakage of root seeds via dynamic power or electromagnetic radiation from the unused_otp_sigs net.",
+      "signals": [
+        "root_key_i.creator_seed",
+        "root_key_i.owner_seed",
+        "unused_otp_sigs"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:337-341"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "CdiWidth is a parameter that may be set larger than the actual width of cnt, causing an out-of-range bit-select on cdi_cnt.",
+      "cond": "when CdiWidth > $size(cnt)",
+      "risk": "cdi_cnt would be X during op_req, leading to incorrect CDI value propagation and possible functional failure.",
+      "signals": [
+        "cnt",
+        "cdi_cnt",
+        "CdiWidth"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:361"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_ctrl.sv:337-361"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
+  "line_start": 337,
+  "line_end": 361,
+  "security_implications": ""
 }

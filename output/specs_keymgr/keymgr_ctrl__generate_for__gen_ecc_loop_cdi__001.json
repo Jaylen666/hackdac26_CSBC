@@ -1,40 +1,120 @@
 {
   "chunk_id": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
-  "summary": "对密钥状态中每个 CDI 份额的每个 ECC 字进行 SECDED 解码，生成组合错误标志 ecc_errs。",
-  "behavior": "通过三层 generate 循环，将 key_state_ecc_q[i][j][k] 与 key_state_q[i][j][k] 拼接为 72 位输入，送入 prim_secded_inv_72_64_dec 解码器。解码器的 2 位 errs 输出经过按位或（|errs）后驱动 ecc_errs[i][j][k]。因此，对于任一 (i,j,k) 组合，只要解码器判定存在任何错误（无论可纠正或不可纠正），ecc_errs 对应比特即为 1。被忽略的 data_o 与 syndrome_o 不影响本片段行为。所有信号均为组合逻辑，随输入立即变化。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "generate_for",
+    "driven": [
+      "ecc_errs"
+    ],
+    "used": [
+      "key_state_ecc_q",
+      "key_state_q",
+      "CDIs",
+      "Shares",
+      "EccWords"
+    ],
+    "modes": [
+      "CDIs",
+      "Shares",
+      "EccWords"
+    ],
+    "tags": [
+      "key",
+      "integrity",
+      "error",
+      "ecc"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 key_state_ecc_q[i][j][k] 和 key_state_q[i][j][k] 不变时，ecc_errs[i][j][k] 的值完全由 prim_secded_inv_72_64_dec 的 err_o 按位或决定，无额外延迟或状态。",
-      "output_signals": [
-        "ecc_errs"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each (i,j,k) within generator bounds, ecc_errs[i][j][k] is assigned 1 if the corresponding SECDED decoder detects any error (correctable or uncorrectable) on {key_state_ecc_q[i][j][k], key_state_q[i][j][k]}, else 0.",
+      "cond": "always (combinational)",
+      "signals": [
+        "ecc_errs",
+        "key_state_ecc_q",
+        "key_state_q",
+        "errs"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_ctrl.sv:321-334"
       ]
     }
   ],
-  "security_implications": "CDI 份额的秘密钥材料易受物理攻击，ECC 错误检测是完整性保护的一部分。ecc_errs 信号可能用于触发密钥擦除或告警，因此其正确、及时的组合行为对安全响应至关重要。若解码器 err_o 的编码与期望不符，可能漏报或误报错误。",
   "assumptions": [
     {
-      "constraint": "${key_state_ecc_q[i][j][k], key_state_q[i][j][k]} 拼接形成的 72 位数据必须与 prim_secded_inv_72_64_dec 要求的（校验位，数据）顺序一致，且模块的 err_o 在无错误时为 2'b00，有任何错误时至少有一位为 1。",
-      "bug_relevance": "若不满足，ecc_errs 可能不反映真实 ECC 状态，导致完整性监控失效（例如可纠正错误被忽略或不可纠正错误未检出），进而损害密钥保护。",
-      "related_signals": [
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The concatenated input {key_state_ecc_q[i][j][k], key_state_q[i][j][k]} is a valid SECDED-encoded codeword for each i,j,k.",
+      "cond": "when ECC checking is meaningful for key integrity",
+      "risk": "If the data is not properly encoded, ecc_errs may spuriously indicate errors, leading to false error handling, potential key invalidation, or denial of service.",
+      "signals": [
         "key_state_ecc_q",
         "key_state_q",
         "ecc_errs"
       ],
-      "source_refs": [
-        "keymgr_ctrl.sv:325-331"
+      "refs": [
+        "keymgr_ctrl.sv:325-326"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "Parameters CDIs, Shares, EccWords match the declared dimensions of the key_state_ecc_q and key_state_q arrays.",
+      "cond": "synthesis and correct behavior",
+      "risk": "Mismatch would cause out-of-bounds array access, synthesis errors, or undefined behavior.",
+      "signals": [
+        "CDIs",
+        "Shares",
+        "EccWords",
+        "key_state_ecc_q",
+        "key_state_q"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:321-323"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "SEC-DED corrected data_o and syndrome_o are unconnected; only the error flag is captured. Key material stored in key_state_q may be used directly even when ecc_errs indicates an error, without correction or wipe.",
+      "cond": "when ecc_errs asserts (any error detected)",
+      "risk": "If corrupted or uncorrectable key data is used, it could lead to cryptographic failures, secret leakage, or security bypass.",
+      "signals": [
+        "data_o",
+        "syndrome_o",
+        "key_state_q",
+        "ecc_errs"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:327-328"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "ecc_errs reduces 2-bit decoder error output (correctable/uncorrectable) to a single bit via reduction OR. The design intent for handling different error types is unclear.",
+      "cond": "when SECDED decoder signals a correctable vs uncorrectable error",
+      "risk": "Loss of information may prevent appropriate responses (e.g., silent correction vs. alert) leading to insufficient error handling.",
+      "signals": [
+        "ecc_errs",
+        "errs"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:331"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr_ctrl.sv:321-334"
   ],
-  "uncertain_points": [
-    "prim_secded_inv_72_64_dec 的 err_o 具体编码未给出；当前设计对 errs 两位进行或运算，可能无法区分可纠正错误与不可纠正错误，需结合顶层使用方式确认设计意图。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 321,
-  "line_end": 334
+  "line_end": 334,
+  "security_implications": ""
 }

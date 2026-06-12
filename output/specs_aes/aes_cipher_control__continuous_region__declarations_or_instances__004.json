@@ -1,18 +1,236 @@
 {
   "chunk_id": "aes_cipher_control__continuous_region__declarations_or_instances__004",
-  "summary": "实例化两个寄存器存储加密和解密密钥生成的状态信号，并将多个控制信号打包到稀疏编码数组 sp2v_sig 中供多轨 FSM 使用。",
-  "behavior": "该区块包含两个 prim_flop 实例 u_crypt_regs 和 u_dec_key_gen_regs，分别锁存 crypt_d 和 dec_key_gen_d 的当前值至 crypt_q_raw 和 dec_key_gen_q_raw，两者均以 SP2V_LOW 为复位值。组合逻辑通过连续赋值将输入握手信号（in_valid_i、out_ready_i、crypt_i、dec_key_gen_i 等）、寄存器输出和从属模块的请求信号（sub_bytes_out_req_i、key_expand_out_req_i）映射到一个宽度为 NumSp2VSig（8）的 sp2v_e 类型数组 sp2v_sig 上；其中寄存器输出经类型转换 sp2v_e'(...) 转换为稀疏编码格式。注释指出除 sub_bytes_out_req_i 和 key_expand_out_req_i 外，sp2v_sig 中的其他信号均由多轨 FSM 驱动和消费，用于实现安全状态机。此外声明了局部参数 Sp2VEnSecBuf（8'b1100_0000），其含义未在本片段使用，可能与后续安全缓冲使能相关。",
-  "guarantees": [],
-  "security_implications": "该片段采用稀疏编码信号（sp2v_e）并组织为多轨 FSM 的输入源，结合注释表明设计意图是通过多轨和稀疏编码增强抗故障注入攻击的能力。",
-  "assumptions": [],
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "mixed",
+    "driven": [
+      "crypt_q_raw",
+      "dec_key_gen_q_raw",
+      "sp2v_sig"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "crypt_d",
+      "dec_key_gen_d",
+      "in_valid_i",
+      "out_ready_i",
+      "crypt_i",
+      "dec_key_gen_i",
+      "crypt_q_raw",
+      "dec_key_gen_q_raw",
+      "sub_bytes_out_req_i",
+      "key_expand_out_req_i"
+    ],
+    "modes": [
+      "NumSp2VSig=8",
+      "Sp2VEnSecBuf=8'b1100_0000"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "multi_rail",
+      "security_precondition",
+      "reset",
+      "parameterization",
+      "flop"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "u_crypt_regs always outputs a registered copy of crypt_d (synchronously reset to Sp2VWidth'(SP2V_LOW) when rst_ni is deasserted).",
+      "cond": "On the rising edge of clk_i, with rst_ni active low.",
+      "signals": [
+        "crypt_q_raw",
+        "crypt_d",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:403-412"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "u_dec_key_gen_regs always outputs a registered copy of dec_key_gen_d (synchronously reset to Sp2VWidth'(SP2V_LOW) when rst_ni is deasserted).",
+      "cond": "On the rising edge of clk_i, with rst_ni active low.",
+      "signals": [
+        "dec_key_gen_q_raw",
+        "dec_key_gen_d",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:414-423"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "sp2v_sig[7:0] is combinational: sp2v_sig[0]=in_valid_i, [1]=out_ready_i, [2]=crypt_i, [3]=dec_key_gen_i, [4]=sp2v_e'(crypt_q_raw), [5]=sp2v_e'(dec_key_gen_q_raw), [6]=sub_bytes_out_req_i, [7]=key_expand_out_req_i.",
+      "cond": "Always.",
+      "signals": [
+        "sp2v_sig",
+        "in_valid_i",
+        "out_ready_i",
+        "crypt_i",
+        "dec_key_gen_i",
+        "crypt_q_raw",
+        "dec_key_gen_q_raw",
+        "sub_bytes_out_req_i",
+        "key_expand_out_req_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:432-439"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "Sp2VEnSecBuf is fixed to 8'b1100_0000, i.e., bits 6 and 7 (corresponding to sp2v_sig[6] and sp2v_sig[7]) are set.",
+      "cond": "At compile time.",
+      "signals": [
+        "Sp2VEnSecBuf"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:443"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Inputs in_valid_i, out_ready_i, crypt_i, dec_key_gen_i, sub_bytes_out_req_i, key_expand_out_req_i must carry valid sp2v_e sparse encodings.",
+      "cond": "Always when sp2v_sig is used.",
+      "risk": "If any input carries a non‑sparse value, sp2v_sig would propagate an invalid encoding, breaking multi‑rail safety.",
+      "signals": [
+        "in_valid_i",
+        "out_ready_i",
+        "crypt_i",
+        "dec_key_gen_i",
+        "sub_bytes_out_req_i",
+        "key_expand_out_req_i"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:427-429,432-439"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "crypt_d and dec_key_gen_d must hold valid sp2v_e encodings when they update the flops.",
+      "cond": "On every clock edge where the flops are updated.",
+      "risk": "If a corrupted value is written, the raw register outputs become non‑sparse; the subsequent sp2v_e' cast would silently produce an invalid sparse signal, undermining multi‑rail integrity.",
+      "signals": [
+        "crypt_d",
+        "dec_key_gen_d"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:403-422"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "SP2V_LOW must be a valid legal sp2v_e encoding.",
+      "cond": "At reset.",
+      "risk": "If SP2V_LOW is an invalid sparse value, the flops would reset to a non‑sparse state, violating the multi‑rail contract from the start.",
+      "signals": [
+        "SP2V_LOW"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:406,417"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "prim_flop module implements a standard flip‑flop with synchronous reset to ResetValue when rst_ni is low, and passes d_i to q_o on the next rising edge otherwise.",
+      "cond": "Always.",
+      "risk": "If prim_flop behaves differently, the registered outputs would not match the intended reset/update semantics, leading to unexpected state in the multi‑rail logic.",
+      "signals": [
+        "crypt_q_raw",
+        "dec_key_gen_q_raw"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:404-412,415-423"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "value_domain",
+      "claim": "Sp2VWidth matches the widths of crypt_q_raw, dec_key_gen_q_raw and the flop instantiation parameters.",
+      "cond": "At elaboration.",
+      "risk": "Mismatch would cause out‑of‑bound assignments or illegal width conversions, corrupting the sparse encoding.",
+      "signals": [
+        "Sp2VWidth",
+        "crypt_q_raw",
+        "dec_key_gen_q_raw"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:403-404,414-415"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Sp2VEnSecBuf = 8'b1100_0000 enables security buffering only for sp2v_sig[6] (sub_bytes_out_req_i) and sp2v_sig[7] (key_expand_out_req_i), which are the only signals explicitly stated as *not* driven/consumed by multi‑rail FSMs (line 441‑442). The rationale for protecting exactly these two non‑multi‑rail signals is unclear.",
+      "cond": "At compile time (parameter usage elsewhere).",
+      "risk": "If the security buffer provides essential integrity for sparse signals, omitting it for other sp2v_sig bits could create a disparity that attackers exploit. Conversely, if the buffer is not needed, the mask may represent dead logic or a mis‑configured security feature.",
+      "signals": [
+        "Sp2VEnSecBuf",
+        "sp2v_sig[6]",
+        "sp2v_sig[7]"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:441-443"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "sp2v_sig_chk, sp2v_sig_chk_raw, and sp2v_sig_err are declared but not driven in this continuous region. The actual sparseness check logic for sp2v_sig resides elsewhere.",
+      "cond": "Unknown.",
+      "risk": "If the checking logic is incomplete or missing, invalid sparse signals on sp2v_sig would propagate undetected, breaking multi‑rail safety guarantees.",
+      "signals": [
+        "sp2v_sig_chk",
+        "sp2v_sig_chk_raw",
+        "sp2v_sig_err",
+        "sp2v_sig"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:428-430"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The raw flop outputs crypt_q_raw/dec_key_gen_q_raw are cast to sp2v_e without an inline sparseness check in this region. The validation (if any) must be performed elsewhere using the declared sp2v_sig_err/chk vectors.",
+      "cond": "Always.",
+      "risk": "A transient fault corrupting a flop could produce a non‑sparse value that is used unchecked until the next validation point, potentially leaking sensitive information or causing a security failure.",
+      "signals": [
+        "crypt_q_raw",
+        "dec_key_gen_q_raw",
+        "sp2v_sig_err"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:436-437,428-430"
+      ]
+    }
+  ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_control.sv:403-443"
   ],
-  "uncertain_points": [
-    "局部参数 Sp2VEnSecBuf 仅声明而未被引用，其确切用途及对安全缓冲的控制需在下游逻辑中确认。",
-    "sp2v_sig_chk、sp2v_sig_chk_raw 和 sp2v_sig_err 信号仅声明而未使用，其用于信号完整性检查的具体机制尚不明确。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
   "line_start": 403,
-  "line_end": 443
+  "line_end": 443,
+  "security_implications": ""
 }

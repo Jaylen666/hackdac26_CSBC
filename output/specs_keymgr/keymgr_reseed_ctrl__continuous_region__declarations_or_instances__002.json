@@ -1,50 +1,111 @@
 {
   "chunk_id": "keymgr_reseed_ctrl__continuous_region__declarations_or_instances__002",
-  "summary": "实例化一个 16 位 prim_count 计数器，用于跟踪重播种次数，提供清除、递增和错误检测功能。",
-  "behavior": "该模块例化了 16 位宽度的 prim_count 计数器 u_reseed_cnt。计数器时钟和复位由 clk_i / rst_ni 提供。清除输入 clr_i 连接 edn_done，当 edn_done 有效时计数器归零。递增使能 incr_en_i 由 cnt_en & lfsr_en_i 组合控制，仅当 cnt_en 和 lfsr_en_i 同时为高时才允许递增。递减使能 decr_en_i 恒为 0，禁止递减。步进 step_i 固定为 16'h1。提交控制 commit_i 恒为 1，意味着计数器内部状态随时直接反映到输出 cnt_o，无额外提交延迟。输出 reseed_cnt 提供当前计数值，错误输出 cnt_err_o 在计数器发生异常（如溢出）时置位。",
+  "header": {
+    "module": "keymgr_reseed_ctrl",
+    "block_kind": "instance",
+    "driven": [
+      "reseed_cnt",
+      "cnt_err_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "edn_done",
+      "cnt_en",
+      "lfsr_en_i"
+    ],
+    "modes": [],
+    "tags": [
+      "counter",
+      "reseed",
+      "error"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 edn_done 脉冲有效后，reseed_cnt 在紧随的时钟边沿后变为 0",
-      "output_signals": [
-        "reseed_cnt"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "The prim_count instance u_reseed_cnt is configured as a 16-bit (Width=16) counter whose clear (clr_i) is driven by edn_done, increment enable (incr_en_i) by (cnt_en & lfsr_en_i), decrement permanently disabled (decr_en_i=0), step=1, commit tied high (immediate commit), and set/set_cnt tied to zero.",
+      "cond": "always (static wiring)",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "edn_done",
+        "cnt_en",
+        "lfsr_en_i",
+        "reseed_cnt",
+        "cnt_err_o"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:95-110"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "edn_done is a single‑cycle pulse.",
+      "cond": "when edn_done asserts",
+      "risk": "If edn_done remains high, the counter stays permanently cleared, losing all increments and stalling the reseed sequence indefinitely.",
+      "signals": [
+        "edn_done"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:100"
       ]
     },
     {
-      "property": "在 cnt_en 和 lfsr_en_i 同时为高的每个时钟周期，reseed_cnt 递增 1",
-      "output_signals": [
-        "reseed_cnt"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:103, /home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:105"
-      ]
-    }
-  ],
-  "security_implications": "reseed_cnt 跟踪密钥管理器重播种次数，通过 lfsr_en_i 门控递增，可能用于限制重播种频率或检测异常活动。cnt_err_o 在计数器溢出等故障时报警，可触发安全响应以防止耗尽式攻击。",
-  "assumptions": [
-    {
-      "constraint": "edn_done 脉冲宽度至少维持一个时钟周期，且与递增使能无同时冲突或因 prim_count 内部优先级被正确处理",
-      "bug_relevance": "若同时发生清除和递增，实际行为取决于 prim_count 的优先级设计，可能导致计数器未被清零或计数错误",
-      "related_signals": [
-        "edn_done",
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "cnt_en and lfsr_en_i are not simultaneously active for more than 2^16 cycles between clear events.",
+      "cond": "when the counter is operating",
+      "risk": "If exceeded, the counter overflows beyond its 16‑bit width, possibly causing an error (cnt_err_o) or silent wrap, which would corrupt the reseed count and weaken key generation randomness.",
+      "signals": [
         "cnt_en",
         "lfsr_en_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:100, /home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:103"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:103"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "cnt_err_o (error output of u_reseed_cnt) is an unconnected port in this chunk; downstream handling must be verified to ensure overflow is properly detected and triggers appropriate security response (e.g., alert, reset).",
+      "cond": "when cnt_err_o asserts",
+      "risk": "If the error is ignored, a counter overflow could silently produce an invalid reseed count, breaking the key manager’s reseed policy and potentially exposing key material.",
+      "signals": [
+        "cnt_err_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:109"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The maximum cumulative assertion time of (cnt_en & lfsr_en_i) between clears is not bounded locally; a hardware fault or logic error could keep both signals active beyond 2^16 cycles.",
+      "cond": "continuous assertion of cnt_en and lfsr_en_i",
+      "risk": "Counter overflow occurs, potentially invalidating the reseed count before the next clear (edn_done). Combined with unhandled error, this may lead to use of stale or wrapped count.",
+      "signals": [
+        "cnt_en",
+        "lfsr_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:103"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:95-110"
-  ],
-  "uncertain_points": [
-    "prim_count 内部 err_o 的准确置位条件（如溢出、无效操作）需参照其实现，当前仅能推断为计数器异常指示",
-    "commit_i 恒为 1 时的内部时序（是否引入额外流水级）取决于 prim_count 的设计，此处假设无额外延迟"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:95-112"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
   "line_start": 95,
-  "line_end": 112
+  "line_end": 112,
+  "security_implications": ""
 }

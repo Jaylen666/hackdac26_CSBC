@@ -48,8 +48,34 @@ class SemanticBatchConfig:
     max_signal_roots: int = 4
 
 
+def _get_text(item: dict[str, Any]) -> str:
+    """Get text field from new format (claim) or old format (property/constraint)."""
+    return str(item.get("claim") or item.get("property") or item.get("constraint") or "")
+
+
+def _get_signals(item: dict[str, Any]) -> list[str]:
+    """Get signals from new format (signals) or old format (output_signals/related_signals)."""
+    sigs = item.get("signals") or item.get("output_signals") or item.get("related_signals") or []
+    return list(sigs) if isinstance(sigs, list) else []
+
+
+def _get_risk(item: dict[str, Any]) -> str:
+    """Get risk field from new format (risk) or old format (bug_relevance)."""
+    return str(item.get("risk") or item.get("bug_relevance") or "")
+
+
+def _get_source_refs(item: dict[str, Any]) -> list[str]:
+    """Get source refs from new format (refs) or old format (source_refs)."""
+    refs = item.get("refs") or item.get("source_refs") or []
+    return list(refs) if isinstance(refs, list) else []
+
+
 def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
-    """Build assumption / guarantee / uncertain atoms from Phase-1 specs."""
+    """Build assumption / guarantee / uncertain atoms from Phase-1 specs.
+
+    Handles both old format (property/constraint/output_signals/related_signals)
+    and new structured format (claim/signals/risk/refs).
+    """
     atoms: list[dict[str, Any]] = []
     for chunk_id in sorted(graph.specs):
         spec = graph.specs[chunk_id]
@@ -57,12 +83,12 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
         for idx, assumption in enumerate(spec.get("assumptions", []) or []):
             if not isinstance(assumption, dict):
                 continue
-            text = assumption.get("constraint", "")
+            text = _get_text(assumption)
             if not text:
                 continue
-            bug_relevance = assumption.get("bug_relevance", "")
+            risk = _get_risk(assumption)
             full_text = "\n".join(
-                part for part in [text, f"bug_relevance: {bug_relevance}"] if part
+                part for part in [text, f"risk: {risk}"] if part
             )
             atoms.append(
                 _make_atom(
@@ -70,8 +96,8 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                     "assumption",
                     idx,
                     full_text,
-                    list(assumption.get("related_signals", []) or []),
-                    assumption.get("source_refs", []),
+                    _get_signals(assumption),
+                    _get_source_refs(assumption),
                     {"raw": assumption},
                 )
             )
@@ -79,7 +105,7 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
         for idx, guarantee in enumerate(spec.get("guarantees", []) or []):
             if not isinstance(guarantee, dict):
                 continue
-            text = guarantee.get("property", "")
+            text = _get_text(guarantee)
             if not text:
                 continue
             atoms.append(
@@ -88,17 +114,25 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                     "guarantee",
                     idx,
                     text,
-                    list(guarantee.get("output_signals", []) or []),
-                    guarantee.get("source_refs", []),
+                    _get_signals(guarantee),
+                    _get_source_refs(guarantee),
                     {"raw": guarantee},
                 )
             )
 
         for idx, point in enumerate(spec.get("uncertain_points", []) or []):
-            text = str(point).strip()
-            if not text:
-                continue
-            signals = sorted(set(re.findall(r"`([^`]+)`", text)))
+            if isinstance(point, dict):
+                # New structured format
+                text = str(point.get("claim", "")).strip()
+                if not text:
+                    continue
+                signals = _get_signals(point)
+            else:
+                # Old string format
+                text = str(point).strip()
+                if not text:
+                    continue
+                signals = sorted(set(re.findall(r"`([^`]+)`", text)))
             atoms.append(
                 _make_atom(
                     spec,
@@ -106,7 +140,7 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                     idx,
                     text,
                     signals,
-                    spec.get("evidence_refs", []),
+                    _get_source_refs(point) if isinstance(point, dict) else spec.get("evidence_refs", []),
                     {"raw": point},
                 )
             )

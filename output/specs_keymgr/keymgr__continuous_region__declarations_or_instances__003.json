@@ -1,51 +1,115 @@
 {
   "chunk_id": "keymgr__continuous_region__declarations_or_instances__003",
-  "summary": "根据配置选择 creator seed 的硬件来源（OTP 或 flash），同时为未使用的源提供侧连接以避免 lint 警告。",
-  "behavior": "该片段通过 generate‑if 实现两个 assign 对。当编译常量 UseOtpSeedsInsteadOfFlash 为真时，creator_seed 取自 otp_key_i.creator_seed，unused_creator_seed 取 flash 侧 CreatorSeedIdx 种子与 otp 有效标志的按位异或归约；否则 creator_seed 取自 flash_i.seeds[CreatorSeedIdx]，unused_creator_seed 取 otp 种子与其有效标志的按位异或归约。两者均为组合逻辑，随输入即时变化。unused_creator_seed 本身不参与功能逻辑，仅用于‘吃掉’未使用路径的输入信号。",
+  "header": {
+    "module": "keymgr",
+    "block_kind": "generate",
+    "driven": [
+      "creator_seed",
+      "unused_creator_seed"
+    ],
+    "used": [
+      "otp_key_i.creator_seed",
+      "otp_key_i.creator_seed_valid",
+      "flash_i.seeds",
+      "flash_ctrl_pkg::CreatorSeedIdx",
+      "UseOtpSeedsInsteadOfFlash",
+      "KeyWidth"
+    ],
+    "modes": [
+      "UseOtpSeedsInsteadOfFlash"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 UseOtpSeedsInsteadOfFlash 为真时，creator_seed 必定等于 otp_key_i.creator_seed；否则 creator_seed 必定等于 flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]。",
-      "output_signals": [
-        "creator_seed"
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "When UseOtpSeedsInsteadOfFlash is true, creator_seed is continuously assigned from otp_key_i.creator_seed; otherwise from flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx].",
+      "cond": "always",
+      "signals": [
+        "creator_seed",
+        "UseOtpSeedsInsteadOfFlash",
+        "otp_key_i.creator_seed",
+        "flash_i.seeds",
+        "flash_ctrl_pkg::CreatorSeedIdx"
       ],
-      "source_refs": [
-        "keymgr.sv:413-423"
-      ]
-    }
-  ],
-  "security_implications": "creator seed 作为密钥派生种子，其来源直接影响 key manager 的安全性。该逻辑根据配置选择 OTP 或 flash 提供种子，未使用的源虽被连接至 unused_creator_seed，但仅做异或归约，不保证数据被清零或掩藏，存在残留或可观测风险。需在系统级确认所选种子的安全等级以及未使用种子的访问控制是否满足整体威胁模型。",
-  "assumptions": [
-    {
-      "constraint": "UseOtpSeedsInsteadOfFlash 必须为编译期常量（非动态信号），使 generate 在综合/仿真前唯一确定分支。",
-      "bug_relevance": "若非编译期常量，generate 会歧义或多驱动，导致综合或仿真失败。",
-      "related_signals": [
-        "UseOtpSeedsInsteadOfFlash"
-      ],
-      "source_refs": [
-        "keymgr.sv:415,419"
+      "refs": [
+        "keymgr.sv:415-422"
       ]
     },
     {
-      "constraint": "otp_key_i.creator_seed 和 flash_i.seeds[CreatorSeedIdx] 的位宽必须与 KeyWidth 匹配，否则高位截断或补零将导致种子值改变。",
-      "bug_relevance": "位宽不匹配会截断种子，产生错误的密钥源，导致后续密钥派生错误，构成功能与安全缺陷。",
-      "related_signals": [
-        "otp_key_i.creator_seed",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "unused_creator_seed is assigned a reduced XOR of flash_i.seeds[CreatorSeedIdx] and otp_key_i.creator_seed_valid when UseOtpSeedsInsteadOfFlash is true, otherwise a reduced XOR of otp_key_i.creator_seed and otp_key_i.creator_seed_valid.",
+      "cond": "always",
+      "signals": [
+        "unused_creator_seed",
+        "otp_key_i.creator_seed_valid",
         "flash_i.seeds",
-        "KeyWidth"
+        "otp_key_i.creator_seed"
       ],
-      "source_refs": [
-        "keymgr.sv:413,418,422"
+      "refs": [
+        "keymgr.sv:416-421"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "When UseOtpSeedsInsteadOfFlash is true, the external logic driving otp_key_i.creator_seed must ensure the seed is valid before it is consumed by downstream key derivation; this block does not gate on otp_key_i.creator_seed_valid.",
+      "cond": "when UseOtpSeedsInsteadOfFlash is active",
+      "risk": "Invalid or uninitialized seed values could be used for key derivation, leading to deterministic or weak keys.",
+      "signals": [
+        "otp_key_i.creator_seed",
+        "otp_key_i.creator_seed_valid"
+      ],
+      "refs": [
+        "keymgr.sv:415-418"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "otp_key_i.creator_seed_valid is only XORed into unused_creator_seed but does not gate creator_seed. If the OTP seed is not yet valid, creator_seed still propagates to key derivation, bypassing a validity check.",
+      "cond": "when UseOtpSeedsInsteadOfFlash is true and otp_key_i.creator_seed_valid is false",
+      "risk": "A bad or glitching OTP seed may be used in key creation, potentially yielding compromised or unpredictable keys.",
+      "signals": [
+        "otp_key_i.creator_seed",
+        "otp_key_i.creator_seed_valid",
+        "creator_seed"
+      ],
+      "refs": [
+        "keymgr.sv:415-418"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "unused_creator_seed is assigned but its value appears unused within this generate block; it may be a dead signal or only provided for external debug visibility.",
+      "cond": "unknown",
+      "risk": "No direct security risk, but an unreferenced assignment may mask intended checks or cause synthesis/simulation mismatches.",
+      "signals": [
+        "unused_creator_seed"
+      ],
+      "refs": [
+        "keymgr.sv:416-417,420-421"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr.sv:413-423"
   ],
-  "uncertain_points": [
-    "unused_creator_seed 是否仅用于 lint 抑制，还是为了阻止未使用输入路径被综合优化（可能导致安全信息泄露），设计文档未明确说明。",
-    "编译常量 UseOtpSeedsInsteadOfFlash 的定义和作用域未在片段中给出，需外部确认是否保证与 keymgr 的其他配置一致。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 413,
-  "line_end": 423
+  "line_end": 423,
+  "security_implications": ""
 }

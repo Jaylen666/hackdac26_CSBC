@@ -1,0 +1,39 @@
+{
+  "chunk_id": "aes_cipher_core__continuous_region__declarations_or_instances__012",
+  "summary": "组合输出 state_o，并提供一系列安全屏蔽相关的编译期及运行时断言与辅助比较逻辑。",
+  "behavior": "该连续区域首先通过 assign 直接将 add_round_key_out 驱动到模块输出 state_o（行 785）。在 `ifdef INC_ASSERT 保护下（行 794），实例化多个断言及辅助逻辑：ASSERT_STATIC_LINT_ERROR 在编译时强制要求 SecMasking 必须为 1，否则产生 lint 错误（行 799）；ASSERT_INIT 检查屏蔽使能与 SBox 实现类型的合法性组合（行 802–809）；然后定义了一个组合比较信号 prd_clearing_equals_output，用于指示状态清除伪随机数据与 add_round_key_out 是否相等，并将其赋值给 unused 信号以消除 lint（行 812–814）。核心动态断言 AesSecCmDataRegKeySca 监控在每一轮最后状态写入（state_we == SP2V_HIGH）且轮计数器到达对应密钥长度的最后一轮时，下一个时钟周期状态寄存器的内容不得等于前一周期的 add_round_key_out，除非满足以下豁免条件之一：state_q 等于前一周期的 state_init_i，或前一周期的 prd_clearing_equals_output 为真，或 alert_o 已置位（行 822–828）。当 SecMasking 使能时，还会实例化三个额外断言：AesSecCmKeyMaskingPrdSubBytes 要求 SubBytes 使能跳变时，PRNG 在前 NumCyclesPerRound+1 周期内至少更新过一次，除非允许强制掩码；AesSecCmKeyMaskingInitialPrngUpdateSubBytes 和 AesSecCmKeyMaskingInitialPrngUpdateKeyExpand 则分别确保从初始状态进入 SubBytes 或 KeyExpand 操作前，PRNG 已根据密钥长度和操作类型获得充分更新，同样为强制掩码状况提供豁免（行 840–866）。所有断言均不改变硬件行为，仅用于验证安全屏蔽功能的正确性。",
+  "guarantees": [
+    {
+      "property": "输出 state_o 始终等于内部信号 add_round_key_out（组合逻辑）。",
+      "output_signals": [
+        "state_o"
+      ],
+      "source_refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:785"
+      ]
+    }
+  ],
+  "security_implications": "该区域的所有断言用于在编译期和运行时检测安全屏蔽是否被意外禁用，以及状态清除和掩码更新是否按预期完成。若 AesSecCmDataRegKeySca 或其他掩码更新断言失败，可能指示硬件故障或侧信道攻击企图，并会由 alert_o 通知系统。静态检查 AesSecMaskingNonDefault 防止屏蔽被关闭，从而保证抗 SCA 能力。",
+  "assumptions": [
+    {
+      "constraint": "参数 SecMasking 必须为 1（设计仅以屏蔽模式运行）。",
+      "bug_relevance": "若 SecMasking ≠ 1（例如参数配置错误），编译时将触发 lint 错误，但若该检查被绕过，核心将丧失侧信道抵抗能力，可能泄露密钥信息。",
+      "related_signals": [
+        "SecMasking"
+      ],
+      "source_refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:799"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "output/aes_mini_rtl/aes_cipher_core.sv:785-866"
+  ],
+  "uncertain_points": [
+    "断言宏 ASSET_STATIC_LINT_ERROR、ASSERT_INIT 及 ASSET 的具体实现（如同步/异步检查、仿真器行为）不在本片段中，可能影响断言生效的时机和方式。",
+    "信号 prd_clearing_equals_output 和 unused_prd_clearing_equals_output 仅用于断言，无法从本片段确认其最终是否被优化或影响覆盖率。"
+  ],
+  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "line_start": 785,
+  "line_end": 866
+}

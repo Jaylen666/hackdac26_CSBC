@@ -1,79 +1,192 @@
 {
   "chunk_id": "aes_cipher_core__always_comb__key_full_mux__001",
-  "summary": "根据 key_full_sel 状态选择 key_full_d 的输入源，实现加密初始化、解密初始化、轮密钥扩展和清除等不同阶段的密钥数据通路。",
-  "behavior": "该组合逻辑通过 unique case 在 key_full_sel 为 KEY_FULL_ENC_INIT 时，将 key_full_d 驱动为 key_init_i；为 KEY_FULL_DEC_INIT 时，若 CiphOpFwdOnly 为假，则输出解密密钥 key_dec_q，否则输出清除密钥 prd_clearing_key_i；为 KEY_FULL_ROUND 或 KEY_FULL_CLEAR 时，均输出密钥扩展结果 key_expand_out；其他未定义状态则安全回落至 prd_clearing_key_i。所有选择均为组合逻辑，key_full_d 随输入即时变化。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "key_full_d"
+    ],
+    "used": [
+      "key_full_sel",
+      "key_init_i",
+      "prd_clearing_key_i",
+      "key_expand_out",
+      "CiphOpFwdOnly",
+      "key_dec_q"
+    ],
+    "modes": [
+      "KEY_FULL_ENC_INIT",
+      "KEY_FULL_DEC_INIT",
+      "KEY_FULL_ROUND",
+      "KEY_FULL_CLEAR"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "wipe",
+      "lifecycle"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 key_full_sel 等于 KEY_FULL_ENC_INIT 时，key_full_d 一定等于 key_init_i。",
-      "output_signals": [
-        "key_full_d"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "key_full_d is driven by key_init_i when key_full_sel equals KEY_FULL_ENC_INIT.",
+      "cond": "key_full_sel == KEY_FULL_ENC_INIT",
+      "signals": [
+        "key_full_d",
+        "key_full_sel",
+        "key_init_i"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:440"
+      "refs": [
+        "aes_cipher_core.sv:440"
       ]
     },
     {
-      "property": "当 key_full_sel 等于 KEY_FULL_DEC_INIT 且 CiphOpFwdOnly 为假时，key_full_d 一定等于 key_dec_q；否则为 prd_clearing_key_i。",
-      "output_signals": [
-        "key_full_d"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "key_full_d is driven by key_dec_q if CiphOpFwdOnly is false, otherwise by prd_clearing_key_i, when key_full_sel equals KEY_FULL_DEC_INIT.",
+      "cond": "key_full_sel == KEY_FULL_DEC_INIT",
+      "signals": [
+        "key_full_d",
+        "key_full_sel",
+        "key_dec_q",
+        "prd_clearing_key_i",
+        "CiphOpFwdOnly"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:441"
+      "refs": [
+        "aes_cipher_core.sv:441"
       ]
     },
     {
-      "property": "当 key_full_sel 为 KEY_FULL_ROUND 或 KEY_FULL_CLEAR 时，key_full_d 一定等于 key_expand_out。",
-      "output_signals": [
-        "key_full_d"
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "key_full_d is driven by key_expand_out when key_full_sel equals KEY_FULL_ROUND.",
+      "cond": "key_full_sel == KEY_FULL_ROUND",
+      "signals": [
+        "key_full_d",
+        "key_full_sel",
+        "key_expand_out"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:442-443"
+      "refs": [
+        "aes_cipher_core.sv:442"
       ]
     },
     {
-      "property": "当 key_full_sel 为其他值（包括未定义或非法值）时，key_full_d 一定等于 prd_clearing_key_i。",
-      "output_signals": [
-        "key_full_d"
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "key_full_d is driven by key_expand_out when key_full_sel equals KEY_FULL_CLEAR.",
+      "cond": "key_full_sel == KEY_FULL_CLEAR",
+      "signals": [
+        "key_full_d",
+        "key_full_sel",
+        "key_expand_out"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:444"
+      "refs": [
+        "aes_cipher_core.sv:443"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "key_full_d is driven by prd_clearing_key_i for any key_full_sel not matching the four explicit cases.",
+      "cond": "key_full_sel not in {KEY_FULL_ENC_INIT, KEY_FULL_DEC_INIT, KEY_FULL_ROUND, KEY_FULL_CLEAR}",
+      "signals": [
+        "key_full_d",
+        "key_full_sel",
+        "prd_clearing_key_i"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:444"
       ]
     }
   ],
-  "security_implications": "该多路选择器控制着 AES 密钥扩展链路的输入数据，包括原始密码密钥、解密密钥及清除密钥。若因错误的状态导致将解密密钥驱动到加密初始化路径，或反向驱动加密密钥到解密路径，可能破坏密钥分离约定，造成密钥信息泄露。设计使用了 prd_clearing_key_i 作为默认和安全回落值，有助于在控制信号异常时避免敏感数据被意外传递。",
   "assumptions": [
     {
-      "constraint": "输入 key_full_sel 必须为单热值且仅属于 {KEY_FULL_ENC_INIT, KEY_FULL_DEC_INIT, KEY_FULL_ROUND, KEY_FULL_CLEAR} 之一。",
-      "bug_relevance": "若 key_full_sel 为非法值，虽然 default 分支会安全回落至 prd_clearing_key_i，但可能违背设计者预期的状态转移，导致密钥扩展回路获得错误数据，影响加密结果。",
-      "related_signals": [
-        "key_full_sel"
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "key_full_sel must be kept within the set {KEY_FULL_ENC_INIT, KEY_FULL_DEC_INIT, KEY_FULL_ROUND, KEY_FULL_CLEAR} for the mux to select the correct key source.",
+      "cond": "During normal operation.",
+      "risk": "If an unexpected key_full_sel value occurs, the default path drives prd_clearing_key_i, replacing the intended key material with a clearing value and causing functional failure of the AES cipher.",
+      "signals": [
+        "key_full_sel",
+        "key_full_d"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:439-445"
+      "refs": [
+        "aes_cipher_core.sv:439-444"
       ]
     },
     {
-      "constraint": "当 key_full_sel == KEY_FULL_DEC_INIT 且 CiphOpFwdOnly == 0 时，key_dec_q 必须包含有效的解密后密钥。",
-      "bug_relevance": "若 key_dec_q 无效，则解密初始化阶段会得到错误的密钥数据，导致解密功能失败。",
-      "related_signals": [
-        "key_dec_q",
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "Parameter CiphOpFwdOnly must correctly reflect whether the core supports only forward (encryption) operation; when 0, decryption key loading is permitted.",
+      "cond": "key_full_sel == KEY_FULL_DEC_INIT.",
+      "risk": "If CiphOpFwdOnly is erroneously 0 in an encryption-only design, key_dec_q may be loaded into the key register, potentially using an invalid or unprotected decryption key.",
+      "signals": [
         "CiphOpFwdOnly",
-        "key_full_sel"
+        "key_dec_q",
+        "key_full_d"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:441"
+      "refs": [
+        "aes_cipher_core.sv:441"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "prd_clearing_key_i must be a safe non-key value (e.g., all‑zero or pseudo‑random) intended for key wipe.",
+      "cond": "Whenever key_full_d is assigned prd_clearing_key_i (KEY_FULL_DEC_INIT with CiphOpFwdOnly=1, or default case).",
+      "risk": "If prd_clearing_key_i carries actual key bits, the clearing path would inject secret material instead of wiping it, leading to key leakage or unintended key state.",
+      "signals": [
+        "prd_clearing_key_i",
+        "key_full_d"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:441,444"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The KEY_FULL_CLEAR case selects key_expand_out, not a dedicated clearing value. This is suspicious because key_expand_out may still contain derived key material, defeating the purpose of a clear operation.",
+      "cond": "key_full_sel == KEY_FULL_CLEAR",
+      "risk": "If key_expand_out holds valid round-key material during CLEAR, the key register will receive new key material instead of being wiped, leaving secret residues that could be exploited.",
+      "signals": [
+        "key_full_sel",
+        "key_expand_out",
+        "key_full_d"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:443"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The DEC_INIT branch assigns prd_clearing_key_i when CiphOpFwdOnly is true. It is ambiguous whether this is intended to block decryption key loading or to actively clear the register.",
+      "cond": "CiphOpFwdOnly == 1 and key_full_sel == KEY_FULL_DEC_INIT",
+      "risk": "Misinterpretation could lead the surrounding logic to expect a real key load instead of a clearing value, causing the cipher to operate on a known constant and breaking encryption.",
+      "signals": [
+        "CiphOpFwdOnly",
+        "key_full_sel",
+        "prd_clearing_key_i",
+        "key_dec_q",
+        "key_full_d"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:441"
       ]
     }
   ],
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:438-446"
-  ],
-  "uncertain_points": [
-    "KEY_FULL_ROUND 和 KEY_FULL_CLEAR 分支均输出 key_expand_out，两者行为完全相同，未体现'清除'与'正常轮'之间的区别，可能实际区别由后续逻辑控制或该清除状态仅用于标记而不改变数据通路。",
-    "default 分支设为 prd_clearing_key_i，但注释或文档未说明该状态是否可到达，可能仅作为综合安全处理。",
-    "unique case 要求 key_full_sel 互斥，但未明确其编码方式（one-hot 或其他），若不满足互斥则行为由 synthesis unique case 语义决定，可能存在多驱冲突风险。"
+    "aes_cipher_core.sv:438-446"
   ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 438,
-  "line_end": 446
+  "line_end": 446,
+  "security_implications": ""
 }

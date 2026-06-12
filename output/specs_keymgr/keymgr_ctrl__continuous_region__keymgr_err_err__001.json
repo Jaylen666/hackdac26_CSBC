@@ -1,4 +1,221 @@
 {
   "chunk_id": "keymgr_ctrl__continuous_region__keymgr_err_err__001",
-  "error": "Unterminated string starting at: line 4 column 15 (char 170)"
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "mixed",
+    "driven": [
+      "state_change_err",
+      "sync_err",
+      "sync_fault",
+      "async_fault",
+      "error_o",
+      "fault_o"
+    ],
+    "used": [
+      "vld_state_change_q",
+      "adv_op",
+      "invalid_op",
+      "disabled",
+      "initialized",
+      "en_i",
+      "invalid",
+      "kmac_input_invalid_i",
+      "shadowed_update_err_i",
+      "kmac_op_err_i",
+      "invalid_kmac_out",
+      "sideload_sel_err_i",
+      "kmac_cmd_err_i",
+      "kmac_fsm_err_i",
+      "kmac_done_err_i",
+      "regfile_intg_err_i",
+      "shadowed_storage_err_i",
+      "state_intg_err_q",
+      "state_intg_err_d",
+      "data_fsm_err",
+      "op_fsm_err",
+      "ecc_errs",
+      "op_state_cmd_err",
+      "cnt_err",
+      "reseed_cnt_err_i",
+      "sideload_fsm_err_i",
+      "op_update",
+      "op_done_o",
+      "stage_sel_o",
+      "op_start_i",
+      "state_q",
+      "op_i",
+      "SyncFaultLastIdx",
+      "AsyncFaultLastIdx"
+    ],
+    "modes": [
+      "StCtrlInit",
+      "StCtrlCreatorRootKey",
+      "StCtrlOwnerIntKey",
+      "StCtrlOwnerKey",
+      "Disable",
+      "OpAdvance",
+      "OpDisable"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "integrity",
+      "key",
+      "secret",
+      "state_machine",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "state_change_err is asserted when vld_state_change_q is true and adv_op is false, and deasserted otherwise.",
+      "cond": "always",
+      "signals": [
+        "state_change_err",
+        "vld_state_change_q",
+        "adv_op"
+      ],
+      "refs": [
+        "file:833"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "When en_i is low, stage_sel_o must be Disable.",
+      "cond": "when en_i is deasserted",
+      "risk": "If stage_sel_o is not Disable, the key manager could allow operations while disabled, potentially leaking or corrupting secret key material.",
+      "signals": [
+        "en_i",
+        "stage_sel_o"
+      ],
+      "refs": [
+        "file:882"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "In StCtrlInit state, when op_start_i and en_i are high, if op_i is not OpAdvance, stage_sel_o must be Disable.",
+      "cond": "state_q == StCtrlInit, op_start_i high, en_i high, op_i not OpAdvance",
+      "risk": "An illegal operation might be initiated during initialization, potentially corrupting key state or bypassing secure state transitions.",
+      "signals": [
+        "state_q",
+        "op_start_i",
+        "en_i",
+        "op_i",
+        "stage_sel_o"
+      ],
+      "refs": [
+        "file:885-886"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "In StCtrlCreatorRootKey or StCtrlOwnerIntKey states, when op_start_i and en_i are high and op_i is OpDisable, stage_sel_o must be Disable.",
+      "cond": "state_q in {StCtrlCreatorRootKey, StCtrlOwnerIntKey}, op_start_i, en_i, and op_i == OpDisable",
+      "risk": "A disable operation in these states might be mishandled, leaving key state in an unprotected or indeterminate condition.",
+      "signals": [
+        "state_q",
+        "op_start_i",
+        "en_i",
+        "op_i",
+        "stage_sel_o"
+      ],
+      "refs": [
+        "file:889-891"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "In StCtrlOwnerKey state, when op_start_i and en_i are high and op_i is in {OpAdvance, OpDisable}, stage_sel_o must be Disable.",
+      "cond": "state_q == StCtrlOwnerKey, op_start_i, en_i, and op_i in {OpAdvance, OpDisable}",
+      "risk": "If stage_sel_o is not Disable, an advance or disable command could introduce unauthorized transitions, compromising owner key security.",
+      "signals": [
+        "state_q",
+        "op_start_i",
+        "en_i",
+        "op_i",
+        "stage_sel_o"
+      ],
+      "refs": [
+        "file:893-894"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "value_domain",
+      "claim": "The total number of synchronous and asynchronous fault status bits (SyncFaultLastIdx + AsyncFaultLastIdx) must equal the width of keymgr_reg2hw_fault_status_reg_t.",
+      "cond": "always, as a parameter check",
+      "risk": "If the widths mismatch, fault indexing in the error module may reference out-of-range bits, leading to incorrect fault reporting and potentially masking critical security faults.",
+      "signals": [
+        "SyncFaultLastIdx",
+        "AsyncFaultLastIdx",
+        "keymgr_reg2hw_fault_status_reg_t"
+      ],
+      "refs": [
+        "file:878-879"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "The async_err_o output of keymgr_err is left unconnected. It is unclear whether asynchronous errors are intentionally ignored or if this is a design omission.",
+      "cond": "when an asynchronous error is reported internally",
+      "risk": "Asynchronous faults could accumulate silently without triggering higher-level alerts, violating fault containment requirements and potentially leaving hardware in a compromised state.",
+      "signals": [
+        "async_err_o"
+      ],
+      "refs": [
+        "file:865"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The assertion SameErrCnt_A relies on parameters SyncFaultLastIdx and AsyncFaultLastIdx that are not locally defined; a mismatch could go undetected if these parameters are updated independently.",
+      "cond": "parameter definition mismatch",
+      "risk": "If a new fault type is added, inconsistent update of these parameters could cause the assertion to fail spuriously or, worse, not be re-evaluated, leading to silent fault indexing errors that hide security-critical faults.",
+      "signals": [
+        "SyncFaultLastIdx",
+        "AsyncFaultLastIdx"
+      ],
+      "refs": [
+        "file:878-879"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The connection disabled_i = disabled | (initialized & ~en_i) forces the disabled input high when initialized is true and en_i is low, even if no explicit disable was requested.",
+      "cond": "initialized high and en_i deasserted",
+      "risk": "This may be intentional to force-disable after de-initialization, but if en_i is deasserted during normal operation, it could erroneously trigger a fault or fail to protect key state properly during a shutdown sequence.",
+      "signals": [
+        "disabled_i",
+        "initialized",
+        "en_i"
+      ],
+      "refs": [
+        "file:839"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:832-894"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
+  "line_start": 832,
+  "line_end": 894,
+  "security_implications": ""
 }

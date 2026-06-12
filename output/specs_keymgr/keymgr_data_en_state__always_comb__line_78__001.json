@@ -1,40 +1,354 @@
 {
   "chunk_id": "keymgr_data_en_state__always_comb__line_78__001",
-  "summary": "数据使能控制状态机组合逻辑，根据操作请求和硬件选择信号决定硬件或软件数据使能，并在操作完成后等待启动信号释放。",
-  "behavior": "该 always_comb 块实现一个 5 状态的状态机，控制 data_hw_en_o 和 data_sw_en_o 的输出。\n当前状态 state_q 默认为 IDLE。在 IDLE 下，adv_en_i 具有最高优先级，立即进入 DIS 状态。否则，若 id_en_i 或 gen_en_i 有效，则根据 hw_sel_i 的 mubi4 值决定下一状态：若 hw_sel_i 为严格真，进入 HW_EN 状态；若为严格假，进入 SW_EN 状态；若 hw_sel_i 既非严格真也非严格假（非法值），进入 DIS 状态以拒绝操作。\n在 HW_EN 状态下，data_hw_en_o 置 1，data_sw_en_o 为 0；op_done_i 有效时进入 WAIT 状态，否则若 adv_en_i 或 hw_sel_i 变为宽松假（即不再为真），则转向 DIS。\n在 SW_EN 状态下，data_sw_en_o 置 1，data_hw_en_o 为 0；op_done_i 有效时进入 WAIT，否则若 adv_en_i 或 hw_sel_i 变为宽松真，则转向 DIS。\n在 DIS 状态下，两个使能均为 0，仅 op_done_i 可触发进入 WAIT，否则保持 DIS。\n在 WAIT 状态下，两个使能均为 0，当 op_start_i 为低时返回 IDLE，否则保持 WAIT。\n未定义的状态（default）转向 DIS 作为安全回退。\n所有状态下 fsm_err_o 均保持为 0。",
+  "header": {
+    "module": "keymgr_data_en_state",
+    "block_kind": "always_comb",
+    "driven": [
+      "state_d",
+      "fsm_err_o",
+      "data_hw_en_o",
+      "data_sw_en_o"
+    ],
+    "used": [
+      "state_q",
+      "adv_en_i",
+      "hw_sel_i",
+      "id_en_i",
+      "gen_en_i",
+      "op_done_i",
+      "op_start_i",
+      "mubi4_test_true_strict",
+      "mubi4_test_false_strict",
+      "mubi4_test_true_loose",
+      "mubi4_test_false_loose"
+    ],
+    "modes": [
+      "StCtrlDataIdle",
+      "StCtrlDataHwEn",
+      "StCtrlDataSwEn",
+      "StCtrlDataDis",
+      "StCtrlDataWait"
+    ],
+    "tags": [
+      "secret",
+      "access_control",
+      "handshake",
+      "fifo",
+      "lifecycle"
+    ]
+  },
   "guarantees": [
     {
-      "property": "输出 data_hw_en_o 与 data_sw_en_o 互斥，二者不会同时为 1。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When state_q is StCtrlDataHwEn, data_hw_en_o is driven to 1'b1.",
+      "cond": "state_q == StCtrlDataHwEn",
+      "signals": [
         "data_hw_en_o",
-        "data_sw_en_o"
+        "state_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv:98,107"
+      "refs": [
+        "78-133:97-98"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When state_q is StCtrlDataSwEn, data_sw_en_o is driven to 1'b1.",
+      "cond": "state_q == StCtrlDataSwEn",
+      "signals": [
+        "data_sw_en_o",
+        "state_q"
+      ],
+      "refs": [
+        "78-133:106-107"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "In all other states (Idle, Dis, Wait, default), data_hw_en_o and data_sw_en_o remain 1'b0 via default assignments.",
+      "cond": "state_q not in {StCtrlDataHwEn, StCtrlDataSwEn}",
+      "signals": [
+        "data_hw_en_o",
+        "data_sw_en_o",
+        "state_q"
+      ],
+      "refs": [
+        "78-133:81-82",
+        "78-133:85-132"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "From StCtrlDataIdle, if adv_en_i is asserted, state_d becomes StCtrlDataDis immediately, overriding all other triggers.",
+      "cond": "state_q == StCtrlDataIdle && adv_en_i",
+      "signals": [
+        "adv_en_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:86-87"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "From StCtrlDataIdle with adv_en_i deasserted, if (id_en_i || gen_en_i) and hw_sel_i is strictly true (mubi4_test_true_strict), state_d transitions to StCtrlDataHwEn.",
+      "cond": "state_q == StCtrlDataIdle && !adv_en_i && (id_en_i || gen_en_i) && mubi4_test_true_strict(hw_sel_i)",
+      "signals": [
+        "id_en_i",
+        "gen_en_i",
+        "hw_sel_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:88-89"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "From StCtrlDataIdle with adv_en_i deasserted, if (id_en_i || gen_en_i) and hw_sel_i is strictly false (mubi4_test_false_strict), state_d transitions to StCtrlDataSwEn.",
+      "cond": "state_q == StCtrlDataIdle && !adv_en_i && (id_en_i || gen_en_i) && mubi4_test_false_strict(hw_sel_i)",
+      "signals": [
+        "id_en_i",
+        "gen_en_i",
+        "hw_sel_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:90-91"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "state_transition",
+      "claim": "From StCtrlDataIdle with adv_en_i deasserted, if (id_en_i || gen_en_i) but hw_sel_i is neither strictly true nor strictly false, state_d goes to StCtrlDataDis (invalid hw_sel_i).",
+      "cond": "state_q == StCtrlDataIdle && !adv_en_i && (id_en_i || gen_en_i) && !mubi4_test_true_strict(hw_sel_i) && !mubi4_test_false_strict(hw_sel_i)",
+      "signals": [
+        "id_en_i",
+        "gen_en_i",
+        "hw_sel_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:92-93"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "state_transition",
+      "claim": "In StCtrlDataHwEn, if op_done_i, next state is StCtrlDataWait; else if adv_en_i or hw_sel_i becomes false_loose, next state is StCtrlDataDis; otherwise state_d remains StCtrlDataHwEn.",
+      "cond": "state_q == StCtrlDataHwEn",
+      "signals": [
+        "op_done_i",
+        "adv_en_i",
+        "hw_sel_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:97-103"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "state_transition",
+      "claim": "In StCtrlDataSwEn, if op_done_i, next state is StCtrlDataWait; else if adv_en_i or hw_sel_i becomes true_loose, next state is StCtrlDataDis; otherwise stays StCtrlDataSwEn.",
+      "cond": "state_q == StCtrlDataSwEn",
+      "signals": [
+        "op_done_i",
+        "adv_en_i",
+        "hw_sel_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:106-112"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "state_transition",
+      "claim": "In StCtrlDataDis, the only legal exit is to StCtrlDataWait when op_done_i is asserted; otherwise state_d remains Dis.",
+      "cond": "state_q == StCtrlDataDis",
+      "signals": [
+        "op_done_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:115-118"
+      ]
+    },
+    {
+      "id": "G11",
+      "type": "state_transition",
+      "claim": "In StCtrlDataWait, if op_start_i is deasserted (!op_start_i), state_d returns to StCtrlDataIdle; else stays in Wait.",
+      "cond": "state_q == StCtrlDataWait",
+      "signals": [
+        "op_start_i",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:121-124"
+      ]
+    },
+    {
+      "id": "G12",
+      "type": "default_fallback",
+      "claim": "Any state_q value not enumerated (including unknown/illegal encodings) forces state_d to StCtrlDataDis.",
+      "cond": "state_q not in {StCtrlDataIdle, StCtrlDataHwEn, StCtrlDataSwEn, StCtrlDataDis, StCtrlDataWait}",
+      "signals": [
+        "state_q",
+        "state_d"
+      ],
+      "refs": [
+        "78-133:127-129"
+      ]
+    },
+    {
+      "id": "G13",
+      "type": "assignment",
+      "claim": "fsm_err_o is always driven to 1'b0 in this always_comb block; no error detection is performed locally.",
+      "cond": "always",
+      "signals": [
+        "fsm_err_o"
+      ],
+      "refs": [
+        "78-133:80"
       ]
     }
   ],
-  "security_implications": "该逻辑通过 mubi4 类型的 hw_sel_i 信号进行硬件/软件使能选择，并使用 strict/loose 测试区分合法值与毛刺。非法 hw_sel_i 值将导致状态机进入 DIS 状态，拒绝数据使能，防止未授权的数据通路激活，属于防御性设计。",
   "assumptions": [
     {
-      "constraint": "hw_sel_i 应为 mubi4 类型信号，其合法值仅能通过 mubi4_test_true_strict 或 mubi4_test_false_strict 测试之一，不能同时满足。",
-      "bug_relevance": "若 hw_sel_i 出现既非真亦非假的值（如亚稳值或攻击值），状态机将进入 DIS 状态，操作被静默拒绝，可能导致功能受阻。设计意图上 hw_sel_i 不应出现此类非法值，否则表明上游逻辑或信号完整性存在问题。",
-      "related_signals": [
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "hw_sel_i must be a valid multi-bit mubi4 signal, and the mubi4_test_* functions correctly implement strict/loose comparisons. The FSM relies on these to distinguish hardware vs software access and to abort on illegal transitions.",
+      "cond": "during any state evaluation using hw_sel_i",
+      "risk": "If hw_sel_i is metastable, glitchy, or the mubi4 tests inconsistent, the FSM could incorrectly enter HwEn/SwEn or abort unexpectedly, potentially enabling data access at the wrong time and compromising key material integrity or confidentiality.",
+      "signals": [
         "hw_sel_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv:88-93"
+      "refs": [
+        "78-133:88-91",
+        "78-133:101-102",
+        "78-133:110-111"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The op_start_i / op_done_i handshake must follow protocol: after asserting op_done_i, the external logic must eventually deassert op_start_i to allow return to Idle. If the FSM enters Dis (e.g., via adv), it expects op_done_i to eventually be asserted to escape Dis.",
+      "cond": "when state_q is in Wait or Dis",
+      "risk": "Deadlock: if op_start_i never deasserts after done, FSM stuck in Wait; if op_done_i never arrives in Dis, FSM stuck in Dis. Both prevent further data enable operations, halting key manager functionality.",
+      "signals": [
+        "op_start_i",
+        "op_done_i"
+      ],
+      "refs": [
+        "78-133:116-118",
+        "78-133:121-124"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "adv_en_i is a high-priority abort/disable signal and must not be permanently asserted for normal operation; it is expected to be deasserted to allow the FSM to leave Idle/Dis.",
+      "cond": "during normal data access sequences",
+      "risk": "If adv_en_i is stuck high, the FSM will never leave Idle or will be continuously forced to Dis, blocking all key manager data operations.",
+      "signals": [
+        "adv_en_i"
+      ],
+      "refs": [
+        "78-133:86-87",
+        "78-133:101-102",
+        "78-133:110-111"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The strict/loose mubi4 tests (true_strict for entry, false_loose/true_loose for abort) create a dynamic window where hw_sel_i may be sampled differently. The safety of this asymmetric checking depends on the mubi4 implementation and signal stability; a glitch could cause unexpected aborts or erroneous entry.",
+      "cond": "when hw_sel_i transitions during an active operation (HwEn or SwEn)",
+      "risk": "Silent state corruption or incorrect data enable routing, potentially granting software access to hardware-only data or vice-versa, leading to secret leakage or unauthorized key manipulation.",
+      "signals": [
+        "hw_sel_i"
+      ],
+      "refs": [
+        "78-133:88-91",
+        "78-133:101-102",
+        "78-133:110-111"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The default case sends state_d to Dis but does not set fsm_err_o; any illegal state_q (e.g., from SEU) is handled without error reporting. This block alone cannot signal a fault.",
+      "cond": "state_q reaches an unlisted encoding",
+      "risk": "An undetected illegal state could persist across cycles if subsequent logic does not flag it, potentially leading to silent key manager misbehavior or security bypass.",
+      "signals": [
+        "state_q",
+        "fsm_err_o"
+      ],
+      "refs": [
+        "78-133:80",
+        "78-133:127-129"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "In StCtrlDataDis, adv_en_i is not monitored; if adv is asserted while waiting for op_done_i, the FSM stays in Dis. It is unclear whether adv should be able to expedite exit or if this is an intentional lock.",
+      "cond": "state_q == StCtrlDataDis and adv_en_i asserted",
+      "risk": "Could block an emergency abort sequence if adv was expected to force a return to Idle/Wait, though likely adv is only needed to trigger transition into Dis.",
+      "signals": [
+        "adv_en_i",
+        "op_done_i"
+      ],
+      "refs": [
+        "78-133:115-118"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The combination id_en_i and gen_en_i is allowed simultaneously. The FSM treats them identically, using hw_sel_i to decide HwEn vs SwEn. It is unclear if concurrent identity and generate operations are valid and whether hw_sel_i can arbitrate between them safely.",
+      "cond": "id_en_i && gen_en_i",
+      "risk": "Could start an operation with ambiguous ownership, potentially mixing key manager operation types and causing functional error or key misuse.",
+      "signals": [
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "78-133:88-91"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "adv_en_i is a top-priority signal that aborts even in Idle, directly going to Dis without any data enable. The intended behavior (advance/disable) is not fully documented, making it unclear if this preemptive abort is correct in all contexts.",
+      "cond": "state_q == StCtrlDataIdle && adv_en_i",
+      "risk": "May incorrectly prevent a valid operation that was about to start, but likely intended as a kill/disable; however misdocumentation could lead to verification gaps.",
+      "signals": [
+        "adv_en_i"
+      ],
+      "refs": [
+        "78-133:86-87"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv:78-133"
   ],
-  "uncertain_points": [
-    "fsm_err_o 在整个 always_comb 中恒为 0，但该信号存在于模块端口，推测错误指示可能在其他逻辑中产生。当前片段未体现任何错误检测，可能为未完成的设计或保留信号。",
-    "未定义状态进入 DIS 后，缺少从 DIS 回到 IDLE 的路径（除非 op_done_i 置位），若因软错误意外进入 default 分支，状态机将卡在 DIS 直到 op_done_i 出现，可能导致较长恢复时间，不确定是否为有意设计。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv",
   "line_start": 78,
-  "line_end": 133
+  "line_end": 133,
+  "security_implications": ""
 }

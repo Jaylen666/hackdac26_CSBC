@@ -1,27 +1,180 @@
 {
   "chunk_id": "keymgr_kmac_if__always_comb__line_296__001",
-  "summary": "Comb next-state logic for inputs_invalid sticky error flags with per-operation enable gating and a synchronous clear.",
-  "behavior": "The block computes the next value of the inputs_invalid flag vector (inputs_invalid_d). By default it holds the current state (inputs_invalid_q). When clr_err is asserted, all flags are cleared to zero. Otherwise, when valid is active, four operation-specific flags (OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut) are updated: each flag is set to 1 only if the corresponding operation enable (adv_en_i for advance, id_en_i for generate ID, gen_en_i for software and hardware output generation) is high AND either the input-stage invalid indicator (inputs_invalid_i) or the currently latched invalid indicator (inputs_invalid_q) is already set. This creates sticky error flags that, once set, remain high across cycles (as long as valid toggles and the enable remains high) until explicitly cleared by clr_err.",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "always_comb",
+    "driven": [
+      "inputs_invalid_d"
+    ],
+    "used": [
+      "inputs_invalid_q",
+      "clr_err",
+      "valid",
+      "adv_en_i",
+      "id_en_i",
+      "gen_en_i",
+      "inputs_invalid_i"
+    ],
+    "modes": [
+      "OpAdvance",
+      "OpGenId",
+      "OpGenSwOut",
+      "OpGenHwOut"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "handshake",
+      "valid"
+    ]
+  },
   "guarantees": [
     {
-      "property": "Asserting clr_err forces inputs_invalid_d to all-zero immediately (combinational path).",
-      "output_signals": [
-        "inputs_invalid_d"
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When clr_err=0 and valid=0, inputs_invalid_d retains the value of inputs_invalid_q (no change).",
+      "cond": "clr_err == 0 && valid == 0",
+      "signals": [
+        "inputs_invalid_d",
+        "inputs_invalid_q",
+        "clr_err",
+        "valid"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:297"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "When clr_err=1, inputs_invalid_d is cleared to all zeros, regardless of valid.",
+      "cond": "clr_err == 1",
+      "signals": [
+        "inputs_invalid_d",
+        "clr_err"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:299-300"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When clr_err=0 and valid=1, for each operation index (OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut): if the corresponding enable (adv_en_i, id_en_i, gen_en_i) is 1, the bit is set to (inputs_invalid_i[bit] OR inputs_invalid_q[bit]); if the enable is 0, the bit is cleared to 0.",
+      "cond": "clr_err == 0 && valid == 1",
+      "signals": [
+        "inputs_invalid_d",
+        "valid",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i",
+        "inputs_invalid_i",
+        "inputs_invalid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:301-309"
       ]
     }
   ],
-  "security_implications": "The inputs_invalid flags are part of the key manager’s input validation; stuck flags prevent propagation of invalid operation requests until explicitly cleared. The logic ensures that an erroneous operation (detected as inputs_invalid_i) and its past occurrence are remembered, which is essential for safe sequencing and avoiding unauthorized key material generation.",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "When valid=1, the signals inputs_invalid_i, adv_en_i, id_en_i, and gen_en_i must be stable and represent the correct error status and operation enables for the current operation.",
+      "cond": "valid == 1",
+      "risk": "Incorrect or stale error flags may be captured, leading to false faults or missed error latching.",
+      "signals": [
+        "valid",
+        "inputs_invalid_i",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:301-309"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "During a valid cycle, if the enable for a particular operation type is 0, any previously latched invalid flag for that operation is cleared. This may lose error history for an operation that previously had an error but is not the current operation.",
+      "cond": "clr_err=0, valid=1, and one of adv_en_i/id_en_i/gen_en_i=0 while that operation's invalid_q bit is 1.",
+      "risk": "A previously detected invalid input error is silently discarded, allowing a future operation on that same interface without the error being flagged, potentially violating security or data integrity.",
+      "signals": [
+        "valid",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i",
+        "inputs_invalid_q",
+        "inputs_invalid_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:301-309"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If clr_err and valid are asserted simultaneously, the incoming operation's invalid status is ignored and the register is cleared. This interaction may mask a fresh error during a clear cycle.",
+      "cond": "clr_err == 1 && valid == 1",
+      "risk": "An incoming error might be lost, possibly allowing an invalid operation to proceed on the same cycle.",
+      "signals": [
+        "clr_err",
+        "valid",
+        "inputs_invalid_d",
+        "inputs_invalid_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:299-310"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The sticky-OR behavior (inputs_invalid_d = enable & (new OR old)) latches an error permanently until global clr_err. It is unclear if per-operation clearing after a successful non‑erroneous operation is required.",
+      "cond": "valid=1, enable=1, and a previous error is set.",
+      "risk": "Spurious or transient errors may persist longer than needed, causing unnecessary blockages or loss of availability, or may mask a subsequent valid operation.",
+      "signals": [
+        "inputs_invalid_d",
+        "inputs_invalid_q",
+        "inputs_invalid_i",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:302-309"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "The enum values OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut are used as bit indices. If any value equals or exceeds the width of inputs_invalid_d/inputs_invalid_q/inputs_invalid_i, the assignment will be out of bounds.",
+      "cond": "Parameter/enum definition compared to vector width.",
+      "risk": "Synthesis or simulation may silently truncate or produce X's, leading to loss of error tracking.",
+      "signals": [
+        "OpAdvance",
+        "OpGenId",
+        "OpGenSwOut",
+        "OpGenHwOut",
+        "inputs_invalid_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:302-309"
+      ]
+    }
+  ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:296-311"
   ],
-  "uncertain_points": [
-    "Whether valid and the enable signals are guaranteed to be mutually exclusive or can overlap across different operation types is not specified here – the logic permits simultaneous setting of multiple flags if respective enables are high and the input/state invalid bits are set."
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 296,
-  "line_end": 311
+  "line_end": 311,
+  "security_implications": ""
 }

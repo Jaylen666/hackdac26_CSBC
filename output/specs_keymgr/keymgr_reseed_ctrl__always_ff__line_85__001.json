@@ -1,39 +1,114 @@
 {
   "chunk_id": "keymgr_reseed_ctrl__always_ff__line_85__001",
-  "summary": "带异步复位的寄存器 cnt_en，在 edn_done 有效时置位，否则保持。",
-  "behavior": "该 always_ff 块描述一个上升沿触发的寄存器 cnt_en。异步复位 rst_ni 低有效时将 cnt_en 清零。复位释放后，在 clk_i 上升沿若 edn_done 为高，则将 cnt_en 置为 1；若 edn_done 为低，cnt_en 保持当前值。因此，cnt_en 在复位后默认为低，检测到 edn_done 有效后变为高并持续保持，直到下次复位。",
+  "header": {
+    "module": "keymgr_reseed_ctrl",
+    "block_kind": "always_ff",
+    "driven": [
+      "cnt_en"
+    ],
+    "used": [
+      "rst_ni",
+      "edn_done"
+    ],
+    "modes": [],
+    "tags": [
+      "reseed",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 cnt_en 一定为 0；在 rst_ni 为高期间，若 edn_done 被采样为高，则 cnt_en 在下一拍变为 1 并保持，直到下一次复位。",
-      "output_signals": [
-        "cnt_en"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "cnt_en is asynchronously cleared to 0 when rst_ni is low, regardless of other signals.",
+      "cond": "!rst_ni",
+      "signals": [
+        "cnt_en",
+        "rst_ni"
       ],
-      "source_refs": [
-        "keymgr_reseed_ctrl.sv:85-91"
+      "refs": [
+        "file:86-87"
       ]
-    }
-  ],
-  "security_implications": "",
-  "assumptions": [
+    },
     {
-      "constraint": "edn_done 信号必须与 clk_i 同步，且其高电平宽度至少维持一个 clk_i 周期，以便在时钟上升沿被正确采样。",
-      "bug_relevance": "若 edn_done 与 clk_i 异步或脉冲过短，可能导致 cnt_en 无法被置位，使能信号丢失，影响下游逻辑的启动。",
-      "related_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "cnt_en is set to 1 on the next rising clock edge after edn_done is sampled high, when not in reset.",
+      "cond": "edn_done && !rst_ni",
+      "signals": [
+        "cnt_en",
         "edn_done",
         "clk_i"
       ],
-      "source_refs": [
-        "keymgr_reseed_ctrl.sv:88-89"
+      "refs": [
+        "file:88-89"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "cnt_en holds its previous value when not in reset and edn_done is low (no explicit write).",
+      "cond": "!rst_ni && !edn_done",
+      "signals": [
+        "cnt_en"
+      ],
+      "refs": [
+        "file:88 (absence of else clause)"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "edn_done is a synchronous pulse signal that can be sampled at the rising clock edge; its timing and duration are controlled externally.",
+      "cond": "when edn_done occurs",
+      "risk": "If edn_done is not pulsed but stays high, cnt_en will be set again on each clock, which may be harmless but could violate single-shot re-seed expectations.",
+      "signals": [
+        "edn_done",
+        "clk_i"
+      ],
+      "refs": [
+        "file:88"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "lifecycle",
+      "claim": "The asynchronous reset rst_ni must be asserted during power-up and removed after clocks are stable.",
+      "cond": "always",
+      "risk": "Incorrect reset removal could cause cnt_en to have an unknown state or metastability.",
+      "signals": [
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "file:86"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "Once cnt_en becomes 1, there is no mechanism in this always_ff block to clear it back to 0, except a full reset. This may prevent multiple re-seed operations or override external clear attempts.",
+      "cond": "after edn_done is asserted and no reset occurs",
+      "risk": "If multiple re-seed operations are needed, cnt_en will remain stuck at 1 and might prevent subsequent re-seed sequences or handshakes from restarting.",
+      "signals": [
+        "cnt_en",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:85-91"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_reseed_ctrl.sv:85-91"
-  ],
-  "uncertain_points": [
-    "代码未给出 cnt_en 清零的其他路径，因此 cnt_en 一旦置 1 后只能通过复位清零。若设计需要重复触发，必须由外部控制复位，此处未体现是否预期如此。"
+    "file:85-91"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
   "line_start": 85,
-  "line_end": 91
+  "line_end": 91,
+  "security_implications": ""
 }

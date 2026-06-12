@@ -1,0 +1,50 @@
+{
+  "chunk_id": "keymgr_sideload_key__always_ff__line_42__001",
+  "summary": "密钥共享寄存器，支持异步复位清零、用熵随机化清除以及条件密钥加载。",
+  "behavior": "在时钟上升沿或异步复位（rst_ni 低有效）时更新 key_q。复位时 key_q 所有比特清零。当 clr_i 有效时（无论 set_i 状态），每个共享（0..Shares-1）被赋值为 {EntropyCopies{entropy_i[i]}}，即用熵的复制值覆盖原密钥（安全擦除）。当 clr_i 无效、set_i 有效时，每个共享根据 set_en_i 选择：若 set_en_i=1，则加载提供的密钥 key_i[i]；否则同样加载 {EntropyCopies{entropy_i[i]}}（可能用于在密钥加载前先用随机数填充）。以上条件均不满足时，key_q 保持原值。clr_i 优先级高于 set_i。",
+  "guarantees": [
+    {
+      "property": "复位后 key_q 一定为全零。",
+      "output_signals": [
+        "key_q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:43-44"
+      ]
+    },
+    {
+      "property": "当 clr_i 有效或（set_i 有效且 set_en_i=0）时，key_q 的每个共享被更新为 entropy_i 相应复制的值，而非 key_i 值。",
+      "output_signals": [
+        "key_q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:45-48",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:49-52"
+      ]
+    }
+  ],
+  "security_implications": "密钥存储 key_q 在复位、clr_i 有效以及 set_i=1 且 set_en_i=0 时均使用熵值（entropy_i 的复制）覆盖，防止明文密钥残留；clr_i 优先级高于 set_i，确保清除操作不可被设置指令打断，符合安全擦除要求。",
+  "assumptions": [
+    {
+      "constraint": "参数 Shares、EntropyCopies 与信号位宽应匹配，使得 key_q[i] 的位宽等于 EntropyCopies * $bits(entropy_i[i])，避免赋值时发生截断或高位零扩展。",
+      "bug_relevance": "若位宽不匹配，可能导致密钥值被截断或零扩展，削弱密钥强度或造成密钥不一致，影响安全性和功能正确性。",
+      "related_signals": [
+        "key_q",
+        "entropy_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:46-48",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:49-51"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:42-54"
+  ],
+  "uncertain_points": [
+    "clr_i 持续多周期有效期间，entropy_i 是否应保持稳定或允许变化？当前实现会在每个时钟沿采样 entropy_i 并覆盖 key_q，这可能产生多次不同的随机填充，但设计意图是单次擦除还是持续随机化不明确。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv",
+  "line_start": 42,
+  "line_end": 54
+}

@@ -1,40 +1,93 @@
 {
   "chunk_id": "aes_cipher_core__generate_for__gen_unused_prd_msbs__001",
-  "summary": "组合生成4个unused_prd_msbs输出，每个输出由prd_masking的对应行通过aes_prd_get_msbs函数计算得到。",
-  "behavior": "该generate块针对i=0~3生成组合逻辑：将prd_masking的第i*WidthPRDRow位开始的WidthPRDRow位切片送入函数aes_prd_get_msbs，函数返回值持续驱动unused_prd_msbs[i]。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "generate",
+    "driven": [
+      "unused_prd_msbs"
+    ],
+    "used": [
+      "prd_masking",
+      "WidthPRDRow",
+      "aes_prd_get_msbs"
+    ],
+    "modes": [],
+    "tags": [
+      "mask",
+      "parameterization",
+      "generate_for"
+    ]
+  },
   "guarantees": [
     {
-      "property": "unused_prd_msbs信号完全由prd_masking组合决定，无寄存器或锁存，任何时刻均即时反映当前输入。",
-      "output_signals": [
-        "unused_prd_msbs"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each i from 0 to 3, unused_prd_msbs[i] is assigned the value of function aes_prd_get_msbs applied to the WidthPRDRow-bit slice prd_masking[i*WidthPRDRow +: WidthPRDRow].",
+      "cond": "always",
+      "signals": [
+        "unused_prd_msbs",
+        "prd_masking",
+        "WidthPRDRow",
+        "aes_prd_get_msbs"
       ],
-      "source_refs": [
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
       ]
     }
   ],
-  "security_implications": "",
   "assumptions": [
     {
-      "constraint": "prd_masking的位宽必须至少为4*WidthPRDRow。",
-      "bug_relevance": "若位宽不足，部分索引切片无效，可能导致unused_prd_msbs出现X态或错误值，影响下游逻辑。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "prd_masking must have a total width of at least 4*WidthPRDRow to support the part-select indexes used in the loop.",
+      "cond": "when this generate block is synthesized/used",
+      "risk": "If prd_masking is narrower, part-select range is out-of-bounds, leading to undefined behaviour or X propagation.",
+      "signals": [
         "prd_masking",
         "WidthPRDRow"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:920"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal unused_prd_msbs is assigned but its name suggests it is not consumed downstream. It is unclear whether this is a dead signal or used elsewhere for monitoring.",
+      "cond": "always (after elaboration)",
+      "risk": "Wasted logic; if truly unused, it may be removed by synthesis but indicates potentially incomplete design intent.",
+      "signals": [
+        "unused_prd_msbs"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The function aes_prd_get_msbs is not defined here; its implementation may involve extraction of mask bits from prd_masking. The correctness of the masking scheme depends on its behavior.",
+      "cond": "when analyzing the masking logic",
+      "risk": "If the function mis-extracts MSBs or is incorrectly implemented, the masked values may be inconsistent, compromising side-channel resistance.",
+      "signals": [
+        "aes_prd_get_msbs",
+        "prd_masking",
+        "unused_prd_msbs"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
       ]
     }
   ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
   ],
-  "uncertain_points": [
-    "函数aes_prd_get_msbs的内部实现及所提取的比特位定义未知。",
-    "unused_prd_msbs的最终用途（是否真的未使用还是用于其它逻辑）未知，需结合上下文确认。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 919,
-  "line_end": 921
+  "line_end": 921,
+  "security_implications": ""
 }

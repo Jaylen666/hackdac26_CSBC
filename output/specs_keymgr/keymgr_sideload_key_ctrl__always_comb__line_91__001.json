@@ -1,58 +1,247 @@
 {
   "chunk_id": "keymgr_sideload_key_ctrl__always_comb__line_91__001",
-  "summary": "组合逻辑实现了一个控制 sideload key 访问的简单状态机，复位后等待初始化，然后在空闲状态使能密钥并检测擦除请求，擦除后永久禁用密钥直至系统复位。",
-  "behavior": "该 always_comb 块描述了一个四状态的有限状态机，用于管理密钥旁路载入使能。默认值：state_d 保持当前状态 state_q，keys_en 置 0，fsm_err_o 置 0。状态转移逻辑：reset 状态下，当 init_i 为 1 时进入 idle 状态（98-100 行）。idle 状态下，keys_en 置 1 以允许载入密钥；若检测到 wipe_key_i 为 1，则立即转入 wipe 状态（106-109 行）。wipe 状态下，keys_en 保持 0，等待 wipe_key_i 释放为 0 后转入 stop 状态（113-116 行）。stop 状态是一个故意设置的终端状态，keys_en 保持 0，再无退出条件（120-122 行）。若 state_q 未落入上述四个枚举状态，则 fsm_err_o 置 1 以指示非法状态（124-126 行）。注意注释（103 行）提到了 “clear” 操作，但代码中未体现相应逻辑，可能已废弃或由外部处理。",
+  "header": {
+    "module": "keymgr_sideload_key_ctrl",
+    "block_kind": "always_comb",
+    "driven": [
+      "keys_en",
+      "state_d",
+      "fsm_err_o"
+    ],
+    "used": [
+      "state_q",
+      "init_i",
+      "wipe_key_i"
+    ],
+    "modes": [
+      "StSideloadReset",
+      "StSideloadIdle",
+      "StSideloadWipe",
+      "StSideloadStop"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "wipe",
+      "error",
+      "sparse_fsm",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "keys_en 仅在当前状态为 StSideloadIdle 时被置为 1，其他所有定义状态（StSideloadReset、StSideloadWipe、StSideloadStop）以及未定义非法状态下均保持 0。",
-      "output_signals": [
-        "keys_en"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "keys_en is driven to 1 only when state_q is StSideloadIdle; otherwise it is driven to 0 (including in the default error case).",
+      "cond": "always",
+      "signals": [
+        "keys_en",
+        "state_q"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:92,106,113,121,124-126"
+      "refs": [
+        "line 92",
+        "line 106",
+        "line 113",
+        "line 121",
+        "line 124-126"
       ]
     },
     {
-      "property": "fsm_err_o 仅在 state_q 不是 StSideloadReset、StSideloadIdle、StSideloadWipe、StSideloadStop 之一时置 1，其余情况为 0。",
-      "output_signals": [
-        "fsm_err_o"
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "fsm_err_o is driven to 1 when state_q does not match any of the four defined states, indicating an illegal state.",
+      "cond": "state_q not in {StSideloadReset, StSideloadIdle, StSideloadWipe, StSideloadStop}",
+      "signals": [
+        "fsm_err_o",
+        "state_q"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:94,125"
+      "refs": [
+        "line 124-126"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "In StSideloadReset, if init_i is high, state_d transitions to StSideloadIdle; otherwise state_d remains StSideloadReset.",
+      "cond": "state_q == StSideloadReset",
+      "signals": [
+        "state_d",
+        "state_q",
+        "init_i"
+      ],
+      "refs": [
+        "line 97-101"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "In StSideloadIdle, if wipe_key_i is high, state_d transitions to StSideloadWipe; otherwise state_d remains StSideloadIdle.",
+      "cond": "state_q == StSideloadIdle",
+      "signals": [
+        "state_d",
+        "state_q",
+        "wipe_key_i"
+      ],
+      "refs": [
+        "line 105-110"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In StSideloadWipe, if wipe_key_i is low, state_d transitions to StSideloadStop; otherwise state_d remains StSideloadWipe.",
+      "cond": "state_q == StSideloadWipe",
+      "signals": [
+        "state_d",
+        "state_q",
+        "wipe_key_i"
+      ],
+      "refs": [
+        "line 112-117"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "In StSideloadStop, state_d is always kept at StSideloadStop (terminal state) and keys_en is driven to 0.",
+      "cond": "state_q == StSideloadStop",
+      "signals": [
+        "state_d",
+        "keys_en"
+      ],
+      "refs": [
+        "line 120-122",
+        "line 92-93"
       ]
     }
   ],
-  "security_implications": "该逻辑提供了一种安全擦除机制：一旦 wipe_key_i 触发，状态机离开 idle 后进入 wipe 并最终锁定在 stop 终端状态，keys_en 被永久禁止，从而阻止任何后续 sideload key 的载入，直至系统复位。这可用于保护敏感密钥在检测到攻击或请求后立即禁用。",
   "assumptions": [
     {
-      "constraint": "状态机启动时需处于 StSideloadReset 或其他有效枚举状态；若 state_q 因软错误跳转到未定义状态，FSM 会置 fsm_err_o 为 1，但不会自动恢复。",
-      "bug_relevance": "若复位未正确将 state_q 初始化为 StSideloadReset，FSM 可能进入非法状态并卡死，导致 keys_en 始终为 0 且 fsm_err_o 持续有效；但该场景属于设计边界之外的错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "lifecycle",
+      "claim": "The reset value of state_q must be StSideloadReset for the FSM to start in a known safe state.",
+      "cond": "at reset release",
+      "risk": "If state_q initializes to any other state, keys_en could be inadvertently asserted before initialization or the FSM could enter an illegal state with only error reporting and no recovery.",
+      "signals": [
         "state_q"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:124-126"
+      "refs": [
+        "line 93",
+        "line 97"
       ]
     },
     {
-      "constraint": "处于 StSideloadWipe 时，wipe_key_i 必须在有限时间内变为 0，否则状态机将永远停留在 Wipe 状态（keys_en 保持为 0，且不进入 Stop）。",
-      "bug_relevance": "若 wipe_key_i 持续为 1，状态机虽仍禁用 keys，但未到达预期的终端 Stop 状态，可能使软件状态观察异常；功能上仅表现为停滞。",
-      "related_signals": [
-        "wipe_key_i"
+      "id": "A2",
+      "type": "handshake",
+      "claim": "init_i must be asserted while state_q is StSideloadReset to allow transition to Idle; otherwise the FSM remains stuck in Reset.",
+      "cond": "state_q == StSideloadReset",
+      "risk": "Deadlock: the sideload key interface cannot be enabled, preventing all key operations until a reset.",
+      "signals": [
+        "init_i",
+        "state_q"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:114-116"
+      "refs": [
+        "line 98-100"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "wipe_key_i must be deasserted after the FSM enters StSideloadWipe to allow the transition to StSideloadStop; otherwise the FSM remains in Wipe indefinitely.",
+      "cond": "state_q == StSideloadWipe",
+      "risk": "Permanent denial of service: the wipe process never completes, and sideload remains disabled until external reset.",
+      "signals": [
+        "wipe_key_i",
+        "state_q"
+      ],
+      "refs": [
+        "line 114-116"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "state_q must never take a value outside the four defined states; the default branch only guards against unexpected transitions but does not recover.",
+      "cond": "always",
+      "risk": "A corrupted state leads to fsm_err_o=1, but the FSM continues operating with the illegal state, potentially propagating undefined control values.",
+      "signals": [
+        "state_q"
+      ],
+      "refs": [
+        "line 124-126",
+        "line 93"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment mentions a 'clear' operation to delete a selected key, but no input or logic for clear is present in the block. It is unclear how key clearing is handled.",
+      "cond": "when clear operation is expected",
+      "risk": "The design may lack a required key-clearing feature, leaving key data exposed when a clear command is issued.",
+      "signals": [],
+      "refs": [
+        "line 103-104"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "When wipe_key_i is asserted while in StSideloadIdle, keys_en remains asserted for that same cycle while the state transitions to StSideloadWipe. An external entity using keys_en could access the key simultaneously with the wipe command.",
+      "cond": "state_q == StSideloadIdle and wipe_key_i rises",
+      "risk": "Secret key value could be read or used in the same cycle as the wipe request, defeating the wipe security goal.",
+      "signals": [
+        "keys_en",
+        "wipe_key_i",
+        "state_q"
+      ],
+      "refs": [
+        "line 106-108",
+        "line 92"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When the FSM enters the default branch due to an illegal state_q, fsm_err_o is set but state_d remains the illegal value (because of the default assignment state_d = state_q). There is no mechanism to force the FSM back to a safe state.",
+      "cond": "state_q illegal",
+      "risk": "Corrupted state persists indefinitely; downstream logic may continue to behave dangerously based on the illegal state despite the error flag.",
+      "signals": [
+        "fsm_err_o",
+        "state_d",
+        "state_q"
+      ],
+      "refs": [
+        "line 124-126",
+        "line 93"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The init_i input is only examined in StSideloadReset and ignored in all other states. An unexpected assertion of init_i outside the Reset state does not cause any detectable effect, masking a potential protocol violation.",
+      "cond": "state_q != StSideloadReset and init_i asserted",
+      "risk": "A protocol violation that could indicate a system-level miscoordination goes undetected, possibly hiding a larger control flow error.",
+      "signals": [
+        "init_i",
+        "state_q"
+      ],
+      "refs": [
+        "line 98-100"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_sideload_key_ctrl.sv:91-129"
-  ],
-  "uncertain_points": [
-    "注释 Line 103 提到“when clear is received, delete the selected key”，但代码中未见 clear 信号或对应逻辑，可能是过时注释或 clear 功能在外部实现。",
-    "StSideloadStop 作为“intentional terminal state”（Line 119）仅能通过系统复位退出，但其复位行为未在本片段定义。"
+    "line 91-129"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
   "line_start": 91,
-  "line_end": 129
+  "line_end": 129,
+  "security_implications": ""
 }

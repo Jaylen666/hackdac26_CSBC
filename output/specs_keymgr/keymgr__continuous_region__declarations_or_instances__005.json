@@ -1,54 +1,199 @@
 {
   "chunk_id": "keymgr__continuous_region__declarations_or_instances__005",
-  "summary": "根据目的选择信号与硬件/软件密钥选择，组合生成目的种子、输出密钥，并构建密钥管理器的生成输入数据 gen_in。",
-  "behavior": "该组合逻辑区域首先将三个身份种子分别赋给 id_matrix 的 Creator、OwnerInt、Owner 位置。然后从影子寄存器 reg2hw.control_shadowed.dest_sel.q 译码出目的选择枚举 dest_sel，并据此多路选择 dest_seed：当 dest_sel 为 Aes 时选 aes_seed，为 Kmac 时选 kmac_seed，为 Otbn 时选 otbn_seed，其余情况均选 none_seed。output_key 通过多比特安全测试 mubi4_test_true_strict 检查 hw_key_sel 信号，若为真则选 hard_output_seed，否则选 soft_output_seed。最终 gen_in 由 invalid_stage_sel 控制：当 invalid_stage_sel 为真时，gen_in 为 lfsr 低 32 位复制 GenLfsrCopies 份拼接而成；否则由 reg2hw.key_version、reg2hw.salt、dest_seed 和 output_key 拼接构成。所有信号均为组合赋值，无额外时序延迟。",
+  "header": {
+    "module": "keymgr",
+    "block_kind": "assign",
+    "driven": [
+      "id_matrix",
+      "dest_sel",
+      "dest_seed",
+      "output_key",
+      "gen_in"
+    ],
+    "used": [
+      "creator_identity_seed",
+      "owner_int_identity_seed",
+      "owner_identity_seed",
+      "reg2hw.control_shadowed.dest_sel.q",
+      "aes_seed",
+      "kmac_seed",
+      "otbn_seed",
+      "none_seed",
+      "hw_key_sel",
+      "hard_output_seed",
+      "soft_output_seed",
+      "invalid_stage_sel",
+      "lfsr",
+      "reg2hw.key_version",
+      "reg2hw.salt",
+      "GenLfsrCopies"
+    ],
+    "modes": [
+      "keymgr_key_dest_e",
+      "invalid_stage_sel"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 invalid_stage_sel 为假时，gen_in 总是 dest_seed 与 output_key 以及 key_version、salt 的固定顺序拼接，且 dest_seed 与 dest_sel 的对应关系明确。",
-      "output_signals": [
-        "gen_in",
-        "dest_seed",
-        "output_key"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "id_matrix[Creator], id_matrix[OwnerInt], id_matrix[Owner] are directly assigned to creator_identity_seed, owner_int_identity_seed, owner_identity_seed, respectively.",
+      "cond": "always",
+      "signals": [
+        "id_matrix",
+        "creator_identity_seed",
+        "owner_int_identity_seed",
+        "owner_identity_seed"
       ],
-      "source_refs": [
-        "keymgr.sv:490-493"
+      "refs": [
+        "keymgr.sv:474-476"
       ]
     },
     {
-      "property": "当 invalid_stage_sel 为真时，gen_in 均为相同的 lfsr 低 32 位复制值，不暴露任何密钥或种子信息。",
-      "output_signals": [
-        "gen_in"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "dest_seed is assigned aes_seed when dest_sel is Aes, kmac_seed when Kmac, otbn_seed when Otbn, and none_seed for all other values.",
+      "cond": "always",
+      "signals": [
+        "dest_seed",
+        "dest_sel",
+        "aes_seed",
+        "kmac_seed",
+        "otbn_seed",
+        "none_seed"
       ],
-      "source_refs": [
-        "keymgr.sv:490"
+      "refs": [
+        "keymgr.sv:485-487"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "output_key is hard_output_seed when mubi4_test_true_strict(hw_key_sel) is true, otherwise soft_output_seed.",
+      "cond": "always",
+      "signals": [
+        "output_key",
+        "hw_key_sel",
+        "hard_output_seed",
+        "soft_output_seed"
+      ],
+      "refs": [
+        "keymgr.sv:488-489"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "gen_in is a concatenation of GenLfsrCopies copies of lfsr[31:0] when invalid_stage_sel is true, otherwise the concatenation of reg2hw.key_version, reg2hw.salt, dest_seed, and output_key.",
+      "cond": "always",
+      "signals": [
+        "gen_in",
+        "invalid_stage_sel",
+        "lfsr",
+        "GenLfsrCopies",
+        "reg2hw.key_version",
+        "reg2hw.salt",
+        "dest_seed",
+        "output_key"
+      ],
+      "refs": [
+        "keymgr.sv:490-493"
       ]
     }
   ],
-  "security_implications": "该片段参与密钥管理器生成输入数据的构造，涉及目的种子和硬件/软件输出密钥的选择。通过 invalid_stage_sel 可以将 gen_in 切换为 LFSR 值，可能在无效阶段掩蔽真实密钥材料。dest_seed 和 output_key 的选通基于多比特安全编码，需确保 mubi4_test_true_strict 和 dest_sel 译码的健壮性。",
   "assumptions": [
     {
-      "constraint": "reg2hw.control_shadowed.dest_sel.q 的编码必须属于 keymgr_key_dest_e 定义的合法值集合，且 hw_key_sel 必须为合法的多比特编码以保证 mubi4_test_true_strict 行为正确。",
-      "bug_relevance": "若 dest_sel 出现未定义的枚举值，设计使用 none_seed 进行回退，不会产生未定义行为。若 hw_key_sel 编码非法，mubi4_test_true_strict 可能返回不可预测结果，导致 output_key 选择错误，进而影响密钥生成安全性。该场景设计上不应发生。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "reg2hw.control_shadowed.dest_sel.q is a legal encoding of keymgr_key_dest_e, ensuring dest_sel cast produces a defined enumeration value.",
+      "cond": "whenever dest_sel is used",
+      "risk": "If the raw register bits are illegal, dest_sel may become X or match none of the branches, forcing dest_seed to none_seed and potentially leaking a weak seed to a key derivation path.",
+      "signals": [
+        "reg2hw.control_shadowed.dest_sel.q",
         "dest_sel",
-        "hw_key_sel"
+        "dest_seed"
       ],
-      "source_refs": [
-        "keymgr.sv:484",
+      "refs": [
+        "keymgr.sv:484"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "hw_key_sel is a valid mubi4 signal that passes mubi4_test_true_strict, maintaining the hard output key source selection.",
+      "cond": "when output key selection matters",
+      "risk": "A glitched or tampered hw_key_sel could cause output_key to fall back to soft_output_seed, breaking hardware-backed key isolation.",
+      "signals": [
+        "hw_key_sel",
+        "output_key"
+      ],
+      "refs": [
         "keymgr.sv:488"
       ]
     }
   ],
-  "evidence_refs": [
-    "keymgr.sv:474-476",
-    "keymgr.sv:484-493"
-  ],
   "uncertain_points": [
-    "GenLfsrCopies 的具体数值及 gen_in 的总位宽未在本片段给出，可能需要参考参数定义。",
-    "invalid_stage_sel 的来源与含义未在本片段说明，需要更高层上下文确定其安全语义。",
-    "none_seed 的常数值未定义，假设为全零或安全的默认值。"
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "dest_sel may take values such as Creator, OwnerInt, or other legal destinations not explicitly listed; for those, dest_seed defaults to none_seed, which may be insecure if later used as a key seed.",
+      "cond": "when invalid_stage_sel is false and dest_sel is not Aes, Kmac, or Otbn",
+      "risk": "A weak or zero seed could be used in key generation, compromising the derived key's security.",
+      "signals": [
+        "dest_sel",
+        "dest_seed",
+        "none_seed",
+        "gen_in"
+      ],
+      "refs": [
+        "keymgr.sv:485-487"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When invalid_stage_sel is true, gen_in uses a repeated LFSR value; the design intent and security properties of using LFSR as a fallback seed source are unclear.",
+      "cond": "invalid_stage_sel true",
+      "risk": "If the LFSR is predictable, the fallback seed could be guessed, weakening the key derivation during fault recovery.",
+      "signals": [
+        "gen_in",
+        "invalid_stage_sel",
+        "lfsr",
+        "GenLfsrCopies"
+      ],
+      "refs": [
+        "keymgr.sv:490"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "dest_sel is cast from a shadowed register without an explicit validity check; an illegal value passes through to the mux fallback, potentially using none_seed without error detection.",
+      "cond": "unexpected dest_sel value",
+      "risk": "A control fault could propagate a chosen none_seed into key derivation without triggering an alert or safe state.",
+      "signals": [
+        "dest_sel",
+        "dest_seed",
+        "none_seed"
+      ],
+      "refs": [
+        "keymgr.sv:484-487"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr.sv:474-493"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 474,
-  "line_end": 493
+  "line_end": 493,
+  "security_implications": ""
 }

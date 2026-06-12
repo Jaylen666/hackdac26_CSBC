@@ -1,39 +1,82 @@
 {
   "chunk_id": "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
-  "summary": "对每个 share 将输入数据截取低 KeyWidth 位，组合输出到 data_truncated。",
-  "behavior": "generate for 循环对每个 share i（0 到 Shares-1）生成一条 assign 语句，将 data_truncated[i] 直接赋值为 data_i[i] 的低 KeyWidth 位（data_i[i][KeyWidth-1:0]）。该赋值是纯组合逻辑，无寄存，输出随输入组合变化。",
+  "header": {
+    "module": "keymgr_sideload_key_ctrl",
+    "block_kind": "generate",
+    "driven": [
+      "data_truncated"
+    ],
+    "used": [
+      "data_i",
+      "Shares",
+      "KeyWidth"
+    ],
+    "modes": [
+      "Shares",
+      "KeyWidth"
+    ],
+    "tags": [
+      "key",
+      "truncation",
+      "parameterization",
+      "shares"
+    ]
+  },
   "guarantees": [
     {
-      "property": "data_truncated[i] 始终等于 data_i[i] 的低 KeyWidth 位（无延迟），只要 data_i[i] 的位宽不小于 KeyWidth。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each share i from 0 to Shares-1, data_truncated[i] is assigned the lower KeyWidth bits of data_i[i].",
+      "cond": "always (combinational assignment)",
+      "signals": [
+        "data_truncated",
+        "data_i",
+        "KeyWidth"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:70-72"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "KeyWidth must be less than or equal to the bit width of each element of data_i, otherwise the part-select [KeyWidth-1:0] will be out-of-range and produce X.",
+      "cond": "always",
+      "risk": "If KeyWidth > data_i[i] width, data_truncated[i] becomes X, corrupting key material and potentially propagating a silent fault.",
+      "signals": [
+        "KeyWidth",
+        "data_i",
         "data_truncated"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_sideload_key_ctrl.sv:71"
       ]
     }
   ],
-  "security_implications": "该片段属于密钥管理器中的密钥数据截断，处理侧载密钥输入。截断操作本身未引入额外的安全风险，但它位于密钥处理流水线中，后续逻辑的安全性依赖该通路提供正确的截断数据。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "每个 data_i[i] 的实际位宽应不小于 KeyWidth，否则部分选择 [KeyWidth-1:0] 会超出信号范围，导致硬件行为不确定。",
-      "bug_relevance": "若位宽不足，可能产生编译错误或仿真/综合行为异常，导致截断数据错误，进而破坏后续密钥处理功能。",
-      "related_signals": [
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The truncation to KeyWidth bits may discard high-order bits of the key shares. It is unclear whether this is the intended effective key length or if the full share width should be used.",
+      "cond": "when KeyWidth < full share width",
+      "risk": "Key entropy is reduced, potentially weakening cryptographic operations if the truncation is not deliberate and accounted for.",
+      "signals": [
         "data_i",
         "KeyWidth"
       ],
-      "source_refs": [
-        "keymgr_sideload_key_ctrl.sv:71"
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:70-72"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr_sideload_key_ctrl.sv:70-72"
   ],
-  "uncertain_points": [
-    "data_i 数组的元素位宽与参数 KeyWidth 的相对大小关系需通过上层模块确认，片段内未做宽度保护。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
   "line_start": 70,
-  "line_end": 72
+  "line_end": 72,
+  "security_implications": ""
 }

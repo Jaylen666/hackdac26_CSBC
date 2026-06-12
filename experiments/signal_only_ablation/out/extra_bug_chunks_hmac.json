@@ -1,0 +1,72 @@
+{
+  "extra_hash_stop_msg_freeze": {
+    "hmac__always_ff__line_365__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 365,
+      "line_end": 373,
+      "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      cfg_block <= '0;\n    end else if (hash_start_or_continue) begin\n      cfg_block <= 1'b 1;\n    end else if (reg_hash_done || reg_hash_stop) begin\n      cfg_block <= 1'b 0;\n    end\n  end"
+    },
+    "hmac__always_ff__line_414__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 414,
+      "line_end": 422,
+      "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      msg_allowed <= '0;\n    end else if (hash_start_or_continue) begin\n      msg_allowed <= 1'b 1;\n    end else if (packer_flush_done) begin\n      msg_allowed <= 1'b 0;\n    end\n  end"
+    },
+    "hmac_core__always_comb__next_state__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+      "line_start": 313,
+      "line_end": 456,
+      "code": "  always_comb begin : next_state\n    hmac_hash_done     = 1'b0;\n    hmac_sha_rvalid    = 1'b0;\n    clr_txcount        = 1'b0;\n    load_txcount       = 1'b0;\n    update_round       = 1'b0;\n    round_d            = Inner;\n    fifo_wsel_o        = 1'b0;   // from register\n    fifo_wvalid_o      = 1'b0;\n    clr_fifo_wdata_sel = 1'b1;\n    sel_rdata          = SelFifo;\n    hash_start         = 1'b0;\n    hash_continue      = 1'b0;\n    hash_process       = 1'b0;\n    st_d               = st_q;\n\n    unique case (st_q)\n      StIdle: begin\n        // reset round to Inner\n        // we always switch context into inner round since outer round computes once over\n        // single block at the end (outer key pad + inner hash)\n        update_round = 1'b1;\n        round_d      = Inner;\n        if (hmac_en_i && reg_hash_start_i) begin\n          st_d = StIPad; // start at StIPad if told to start\n\n          clr_txcount  = 1'b1;\n          hash_start   = 1'b1;\n        end else if (hmac_en_i && reg_hash_continue_i) begin\n          st_d = StMsg; // skip StIPad if told to continue - assumed it finished StIPad\n\n          load_txcount  = 1'b1;\n          hash_continue = 1'b1;\n        end else begin\n          st_d = StIdle;\n        end\n      end\n\n      StIPad: begin\n        sel_rdata = SelIPad;\n\n        if (txcnt_eq_blksz) begin\n          st_d = StMsg;\n\n          hmac_sha_rvalid = 1'b0; // block new read request\n        end else begin\n          st_d = StIPad;\n\n          hmac_sha_rvalid = 1'b1;\n        end\n      end\n\n      StMsg: begin\n        sel_rdata   = SelFifo;\n        fifo_wsel_o = (round_q == Outer);\n\n        if ( (((round_q == Inner) && reg_hash_process_flag) || (round_q == Outer))\n            && (txcount >= sha_message_length_o)) begin\n          st_d    = StWaitResp;\n\n          hmac_sha_rvalid = 1'b0; // block reading words from MSG FIFO\n          hash_process    = (round_q == Outer);\n        end else if (txcnt_eq_blksz && (txcount >= sha_message_length_o)\n                     && reg_hash_stop_q && (round_q == Inner)) begin\n          // wait till all MSG words are pushed out from FIFO (txcount reaches msg length)\n          // before transitioning to StWaitResp to wait on sha_hash_done_i and disabling\n          // reading from MSG FIFO\n          st_d =  StWaitResp;\n\n          hmac_sha_rvalid = 1'b0;\n        end else begin\n          st_d            = StMsg;\n          hmac_sha_rvalid = fifo_rvalid_i;\n        end\n      end\n\n      StWaitResp: begin\n        hmac_sha_rvalid = 1'b0;\n\n        if (sha_hash_done_i) begin\n          if (round_q == Outer) begin\n            st_d = StDone;\n          end else begin // round_q == Inner\n            if (reg_hash_stop_q) begin\n              st_d = StDone;\n            end else begin\n              st_d = StPushToMsgFifo;\n            end\n          end\n        end else begin\n          st_d = StWaitResp;\n        end\n      end\n\n      StPushToMsgFifo: begin\n        hmac_sha_rvalid    = 1'b0;\n        fifo_wsel_o        = 1'b1;\n        fifo_wvalid_o      = 1'b1;\n        clr_fifo_wdata_sel = 1'b0;\n\n        if (fifo_wready_i && (((fifo_wdata_sel_o == 4'd7) && (digest_size_i == SHA2_256)) ||\n                             ((fifo_wdata_sel_o == 4'd15) && (digest_size_i == SHA2_512)) ||\n                             ((fifo_wdata_sel_o == 4'd11) && (digest_size_i == SHA2_384)))) begin\n\n          st_d = StOPad;\n\n          clr_txcount  = 1'b1;\n          update_round = 1'b1;\n          round_d      = Outer;\n          hash_start   = 1'b1;\n        end else begin\n          st_d = StPushToMsgFifo;\n\n        end\n      end\n\n      StOPad: begin\n        sel_rdata   = SelOPad;\n        fifo_wsel_o = 1'b1; // Remained HMAC select to indicate HMAC is in second stage\n\n        if (txcnt_eq_blksz) begin\n          st_d = StMsg;\n\n          hmac_sha_rvalid = 1'b0; // block new read request\n        end else begin\n          st_d = StOPad;\n\n          hmac_sha_rvalid = 1'b1;\n        end\n      end\n\n      StDone: begin\n        // raise interrupt (hash_done)\n        st_d = StIdle;\n\n        hmac_hash_done = 1'b1;\n      end\n\n      default: begin\n        st_d = StIdle;\n      end\n\n    endcase\n  end"
+    },
+    "hmac__always_comb__line_645__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 645,
+      "line_end": 661,
+      "code": "  always_comb begin\n    message_length_d = message_length;\n    if (!cfg_block) begin\n      if (reg2hw.msg_length_lower.qe) begin\n        message_length_d[31:0]  = reg2hw.msg_length_lower.q;\n      end\n      if (reg2hw.msg_length_upper.qe) begin\n        message_length_d[63:32] = reg2hw.msg_length_upper.q;\n      end\n    end\n\n    if (hash_start) begin\n      message_length_d = '0;\n    end else if (msg_write && sha_en && packer_ready) begin\n      message_length_d = message_length + 64'(wmask_ones);\n    end\n  end"
+    },
+    "hmac__continuous_region__declarations_or_instances__005": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 336,
+      "line_end": 363,
+      "code": "  assign endian_swap = cfg_reg.endian_swap.q;\n  assign digest_swap = cfg_reg.digest_swap.q;\n  assign key_swap    = cfg_reg.key_swap.q;\n\n  assign hw2reg.cfg.hmac_en.d     = cfg_reg.hmac_en.q;\n  assign hw2reg.cfg.sha_en.d      = cfg_reg.sha_en.q;\n  assign hw2reg.cfg.digest_size.d = digest_mode_e'(digest_size);\n  assign hw2reg.cfg.key_length.d  = key_length_e'(key_length);\n  assign hw2reg.cfg.endian_swap.d = cfg_reg.endian_swap.q;\n  assign hw2reg.cfg.digest_swap.d = cfg_reg.digest_swap.q;\n  assign hw2reg.cfg.key_swap.d    = cfg_reg.key_swap.q;\n\n  assign reg_hash_start    = reg2hw.cmd.hash_start.qe & reg2hw.cmd.hash_start.q;\n  assign reg_hash_stop     = reg2hw.cmd.hash_stop.qe & reg2hw.cmd.hash_stop.q;\n  assign reg_hash_continue = reg2hw.cmd.hash_continue.qe & reg2hw.cmd.hash_continue.q;\n  assign reg_hash_process  = reg2hw.cmd.hash_process.qe & reg2hw.cmd.hash_process.q;\n\n  // Error code register\n  assign hw2reg.err_code.de = err_valid;\n  assign hw2reg.err_code.d  = err_code;\n\n  /////////////////////\n  // Control signals //\n  /////////////////////\n  assign hash_start             = reg_hash_start    & sha_en & ~cfg_block & ~invalid_config;\n  assign hash_continue          = reg_hash_continue & sha_en & ~cfg_block & ~invalid_config;\n  assign hash_process           = reg_hash_process  & sha_en & cfg_block &  ~invalid_config;\n  assign hash_start_or_continue = hash_start | hash_continue;"
+    },
+    "hmac__continuous_region__declarations_or_instances__007": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 461,
+      "line_end": 483,
+      "code": "  logic status_fifo_empty, fifo_empty_gate;\n  logic fifo_empty_negedge, fifo_empty_q;\n  logic fifo_full_posedge, fifo_full_q;\n  logic fifo_full_seen_d, fifo_full_seen_q;\n  assign fifo_empty_negedge = fifo_empty_q & ~fifo_empty;\n  assign fifo_full_posedge  = ~fifo_full_q & fifo_full;\n\n  // Track whether the FIFO was full after being empty. We clear the tracking:\n  // - When receiving the Start, Continue, Process or Stop command. This is to start over for the\n  //   next message.\n  // - When seeing a negative edge on the empty signal. This signals that software has reacted to\n  //   the interrupt and is filling up the FIFO again.\n  assign fifo_full_seen_d =\n      reg_hash_start   || reg_hash_continue ||\n      reg_hash_process || reg_hash_stop     ? 1'b 0 :\n      fifo_empty_negedge                    ? 1'b 0 :\n      fifo_full_posedge                     ? 1'b 1 : fifo_full_seen_q;\n\n  // The interrupt is gated unless software is actually allowed to write the FIFO and the FIFO was\n  // full before.\n  assign fifo_empty_gate = ~msg_allowed || ~fifo_full_seen_q;\n\n  assign status_fifo_empty = fifo_empty_gate ? 1'b 0 : fifo_empty;"
+    }
+  },
+  "extra_hash_stop_unlock_window": {
+    "hmac__always_ff__line_365__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 365,
+      "line_end": 373,
+      "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      cfg_block <= '0;\n    end else if (hash_start_or_continue) begin\n      cfg_block <= 1'b 1;\n    end else if (reg_hash_done || reg_hash_stop) begin\n      cfg_block <= 1'b 0;\n    end\n  end"
+    },
+    "hmac__always_ff__line_375__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 375,
+      "line_end": 411,
+      "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      cfg_reg <= '{\n        hmac_en: '{\n          q: 1'b0,\n          qe: 1'b0\n        },\n        sha_en: '{\n          q: 1'b0,\n          qe: 1'b0\n        },\n        endian_swap: '{\n          q: HMAC_CFG_ENDIAN_SWAP_RESVAL,\n          qe: 1'b0\n        },\n        digest_swap: '{\n          q: HMAC_CFG_DIGEST_SWAP_RESVAL,\n          qe: 1'b0\n        },\n        key_swap: '{\n          q: HMAC_CFG_KEY_SWAP_RESVAL,\n          qe: 1'b0\n        },\n        digest_size: '{\n          q: HMAC_CFG_DIGEST_SIZE_RESVAL,\n          qe: 1'b0\n        },\n        key_length: '{\n          q: HMAC_CFG_KEY_LENGTH_RESVAL,\n          qe: 1'b0\n        },\n        default:'0\n      };\n    end else if (!cfg_block && reg2hw.cfg.hmac_en.qe) begin\n      cfg_reg <= reg2hw.cfg ;\n    end\n  end"
+    },
+    "hmac__always_comb__update_secret_key__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 214,
+      "line_end": 227,
+      "code": "  always_comb begin : update_secret_key\n    secret_key_d = secret_key;\n    if (wipe_secret) begin\n      secret_key_d = {32{wipe_v}};\n    end else if (!cfg_block) begin\n      // Allow updating secret key only when the engine is in Idle.\n      for (int i = 0; i < 32; i++) begin\n        if (reg2hw.key[31-i].qe) begin\n          // swap byte endianness per secret key word if key_swap = 1\n          secret_key_d[32*i+:32] = conv_endian32(reg2hw.key[31-i].q, key_swap);\n        end\n      end\n    end\n  end"
+    },
+    "hmac__always_comb__line_149__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 149,
+      "line_end": 195,
+      "code": "  always_comb begin\n    done_state_d    = done_state_q;\n    hash_done_event = 8'd0;\n\n    unique case (done_state_q)\n      DoneAwaitCmd: begin\n        cool_down_ct_d = 8'd0;\n        if (sha_hash_process) begin\n          // SHA has been told to process the message, so signal *done* when the hash is done.\n          done_state_d = DoneAwaitHashDone;\n        end else if (reg_hash_stop) begin\n          // SHA has been told to stop, so first wait for the current message block to be complete.\n          done_state_d = DoneAwaitMessageComplete;\n        end\n      end\n\n      DoneAwaitHashDone: begin\n        if (reg_hash_done) begin\n          hash_done_event = 1'b1;\n          done_state_d = DoneAwaitCmd;\n        end\n      end\n\n      DoneAwaitMessageComplete: begin\n        if (digest_on_blk) begin\n          // Once the digest is being computed for the complete message block, wait for the hash to\n          // complete.\n          done_state_d = DoneAwaitHashComplete;\n        end\n      end\n\n      DoneAwaitHashComplete: begin\n        if (!hash_running) begin\n          if (cool_down_ct_q < 8'd127) begin\n            cool_down_ct_d = cool_down_ct_q + 1'b1;\n            hash_done_event = 1'b0;\n            done_state_d = DoneAwaitHashComplete;\n          end else begin\n            hash_done_event = 1'b1;\n            done_state_d = DoneAwaitCmd;\n          end\n        end\n      end\n\n      default: ;\n    endcase\n  end"
+    },
+    "hmac__always_comb__line_825__001": {
+      "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+      "line_start": 825,
+      "line_end": 836,
+      "code": "  always_comb begin\n    update_seckey_inprocess = 1'b0;\n    if (cfg_block) begin\n      for (int i = 0 ; i < 32 ; i++) begin\n        if (reg2hw.key[i].qe) begin\n          update_seckey_inprocess = update_seckey_inprocess | 1'b1;\n        end\n      end\n    end else begin\n      update_seckey_inprocess = 1'b0;\n    end\n  end"
+    }
+  }
+}

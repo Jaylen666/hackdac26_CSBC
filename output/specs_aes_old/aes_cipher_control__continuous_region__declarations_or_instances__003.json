@@ -1,0 +1,39 @@
+{
+  "chunk_id": "aes_cipher_control__continuous_region__declarations_or_instances__003",
+  "summary": "将内部状态和控制信号直接输出给主控制器，并基于解密密钥生成条件与仅正向配置生成密钥扩展操作码",
+  "behavior": "该组合逻辑块将多个内部寄存器（crypt_q、dec_key_gen_q、prng_reseed_q、key_clear_q、data_out_clear_q）直通到对应输出，供主控制器获取当前状态。key_expand_round_o 直接跟随 rnd_ctr。key_expand_op_o 的生成逻辑为：若解密密钥生成请求信号（dec_key_gen_d 或 dec_key_gen_q）为高，或模块配置为仅正向操作（CiphOpFwdOnly 为真），则强制输出正向操作码 CIPH_FWD；否则透传输入 op_i。这一强制正向逻辑确保在解密密钥扩展相关操作中总是使用正向密钥扩展路径。所有 assign 立即生效，无额外延迟。",
+  "guarantees": [
+    {
+      "property": "当 dec_key_gen_d == SP2V_HIGH 或 dec_key_gen_q == SP2V_HIGH 或 CiphOpFwdOnly 为真时，key_expand_op_o 一定等于 CIPH_FWD",
+      "output_signals": [
+        "key_expand_op_o"
+      ],
+      "source_refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:373-374"
+      ]
+    },
+    {
+      "property": "key_expand_round_o 始终等于 rnd_ctr",
+      "output_signals": [
+        "key_expand_round_o"
+      ],
+      "source_refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:375"
+      ]
+    }
+  ],
+  "security_implications": "解密密钥生成期间强制密钥扩展使用正向操作码，避免在此敏感阶段意外使用反向操作码，从而降低密钥扩展路径被恶意利用或引发功能错误的风险。同时，密钥与数据清除状态（key_clear_o、data_out_clear_o）的透传使主控制器能及时实施安全擦除策略。",
+  "assumptions": [],
+  "evidence_refs": [
+    "output/aes_mini_rtl/aes_cipher_control.sv:373-375",
+    "output/aes_mini_rtl/aes_cipher_control.sv:377-382"
+  ],
+  "uncertain_points": [
+    "assign 表达式优先级与括号：源码为 (dec_key_gen_d == SP2V_HIGH  || dec_key_gen_q == SP2V_HIGH) || CiphOpFwdOnly ? CIPH_FWD : op_i，按 Verilog 规则正确执行，但可读性依赖优先级，确认综合结果与意图一致。",
+    "CiphOpFwdOnly 的本质：可能是预处理器常量或参数，需在外层确认其是否恒定，以判断该条件为静态选择。",
+    "输入 op_i 的合法范围未在片段内约束，假设在非强制模式下 op_i 由其他逻辑保证为有效操作码。"
+  ],
+  "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
+  "line_start": 373,
+  "line_end": 382
+}

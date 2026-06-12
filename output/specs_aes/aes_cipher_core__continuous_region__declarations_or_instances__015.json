@@ -1,43 +1,122 @@
 {
   "chunk_id": "aes_cipher_core__continuous_region__declarations_or_instances__015",
-  "summary": "将 prd_key_expand 连接到 unused_prd_masking 的高位片，并通过仿真断言验证 prd_masking 整体相等。",
-  "behavior": "组合赋值驱动 unused_prd_masking[WidthPRDMasking-1 : WidthPRDMasking-WidthPRDKey] 为 prd_key_expand 的值，建立直接组合连接。同时，`ASSERT 宏（AesMskgPrdExtraction）在仿真中检查 prd_masking 是否等于 unused_prd_masking，若不等则报断言违例。该断言不产生实际硬件，仅用于设计验证。",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "mixed",
+    "driven": [
+      "unused_prd_masking[WidthPRDMasking-1 -: WidthPRDKey]"
+    ],
+    "used": [
+      "prd_key_expand",
+      "prd_masking",
+      "unused_prd_masking"
+    ],
+    "modes": [
+      "WidthPRDMasking",
+      "WidthPRDKey"
+    ],
+    "tags": [
+      "masking",
+      "key",
+      "entropy",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "unused_prd_masking 从最高位向下的 WidthPRDKey 位始终等于 prd_key_expand（组合路径）。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "unused_prd_masking[WidthPRDMasking-1 -: WidthPRDKey] is continuously driven by prd_key_expand.",
+      "cond": "always when this code is active",
+      "signals": [
+        "unused_prd_masking",
+        "prd_key_expand"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:926"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "An immediate assertion fires if prd_masking != unused_prd_masking.",
+      "cond": "always when this code is active and assertion enabled",
+      "signals": [
+        "prd_masking",
         "unused_prd_masking"
       ],
-      "source_refs": [
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:927"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "WidthPRDMasking >= WidthPRDKey, otherwise the partial select is out-of-bounds.",
+      "cond": "before synthesis or simulation",
+      "risk": "Invalid partial select leads to undefined width, possible x-propagation, or synthesis failure.",
+      "signals": [
+        "WidthPRDMasking",
+        "WidthPRDKey"
+      ],
+      "refs": [
         "output/aes_mini_rtl/aes_cipher_core.sv:926"
       ]
     }
   ],
-  "security_implications": "unused_prd_masking 原本可能用于掩码目的，将 prd_key_expand（密钥扩展数据）直接连接到其上，如果这些高位被下游逻辑当作掩码使用，可能将密钥扩展值暴露于运算通路，增加侧信道信息泄露风险。具体影响需根据 unused_prd_masking 的消费者上下文评估。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "WidthPRDKey <= WidthPRDMasking，且 unused_prd_masking 的这部分高位未被其他逻辑驱动（避免多驱动冲突）。",
-      "bug_relevance": "若位宽不等式不成立，索引范围将无效或导致高位截断/错误映射；若存在多驱动，在仿真或综合中会产生多驱动冲突，导致未知值或不确定性。",
-      "related_signals": [
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Only the top slice of unused_prd_masking is assigned here; the remaining bits must be driven by other logic to satisfy the assertion prd_masking == unused_prd_masking.",
+      "cond": "when this code is active",
+      "risk": "If other chunks do not correctly drive the unused bits, the masking PRD will be incomplete or the assertion will fire, potentially breaking masking.",
+      "signals": [
         "unused_prd_masking",
-        "prd_key_expand",
+        "prd_masking"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:926-927"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If WidthPRDMasking and WidthPRDKey are not sized appropriately, the partial select may not cover the intended PRD region, making the assertion useless or always failing.",
+      "cond": "if parameter values are mismatched with the expected PRD structure",
+      "risk": "Incorrect widths could silently weaken masking by leaving bits undriven or mismatched.",
+      "signals": [
         "WidthPRDMasking",
         "WidthPRDKey"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:926"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:926-927"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The exact purpose and coverage of assertion AesMskgPrdExtraction is undocumented; it is unclear whether it guarantees perfect extraction or only a partial sanity check.",
+      "cond": "for verification closure",
+      "risk": "If the assertion is too weak, PRD corruption may go undetected.",
+      "signals": [
+        "AesMskgPrdExtraction"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_core.sv:927"
       ]
     }
   ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_core.sv:926-927"
   ],
-  "uncertain_points": [
-    "prd_key_expand 的实际位宽是否等于 WidthPRDKey，以及 prd_masking 与 unused_prd_masking 的相等性是否依赖于未显示的低位赋值逻辑。",
-    "assign 仅驱动部分高位，unused_prd_masking 剩余低位的驱动来源及完整性未在片段中体现。",
-    "断言 AesMskgPrdExtraction 的具体宏定义和综合行为（是否会被忽略）未提供。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
   "line_start": 926,
-  "line_end": 933
+  "line_end": 933,
+  "security_implications": ""
 }

@@ -1,11 +1,159 @@
 {
   "chunk_id": "aes_cipher_control__continuous_region__aes_cipher_control__001",
-  "summary": "组合逻辑将 sp2v_e 控制/握手信号打包为位宽为 Sp2VWidth 的稀疏多轨信号，用于连接多轨冗余 FSM。",
-  "behavior": "该区域声明了一组内部信号，并将 sp2v_e 类型的控制与握手信号（in_valid, out_ready, crypt, dec_key_gen, sub_bytes_out_req, key_expand_out_req）以及寄存器输出（crypt_q, dec_key_gen_q）通过简单的 assign 赋值转换为宽度为 Sp2VWidth 的稀疏信号（sp_*）。例如，sp_in_valid = {in_valid}，其每一位都复制或反映输入信号的值。这为下游的多轨冗余有限状态机（FSM）提供了确定性的一对多复制。该逻辑为纯组合，不引入额外延迟。",
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "mixed",
+    "driven": [
+      "sp_in_valid",
+      "sp_out_ready",
+      "sp_crypt",
+      "sp_dec_key_gen",
+      "sp_sub_bytes_out_req",
+      "sp_key_expand_out_req",
+      "sp_crypt_q",
+      "sp_dec_key_gen_q"
+    ],
+    "used": [
+      "in_valid",
+      "out_ready",
+      "crypt",
+      "dec_key_gen",
+      "sub_bytes_out_req",
+      "key_expand_out_req",
+      "crypt_q",
+      "dec_key_gen_q"
+    ],
+    "modes": [
+      "CiphOpFwdOnly",
+      "SecMasking",
+      "SecSBoxImpl"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "wipe",
+      "alert",
+      "error",
+      "mask",
+      "prng",
+      "fault",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "输出的 sparsified 信号（sp_in_valid, sp_out_ready, sp_crypt 等）每一位都始终等于对应单轨 sp2v_e 源信号的对应位，无额外的逻辑变换。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "sp_in_valid is driven by the concatenation {in_valid}; only bit 0 receives in_valid's value, any remaining bits (if Sp2VWidth>1) are undriven.",
+      "cond": "always",
+      "signals": [
+        "sp_in_valid",
+        "in_valid"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:139"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "sp_out_ready is driven by the concatenation {out_ready}; only bit 0 receives out_ready's value, remaining bits (if Sp2VWidth>1) are undriven.",
+      "cond": "always",
+      "signals": [
+        "sp_out_ready",
+        "out_ready"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:140"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "sp_crypt is driven by {crypt}, similarly connecting only the least significant bit.",
+      "cond": "always",
+      "signals": [
+        "sp_crypt",
+        "crypt"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:141"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "sp_dec_key_gen is driven by {dec_key_gen}.",
+      "cond": "always",
+      "signals": [
+        "sp_dec_key_gen",
+        "dec_key_gen"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:142"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "sp_sub_bytes_out_req is driven by {sub_bytes_out_req}.",
+      "cond": "always",
+      "signals": [
+        "sp_sub_bytes_out_req",
+        "sub_bytes_out_req"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:143"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "sp_key_expand_out_req is driven by {key_expand_out_req}.",
+      "cond": "always",
+      "signals": [
+        "sp_key_expand_out_req",
+        "key_expand_out_req"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:144"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "sp_crypt_q is driven by {crypt_q}.",
+      "cond": "always",
+      "signals": [
+        "sp_crypt_q",
+        "crypt_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:145"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "assignment",
+      "claim": "sp_dec_key_gen_q is driven by {dec_key_gen_q}.",
+      "cond": "always",
+      "signals": [
+        "sp_dec_key_gen_q",
+        "dec_key_gen_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:146"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The Sparsified FSM width parameter Sp2VWidth must be exactly 1; otherwise, the `assign sp_* = {original}` pattern drives only bit 0, leaving higher bits disconnected.",
+      "cond": "always, when sparsified signals are used by receiver blocks",
+      "risk": "If Sp2VWidth > 1, the redundant copies expected for security/fault detection remain unconnected, potentially causing X propagation, loss of spatial redundancy, and missed errors in secret/key/manipulation paths.",
+      "signals": [
         "sp_in_valid",
         "sp_out_ready",
         "sp_crypt",
@@ -15,21 +163,58 @@
         "sp_crypt_q",
         "sp_dec_key_gen_q"
       ],
-      "source_refs": [
-        "output/aes_mini_rtl/aes_cipher_control.sv:138-146"
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:139-146"
       ]
     }
   ],
-  "security_implications": "将控制信号复制为多比特稀疏信号可提供对抗瞬时故障的冗余，是多轨逻辑风格的一部分，旨在加强密码控制路径的安全性。",
-  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The Sp2VWidth parameter might be >1 for spatial redundancy, but the conversion assigns ({signal}) only connects one bit. If Sp2VWidth>1, the higher-order bits of sp_* signals are undriven, defeating sparsified redundancy.",
+      "cond": "Sp2VWidth > 1 (value not visible in this chunk)",
+      "risk": "Loss of multi-rail security protection; undriven bits can lead to metastability, X-propagation into key/cipher FSM, or masked faults bypassing alert mechanisms.",
+      "signals": [
+        "sp_in_valid",
+        "sp_crypt",
+        "sp_dec_key_gen",
+        "sp_sub_bytes_out_req",
+        "sp_key_expand_out_req",
+        "sp_crypt_q",
+        "sp_dec_key_gen_q"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:139-146"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "All top-level outputs (in_ready_o, out_valid_o, crypt_o, dec_key_gen_o, prng_reseed_o, key_clear_o, data_out_clear_o, alert_o, prng_update_o, prng_reseed_req_o, state_sel_o, state_we_o, …) and internal registers (crypt_d/q, dec_key_gen_d/q, prng_reseed, key_clear, data_out_clear, rnd_ctr) are not driven in this chunk; their logic resides in other parts of the module.",
+      "cond": "always (chunk covers only declarations and sparse-conversion assigns)",
+      "risk": "Missing or erroneous implementation in the excluded module segments can leave critical security outputs undriven or stuck at reset, causing protocol deadlock, cipher mis‑operation, or silent data exposure.",
+      "signals": [
+        "in_ready_o",
+        "out_valid_o",
+        "alert_o",
+        "prng_update_o",
+        "state_sel_o",
+        "key_expand_clear_o",
+        "key_expand_round_o"
+      ],
+      "refs": [
+        "output/aes_mini_rtl/aes_cipher_control.sv:11-146"
+      ]
+    }
+  ],
   "evidence_refs": [
     "output/aes_mini_rtl/aes_cipher_control.sv:9-146"
   ],
-  "uncertain_points": [
-    "sp2v_e 的具体位宽与 Sp2VWidth 的关系未知，赋值 {signal} 的确切行为取决于 SystemVerilog 的位宽扩展规则。",
-    "内部信号 crypt_q, dec_key_gen_q 的来源及驱动逻辑不在该片段中，其行为由其他 chunk 定义。"
-  ],
   "source_file": "output/aes_mini_rtl/aes_cipher_control.sv",
   "line_start": 9,
-  "line_end": 146
+  "line_end": 146,
+  "security_implications": ""
 }

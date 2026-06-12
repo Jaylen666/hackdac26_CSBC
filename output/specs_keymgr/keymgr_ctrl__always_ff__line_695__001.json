@@ -1,34 +1,107 @@
 {
   "chunk_id": "keymgr_ctrl__always_ff__line_695__001",
-  "summary": "在时钟上升沿或异步复位时，根据 update_en 将当前 working_state_o 捕获到 last_working_st 寄存器，以实现工作状态的备份。",
-  "behavior": "该寄存器在复位（rst_ni 为低）时异步置为 StReset。复位释放后，每个 clk_i 上升沿若 update_en 为高，则 last_working_st 更新为 working_state_o 的当前值；若 update_en 为低，则保持原值不变。因此，last_working_st 保存最近一次 update_en 有效时的工作状态，或复位后的初始状态。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "always_ff",
+    "driven": [
+      "last_working_st"
+    ],
+    "used": [
+      "rst_ni",
+      "update_en",
+      "working_state_o"
+    ],
+    "modes": [
+      "StReset"
+    ],
+    "tags": [
+      "lifecycle",
+      "state",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 last_working_st 一定等于 StReset。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "On negedge of rst_ni, last_working_st is forced to StReset.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "last_working_st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:696-697"
+      "refs": [
+        "file:696-697"
       ]
     },
     {
-      "property": "在任一 clk_i 上升沿采样到 update_en 为高时，从该时钟沿之后 last_working_st 等于该时钟沿采样到的 working_state_o 值。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On posedge clk_i when rst_ni is high and update_en is high, last_working_st is updated with the value of working_state_o.",
+      "cond": "rst_ni && update_en",
+      "signals": [
+        "clk_i",
+        "update_en",
+        "working_state_o",
         "last_working_st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:698-699"
+      "refs": [
+        "file:698-699"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:695-701"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "StReset is a valid member of the working state encoding.",
+      "cond": "always",
+      "risk": "If StReset is not a legal state, other logic using last_working_st may misinterpret the reset state and enter undefined behavior.",
+      "signals": [
+        "StReset"
+      ],
+      "refs": [
+        "file:697"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When update_en is asserted, working_state_o must be stable and represent the intended working state.",
+      "cond": "update_en == 1",
+      "risk": "If working_state_o is transient or invalid during update_en, last_working_st may capture an incorrect state, potentially corrupting state tracking or security-sensitive decisions.",
+      "signals": [
+        "update_en",
+        "working_state_o"
+      ],
+      "refs": [
+        "file:699"
+      ]
+    }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The timing relationship between update_en and working_state_o is not constrained locally; update_en might be asserted while working_state_o is still transitioning.",
+      "cond": "update_en posedge occurs during a state change of working_state_o",
+      "risk": "last_working_st could latch an intermediate or glitched value, leading to an illegal state that could affect key manager state-dependent controls.",
+      "signals": [
+        "update_en",
+        "working_state_o",
+        "last_working_st"
+      ],
+      "refs": [
+        "file:698-699"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:695-701"
+  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 695,
-  "line_end": 701
+  "line_end": 701,
+  "security_implications": ""
 }

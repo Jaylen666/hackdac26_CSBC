@@ -1,50 +1,224 @@
 {
   "chunk_id": "keymgr_sideload_key__always_ff__line_42__001",
-  "summary": "密钥共享寄存器，支持异步复位清零、用熵随机化清除以及条件密钥加载。",
-  "behavior": "在时钟上升沿或异步复位（rst_ni 低有效）时更新 key_q。复位时 key_q 所有比特清零。当 clr_i 有效时（无论 set_i 状态），每个共享（0..Shares-1）被赋值为 {EntropyCopies{entropy_i[i]}}，即用熵的复制值覆盖原密钥（安全擦除）。当 clr_i 无效、set_i 有效时，每个共享根据 set_en_i 选择：若 set_en_i=1，则加载提供的密钥 key_i[i]；否则同样加载 {EntropyCopies{entropy_i[i]}}（可能用于在密钥加载前先用随机数填充）。以上条件均不满足时，key_q 保持原值。clr_i 优先级高于 set_i。",
+  "header": {
+    "module": "keymgr_sideload_key",
+    "block_kind": "always_ff",
+    "driven": [
+      "key_q"
+    ],
+    "used": [
+      "rst_ni",
+      "clr_i",
+      "set_i",
+      "set_en_i",
+      "key_i",
+      "entropy_i",
+      "Shares",
+      "EntropyCopies"
+    ],
+    "modes": [
+      "reset",
+      "clear",
+      "set_enabled",
+      "set_disabled",
+      "hold"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "entropy",
+      "wipe",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 key_q 一定为全零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "Upon negedge rst_ni, key_q is reset to all zeros.",
+      "cond": "always during reset",
+      "signals": [
+        "rst_ni",
         "key_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:43-44"
+      "refs": [
+        "file:43-44"
       ]
     },
     {
-      "property": "当 clr_i 有效或（set_i 有效且 set_en_i=0）时，key_q 的每个共享被更新为 entropy_i 相应复制的值，而非 key_i 值。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When clr_i is asserted and not reset, for all i from 0 to Shares-1, key_q[i] is assigned {EntropyCopies{entropy_i[i]}}, overwriting any key with entropy.",
+      "cond": "clr_i active and not reset",
+      "signals": [
+        "clr_i",
+        "entropy_i",
+        "key_q",
+        "Shares",
+        "EntropyCopies"
+      ],
+      "refs": [
+        "file:45-48"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When set_i is asserted, not reset, and clr_i inactive, key_q[i] gets key_i[i] if set_en_i=1, otherwise gets {EntropyCopies{entropy_i[i]}}. This supports conditional load or clear-to-entropy.",
+      "cond": "set_i active, clr_i inactive, not reset",
+      "signals": [
+        "set_i",
+        "set_en_i",
+        "key_i",
+        "entropy_i",
         "key_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:45-48",
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:49-52"
+      "refs": [
+        "file:49-52"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When none of rst_ni, clr_i, or set_i is active, key_q holds its previous value (implicit register hold).",
+      "cond": "no explicit update condition",
+      "signals": [
+        "key_q"
+      ],
+      "refs": [
+        "file:42-54"
       ]
     }
   ],
-  "security_implications": "密钥存储 key_q 在复位、clr_i 有效以及 set_i=1 且 set_en_i=0 时均使用熵值（entropy_i 的复制）覆盖，防止明文密钥残留；clr_i 优先级高于 set_i，确保清除操作不可被设置指令打断，符合安全擦除要求。",
   "assumptions": [
     {
-      "constraint": "参数 Shares、EntropyCopies 与信号位宽应匹配，使得 key_q[i] 的位宽等于 EntropyCopies * $bits(entropy_i[i])，避免赋值时发生截断或高位零扩展。",
-      "bug_relevance": "若位宽不匹配，可能导致密钥值被截断或零扩展，削弱密钥强度或造成密钥不一致，影响安全性和功能正确性。",
-      "related_signals": [
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The reset rst_ni must be asserted low for sufficient time to clear all key_q flip-flops to zero before normal operation.",
+      "cond": "startup or system reset",
+      "risk": "Incomplete reset may leave key_q with X values that could be mistaken for a valid key, causing key leakage.",
+      "signals": [
+        "rst_ni",
+        "key_q"
+      ],
+      "refs": [
+        "file:43-44"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "entropy_i must provide independent, high-quality random bits per share when it is used to overwrite key_q, to ensure effective clearing.",
+      "cond": "when clr_i or set_i with set_en_i=0 activates",
+      "risk": "Predictable entropy would result in a deterministic clear value, potentially leaving recoverable information about the previous key.",
+      "signals": [
+        "entropy_i"
+      ],
+      "refs": [
+        "file:47,51"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "Parameters Shares and EntropyCopies must match the actual array dimensions and bit widths of key_i, key_q, and entropy_i.",
+      "cond": "always",
+      "risk": "Mismatch can cause truncated writes, missing shares, or incorrect replication, corrupting key data or leaving residues.",
+      "signals": [
+        "Shares",
+        "EntropyCopies",
+        "key_i",
         "key_q",
         "entropy_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:46-48",
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:49-51"
+      "refs": [
+        "file:46-47,50-51"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "External logic must ensure clr_i is not asserted while set_i is asserted to load a key, because clr_i has higher priority and will clear instead.",
+      "cond": "when key load is intended",
+      "risk": "Simultaneous assertion could cause a key load to be missed, leaving the module without a valid key or triggering an unintended clear.",
+      "signals": [
+        "clr_i",
+        "set_i"
+      ],
+      "refs": [
+        "file:45,49"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "If a fault asserts clr_i during a set_i with set_en_i=1, the priority logic clears the key instead of loading a new one. Is this acceptable or should mutual-exclusion or glitch protection exist?",
+      "cond": "set_i=1, set_en_i=1, clr_i=1",
+      "risk": "Unintended clear could cause key loss or denial of service; a fault could exploit this edge case.",
+      "signals": [
+        "clr_i",
+        "set_i",
+        "set_en_i"
+      ],
+      "refs": [
+        "file:45-49"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The clear operation uses only a single entropy bit per share, replicated EntropyCopies times. Is one bit per share sufficient to securely erase the full share width?",
+      "cond": "clear (clr_i or set_i with set_en_i=0)",
+      "risk": "Residual data-dependent effects could allow partial recovery of the previous key if the clear value is highly correlated (all 0s or all 1s).",
+      "signals": [
+        "entropy_i",
+        "EntropyCopies",
+        "key_q"
+      ],
+      "refs": [
+        "file:47,51"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When set_i=1 and set_en_i=0, the design clears key_q to entropy instead of holding. Is this an intentional feature, or should set_i be gated entirely by set_en_i?",
+      "cond": "set_i=1, set_en_i=0",
+      "risk": "Erroneous assertion of set_i (e.g., by software error or glitch) would wipe the key, causing functional failure.",
+      "signals": [
+        "set_i",
+        "set_en_i"
+      ],
+      "refs": [
+        "file:49-51"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "If Shares is set to 0, the clear/load loops do not execute, leaving key_q unchanged after reset or never updated. This may breach the assumption that key_q is always cleared.",
+      "cond": "Shares=0",
+      "risk": "key_q could retain an old key or unknown state, enabling key leakage across resets or power cycles.",
+      "signals": [
+        "Shares",
+        "key_q"
+      ],
+      "refs": [
+        "file:46,50"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:42-54"
-  ],
-  "uncertain_points": [
-    "clr_i 持续多周期有效期间，entropy_i 是否应保持稳定或允许变化？当前实现会在每个时钟沿采样 entropy_i 并覆盖 key_q，这可能产生多次不同的随机填充，但设计意图是单次擦除还是持续随机化不明确。"
+    "file:42-54"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv",
   "line_start": 42,
-  "line_end": 54
+  "line_end": 54,
+  "security_implications": ""
 }

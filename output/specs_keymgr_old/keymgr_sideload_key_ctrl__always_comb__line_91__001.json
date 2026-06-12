@@ -1,0 +1,58 @@
+{
+  "chunk_id": "keymgr_sideload_key_ctrl__always_comb__line_91__001",
+  "summary": "组合逻辑实现了一个控制 sideload key 访问的简单状态机，复位后等待初始化，然后在空闲状态使能密钥并检测擦除请求，擦除后永久禁用密钥直至系统复位。",
+  "behavior": "该 always_comb 块描述了一个四状态的有限状态机，用于管理密钥旁路载入使能。默认值：state_d 保持当前状态 state_q，keys_en 置 0，fsm_err_o 置 0。状态转移逻辑：reset 状态下，当 init_i 为 1 时进入 idle 状态（98-100 行）。idle 状态下，keys_en 置 1 以允许载入密钥；若检测到 wipe_key_i 为 1，则立即转入 wipe 状态（106-109 行）。wipe 状态下，keys_en 保持 0，等待 wipe_key_i 释放为 0 后转入 stop 状态（113-116 行）。stop 状态是一个故意设置的终端状态，keys_en 保持 0，再无退出条件（120-122 行）。若 state_q 未落入上述四个枚举状态，则 fsm_err_o 置 1 以指示非法状态（124-126 行）。注意注释（103 行）提到了 “clear” 操作，但代码中未体现相应逻辑，可能已废弃或由外部处理。",
+  "guarantees": [
+    {
+      "property": "keys_en 仅在当前状态为 StSideloadIdle 时被置为 1，其他所有定义状态（StSideloadReset、StSideloadWipe、StSideloadStop）以及未定义非法状态下均保持 0。",
+      "output_signals": [
+        "keys_en"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:92,106,113,121,124-126"
+      ]
+    },
+    {
+      "property": "fsm_err_o 仅在 state_q 不是 StSideloadReset、StSideloadIdle、StSideloadWipe、StSideloadStop 之一时置 1，其余情况为 0。",
+      "output_signals": [
+        "fsm_err_o"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:94,125"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑提供了一种安全擦除机制：一旦 wipe_key_i 触发，状态机离开 idle 后进入 wipe 并最终锁定在 stop 终端状态，keys_en 被永久禁止，从而阻止任何后续 sideload key 的载入，直至系统复位。这可用于保护敏感密钥在检测到攻击或请求后立即禁用。",
+  "assumptions": [
+    {
+      "constraint": "状态机启动时需处于 StSideloadReset 或其他有效枚举状态；若 state_q 因软错误跳转到未定义状态，FSM 会置 fsm_err_o 为 1，但不会自动恢复。",
+      "bug_relevance": "若复位未正确将 state_q 初始化为 StSideloadReset，FSM 可能进入非法状态并卡死，导致 keys_en 始终为 0 且 fsm_err_o 持续有效；但该场景属于设计边界之外的错误。",
+      "related_signals": [
+        "state_q"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:124-126"
+      ]
+    },
+    {
+      "constraint": "处于 StSideloadWipe 时，wipe_key_i 必须在有限时间内变为 0，否则状态机将永远停留在 Wipe 状态（keys_en 保持为 0，且不进入 Stop）。",
+      "bug_relevance": "若 wipe_key_i 持续为 1，状态机虽仍禁用 keys，但未到达预期的终端 Stop 状态，可能使软件状态观察异常；功能上仅表现为停滞。",
+      "related_signals": [
+        "wipe_key_i"
+      ],
+      "source_refs": [
+        "keymgr_sideload_key_ctrl.sv:114-116"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keymgr_sideload_key_ctrl.sv:91-129"
+  ],
+  "uncertain_points": [
+    "注释 Line 103 提到“when clear is received, delete the selected key”，但代码中未见 clear 信号或对应逻辑，可能是过时注释或 clear 功能在外部实现。",
+    "StSideloadStop 作为“intentional terminal state”（Line 119）仅能通过系统复位退出，但其复位行为未在本片段定义。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
+  "line_start": 91,
+  "line_end": 129
+}

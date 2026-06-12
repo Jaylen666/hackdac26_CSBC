@@ -1,42 +1,169 @@
 {
   "chunk_id": "keymgr_err__always_ff__line_95__001",
-  "summary": "异步复位或操作完成时清除同步故障寄存器，操作更新时锁存新故障值。",
-  "behavior": "该 always_ff 块管理 sync_fault_q 寄存器。当异步复位 rst_ni 为低或操作完成信号 op_done_i 为高时，寄存器异步/同步清零。否则，当操作更新信号 op_update_i 为高时，在时钟上升沿将输入 sync_fault_d 锁存到 sync_fault_q。若两个条件同时成立（op_done_i 和 op_update_i 均为高），if-else 优先级导致清零操作优先，sync_fault_d 的值不会被采用。",
+  "header": {
+    "module": "keymgr_err",
+    "block_kind": "always_ff",
+    "driven": [
+      "sync_fault_q"
+    ],
+    "used": [
+      "rst_ni",
+      "op_done_i",
+      "op_update_i",
+      "sync_fault_d"
+    ],
+    "modes": [
+      "reset",
+      "clear_on_done",
+      "load_on_update",
+      "hold"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "register_update"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在复位无效且未发生 op_done_i 和 op_update_i 时，sync_fault_q 保持上一次的值；复位后或 op_done_i 有效后的第一个时钟沿，sync_fault_q 一定为 0；op_update_i 有效后的第一个时钟沿，sync_fault_q 更新为当前 sync_fault_d 的值。",
-      "output_signals": [
+      "id": "G1",
+      "type": "state_transition",
+      "claim": "When asynchronous reset rst_ni is low, sync_fault_q is cleared to '0.",
+      "cond": "rst_ni = 0",
+      "signals": [
+        "rst_ni",
         "sync_fault_q"
       ],
-      "source_refs": [
-        "keymgr_err.sv:95-103"
+      "refs": [
+        "keymgr_err.sv:96-97"
       ]
-    }
-  ],
-  "security_implications": "sync_fault_q 存储同步故障状态，其清零（复位或操作完成）或更新可能影响密钥管理器对故障的处理策略，进而与安全响应路径相关。具体安全性取决于 sync_fault_d 的来源和 sync_fault_q 的后续使用。",
-  "assumptions": [
+    },
     {
-      "constraint": "op_done_i 和 op_update_i 不应在同一周期同时有效；若同时有效，设计选择清零优先，sync_fault_d 被丢弃。调用者须确保该场景符合顶层设计意图。",
-      "bug_relevance": "若两者同时有效，sync_fault_q 被强制清零而不记录 sync_fault_d，可能导致故障信息丢失或掩盖真实故障状态，违反故障记录连续性。",
-      "related_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When op_done_i is asserted and rst_ni is high, sync_fault_q is cleared to '0.",
+      "cond": "!rst_ni false and op_done_i true",
+      "signals": [
         "op_done_i",
+        "sync_fault_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:98-99"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When op_update_i is asserted, op_done_i is not asserted, and rst_ni is high, sync_fault_q is updated to sync_fault_d.",
+      "cond": "!rst_ni, !op_done_i, op_update_i",
+      "signals": [
         "op_update_i",
         "sync_fault_d",
         "sync_fault_q"
       ],
-      "source_refs": [
+      "refs": [
+        "keymgr_err.sv:100-101"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update_priority",
+      "claim": "If both op_done_i and op_update_i are asserted, op_done_i takes precedence and clears sync_fault_q.",
+      "cond": "op_done_i and op_update_i both true",
+      "signals": [
+        "op_done_i",
+        "op_update_i",
+        "sync_fault_q"
+      ],
+      "refs": [
         "keymgr_err.sv:98-101"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "External logic must not assert op_update_i when op_done_i is asserted, otherwise the intended fault update is lost because clear takes priority.",
+      "cond": "when the producer intends to load a new fault value",
+      "risk": "Fault capture is silently dropped, leaving sync_fault_q zero when a fault should be recorded.",
+      "signals": [
+        "op_update_i",
+        "op_done_i",
+        "sync_fault_d",
+        "sync_fault_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:98-101"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "sync_fault_d must present a stable and valid fault value during the cycle op_update_i is asserted.",
+      "cond": "op_update_i asserted",
+      "risk": "sync_fault_q may latch an invalid or glitched fault indication, causing false error handling.",
+      "signals": [
+        "sync_fault_d",
+        "op_update_i"
+      ],
+      "refs": [
+        "keymgr_err.sv:101"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "op_done_i must be asserted only after the captured fault in sync_fault_q has been fully processed by the downstream logic.",
+      "cond": "when a fault value has been loaded via op_update_i and needs to be consumed",
+      "risk": "Premature clearing could drop an unreported or unhandled fault, compromising error containment.",
+      "signals": [
+        "op_done_i",
+        "sync_fault_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:98-99"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "Clearing sync_fault_q immediately on op_done_i may cause loss of a fault that was captured but not yet consumed if op_done_i arrives too early.",
+      "cond": "op_done_i asserted while a fault is still pending in sync_fault_q (e.g., after op_update_i but before downstream consumption)",
+      "risk": "Fault is cleared without being handled, leading to missed error propagation and potential security violation.",
+      "signals": [
+        "op_done_i",
+        "sync_fault_q",
+        "op_update_i"
+      ],
+      "refs": [
+        "keymgr_err.sv:98-101"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The unconditional clear on op_done_i may conflict with fault capture modes if op_done_i is not gated by a fault-serviced condition; need to verify intended operational protocol.",
+      "cond": "unknown; depends on higher-level state machine",
+      "risk": "Incorrect integration could lead to lost faults or redundant clears.",
+      "signals": [
+        "op_done_i",
+        "sync_fault_q"
+      ],
+      "refs": [
+        "keymgr_err.sv:98-99"
       ]
     }
   ],
   "evidence_refs": [
     "keymgr_err.sv:95-103"
   ],
-  "uncertain_points": [
-    "op_done_i 与 op_update_i 同时有效时的预期行为是清零优先，不确定这是否为有意的设计选择还是外部保证不会同时触发。",
-    "sync_fault_d 的来源和 sync_fault_q 的下游连接未给出，不确定清零或更新是否会影响安全关键状态的完整性。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 95,
-  "line_end": 103
+  "line_end": 103,
+  "security_implications": ""
 }

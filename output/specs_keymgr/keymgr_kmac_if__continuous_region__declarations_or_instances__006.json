@@ -1,46 +1,96 @@
 {
   "chunk_id": "keymgr_kmac_if__continuous_region__declarations_or_instances__006",
-  "summary": "组合生成错误信号、PRNG 使能，并断言写选通非零。",
-  "behavior": "当 one_hot_err_q 或 cmd_consty_err_q 为 1 时，cmd_error_o 被组合拉高（行 392）。prng_en_o 在输出数据有效且下游就绪时（kmac_data_o.valid & kmac_data_i.ready）置 1（行 395），用于请求伪随机数发生器搅动。同时包含一个并发断言：一旦 valid 为真，写选通 strb 不能为全 0（行 398），否则触发警报。所有信号均为组合逻辑，立即更新。",
+  "header": {
+    "module": "keymgr_kmac_if",
+    "block_kind": "mixed",
+    "driven": [
+      "cmd_error_o",
+      "prng_en_o"
+    ],
+    "used": [
+      "one_hot_err_q",
+      "cmd_consty_err_q",
+      "kmac_data_o.valid",
+      "kmac_data_i.ready",
+      "valid",
+      "strb"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "handshake",
+      "entropy"
+    ]
+  },
   "guarantees": [
     {
-      "property": "cmd_error_o 恒为 one_hot_err_q 与 cmd_consty_err_q 的按位或。",
-      "output_signals": [
-        "cmd_error_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "cmd_error_o is always the logical OR of one_hot_err_q and cmd_consty_err_q.",
+      "cond": "always",
+      "signals": [
+        "cmd_error_o",
+        "one_hot_err_q",
+        "cmd_consty_err_q"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_kmac_if.sv:392"
       ]
     },
     {
-      "property": "prng_en_o 在 kmac_data_o.valid 和 kmac_data_i.ready 同时为高时置 1，否则为 0。",
-      "output_signals": [
-        "prng_en_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "prng_en_o is asserted exactly when kmac_data_o.valid and kmac_data_i.ready are both high.",
+      "cond": "always",
+      "signals": [
+        "prng_en_o",
+        "kmac_data_o.valid",
+        "kmac_data_i.ready"
       ],
-      "source_refs": [
+      "refs": [
         "keymgr_kmac_if.sv:395"
       ]
     }
   ],
-  "security_implications": "prng_en_o 用于触发伪随机数发生器的搅动，为后续密钥派生提供熵源。若因 valid/ready 条件不满足而未能按时使能，可能导致熵不足，削弱密钥安全性。",
   "assumptions": [
     {
-      "constraint": "当 valid 为高时，strb 信号必须非全零。",
-      "bug_relevance": "若该条件被违反，表明数据包可能损坏或协议错误，可能使 KMAC 接口行为异常。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Whenever valid is asserted (the module is transmitting), the strobe signal strb must not be zero.",
+      "cond": "valid is high",
+      "risk": "If violated, strb == 0 indicates no valid bytes, which could corrupt KMAC data input, potentially leading to a wrong digest or security bypass.",
+      "signals": [
         "valid",
         "strb"
       ],
-      "source_refs": [
+      "refs": [
+        "keymgr_kmac_if.sv:398"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The signal 'valid' used in the assertion is not defined in this chunk; it may be identical to kmac_data_o.valid or a different internal/input signal. Its origin determines whether the assertion is an input assumption or an internal consistency check.",
+      "cond": "when the strobe requirement is relevant",
+      "risk": "If 'valid' is unrelated to actual transaction valid, the assertion may either over-constrain inputs (needlessly) or miss a genuine hazard where kmac_data_o.valid is high and strb is zero.",
+      "signals": [
+        "valid",
+        "kmac_data_o.valid",
+        "strb"
+      ],
+      "refs": [
         "keymgr_kmac_if.sv:398"
       ]
     }
   ],
   "evidence_refs": [
-    "keymgr_kmac_if.sv:392-398"
+    "keymgr_kmac_if.sv:392-401"
   ],
-  "uncertain_points": [],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 392,
-  "line_end": 401
+  "line_end": 401,
+  "security_implications": ""
 }

@@ -1,25 +1,90 @@
 {
   "chunk_id": "keymgr_ctrl__always_ff__line_263__001",
-  "summary": "异步复位寄存器，存储完整性错误标志 state_intg_err_q",
-  "behavior": "该 always_ff 块在时钟上升沿或复位下降沿触发。当 rst_ni 为低时，state_intg_err_q 被异步清零。当 rst_ni 为高时，每个时钟上升沿将 state_intg_err_d 的值存入 state_intg_err_q，实现一个周期的延迟更新。",
+  "header": {
+    "module": "keymgr_ctrl",
+    "block_kind": "always_ff",
+    "driven": [
+      "state_intg_err_q"
+    ],
+    "used": [
+      "rst_ni",
+      "state_intg_err_d",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "integrity",
+      "fault",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "state_intg_err_q 始终等于 state_intg_err_d 前一个周期（复位释放后第一个上升沿采样的值是释放时刻 state_intg_err_d 的值），且在复位期间输出为 0。",
-      "output_signals": [
-        "state_intg_err_q"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is high, state_intg_err_q registers state_intg_err_d on posedge clk_i.",
+      "cond": "rst_ni == 1 and rising edge of clk_i",
+      "signals": [
+        "state_intg_err_q",
+        "state_intg_err_d",
+        "clk_i"
       ],
-      "source_refs": [
-        "keymgr_ctrl.sv:263-269"
+      "refs": [
+        "keymgr_ctrl.sv:267"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "On reset (rst_ni low), state_intg_err_q is cleared to 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "state_intg_err_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:264-265"
       ]
     }
   ],
-  "security_implications": "state_intg_err_q 存储状态完整性错误检测标志，可能用于触发密钥管理器的安全擦除或报警。异步复位确保系统启动时该标志被清除，避免残留错误状态导致虚假安全响应。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "state_intg_err_d must be stable at the rising edge of clk_i when rst_ni is high to avoid metastability or glitch capture.",
+      "cond": "always during normal operation",
+      "risk": "Sampling an unstable state_intg_err_d may cause a spurious integrity error flag or missed real error.",
+      "signals": [
+        "state_intg_err_d",
+        "clk_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:263-267"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "state_intg_err_q is driven but its downstream usage for security-critical response (e.g., alert, wipe, key destruction) is not visible here.",
+      "cond": "when state_intg_err_q asserts",
+      "risk": "If consumers do not properly handle state_intg_err_q, a state integrity error could be missed, leading to key leakage or security bypass.",
+      "signals": [
+        "state_intg_err_q"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:267"
+      ]
+    }
+  ],
   "evidence_refs": [
     "keymgr_ctrl.sv:263-269"
   ],
-  "uncertain_points": [],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 263,
-  "line_end": 269
+  "line_end": 269,
+  "security_implications": ""
 }
