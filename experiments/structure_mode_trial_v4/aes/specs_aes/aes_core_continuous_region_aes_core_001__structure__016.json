@@ -1,0 +1,172 @@
+{
+  "chunk_id": "aes_core_continuous_region_aes_core_001__structure__016",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "mixed",
+    "driven": [
+      "prd_clearing",
+      "prd_clearing_upd_ack",
+      "prd_clearing_rsd_ack",
+      "entropy_clearing_req_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "prd_clearing_upd_req",
+      "prd_clearing_rsd_req",
+      "entropy_clearing_ack_i",
+      "entropy_clearing_i"
+    ],
+    "modes": [
+      "SecSkipPRNGReseeding"
+    ],
+    "tags": [
+      "secret",
+      "wipe",
+      "entropy",
+      "handshake",
+      "reset",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "instance_connection",
+      "claim": "The aes_prng_clearing instance u_aes_prng_clearing is connected with the specified parameters; its data_o drives prd_clearing, data_ack_o drives prd_clearing_upd_ack, reseed_ack_o drives prd_clearing_rsd_ack, entropy_req_o drives entropy_clearing_req_o, and it receives prd_clearing_upd_req, prd_clearing_rsd_req, entropy_clearing_ack_i, entropy_clearing_i, clk_i, rst_ni.",
+      "cond": "always",
+      "signals": [
+        "prd_clearing",
+        "prd_clearing_upd_ack",
+        "prd_clearing_rsd_ack",
+        "entropy_clearing_req_o",
+        "prd_clearing_upd_req",
+        "prd_clearing_rsd_req",
+        "entropy_clearing_ack_i",
+        "entropy_clearing_i",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:192-212"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "prd_clearing_upd_req is asserted only when a new pseudo‑random word is needed and the handshake with prd_clearing_upd_ack is correctly followed to avoid reading stale prd_clearing.",
+      "cond": "when clearing data is required",
+      "risk": "If the handshake is mismanaged, prd_clearing may hold stale or all‑zero data, preventing true wipe of secrets.",
+      "signals": [
+        "prd_clearing_upd_req",
+        "prd_clearing_upd_ack",
+        "prd_clearing"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:176-177,192-205"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "prd_clearing_rsd_req is asserted appropriately to trigger reseeding, respecting the handshake with prd_clearing_rsd_ack, as required by the entropy consumption policy.",
+      "cond": "before entropy runs low or after a security event",
+      "risk": "Failure to reseed leads to predictable clearing data, aiding an attacker in recovering secret material.",
+      "signals": [
+        "prd_clearing_rsd_req",
+        "prd_clearing_rsd_ack"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:179-180,206-207"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "Entropy input entropy_clearing_i provides full‑entropy bits of width EntropyWidth, and entropy_clearing_ack_i is asserted only when a valid entropy sample is presented.",
+      "cond": "when entropy_clearing_req_o is high",
+      "risk": "Weak or reused entropy makes the clearing PRNG output predictable, exposing secrets after a clearing operation.",
+      "signals": [
+        "entropy_clearing_i",
+        "entropy_clearing_ack_i",
+        "EntropyWidth"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:194,210-211"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "prd_clearing_upd_req and prd_clearing_rsd_req are not asserted simultaneously to avoid corruption of the PRNG state or mixed handshake responses.",
+      "cond": "during any clock cycle",
+      "risk": "Concurrent requests could produce indeterminate prd_clearing or ack behavior, compromising clearing integrity.",
+      "signals": [
+        "prd_clearing_upd_req",
+        "prd_clearing_rsd_req"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:176-180,192-207"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The signals prd_clearing_128, prd_clearing_256, prd_clearing_data, prd_clearing_key_init, prd_clearing_state, and prd_clearing_key are declared but not driven in this chunk. They must be assigned from prd_clearing (or derived) elsewhere to actually clear the corresponding register arrays.",
+      "cond": "during any clearing operation",
+      "risk": "If left undriven or incorrectly connected, those registers may retain secret key/state/data after a wipe, breaking security.",
+      "signals": [
+        "prd_clearing_128",
+        "prd_clearing_256",
+        "prd_clearing_data",
+        "prd_clearing_key_init",
+        "prd_clearing_state",
+        "prd_clearing_key"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:181-186"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The parameter SecSkipPRNGReseeding, when enabled, may allow skipping reseeding under certain conditions. It is unclear whether the security policy requires mandatory reseeding during clearing operations (e.g., key clear).",
+      "cond": "if SecSkipPRNGReseeding == 1 and a reseed would normally be needed",
+      "risk": "Skipping reseeding could cause the clearing PRNG to output lower-quality pseudo‑random data, making wiped secrets potentially recoverable.",
+      "signals": [
+        "SecSkipPRNGReseeding",
+        "prd_clearing"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:194"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The signal unused_data_out_q is declared but not connected and not driven in this chunk. It may be a leftover or placeholder with no functional impact.",
+      "cond": "always",
+      "risk": "No direct security or functional risk in this chunk, but could indicate incomplete cleanup.",
+      "signals": [
+        "unused_data_out_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:189"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:167-212"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 167,
+  "line_end": 212,
+  "security_implications": ""
+}

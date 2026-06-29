@@ -1,49 +1,106 @@
 {
   "chunk_id": "kmac_reg_top__always_comb__line_2656__001",
-  "summary": "该组合逻辑在寄存器写请求时，检查当前命中的寄存器地址是否尝试写入该寄存器不允许更新的字节，并据此产生写错误标志 wr_err。",
-  "behavior": "wr_err 仅在 reg_we 为 1 的写访问期间可能置位；其判断方式是：对每个可能命中的寄存器项 i（0 到 56），若 addr_hit[i] 为 1，则把该寄存器的字节写许可掩码 KMAC_PERMIT[i] 与当前未被使能的字节掩码 ~reg_be 相与，只要结果中任一位为 1，就认为本次写访问缺少该寄存器要求的某些字节使能，从而置位 wr_err。等价地说，命中某寄存器时，若 KMAC_PERMIT[i] 所要求允许写入的字节没有全部被 reg_be 覆盖，则该写访问报错；若 reg_we 为 0，则 wr_err 必为 0。该片段本身只负责组合地产生错误条件，不展示错误后的回退、屏蔽写入或异常响应机制。",
+  "header": {
+    "module": "kmac_reg_top",
+    "block_kind": "always_comb",
+    "driven": [
+      "wr_err"
+    ],
+    "used": [
+      "reg_we",
+      "addr_hit[56:0]",
+      "KMAC_PERMIT[56:0]",
+      "reg_be"
+    ],
+    "modes": [],
+    "tags": [
+      "csr",
+      "access_control"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 reg_we 为 0 时，wr_err 一定为 0。",
-      "output_signals": [
-        "wr_err"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "wr_err is asserted when a register write is requested (reg_we=1) and for any address hit i, at least one byte lane has write enable (reg_be) set but the corresponding bit in KMAC_PERMIT[i] is not set, indicating an illegal partial write or access violation.",
+      "cond": "always",
+      "signals": [
+        "wr_err",
+        "reg_we",
+        "addr_hit",
+        "KMAC_PERMIT",
+        "reg_be"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2657-2714"
-      ]
-    },
-    {
-      "property": "当 reg_we 为 1 且命中的任一寄存器地址 addr_hit[i] 对应的 KMAC_PERMIT[i] 中存在字节位未被 reg_be 使能时，wr_err 一定为 1。",
-      "output_signals": [
-        "wr_err"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2657-2714"
+      "refs": [
+        "kmac_reg_top.sv:2657-2714"
       ]
     }
   ],
-  "security_implications": "该逻辑属于寄存器写访问约束检查的一部分，通过按字节许可掩码验证写使能覆盖范围，能够阻止对某些寄存器进行不完整或非预期的部分字节写入。如果这些寄存器包含安全敏感配置或状态，这有助于避免由于 byte-enable 操作不当导致的配置绕过、状态破坏或只修改部分字段的异常写入。",
   "assumptions": [
     {
-      "constraint": "正常寄存器访问应满足 addr_hit 在一次访问中至多命中一个寄存器项；该逻辑按所有 addr_hit 位做并行 OR 检查，默认其表示唯一解码结果。",
-      "bug_relevance": "如果一次访问同时命中多个寄存器，wr_err 将变成多个寄存器 permit 检查的并集，可能产生伪错误或掩盖实际地址解码问题；这更像地址解码契约被破坏，违反后可能导致功能错误。",
-      "related_signals": [
-        "addr_hit",
-        "wr_err"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "addr_hit signals are one-hot for every access; at most one bit is asserted at a time.",
+      "cond": "every register access cycle",
+      "risk": "multiple simultaneous hits can cause incorrect wr_err, masking or falsely generating write errors, potentially leading to missed access control enforcement.",
+      "signals": [
+        "addr_hit"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2658-2714"
+      "refs": [
+        "kmac_reg_top.sv:2658-2714"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "KMAC_PERMIT[i] bits are correctly configured to reflect the writable byte lanes of each register.",
+      "cond": "always",
+      "risk": "misconfigured permit bits may allow writes to read-only or security-sensitive register bits, causing data corruption, privilege escalation, or unexpected behavior.",
+      "signals": [
+        "KMAC_PERMIT"
+      ],
+      "refs": [
+        "kmac_reg_top.sv:2658-2714"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "reg_we, addr_hit, and reg_be are stable during the combinational evaluation and represent a valid bus transaction.",
+      "cond": "when wr_err is sampled",
+      "risk": "glitches or timing violations may cause false write-error assertions, leading to incorrect bus fault handling.",
+      "signals": [
+        "reg_we",
+        "addr_hit",
+        "reg_be"
+      ],
+      "refs": [
+        "kmac_reg_top.sv:2657-2714"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "wr_err logic ORs all address hit conditions, assuming addr_hit is one-hot. If multiple addr_hit bits can be asserted simultaneously (e.g., due to address decode error), wr_err may be falsely triggered or hide a real error.",
+      "cond": "when multiple addr_hit bits are high",
+      "risk": "spurious write error could abort a valid write or mask an illegal access, leading to functional or security issues.",
+      "signals": [
+        "wr_err",
+        "addr_hit"
+      ],
+      "refs": [
+        "kmac_reg_top.sv:2657-2714"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2656-2715"
-  ],
-  "uncertain_points": [
-    "仅从该片段无法确认 KMAC_PERMIT[i] 的语义是“必须同时使能这些字节才能写该寄存器”还是“这些字节属于受保护/有效字节集合，因此缺失任一使能即报错”；当前行为上体现为对 KMAC_PERMIT 标记的每一位都要求 reg_be 对应位置 1。",
-    "该片段只生成 wr_err，无法从这里确认 wr_err 后续是否会阻止实际寄存器写入、返回总线错误，或仅作为内部状态/告警使用。"
+    "kmac_reg_top.sv:2656-2715"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv",
   "line_start": 2656,
-  "line_end": 2715
+  "line_end": 2715,
+  "security_implications": ""
 }

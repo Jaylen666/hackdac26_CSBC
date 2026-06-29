@@ -1,0 +1,140 @@
+{
+  "chunk_id": "aes_core__always_ff__key_init_reg__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "key_init_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "key_init_we",
+      "key_init_d",
+      "NumSharesKey",
+      "NumRegsKey",
+      "SP2V_HIGH"
+    ],
+    "modes": [
+      "reset",
+      "key_load"
+    ],
+    "tags": [
+      "key",
+      "reset"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (asynchronous reset), all elements of key_init_q are cleared to 0.",
+      "cond": "negedge rst_ni",
+      "signals": [
+        "rst_ni",
+        "key_init_q"
+      ],
+      "refs": [
+        "file:326-327"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and key_init_we[s][i] equals SP2V_HIGH, at the next posedge clk_i, key_init_q[s][i] is loaded with key_init_d[s][i].",
+      "cond": "rst_ni == 1 and key_init_we[s][i] == SP2V_HIGH",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "key_init_we",
+        "key_init_d",
+        "key_init_q"
+      ],
+      "refs": [
+        "file:326, 328-332"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and key_init_we[s][i] is not equal to SP2V_HIGH, key_init_q[s][i] retains its previous value.",
+      "cond": "rst_ni == 1 and key_init_we[s][i] != SP2V_HIGH",
+      "signals": [
+        "key_init_q",
+        "key_init_we"
+      ],
+      "refs": [
+        "file:331-333"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "key_init_we signals must be synchronous to clk_i and meet setup/hold timing.",
+      "cond": "during any write cycle",
+      "risk": "If not synchronized, metastability or spurious writes could corrupt key_init_q.",
+      "signals": [
+        "clk_i",
+        "key_init_we"
+      ],
+      "refs": [
+        "file:331"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When key_init_we[s][i] == SP2V_HIGH, key_init_d[s][i] must contain valid key data.",
+      "cond": "rising edge of clk_i while write enable is asserted",
+      "risk": "Invalid data results in a wrong key being loaded, potentially compromising encryption.",
+      "signals": [
+        "key_init_d",
+        "key_init_we"
+      ],
+      "refs": [
+        "file:331-332"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "After reset, key_init_q is all zeros. If the AES core can start operations before a valid key is written, encryption proceeds with a known all-zero key.",
+      "cond": "post‑reset, before first key write",
+      "risk": "Exposure of secrets or weak cryptographic output due to predictable key.",
+      "signals": [
+        "key_init_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:326-327"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "key_init_we is assumed synchronous to clk_i; no internal synchronization. If generated asynchronously, metastability may occur.",
+      "cond": "if key_init_we is not synchronous with clk_i",
+      "risk": "Corrupted key register content from timing violations.",
+      "signals": [
+        "key_init_we",
+        "clk_i"
+      ],
+      "refs": [
+        "file:331"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:325-337"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 325,
+  "line_end": 337,
+  "security_implications": ""
+}

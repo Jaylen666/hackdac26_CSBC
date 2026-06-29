@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 from rtl_bug_agent.phase2.signal_graph import SignalGraph
+from rtl_bug_agent.phase2.formal_sketch import build_formal_sketch, merge_formal_sketch
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,10 @@ class SemanticAgConfig:
     uncertain_dense_fallback: float = 0.82
     dense_weight: float = 0.8
     signal_weight: float = 0.2
+    # v2.0 §3.2: pairing is purely semantic (dense + signal). Formal similarity
+    # no longer drives ranking; default 0.0. Set >0 only to experiment with
+    # formal-aware ranking. Conflict is reported via match.diagnostics regardless.
+    formal_weight: float = 0.0
     exclude_same_spec: bool = True
 
 
@@ -90,6 +95,10 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
             full_text = "\n".join(
                 part for part in [text, f"risk: {risk}"] if part
             )
+            formal_sketch = merge_formal_sketch(
+                assumption.get("formal_sketch"),
+                build_formal_sketch(assumption, spec=spec, role="assumption"),
+            )
             atoms.append(
                 _make_atom(
                     spec,
@@ -98,7 +107,7 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                     full_text,
                     _get_signals(assumption),
                     _get_source_refs(assumption),
-                    {"raw": assumption},
+                    {"raw": assumption, "formal_sketch": formal_sketch},
                 )
             )
 
@@ -108,6 +117,10 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
             text = _get_text(guarantee)
             if not text:
                 continue
+            formal_sketch = merge_formal_sketch(
+                guarantee.get("formal_sketch"),
+                build_formal_sketch(guarantee, spec=spec, role="guarantee"),
+            )
             atoms.append(
                 _make_atom(
                     spec,
@@ -116,7 +129,7 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                     text,
                     _get_signals(guarantee),
                     _get_source_refs(guarantee),
-                    {"raw": guarantee},
+                    {"raw": guarantee, "formal_sketch": formal_sketch},
                 )
             )
 
@@ -127,12 +140,21 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                 if not text:
                     continue
                 signals = _get_signals(point)
+                formal_sketch = merge_formal_sketch(
+                    point.get("formal_sketch"),
+                    build_formal_sketch(point, spec=spec, role="uncertain"),
+                )
             else:
                 # Old string format
                 text = str(point).strip()
                 if not text:
                     continue
                 signals = sorted(set(re.findall(r"`([^`]+)`", text)))
+                formal_sketch = build_formal_sketch(
+                    {"claim": text, "signals": signals, "cond": ""},
+                    spec=spec,
+                    role="uncertain",
+                )
             atoms.append(
                 _make_atom(
                     spec,
@@ -141,7 +163,7 @@ def build_atoms(graph: SignalGraph) -> list[dict[str, Any]]:
                     text,
                     signals,
                     _get_source_refs(point) if isinstance(point, dict) else spec.get("evidence_refs", []),
-                    {"raw": point},
+                    {"raw": point, "formal_sketch": formal_sketch},
                 )
             )
 
@@ -152,13 +174,14 @@ def pair_atoms(
     atoms: list[dict[str, Any]],
     embeddings: np.ndarray,
     config: SemanticAgConfig,
+    graph: SignalGraph | None = None,
 ) -> dict[str, Any]:
     """Select semantic A-G candidates using dense score + signal relation."""
     id_to_index = {atom["atom_id"]: i for i, atom in enumerate(atoms)}
     queries = [atom for atom in atoms if atom["kind"] in ("assumption", "uncertain")]
     guarantees = [atom for atom in atoms if atom["kind"] == "guarantee"]
 
-    dense_weight, signal_weight = _normalised_weights(config)
+    dense_weight, signal_weight, formal_weight = _normalised_weights(config)
     results: list[dict[str, Any]] = []
     selected_pairs: list[dict[str, Any]] = []
 
@@ -170,11 +193,16 @@ def pair_atoms(
                 continue
             dense = float(embeddings[id_to_index[cand["atom_id"]]] @ embeddings[qi])
             sig_rel, sig_kind, shared = _signal_relation(query, cand)
+            formal_rel, formal_kind, formal_shared, formal_diag = _formal_relation(query, cand)
             pair_type = _pair_type(query, sig_rel, dense, config)
             if pair_type is None:
                 continue
 
-            score = dense_weight * dense + signal_weight * sig_rel
+            score = (
+                dense_weight * dense
+                + signal_weight * sig_rel
+                + formal_weight * formal_rel
+            )
             if pair_type == "normal" and score < config.assumption_min_score:
                 continue
             if (
@@ -195,6 +223,10 @@ def pair_atoms(
                     "signal_relation_score": float(sig_rel),
                     "signal_relation_kind": sig_kind,
                     "shared_signals": shared,
+                    "formal_relation_score": float(formal_rel),
+                    "formal_relation_kind": formal_kind,
+                    "formal_shared": formal_shared,
+                    "diagnostics": formal_diag,
                     "pair_type": pair_type,
                     "atom_id": cand["atom_id"],
                     "spec_id": cand["spec_id"],
@@ -207,7 +239,22 @@ def pair_atoms(
 
         rows.sort(key=lambda item: item["score"], reverse=True)
         limit = config.assumption_top_k if query["kind"] == "assumption" else config.uncertain_top_k
-        kept = rows[:limit]
+        kept = sorted(
+            rows,
+            key=lambda item: (
+                item["score"],
+                item.get("formal_relation_score", 0.0),
+                item["dense_score"],
+                item["signal_relation_score"],
+            ),
+            reverse=True,
+        )[:limit]
+        structural_facts = []
+        if graph is not None:
+            structural_facts = graph.get_structural_facts(
+                query.get("signals", []),
+                limit=8,
+            )
         for rank, row in enumerate(kept, start=1):
             row["rank"] = rank
             selected_pairs.append({"query_atom_id": query["atom_id"], **row})
@@ -217,17 +264,24 @@ def pair_atoms(
                 "query": _public_atom(query),
                 "matches": kept,
                 "num_candidates_after_filter": len(rows),
+                "structural_facts": structural_facts,
+                "num_structural_facts": len(structural_facts),
             }
         )
 
     by_query_kind: dict[str, int] = {}
     by_pair_type: dict[str, int] = {}
+    num_query_with_structure = 0
+    num_structure_facts = 0
     for item in results:
         by_query_kind[item["query"]["kind"]] = (
             by_query_kind.get(item["query"]["kind"], 0) + len(item["matches"])
         )
         for match in item["matches"]:
             by_pair_type[match["pair_type"]] = by_pair_type.get(match["pair_type"], 0) + 1
+        if item.get("structural_facts"):
+            num_query_with_structure += 1
+            num_structure_facts += len(item["structural_facts"])
 
     return {
         "metadata": {
@@ -240,6 +294,7 @@ def pair_atoms(
             "uncertain_dense_fallback": config.uncertain_dense_fallback,
             "dense_weight": dense_weight,
             "signal_weight": signal_weight,
+            "formal_weight": formal_weight,
             "exclude_same_spec": config.exclude_same_spec,
             "num_atoms": len(atoms),
             "num_queries": len(queries),
@@ -251,6 +306,8 @@ def pair_atoms(
             "num_unmatched_uncertain": sum(
                 1 for r in results if r["query"]["kind"] == "uncertain" and not r["matches"]
             ),
+            "num_queries_with_structural_facts": num_query_with_structure,
+            "num_structural_facts_attached": num_structure_facts,
         },
         "results": results,
     }
@@ -313,7 +370,7 @@ def build_pairing(
                     raise ValueError("Embeddings atom_ids do not match current specs")
     else:
         embeddings = embed_atoms_cached(atoms, cache_dir, cfg)
-    return pair_atoms(atoms, embeddings, cfg)
+    return pair_atoms(atoms, embeddings, cfg, graph=graph)
 
 
 def query_units(pairing: dict[str, Any]) -> list[dict[str, Any]]:
@@ -398,12 +455,26 @@ def summarise_batches(batches: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def unmatched_uncertain_candidates(pairing: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return unmatched uncertain points as Phase-3/fusion candidates."""
+def unmatched_query_candidates(
+    pairing: dict[str, Any],
+    kinds: tuple[str, ...] = ("uncertain",),
+) -> list[dict[str, Any]]:
+    """Return unmatched queries of the given *kinds* as Channel F candidates.
+
+    In the A-G model, assumptions and uncertain points are *queries* while
+    guarantees are only *candidates*; so an "unpaired assumption" is a query
+    with zero matches, but "unpaired guarantee" is not expressible here. Pass
+    ``kinds=("uncertain", "assumption")`` to also surface high-value unpaired
+    assumptions for SVA synthesis.
+
+    Each candidate carries ``formal_sketch`` so Channel F's gate can read
+    ``formalizability`` directly.
+    """
     out = []
     for item in pairing.get("results", []):
         query = item.get("query", {})
-        if query.get("kind") != "uncertain" or item.get("matches"):
+        kind = query.get("kind", "")
+        if kind not in kinds or item.get("matches"):
             continue
         out.append(
             {
@@ -412,12 +483,24 @@ def unmatched_uncertain_candidates(pairing: dict[str, Any]) -> list[dict[str, An
                 "line_start": query.get("line_start", 0),
                 "line_end": query.get("line_end", 0),
                 "uncertain_text": query.get("text", "")[:400],
+                "text": query.get("text", "")[:400],
+                "kind": kind,
                 "signals": query.get("signals", []),
+                "atom_id": query.get("atom_id", ""),
+                "formal_sketch": query.get("formal_sketch", {}),
                 "summary": "",
-                "source": "semantic_unmatched_uncertain",
+                "source": f"semantic_unmatched_{kind}",
             }
         )
     return out
+
+
+def unmatched_uncertain_candidates(pairing: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return unmatched uncertain points as Phase-3/fusion candidates.
+
+    Thin back-compat wrapper over :func:`unmatched_query_candidates`.
+    """
+    return unmatched_query_candidates(pairing, kinds=("uncertain",))
 
 
 def render_query_unit(query: dict[str, Any], matches: list[dict[str, Any]]) -> str:
@@ -498,6 +581,7 @@ def _make_atom(
         "text": text,
         "signals": signals,
         "source_refs": source_refs if source_refs is not None else [],
+        "formal_sketch": (extra or {}).get("formal_sketch", {}),
     }
     atom["embedding_text"] = "\n".join(
         part
@@ -530,6 +614,7 @@ def _public_atom(atom: dict[str, Any]) -> dict[str, Any]:
         "source_file": atom.get("source_file", ""),
         "line_start": atom.get("line_start"),
         "line_end": atom.get("line_end"),
+        "formal_sketch": atom.get("formal_sketch", {}),
     }
 
 
@@ -679,6 +764,151 @@ def _signal_relation(query: dict[str, Any], cand: dict[str, Any]) -> tuple[float
     return 0.0, "none", []
 
 
+def _formal_relation(
+    query: dict[str, Any],
+    cand: dict[str, Any],
+) -> tuple[float, str, list[str], dict[str, Any]]:
+    """Compute a formal-similarity score between two sketches.
+
+    Returns ``(score, kind, shared, diagnostics)``. The score reflects
+    *similarity* only (scope/clock/shape/signal overlap) and feeds ranking.
+    Consequent **conflict** is NOT scored here — it is a contradiction signal,
+    not a similarity signal — and is instead reported in ``diagnostics`` so it
+    can be surfaced to humans / trace without distorting semantic ranking
+    (Formal CSBC v2.0 §3.2: pairing stays purely semantic).
+    """
+    q = query.get("formal_sketch", {}) or {}
+    c = cand.get("formal_sketch", {}) or {}
+    if not q and not c:
+        return 0.0, "none", [], {}
+
+    score = 0.0
+    shared: list[str] = []
+
+    q_scope = str(q.get("scope", "") or "").strip()
+    c_scope = str(c.get("scope", "") or "").strip()
+    if q_scope and c_scope and q_scope == c_scope:
+        score += 0.18
+        shared.append(f"scope:{q_scope}")
+
+    q_clock = str(q.get("clock", "") or "").strip()
+    c_clock = str(c.get("clock", "") or "").strip()
+    if q_clock and c_clock and q_clock == c_clock:
+        score += 0.16
+        shared.append(f"clock:{q_clock}")
+
+    q_reset = str(q.get("reset", "") or "").strip()
+    c_reset = str(c.get("reset", "") or "").strip()
+    if q_reset and c_reset and q_reset == c_reset:
+        score += 0.08
+        shared.append(f"reset:{q_reset}")
+
+    q_shape = str(q.get("temporal_shape", "") or "").strip()
+    c_shape = str(c.get("temporal_shape", "") or "").strip()
+    if q_shape and c_shape and q_shape == c_shape:
+        score += 0.14
+        shared.append(f"shape:{q_shape}")
+
+    q_form = str(q.get("formalizability", "") or "").strip()
+    c_form = str(c.get("formalizability", "") or "").strip()
+    if q_form and c_form and q_form == c_form:
+        score += 0.10
+        shared.append(f"formal:{q_form}")
+
+    q_sig = set(str(s) for s in q.get("signals", []) or [])
+    c_sig = set(str(s) for s in c.get("signals", []) or [])
+    if q_sig and c_sig:
+        inter = sorted(q_sig & c_sig)
+        if inter:
+            score += min(0.20, 0.05 * len(inter))
+            shared.extend(inter[:6])
+
+    q_ant = str(q.get("antecedent", "") or "")
+    c_cons = str(c.get("consequent", "") or "")
+    if q_ant and c_cons:
+        overlap = _text_overlap_score(q_ant, c_cons)
+        if overlap:
+            score += min(0.10, overlap * 0.10)
+            shared.append("antecedent/consequent")
+
+    # Consequent conflict detection — the core CSBC signal. Detected here but
+    # NOT added to the score (v2.0 §3.2). Reported as diagnostics so Phase 3 /
+    # trace / humans can see it, while pairing order stays purely semantic.
+    diagnostics: dict[str, Any] = {}
+    conflict_sigs = _consequent_conflict(q, c)
+    if conflict_sigs:
+        diagnostics["conflict_signals"] = conflict_sigs
+
+    kind = "aligned" if score >= 0.5 else "weak"
+    return min(score, 1.0), kind, shared, diagnostics
+
+
+# Match "signal == value", "signal != value", "!signal", "signal" patterns
+_EQ_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_.$\[\]]*)\s*(==|!=)\s*([A-Za-z0-9_'\.]+)")
+_NEG_RE = re.compile(r"(^|[^A-Za-z0-9_])!\s*([A-Za-z_][A-Za-z0-9_.$\[\]]*)")
+
+
+def _parse_signal_constraints(expr: str) -> dict[str, set[str]]:
+    """Parse an expression into {signal: {asserted value strings}}.
+
+    Captures ``sig == V`` (value V), ``sig != V`` (not-V marker), ``!sig``
+    (value '0), and bare ``sig`` (value '1) so two consequents can be checked
+    for direct value conflicts on the same signal.
+    """
+    out: dict[str, set[str]] = {}
+    if not expr:
+        return out
+    for sig, op, val in _EQ_RE.findall(expr):
+        key = sig.strip().lower()
+        tag = f"={val.strip().lower()}" if op == "==" else f"!={val.strip().lower()}"
+        out.setdefault(key, set()).add(tag)
+    for _, sig in _NEG_RE.findall(expr):
+        out.setdefault(sig.strip().lower(), set()).add("=1'b0")
+    return out
+
+
+def _consequent_conflict(q: dict[str, Any], c: dict[str, Any]) -> list[str]:
+    """Return signals whose asserted values conflict between two consequents.
+
+    Only flags a conflict when the two items share antecedent context (same
+    temporal shape and overlapping antecedent tokens), so unrelated guarantees
+    on the same signal are not falsely marked.
+    """
+    q_cons = _parse_signal_constraints(str(q.get("consequent", "") or ""))
+    c_cons = _parse_signal_constraints(str(c.get("consequent", "") or ""))
+    if not q_cons or not c_cons:
+        return []
+
+    # Require some shared antecedent context to avoid spurious conflicts.
+    q_ant = str(q.get("antecedent", "") or "")
+    c_ant = str(c.get("antecedent", "") or "")
+    if q_ant and c_ant and _text_overlap_score(q_ant, c_ant) < 0.1:
+        return []
+
+    conflicts: list[str] = []
+    for sig in set(q_cons) & set(c_cons):
+        qv, cv = q_cons[sig], c_cons[sig]
+        # Direct value conflict: one asserts ==X, other asserts ==Y (X!=Y),
+        # or one asserts ==X while the other asserts !=X.
+        q_eq = {v[1:] for v in qv if v.startswith("=")}
+        c_eq = {v[1:] for v in cv if v.startswith("=")}
+        q_ne = {v[2:] for v in qv if v.startswith("!=")}
+        c_ne = {v[2:] for v in cv if v.startswith("!=")}
+        if q_eq and c_eq and not (q_eq & c_eq):
+            conflicts.append(sig)
+        elif (q_eq & c_ne) or (c_eq & q_ne):
+            conflicts.append(sig)
+    return sorted(conflicts)
+
+
+def _text_overlap_score(a: str, b: str) -> float:
+    ta = set(re.findall(r"[A-Za-z_][A-Za-z0-9_.$\[\]:]*", a.lower()))
+    tb = set(re.findall(r"[A-Za-z_][A-Za-z0-9_.$\[\]:]*", b.lower()))
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
+
+
 def _pair_type(
     query: dict[str, Any],
     signal_relation: float,
@@ -759,8 +989,12 @@ def _batch_dict(batch_id: int, units: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _normalised_weights(config: SemanticAgConfig) -> tuple[float, float]:
-    total = config.dense_weight + config.signal_weight
+def _normalised_weights(config: SemanticAgConfig) -> tuple[float, float, float]:
+    total = config.dense_weight + config.signal_weight + config.formal_weight
     if total <= 0:
-        raise ValueError("dense_weight + signal_weight must be positive")
-    return config.dense_weight / total, config.signal_weight / total
+        raise ValueError("dense_weight + signal_weight + formal_weight must be positive")
+    return (
+        config.dense_weight / total,
+        config.signal_weight / total,
+        config.formal_weight / total,
+    )

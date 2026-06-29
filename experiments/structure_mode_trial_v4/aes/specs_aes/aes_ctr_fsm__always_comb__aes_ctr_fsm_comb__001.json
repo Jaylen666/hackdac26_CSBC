@@ -1,0 +1,242 @@
+{
+  "chunk_id": "aes_ctr_fsm__always_comb__aes_ctr_fsm_comb__001",
+  "header": {
+    "module": "aes_ctr_fsm",
+    "block_kind": "always_comb",
+    "driven": [
+      "ready_o",
+      "ctr_we_o",
+      "alert_o",
+      "aes_ctr_ns",
+      "ctr_slice_idx_d",
+      "ctr_carry_d",
+      "alert_counter_d"
+    ],
+    "used": [
+      "incr_i",
+      "ctr_slice_idx_q",
+      "ctr_carry_q",
+      "ctr_value",
+      "alert_counter_q",
+      "incr_err_i",
+      "mr_err_i",
+      "aes_ctr_cs"
+    ],
+    "modes": [
+      "CTR_IDLE",
+      "CTR_INCR",
+      "CTR_ERROR",
+      "default"
+    ],
+    "tags": [
+      "counter",
+      "fsm",
+      "error",
+      "alert",
+      "handshake",
+      "integrity"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "ready_o, ctr_we_o, alert_o are forced to 0 as initial defaults; aes_ctr_ns, ctr_slice_idx_d, ctr_carry_d are initialized to their current registered values before case overrides.",
+      "cond": "always",
+      "signals": [
+        "ready_o",
+        "ctr_we_o",
+        "alert_o",
+        "aes_ctr_ns",
+        "ctr_slice_idx_d",
+        "ctr_carry_d"
+      ],
+      "refs": [
+        "46-56"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "In state CTR_IDLE, ready_o is asserted and alert_counter_d is cleared to 0.",
+      "cond": "aes_ctr_cs == CTR_IDLE",
+      "signals": [
+        "ready_o",
+        "alert_counter_d"
+      ],
+      "refs": [
+        "59-61"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "In CTR_IDLE, if incr_i == 1, then ctr_slice_idx_d is set to 0, ctr_carry_d to 1, and next state becomes CTR_INCR.",
+      "cond": "aes_ctr_cs == CTR_IDLE && incr_i == 1",
+      "signals": [
+        "incr_i",
+        "ctr_slice_idx_d",
+        "ctr_carry_d",
+        "aes_ctr_ns"
+      ],
+      "refs": [
+        "62-66"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "In CTR_INCR, ctr_slice_idx_d is incremented by 1, ctr_carry_d is assigned from ctr_value[SliceSizeCtr], and ctr_we_o is asserted.",
+      "cond": "aes_ctr_cs == CTR_INCR",
+      "signals": [
+        "ctr_slice_idx_d",
+        "ctr_carry_d",
+        "ctr_we_o",
+        "ctr_value"
+      ],
+      "refs": [
+        "72-74"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In CTR_INCR, when ctr_slice_idx_q equals all-ones (max slice index), the next state is set to CTR_IDLE.",
+      "cond": "aes_ctr_cs == CTR_INCR && ctr_slice_idx_q == {SliceIdxWidth{1'b1}}",
+      "signals": [
+        "ctr_slice_idx_q",
+        "aes_ctr_ns"
+      ],
+      "refs": [
+        "76-78"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "error_detection",
+      "claim": "In CTR_ERROR, if alert_counter_q < 100, alert_counter_d is incremented and alert_o remains 0; otherwise alert_counter_d is unchanged and alert_o is set to 1 (delayed alert after 100 cycles).",
+      "cond": "aes_ctr_cs == CTR_ERROR",
+      "signals": [
+        "alert_counter_q",
+        "alert_counter_d",
+        "alert_o"
+      ],
+      "refs": [
+        "84-90"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "default_fallback",
+      "claim": "For any state other than CTR_IDLE, CTR_INCR, or CTR_ERROR, the FSM forces next state to CTR_ERROR and immediately asserts alert_o.",
+      "cond": "aes_ctr_cs not in {CTR_IDLE, CTR_INCR, CTR_ERROR}",
+      "signals": [
+        "aes_ctr_ns",
+        "alert_o"
+      ],
+      "refs": [
+        "95-98"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "error_detection",
+      "claim": "Regardless of current state, if incr_err_i or mr_err_i is high, aes_ctr_ns is forced to CTR_ERROR, overriding any other transition.",
+      "cond": "incr_err_i || mr_err_i",
+      "signals": [
+        "incr_err_i",
+        "mr_err_i",
+        "aes_ctr_ns"
+      ],
+      "refs": [
+        "102-104"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "incr_err_i and mr_err_i must be glitch-free and stable; a glitch will cause a false entry to CTR_ERROR, eventually asserting alert_o permanently after 100 cycles.",
+      "cond": "always",
+      "risk": "Spurious alert assertion, potential denial-of-service and masking of real errors.",
+      "signals": [
+        "incr_err_i",
+        "mr_err_i"
+      ],
+      "refs": [
+        "102-104"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When ctr_we_o is asserted (in CTR_INCR), the external logic providing ctr_value[SliceSizeCtr] must supply a valid carry-out bit for the current slice.",
+      "cond": "aes_ctr_cs == CTR_INCR",
+      "risk": "Incorrect carry bit leads to wrong counter value, breaking the counter integrity.",
+      "signals": [
+        "ctr_value",
+        "ctr_we_o"
+      ],
+      "refs": [
+        "73-74"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "A transient assertion of incr_err_i or mr_err_i (even a single-cycle pulse) latches the FSM into CTR_ERROR with no exit path. After 100 cycles, alert_o goes high and stays high, causing an irreversible alert from a transient event.",
+      "cond": "incr_err_i or mr_err_i triggered transiently",
+      "risk": "Permanent system fault response from a hardware glitch, threatening availability.",
+      "signals": [
+        "incr_err_i",
+        "mr_err_i",
+        "alert_o",
+        "aes_ctr_ns"
+      ],
+      "refs": [
+        "81-91",
+        "102-104"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "If the state machine enters an invalid state (e.g., via malicious glitch or SEU), the default branch immediately asserts alert_o (bypassing the 100-cycle counter) and transitions to CTR_ERROR. The comment indicates this is intentional for security, but a non-malicious transient fault could trigger an unwarranted immediate alert.",
+      "cond": "aes_ctr_cs holds an invalid encoding",
+      "risk": "Immediate alert from a non-malicious bit-flip may cause a false system-wide reaction; design intent needs clarification.",
+      "signals": [
+        "alert_o",
+        "aes_ctr_ns"
+      ],
+      "refs": [
+        "95-98"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "In CTR_IDLE, alert_counter_d is reset to 0. Because there is no transition from CTR_ERROR back to CTR_IDLE, this reset is unreachable after the FSM has ever entered CTR_ERROR. The purpose of resetting the counter in IDLE is unclear.",
+      "cond": "aes_ctr_cs == CTR_IDLE",
+      "risk": "No functional impact, but may indicate a missing error recovery path or leftover code.",
+      "signals": [
+        "alert_counter_d"
+      ],
+      "refs": [
+        "61"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "46-105"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_ctr_fsm.sv",
+  "line_start": 46,
+  "line_end": 105,
+  "security_implications": ""
+}

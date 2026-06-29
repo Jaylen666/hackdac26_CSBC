@@ -1,0 +1,228 @@
+{
+  "chunk_id": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+  "header": {
+    "module": "hmac_reg_top",
+    "block_kind": "assign",
+    "driven": [
+      "intr_state_we, intr_state_hmac_done_wd, intr_state_hmac_err_wd",
+      "intr_enable_we, intr_enable_hmac_done_wd, intr_enable_fifo_empty_wd, intr_enable_hmac_err_wd",
+      "intr_test_we, intr_test_hmac_done_wd, intr_test_fifo_empty_wd, intr_test_hmac_err_wd",
+      "alert_test_we, alert_test_wd",
+      "cfg_re, cfg_we, cfg_hmac_en_wd, cfg_sha_en_wd, cfg_endian_swap_wd, cfg_digest_swap_wd, cfg_key_swap_wd, cfg_digest_size_wd, cfg_key_length_wd",
+      "cmd_we, cmd_hash_start_wd, cmd_hash_process_wd, cmd_hash_stop_wd, cmd_hash_continue_wd",
+      "status_re",
+      "wipe_secret_we, wipe_secret_wd",
+      "key_0_we..key_31_we, key_0_wd..key_31_wd",
+      "digest_0_re..digest_15_re, digest_0_we..digest_15_we, digest_0_wd..digest_15_wd",
+      "msg_length_lower_re, msg_length_lower_we, msg_length_lower_wd",
+      "msg_length_upper_re, msg_length_upper_we, msg_length_upper_wd"
+    ],
+    "used": [
+      "addr_hit",
+      "reg_we",
+      "reg_re",
+      "reg_error",
+      "reg_wdata"
+    ],
+    "modes": [],
+    "tags": [
+      "csr",
+      "secret",
+      "key",
+      "digest",
+      "wipe"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "wipe_secret_we is asserted exactly when addr_hit[8] is high, reg_we is high, and reg_error is high.",
+      "cond": "addr_hit[8] && reg_we && reg_error",
+      "signals": [
+        "wipe_secret_we",
+        "addr_hit[8]",
+        "reg_we",
+        "reg_error"
+      ],
+      "refs": [
+        "2128"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "All other write enable signals (intr_state_we, intr_enable_we, intr_test_we, alert_test_we, cfg_we, cmd_we, key_i_we, digest_i_we, msg_length_lower_we, msg_length_upper_we) are asserted when the corresponding addr_hit bit is high, reg_we is high, and reg_error is low.",
+      "cond": "addr_hit[i] & reg_we & !reg_error, for i ∈ {0..7, 9..58}",
+      "signals": [
+        "all *_we except wipe_secret_we"
+      ],
+      "refs": [
+        "2073-2299"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "All write data signals (intr_state_*, intr_enable_*, intr_test_*, alert_test_wd, cfg_*_wd, cmd_hash_*_wd, wipe_secret_wd, key_i_wd, digest_i_wd, msg_length_*_wd) are directly driven from reg_wdata with fixed bit slicing; they are combinational and updated whenever reg_wdata changes.",
+      "cond": "always",
+      "signals": [
+        "all *_wd"
+      ],
+      "refs": [
+        "2075-2299"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "Read enable signals (status_re, digest_i_re, msg_length_lower_re, msg_length_upper_re) are asserted when the corresponding addr_hit bit is high, reg_re is high, and reg_error is low.",
+      "cond": "addr_hit[i] & reg_re & !reg_error",
+      "signals": [
+        "status_re",
+        "digest_i_re",
+        "msg_length_lower_re",
+        "msg_length_upper_re"
+      ],
+      "refs": [
+        "2120",
+        "2228",
+        "2292",
+        "2296"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "addr_hit must be one-hot (only one bit high) during any valid bus transaction; the chunk does not enforce mutual exclusion between register selects.",
+      "cond": "when reg_we or reg_re is asserted",
+      "risk": "Multiple registers could be written/read concurrently, leading to data corruption or security violation (e.g., simultaneous key and configuration write).",
+      "signals": [
+        "addr_hit",
+        "reg_we",
+        "reg_re"
+      ],
+      "refs": [
+        "2073-2299"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "reg_error must be asserted precisely during bus error events that require a secret wipe; it is used as a direct condition for wipe_secret_we.",
+      "cond": "when a bus error requiring wipe occurs",
+      "risk": "If reg_error is not asserted in time, wipe_secret_we will not trigger, leaving secrets intact; if falsely asserted, an unintended wipe may corrupt state.",
+      "signals": [
+        "reg_error",
+        "wipe_secret_we"
+      ],
+      "refs": [
+        "2128"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "cfg_key_length_dec (reg_wdata[14:9]) and cfg_digest_size_wd (reg_wdata[8:5]) are passed directly without range checking; the downstream HMAC core must tolerate or reject out-of-range values.",
+      "cond": "when these configuration fields are written",
+      "risk": "An invalid key length or digest size may cause unpredictable HMAC operation or security weakness.",
+      "signals": [
+        "cfg_key_length_dec",
+        "cfg_digest_size_wd"
+      ],
+      "refs": [
+        "2108",
+        "2111-2118"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "The bus infrastructure must enforce that only trusted masters can write to key, digest, and message length registers, because this chunk provides no access control or locking.",
+      "cond": "always",
+      "risk": "An unauthorized write could inject known keys, overwrite computed digests, or alter message lengths, breaking HMAC security guarantees.",
+      "signals": [
+        "key_*_we",
+        "digest_*_we",
+        "msg_length_*_we"
+      ],
+      "refs": [
+        "2131-2299"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Digest registers are writable (digest_*_we) without any visible lock or sequencing; it is unclear if allowing writes to the digest during operation is intended or a potential integrity threat.",
+      "cond": "when a write targets address range 41–56",
+      "risk": "An attacker could replace the authentic digest with a chosen value before verification, causing acceptance of forged data.",
+      "signals": [
+        "digest_0_we",
+        "digest_1_we",
+        "...",
+        "digest_15_we"
+      ],
+      "refs": [
+        "2229-2289"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "wipe_secret_we is conditioned on reg_error being high; if reg_error is a short pulse or deasserts before the write completes, the secret wipe may be missed or incomplete.",
+      "cond": "when a bus error triggers",
+      "risk": "Secret data may persist after an error, violating secure erase requirements.",
+      "signals": [
+        "wipe_secret_we",
+        "reg_error"
+      ],
+      "refs": [
+        "2128"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "msg_length_lower_we and msg_length_upper_we allow arbitrary writes to the message length registers; if these registers directly influence HMAC padding, a malicious write could enable MAC forgery.",
+      "cond": "when writing to message length addresses",
+      "risk": "An attacker may falsify the message length, producing a valid HMAC for a different message while leaving the key secret.",
+      "signals": [
+        "msg_length_lower_we",
+        "msg_length_upper_we"
+      ],
+      "refs": [
+        "2292-2299"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Key registers (key_0 through key_31) are writable without any hardware lock or sequencing enforcement visible in this chunk; the HMAC core may rely on a configuration lock or a specific state to protect keys, but that is not enforced here.",
+      "cond": "when any write targets key register addresses",
+      "risk": "Keys could be overwritten mid-operation or by unauthorized masters if the outer logic does not gate the writes, compromising the HMAC key.",
+      "signals": [
+        "key_0_we",
+        "...",
+        "key_31_we"
+      ],
+      "refs": [
+        "2131-2227"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "2073-2299"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 2073,
+  "line_end": 2299,
+  "security_implications": ""
+}

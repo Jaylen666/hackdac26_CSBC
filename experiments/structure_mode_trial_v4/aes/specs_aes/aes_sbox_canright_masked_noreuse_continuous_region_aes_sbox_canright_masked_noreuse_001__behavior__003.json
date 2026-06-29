@@ -1,0 +1,225 @@
+{
+  "chunk_id": "aes_sbox_canright_masked_noreuse_continuous_region_aes_sbox_canright_masked_noreuse_001__behavior__003",
+  "header": {
+    "module": "aes_sbox_canright_masked_noreuse",
+    "block_kind": "mixed",
+    "driven": [
+      "prd_masking",
+      "in_mask_basis_x",
+      "out_mask_basis_x",
+      "out_data_basis_x",
+      "data_o"
+    ],
+    "used": [
+      "prd_i",
+      "op_i",
+      "mask_i",
+      "mask_o",
+      "in_data_basis_x",
+      "out_data_basis_x"
+    ],
+    "modes": [
+      "CIPH_FWD",
+      "CIPH_INV",
+      "default"
+    ],
+    "tags": [
+      "secret",
+      "mask",
+      "crypto",
+      "sbox",
+      "basis_conversion"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "prd_masking is always assigned to prd_i[17:8].",
+      "cond": "always",
+      "signals": [
+        "prd_masking",
+        "prd_i"
+      ],
+      "refs": [
+        "423:423"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "in_mask_basis_x is assigned to aes_mvm(mask_i, A2X) when op_i == CIPH_FWD, aes_mvm(mask_i, S2X) when op_i == CIPH_INV, else aes_mvm(mask_i, A2X).",
+      "cond": "op_i value",
+      "signals": [
+        "in_mask_basis_x",
+        "op_i",
+        "mask_i"
+      ],
+      "refs": [
+        "427:429"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "out_mask_basis_x is assigned to aes_mvm(mask_o, A2X) when op_i == CIPH_INV, aes_mvm(mask_o, S2X) when op_i == CIPH_FWD, else aes_mvm(mask_o, S2X).",
+      "cond": "op_i value",
+      "signals": [
+        "out_mask_basis_x",
+        "op_i",
+        "mask_o"
+      ],
+      "refs": [
+        "432:434"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "instance_connection",
+      "claim": "Instance u_aes_masked_inverse_gf2p8 connects in_data_basis_x to .a, in_mask_basis_x to .m, out_mask_basis_x to .n, prd_masking to .prd, and drives out_data_basis_x from .a_inv.",
+      "cond": "always",
+      "signals": [
+        "in_data_basis_x",
+        "in_mask_basis_x",
+        "out_mask_basis_x",
+        "prd_masking",
+        "out_data_basis_x"
+      ],
+      "refs": [
+        "437:443"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "mux_case",
+      "claim": "data_o is assigned to (aes_mvm(out_data_basis_x, X2S) ^ 8'h63) when op_i == CIPH_FWD, aes_mvm(out_data_basis_x, X2A) when op_i == CIPH_INV, else (aes_mvm(out_data_basis_x, X2S) ^ 8'h63).",
+      "cond": "op_i value",
+      "signals": [
+        "data_o",
+        "op_i",
+        "out_data_basis_x"
+      ],
+      "refs": [
+        "446:448"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The op_i input is restricted to the defined operational mode values CIPH_FWD or CIPH_INV; any other value triggers default forward-mode basis conversions which may not match the inversion instance's expected mask basis.",
+      "cond": "when op_i is not CIPH_FWD nor CIPH_INV",
+      "risk": "Mismatched basis conversions can break the masking scheme and leak secret intermediate values.",
+      "signals": [
+        "op_i"
+      ],
+      "refs": [
+        "427:434",
+        "446:448"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "mask_i and mask_o are valid mask values whose basis-converted forms (via A2X or S2X) produce the correct mask inputs for the masked inversion.",
+      "cond": "always",
+      "risk": "Invalid mask vectors could corrupt the masked computation, enabling side-channel leakage.",
+      "signals": [
+        "mask_i",
+        "mask_o"
+      ],
+      "refs": [
+        "427:434"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "prd_i provides random fresh bits for prd_masking; prd_i[17:8] must be unpredictable and not reused across gadgets.",
+      "cond": "always",
+      "risk": "Predictable or reused prd values can break the inter-gadget non-interference property of the masking scheme, exposing secrets.",
+      "signals": [
+        "prd_i",
+        "prd_masking"
+      ],
+      "refs": [
+        "423:423"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "The aes_mvm function correctly computes matrix-vector multiplication for the given constant matrices A2X, S2X, X2S, X2A.",
+      "cond": "always",
+      "risk": "Incorrect basis transformations would invalidate all masking protections.",
+      "signals": [
+        "aes_mvm"
+      ],
+      "refs": [
+        "427:434",
+        "446:448"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The default case for op_i in all muxes corresponds to forward-mode basis conversions, but it is unclear whether op_i can legally assume other values (e.g., key schedule mode) that would require different conversions. If such a mode exists, the S-box output would be incorrect and potentially leak secrets.",
+      "cond": "op_i not CIPH_FWD nor CIPH_INV",
+      "risk": "Incorrect data_o due to wrong basis conversion and/or missing/wrong affine constant, breaking masked output and potentially exposing secret state.",
+      "signals": [
+        "op_i",
+        "in_mask_basis_x",
+        "out_mask_basis_x",
+        "data_o"
+      ],
+      "refs": [
+        "427:434",
+        "446:448"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment states that the addition of constant 8'h63 is skipped for mask conversions, but it is added for data_o in forward mode. It is uncertain if this matches the required algebraic masking relationships for all operating modes, especially when op_i changes dynamically.",
+      "cond": "when transitioning between modes or during startup",
+      "risk": "If the mask and data paths are not perfectly aligned, the masking scheme may introduce bias or leak secrets during operations.",
+      "signals": [
+        "in_mask_basis_x",
+        "out_mask_basis_x",
+        "data_o",
+        "8'h63"
+      ],
+      "refs": [
+        "426:429",
+        "445:448"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The prd_masking slice (prd_i[17:8]) may be shared with other masked gadgets outside this module, increasing the risk of entropy reuse that could compromise non-interference.",
+      "cond": "if prd_i bits are also used elsewhere",
+      "risk": "Entropy reuse across gadgets can lead to biased joint distributions, enabling higher-order DPA attacks.",
+      "signals": [
+        "prd_i",
+        "prd_masking"
+      ],
+      "refs": [
+        "423:423"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "423:450"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked_noreuse.sv",
+  "line_start": 423,
+  "line_end": 450,
+  "security_implications": ""
+}

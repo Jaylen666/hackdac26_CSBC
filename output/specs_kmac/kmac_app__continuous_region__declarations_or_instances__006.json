@@ -1,55 +1,147 @@
 {
   "chunk_id": "kmac_app__continuous_region__declarations_or_instances__006",
-  "summary": "该片段对内部多路选择状态和状态有效位做安全锚定缓冲后再导出，意图是为后续使用提供带逻辑完整性保护的副本。",
-  "behavior": "片段为同一个内部选择信号 mux_sel 生成三个彼此独立的缓冲副本，分别通过 prim_sec_anchor_buf 实例输出到 mux_sel_buf_output_logic、mux_sel_buf_err_check_logic 和 mux_sel_buf_kmac_logic，然后再强制转换为 app_mux_sel_e 类型，形成 mux_sel_buf_output、mux_sel_buf_err_check 和 mux_sel_buf_kmac 供不同后续逻辑使用 [kmac_app.sv:676-707]。此外，内部 1 位信号 reg_state_valid 也通过一个宽度为 1 的 prim_sec_anchor_buf 缓冲后驱动 reg_state_valid_o [kmac_app.sv:709-716]。注释中的 SEC_CM: LOGIC.INTEGRITY 表明设计意图是通过这些锚定缓冲增强关键控制状态的逻辑完整性；从实际 RTL 看，本片段本身不改变 mux_sel 或 reg_state_valid 的功能语义，只是为它们提供经过独立缓冲、并在枚举输出端做类型转换的派生信号 [kmac_app.sv:679-715]。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "mixed",
+    "driven": [
+      "mux_sel_buf_output",
+      "mux_sel_buf_output_logic",
+      "mux_sel_buf_err_check",
+      "mux_sel_buf_err_check_logic",
+      "mux_sel_buf_kmac",
+      "mux_sel_buf_kmac_logic",
+      "reg_state_valid_o"
+    ],
+    "used": [
+      "mux_sel",
+      "reg_state_valid",
+      "mux_sel_buf_output_logic",
+      "mux_sel_buf_err_check_logic",
+      "mux_sel_buf_kmac_logic"
+    ],
+    "modes": [
+      "AppMuxWidth",
+      "app_mux_sel_e"
+    ],
+    "tags": [
+      "integrity",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "mux_sel_buf_output、mux_sel_buf_err_check 和 mux_sel_buf_kmac 始终分别由同一个源信号 mux_sel 经过各自独立的缓冲路径产生，不会来自不同源信号。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "mux_sel_buf_output is continuously assigned to the type-cast (app_mux_sel_e) of mux_sel_buf_output_logic.",
+      "cond": "always",
+      "signals": [
         "mux_sel_buf_output",
-        "mux_sel_buf_err_check",
-        "mux_sel_buf_kmac"
+        "mux_sel_buf_output_logic"
       ],
-      "source_refs": [
-        "kmac_app.sv:676-707"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:677"
       ]
     },
     {
-      "property": "reg_state_valid_o 始终由内部 reg_state_valid 经过 1 位安全锚定缓冲驱动。",
-      "output_signals": [
-        "reg_state_valid_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "mux_sel_buf_err_check is continuously assigned to the type-cast (app_mux_sel_e) of mux_sel_buf_err_check_logic.",
+      "cond": "always",
+      "signals": [
+        "mux_sel_buf_err_check",
+        "mux_sel_buf_err_check_logic"
       ],
-      "source_refs": [
-        "kmac_app.sv:709-716"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:688"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "mux_sel_buf_kmac is continuously assigned to the type-cast (app_mux_sel_e) of mux_sel_buf_kmac_logic.",
+      "cond": "always",
+      "signals": [
+        "mux_sel_buf_kmac",
+        "mux_sel_buf_kmac_logic"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:699"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "instance_connection",
+      "claim": "reg_state_valid_o is connected to the .out_o of u_prim_buf_state_output_valid, a prim_sec_anchor_buf instance whose .in_i is reg_state_valid and Width is 1.",
+      "cond": "always",
+      "signals": [
+        "reg_state_valid_o",
+        "reg_state_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:711-716"
       ]
     }
   ],
-  "security_implications": "该片段直接涉及安全机制。注释 SEC_CM: LOGIC.INTEGRITY 和对关键状态 mux_sel、reg_state_valid 的多路独立 prim_sec_anchor_buf 缓冲说明，这些控制信号被视为需要完整性保护的安全敏感状态。不同消费逻辑使用独立缓冲副本，有助于降低单点组合篡改或故障传播的影响，并支持后续分路径一致性检查；但本片段本身未展示检测或告警逻辑。",
   "assumptions": [
     {
-      "constraint": "mux_sel 在语义上应始终是 app_mux_sel_e 的合法编码，否则经 logic 向量到 app_mux_sel_e 的强制转换后，各缓冲输出的枚举值解释可能未定义或落入非法状态处理路径。",
-      "bug_relevance": "如果违反，该片段仍会传播该位模式，但下游若假定枚举值总合法，可能导致错误选择、误报完整性错误或进入未覆盖分支；这更像行为契约而非本片段内建回退。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "mux_sel must always be a legal app_mux_sel_e encoding, because the type cast in the continuous assignments does not validate the input.",
+      "cond": "always",
+      "risk": "An out-of-range encoding could produce an invalid enum value, leading to undefined mux decode behavior and possible unintended data-path access.",
+      "signals": [
         "mux_sel",
         "mux_sel_buf_output",
         "mux_sel_buf_err_check",
         "mux_sel_buf_kmac"
       ],
-      "source_refs": [
-        "kmac_app.sv:677",
-        "kmac_app.sv:683-695",
-        "kmac_app.sv:699-706"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:677",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:688",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:699"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The parameter AppMuxWidth must equal the actual bit width of the mux_sel signal.",
+      "cond": "when this chunk is synthesized or simulated",
+      "risk": "Width mismatch would cause silent truncation, expansion, or elaboration error, potentially corrupting the buffered mux select values and impacting secure path selection.",
+      "signals": [
+        "AppMuxWidth",
+        "mux_sel"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:680-685",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:691-696",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:702-707"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The same mux_sel signal fans out to three separate prim_sec_anchor_buf instances (producing mux_sel_buf_output, mux_sel_buf_err_check, mux_sel_buf_kmac) with SEC_CM: LOGIC.INTEGRITY commentary, but this chunk does not compare them nor enforce consistency. It is unclear whether downstream logic expects these three signals to always be equal and whether any discrepancy is detected. If mismatches are not handled, a single-point corruption in one buffer could silently propagate a wrong mux selection to part of the design.",
+      "cond": "always",
+      "risk": "An undetected discrepancy between the three buffered copies could allow an attacker to steer the KMAC engine, error-checking, or output path with a corrupted mux select, breaking the intended integrity scheme.",
+      "signals": [
+        "mux_sel_buf_output",
+        "mux_sel_buf_err_check",
+        "mux_sel_buf_kmac",
+        "mux_sel"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:679-707"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_app.sv:676-716"
-  ],
-  "uncertain_points": [
-    "prim_sec_anchor_buf 的精确定义未在片段中给出，因此无法仅凭此处确认它是纯透传缓冲、带锚定综合约束的缓冲，还是还包含额外的抗篡改/抗优化语义；这里只能确认设计意图与逻辑完整性相关 [kmac_app.sv:679-715]。",
-    "reg_state_valid 在本片段中仅被声明并作为缓冲输入使用，其具体驱动来源未出现在片段内，因此无法判断 reg_state_valid_o 是否导出的是寄存器状态、组合有效位，或是否会有额外完整性编码 [kmac_app.sv:710-715]。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:676-716"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 676,
-  "line_end": 716
+  "line_end": 716,
+  "security_implications": ""
 }

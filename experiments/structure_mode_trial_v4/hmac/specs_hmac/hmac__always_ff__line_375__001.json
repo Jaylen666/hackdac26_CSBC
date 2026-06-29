@@ -1,0 +1,156 @@
+{
+  "chunk_id": "hmac__always_ff__line_375__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "cfg_reg"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "cfg_block",
+      "reg2hw",
+      "HMAC_CFG_ENDIAN_SWAP_RESVAL",
+      "HMAC_CFG_DIGEST_SWAP_RESVAL",
+      "HMAC_CFG_KEY_SWAP_RESVAL",
+      "HMAC_CFG_DIGEST_SIZE_RESVAL",
+      "HMAC_CFG_KEY_LENGTH_RESVAL"
+    ],
+    "modes": [],
+    "tags": [
+      "csr",
+      "reset",
+      "security"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, cfg_reg is reset to default configuration values defined by HMAC_CFG_*_RESVAL parameters for listed fields and zeros for any remaining fields via default:'0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "cfg_reg"
+      ],
+      "refs": [
+        "375-407"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When cfg_block is low and reg2hw.cfg.hmac_en.qe is high, cfg_reg is assigned the entire reg2hw.cfg struct, capturing all fields simultaneously.",
+      "cond": "!cfg_block && reg2hw.cfg.hmac_en.qe",
+      "signals": [
+        "cfg_block",
+        "reg2hw",
+        "cfg_reg"
+      ],
+      "refs": [
+        "408-409"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "In all other conditions (not reset and not the update condition), cfg_reg retains its previous value unchanged.",
+      "cond": "else (implicit)",
+      "signals": [
+        "cfg_reg"
+      ],
+      "refs": [
+        "375-411"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "Parameter constants HMAC_CFG_ENDIAN_SWAP_RESVAL, HMAC_CFG_DIGEST_SWAP_RESVAL, HMAC_CFG_KEY_SWAP_RESVAL, HMAC_CFG_DIGEST_SIZE_RESVAL, and HMAC_CFG_KEY_LENGTH_RESVAL are defined to values consistent with HMAC operational requirements and produce a safe configuration after reset.",
+      "cond": "always (reset and operational state)",
+      "risk": "Incorrect reset defaults could cause wrong data swaps, digest sizes, or key lengths, leading to HMAC protocol errors or security weaknesses.",
+      "signals": [
+        "HMAC_CFG_ENDIAN_SWAP_RESVAL",
+        "HMAC_CFG_DIGEST_SWAP_RESVAL",
+        "HMAC_CFG_KEY_SWAP_RESVAL",
+        "HMAC_CFG_DIGEST_SIZE_RESVAL",
+        "HMAC_CFG_KEY_LENGTH_RESVAL"
+      ],
+      "refs": [
+        "386-405"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "External logic must assert cfg_block to inhibit cfg_reg updates when it is unsafe to change configuration (e.g., during active HMAC processing).",
+      "cond": "when cfg updates must be blocked",
+      "risk": "If cfg_block is not asserted at the right time, a register write could corrupt the configuration mid-operation, causing incorrect HMAC computations or security breaches.",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "408"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "When reg2hw.cfg.hmac_en.qe is asserted, all fields of reg2hw.cfg must hold the intended, consistent configuration values for the entire register.",
+      "cond": "during cfg_reg update condition",
+      "risk": "If reg2hw.cfg contains incomplete or inconsistent data (e.g., from a partial register write), the captured configuration snapshot may be invalid, leading to operational errors.",
+      "signals": [
+        "reg2hw"
+      ],
+      "refs": [
+        "409"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The cfg_reg update uses only reg2hw.cfg.hmac_en.qe as a gate, ignoring the per-field write‑enable bits (qe) for sha_en, endian_swap, digest_swap, key_swap, digest_size, and key_length. If software performs a partial register write that asserts only sha_en.qe (or any other qe) without hmac_en.qe, cfg_reg will not capture those changes, leaving those fields stuck at their previous (potentially stale) values.",
+      "cond": "partial register write to HMAC CFG fields other than hmac_en",
+      "risk": "Stale configuration values could cause the HMAC engine to operate with an incorrect digest size, endianness, or swap setting, resulting in wrong authentication codes, security bypass, or data integrity failures.",
+      "signals": [
+        "reg2hw.cfg.hmac_en.qe",
+        "reg2hw.cfg.sha_en.qe",
+        "reg2hw.cfg.endian_swap.qe",
+        "reg2hw.cfg.digest_swap.qe",
+        "reg2hw.cfg.key_swap.qe",
+        "reg2hw.cfg.digest_size.qe",
+        "reg2hw.cfg.key_length.qe"
+      ],
+      "refs": [
+        "408-409"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The reset initialization uses 'default:'0' to zeroize any fields of the cfg_reg struct not explicitly listed in the assignment. It is unknown whether the actual struct contains additional fields that require non‑zero reset values; if so, they would be incorrectly forced to zero.",
+      "cond": "unknown struct fields",
+      "risk": "If hidden fields expect non‑zero reset defaults, zeroing could cause functional misbehavior (e.g., disabled internal debug features, wrong mode selections).",
+      "signals": [
+        "cfg_reg"
+      ],
+      "refs": [
+        "406"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:375-411"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 375,
+  "line_end": 411,
+  "security_implications": ""
+}

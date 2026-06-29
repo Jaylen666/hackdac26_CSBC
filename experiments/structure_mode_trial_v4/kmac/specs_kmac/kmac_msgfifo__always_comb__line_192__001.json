@@ -1,0 +1,201 @@
+{
+  "chunk_id": "kmac_msgfifo__always_comb__line_192__001",
+  "header": {
+    "module": "kmac_msgfifo",
+    "block_kind": "always_comb",
+    "driven": [
+      "flush_st_d",
+      "msgfifo_flush_done"
+    ],
+    "used": [
+      "flush_st",
+      "process_i",
+      "packer_flush_done",
+      "fifo_empty_o",
+      "clear_i",
+      "prim_mubi_pkg::mubi4_test_true_strict"
+    ],
+    "modes": [
+      "FlushIdle",
+      "FlushPacker",
+      "FlushFifo",
+      "FlushClear"
+    ],
+    "tags": [
+      "flush",
+      "fifo",
+      "handshake",
+      "state_machine",
+      "security",
+      "mubi"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "If flush_st is not one of FlushIdle, FlushPacker, FlushFifo, or FlushClear, flush_st_d is forced to FlushIdle.",
+      "cond": "when flush_st is an invalid encoding",
+      "signals": [
+        "flush_st",
+        "flush_st_d"
+      ],
+      "refs": [
+        "file:232-234"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "msgfifo_flush_done is driven to 1 only when flush_st is FlushFifo and fifo_empty_o is true; otherwise it is 0 (due to default assignment).",
+      "cond": "always (combinational default + override)",
+      "signals": [
+        "msgfifo_flush_done",
+        "flush_st",
+        "fifo_empty_o"
+      ],
+      "refs": [
+        "file:195",
+        "file:214-221"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "Unless a specific branch overrides, flush_st_d is assigned the current value of flush_st.",
+      "cond": "always (combinational default before case)",
+      "signals": [
+        "flush_st_d",
+        "flush_st"
+      ],
+      "refs": [
+        "file:193"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "In FlushClear state, flush_st_d transitions to FlushIdle only when prim_mubi_pkg::mubi4_test_true_strict(clear_i) is true; otherwise it remains FlushClear.",
+      "cond": "flush_st == FlushClear",
+      "signals": [
+        "flush_st_d",
+        "clear_i"
+      ],
+      "refs": [
+        "file:224-229"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "The external initiator must eventually assert process_i while flush_st is FlushIdle to start the flush sequence.",
+      "cond": "flush_st == FlushIdle",
+      "risk": "Deadlock: the FSM remains in FlushIdle forever, no flush possible.",
+      "signals": [
+        "process_i",
+        "flush_st"
+      ],
+      "refs": [
+        "file:198-203"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The packer module must eventually assert packer_flush_done when the FSM is in FlushPacker.",
+      "cond": "flush_st == FlushPacker",
+      "risk": "Deadlock: FSM hangs in FlushPacker, blocking further flush progress.",
+      "signals": [
+        "packer_flush_done",
+        "flush_st"
+      ],
+      "refs": [
+        "file:206-211"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "The FIFO must eventually assert fifo_empty_o when the FSM is in FlushFifo.",
+      "cond": "flush_st == FlushFifo",
+      "risk": "Deadlock: FSM hangs in FlushFifo, blocking flush completion.",
+      "signals": [
+        "fifo_empty_o",
+        "flush_st"
+      ],
+      "refs": [
+        "file:214-221"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "The external clear controller must eventually set clear_i to a mubi4 TRUE value when the FSM is in FlushClear to allow return to idle.",
+      "cond": "flush_st == FlushClear",
+      "risk": "Deadlock: FSM remains in FlushClear, preventing any future flush sequences.",
+      "signals": [
+        "clear_i",
+        "flush_st"
+      ],
+      "refs": [
+        "file:224-229"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The FSM exits FlushClear solely on clear_i being mubi4 TRUE, but does not enforce that the actual clearing hardware has completed wiping secret data. A premature TRUE could allow residual secrets.",
+      "cond": "flush_st == FlushClear and clear_i evaluated as TRUE",
+      "risk": "Confidential key/material residues may persist after flush-complete if clear_i is asserted too early.",
+      "signals": [
+        "clear_i"
+      ],
+      "refs": [
+        "file:224-226"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "process_i is sampled without handshake; if it is asserted while packer is not ready, the FSM moves to FlushPacker and may hang if packer_flush_done never arrives.",
+      "cond": "flush_st == FlushIdle and process_i asserted",
+      "risk": "Potential hang: FSM stuck in FlushPacker if packer cannot complete its flush.",
+      "signals": [
+        "process_i"
+      ],
+      "refs": [
+        "file:199-203"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "msgfifo_flush_done is a combinatorial pulse lasting only the cycle where fifo_empty_o is true and flush_st is FlushFifo; a downstream consumer must capture it in that exact cycle.",
+      "cond": "transition from FlushFifo to FlushClear",
+      "risk": "Loss of flush-done notification if the consumer does not grab the signal in the correct cycle (e.g., due to clock domain crossing).",
+      "signals": [
+        "msgfifo_flush_done",
+        "flush_st",
+        "fifo_empty_o"
+      ],
+      "refs": [
+        "file:195",
+        "file:218"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:192-236"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
+  "line_start": 192,
+  "line_end": 236,
+  "security_implications": ""
+}

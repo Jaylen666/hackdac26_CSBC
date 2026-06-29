@@ -30,6 +30,8 @@ pip install -r requirements-semantic-ag.txt  # BGE-M3 embedding (可选)
 
 系统 `python3` 即可运行大部分脚本。BGE-M3 语义嵌入需使用独立的 venv（实验目录下有预装好的 `.venv`），模型权重需离线缓存到本地 HuggingFace cache。
 
+默认优先走离线模型与本地缓存，不建议在常规实验里在线下载权重。
+
 ### 3. 本地 BGE-M3 模型缓存（离线运行）
 
 模型本地路径示例：`experiments/bge_m3_ag_retrieval/out/hf_cache/`
@@ -66,6 +68,7 @@ python3 scripts/generate_all_specs.py \
 /home/smy/rtl_bug_agent/experiments/bge_m3_ag_retrieval/.venv/bin/python \
   scripts/run_phase2_e2e.py \
   --ip <ip> \
+  --out-root output/<ip>_run \
   --specs-dir output/specs_<ip> \
   --ag-pairing-mode semantic \
   --semantic-batch-mode guarded \
@@ -83,6 +86,7 @@ python3 scripts/generate_all_specs.py \
 /home/smy/rtl_bug_agent/experiments/bge_m3_ag_retrieval/.venv/bin/python \
   scripts/run_phase2_e2e.py \
   --ip hmac \
+  --out-root output/hmac_run \
   --specs-dir output/specs \
   --ag-pairing-mode semantic \
   --semantic-batch-mode guarded \
@@ -197,6 +201,7 @@ rtl_bug_agent/
 | `scripts/generate_selected_specs.py` | 为指定 chunk 重试 spec |
 | `python3 -m rtl_bug_agent.cli chunk` | RTL 语义分块 |
 | `python3 -m rtl_bug_agent.cli semantic-ag` | 单独跑 semantic AG (不调 LLM) |
+| `python3 -m rtl_bug_agent.cli structural-facts` | 从 reg/pkg/typedef/instance 语句提取结构事实 |
 | `demo/n003_discovery.py` | N-003 发现过程离线 demo |
 
 ### 常用参数 (`run_phase2_e2e.py`)
@@ -204,12 +209,20 @@ rtl_bug_agent/
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `--ip` | `hmac` | IP 名称 |
+| `--out-root` | `output` | 所有产物和 checkpoint 的根目录 |
 | `--specs-dir` | `output/specs_<ip>` | Spec 目录 |
+| `--structural-facts` | 空 | 可选结构事实 JSONL/JSON，用于挂载到 AG pairing |
 | `--ag-pairing-mode` | `legacy` | `legacy` / `semantic` / `shadow` |
 | `--semantic-batch-mode` | `single` | `single` / `guarded` |
 | `--phase3-top-n` | `0` | Phase 3 验证 top-N findings (0=跳过) |
 | `--workers` | `8` | 并行 LLM 调用数 |
 | `--force` | `false` | 忽略 checkpoint 重新跑 |
+
+### 新模式说明
+
+当前新增了一个可选的 `structure facts` 路径，用于把 `reg_top / reg_pkg / pkg / typedef / instance` 一类静态结构信息从 chunk/spec 流中分离出来，再按 signal root 挂回到 semantic AG 和 Channel B。
+
+默认不启用时，流程保持原样。启用时建议先独立产出到新的临时目录，避免覆盖原 `output/`。
 
 ---
 

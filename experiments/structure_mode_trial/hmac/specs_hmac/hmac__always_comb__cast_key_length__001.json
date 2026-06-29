@@ -1,0 +1,103 @@
+{
+  "chunk_id": "hmac__always_comb__cast_key_length__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "key_length"
+    ],
+    "used": [
+      "key_length_supplied",
+      "Key_128",
+      "Key_256",
+      "Key_384",
+      "Key_512",
+      "Key_1024"
+    ],
+    "modes": [
+      "Key_None",
+      "Key_128",
+      "Key_256",
+      "Key_384",
+      "Key_512",
+      "Key_1024"
+    ],
+    "tags": [
+      "error",
+      "secret"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "key_length is assigned the matching Key_* value when key_length_supplied is Key_128, Key_256, Key_384, Key_512, or Key_1024; for any other value, key_length is assigned Key_None.",
+      "cond": "always",
+      "signals": [
+        "key_length",
+        "key_length_supplied"
+      ],
+      "refs": [
+        "hw/ip/hmac/rtl/hmac.sv:320-334"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The consumer of key_length (e.g., HMAC FSM) must treat key_length == Key_None as an unsupported key length, block HMAC start, and signal an error to software.",
+      "cond": "when an unsupported key_length_supplied value is applied and HMAC (not SHA-2) is triggered",
+      "risk": "If the consumer does not block, HMAC may operate with key_length = Key_None (effectively no key), leading to incorrect MAC computation and security compromise.",
+      "signals": [
+        "key_length",
+        "hmac_start",
+        "error"
+      ],
+      "refs": [
+        "hw/ip/hmac/rtl/hmac.sv:329-332"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The enforcement that HMAC start is blocked when key_length == Key_None is not implemented here; it must be verified in the surrounding control logic (FSM/start gating).",
+      "cond": "when key_length_supplied is an unsupported value and hmac_start is asserted",
+      "risk": "If the condition is missing, HMAC could run with a zeroed or default key while SW expects a longer key, breaking authentication properties.",
+      "signals": [
+        "key_length",
+        "hmac_start",
+        "error"
+      ],
+      "refs": [
+        "hw/ip/hmac/rtl/hmac.sv:329-332"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment distinguishes between HMAC and SHA-2 behavior when an unsupported key length is encountered; it is unclear whether SHA-2 mode may proceed with Key_None or unsupported lengths without error, potentially causing unintentional silent use of a different key length.",
+      "cond": "when SHA-2 mode is active and key_length_supplied is an unsupported value",
+      "risk": "If SHA-2 mode does not check key_length for unsupported values, a misconfigured key length could silently lead to incorrect hash operations.",
+      "signals": [
+        "sha2_mode",
+        "key_length",
+        "key_length_supplied"
+      ],
+      "refs": [
+        "hw/ip/hmac/rtl/hmac.sv:329-332"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hw/ip/hmac/rtl/hmac.sv:320-334"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 320,
+  "line_end": 334,
+  "security_implications": ""
+}

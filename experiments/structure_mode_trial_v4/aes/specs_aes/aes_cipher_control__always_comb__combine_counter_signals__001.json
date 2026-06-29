@@ -1,0 +1,120 @@
+{
+  "chunk_id": "aes_cipher_control__always_comb__combine_counter_signals__001",
+  "header": {
+    "module": "aes_cipher_control",
+    "block_kind": "always_comb",
+    "driven": [
+      "rnd_ctr",
+      "rnd_ctr_err"
+    ],
+    "used": [
+      "mr_rnd_ctr",
+      "Sp2VWidth"
+    ],
+    "modes": [],
+    "tags": [
+      "error_detection",
+      "counter",
+      "fault_tolerance",
+      "redundancy"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "rnd_ctr is bitwise OR over all i=0..Sp2VWidth-1 of mr_rnd_ctr[i].",
+      "cond": "always",
+      "signals": [
+        "rnd_ctr",
+        "mr_rnd_ctr"
+      ],
+      "refs": [
+        "346-358"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "rnd_ctr_err is 1 if any mr_rnd_ctr[i] differs from the OR-combined rnd_ctr, otherwise 0.",
+      "cond": "always",
+      "signals": [
+        "rnd_ctr_err",
+        "rnd_ctr",
+        "mr_rnd_ctr"
+      ],
+      "refs": [
+        "346-358"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "mr_rnd_ctr[i] must be driven to known (non-X) values when this block is evaluated.",
+      "cond": "for error detection reliability",
+      "risk": "If any mr_rnd_ctr[i] is X, rnd_ctr becomes X and rnd_ctr_err may become X, masking real mismatches or causing false error flags, breaking fault detection.",
+      "signals": [
+        "mr_rnd_ctr"
+      ],
+      "refs": [
+        "346-358"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If parameter Sp2VWidth is 0, the loops are empty, rnd_ctr stays 0 and rnd_ctr_err stays 0, permanently disabling redundant counter mismatch detection.",
+      "cond": "Sp2VWidth == 0",
+      "risk": "All counter discrepancies go undetected, potentially allowing silent corruption of cipher state or control.",
+      "signals": [
+        "Sp2VWidth",
+        "rnd_ctr_err"
+      ],
+      "refs": [
+        "349-357"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "low",
+      "claim": "rnd_ctr_err only raises when any mr_rnd_ctr[i] differs from the OR. If an attacker corrupts all copies identically (all become the same wrong value), the OR matches and no error is flagged.",
+      "cond": "adversary forcing identical corruption of all mr_rnd_ctr[i]",
+      "risk": "Undetected identical multi‑copy corruption may bypass redundancy checking.",
+      "signals": [
+        "mr_rnd_ctr",
+        "rnd_ctr_err"
+      ],
+      "refs": [
+        "353-356"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "When a mismatch occurs, rnd_ctr is computed as the OR of possibly divergent values and is driven concurrently with rnd_ctr_err; downstream logic may consume a corrupt rnd_ctr before the error is handled.",
+      "cond": "rnd_ctr_err == 1",
+      "risk": "Corrupt counter value could be used in cipher rounds or key expansion, causing incorrect encryption or leakage before containment.",
+      "signals": [
+        "rnd_ctr",
+        "rnd_ctr_err"
+      ],
+      "refs": [
+        "346-358"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_cipher_control.sv:346-358"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control.sv",
+  "line_start": 346,
+  "line_end": 358,
+  "security_implications": ""
+}

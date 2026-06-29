@@ -16,7 +16,10 @@ class RtlChunk:
     context_summary: str
     code: str
     dependencies: list[str] = field(default_factory=list)
+    semantic_class: str = "behavior"
+    guard_context: list[dict[str, Any]] = field(default_factory=list)
+    structure_refs: list[str] = field(default_factory=list)
+    compile_time_context: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-

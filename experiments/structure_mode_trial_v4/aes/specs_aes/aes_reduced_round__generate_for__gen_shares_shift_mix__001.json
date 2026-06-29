@@ -1,0 +1,168 @@
+{
+  "chunk_id": "aes_reduced_round__generate_for__gen_shares_shift_mix__001",
+  "header": {
+    "module": "aes_reduced_round",
+    "block_kind": "generate_for",
+    "driven": [
+      "shift_rows_in",
+      "shift_rows_out",
+      "mix_columns_out"
+    ],
+    "used": [
+      "sub_bytes_out",
+      "sb_out_mask",
+      "op_i",
+      "NumShares"
+    ],
+    "modes": [
+      "op_i",
+      "NumShares"
+    ],
+    "tags": [
+      "secret",
+      "mask",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When share index s is 0, shift_rows_in[0] is continuously assigned the value of sub_bytes_out.",
+      "cond": "genvar s == 0",
+      "signals": [
+        "shift_rows_in",
+        "sub_bytes_out"
+      ],
+      "refs": [
+        "57:57"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When share index s is greater than 0, shift_rows_in[s] is continuously assigned the value of sb_out_mask.",
+      "cond": "genvar s != 0",
+      "signals": [
+        "shift_rows_in",
+        "sb_out_mask"
+      ],
+      "refs": [
+        "58-60"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "For every share s, an instance of aes_shift_rows is connected: .op_i to op_i, .data_i to shift_rows_in[s], and .data_o to shift_rows_out[s].",
+      "cond": "for each s in generate loop",
+      "signals": [
+        "u_aes_shift_rows",
+        "shift_rows_out",
+        "op_i",
+        "shift_rows_in"
+      ],
+      "refs": [
+        "63-67"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "For every share s, an instance of aes_mix_columns is connected: .op_i to op_i, .data_i to shift_rows_out[s], and .data_o to mix_columns_out[s].",
+      "cond": "for each s in generate loop",
+      "signals": [
+        "u_aes_mix_columns",
+        "mix_columns_out",
+        "op_i",
+        "shift_rows_out"
+      ],
+      "refs": [
+        "69-73"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "NumShares is at least 1.",
+      "cond": "always",
+      "risk": "If NumShares == 0, the generate loop produces no instances, leaving shift_rows_in, shift_rows_out, and mix_columns_out unconnected and the data path incomplete.",
+      "signals": [
+        "NumShares"
+      ],
+      "refs": [
+        "54:54"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "sub_bytes_out and sb_out_mask are the correct masked data share and mask share outputs from the preceding SubBytes stage.",
+      "cond": "when the round logic is evaluated",
+      "risk": "If these signals are swapped, incorrectly computed, or corrupted, the masking scheme will be disrupted, potentially enabling side‑channel leakage of the secret data.",
+      "signals": [
+        "sub_bytes_out",
+        "sb_out_mask"
+      ],
+      "refs": [
+        "57",
+        "60"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "op_i remains stable during the combinational propagation through the shift_rows and mix_columns instances.",
+      "cond": "while the outputs are being used",
+      "risk": "If op_i changes during evaluation, it may cause glitches or incorrect operation selection, leading to a corrupted round transformation output.",
+      "signals": [
+        "op_i"
+      ],
+      "refs": [
+        "63-73"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The generate block unconditionally drives all shares with s>0 from the single signal sb_out_mask. If NumShares is intended to support more than one mask share (NumShares > 2), this would incorrectly assign identical mask values to multiple shares, breaking masking independence.",
+      "cond": "NumShares > 2 and the design intent is multi‑share masking",
+      "risk": "Identical mask shares eliminate the randomness needed for side‑channel resistance, potentially exposing secret data through power/EM analysis.",
+      "signals": [
+        "sb_out_mask",
+        "NumShares"
+      ],
+      "refs": [
+        "55-61",
+        "54"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "When NumShares is set to 1, only the s==0 path is instantiated, leaving no mask share. This results in an unmasked AES round, which may violate a security requirement that the design always operate with masking.",
+      "cond": "NumShares == 1 at compile time",
+      "risk": "An unmasked implementation exposes the entire data path to first‑order side‑channel attacks, defeating the purpose of the masking countermeasure.",
+      "signals": [
+        "NumShares"
+      ],
+      "refs": [
+        "54-57",
+        "55"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "54-74"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_reduced_round.sv",
+  "line_start": 54,
+  "line_end": 74,
+  "security_implications": ""
+}

@@ -1,71 +1,161 @@
 {
   "chunk_id": "kmac_pkg__continuous_region__declarations_or_instances__004",
-  "summary": "This package region defines KMAC application-interface types, default request/response constants, FSM state encodings, and error-code enums that standardize how the rest of the design represents app transactions and faults.",
-  "behavior": "This chunk is declarative rather than operational: it establishes the symbolic state encoding `st_e` for the KMAC/app control FSM, including normal app-driven states (`StAppCfg`, `StAppMsg`, `StAppOutLen`, `StAppProcess`, `StAppWait`), a software-controlled mode (`StSw`), several error-handling states, and a terminal error state [kmac_pkg.sv:329-356]. Comments indicate intended sequencing semantics for some states: `StAppOutLen` is used to push an encoded output length into the message FIFO, with the example 256-bit length encoded as `48'h02_0100`; `StSw` is intended to give software exclusive control so that KeyMgr requests are discarded while a software-started operation is active; and `StKeyMgrErrKeyNotValid` represents the case where KeyMgr requests KDF before the secret key is ready [kmac_pkg.sv:333-346, 339-342]. The chunk also defines the application request/response payload formats. `app_req_t` carries `valid`, message `data`, byte strobes `strb`, and `last`; `app_rsp_t` carries `ready`, `done`, two digest shares, and `error`, with comments stating that `error` is meaningful when `done` is high and that on KDF errors the digest shares may contain garbage that KeyMgr should discard [kmac_pkg.sv:363-379]. Default constants provide a quiescent request (`APP_REQ_DEFAULT`: no valid data, zero payload, not last) and an error-marked response (`APP_RSP_DEFAULT`: ready=1, done=1, fixed placeholder digest shares derived from `DEADBEEF`/`FACEBEEF`, error=1) [kmac_pkg.sv:381-393]. Finally, the chunk defines the package-wide error code enum `err_code_e` and packed error struct `err_t`, covering software flow violations, invalid KeyMgr key usage, entropy/configuration issues, fatal faults, and FIFO/packer integrity failures [kmac_pkg.sv:400-460], as well as `rsp_digest_t` as a two-share digest container [kmac_pkg.sv:462-465].",
+  "header": {
+    "module": "kmac_pkg",
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [
+      "MsgWidth",
+      "MsgStrbW",
+      "AppDigestW"
+    ],
+    "modes": [
+      "st_e (StAppCfg, StAppMsg, ..., StError, StTerminalError)",
+      "err_code_e (ErrNone, ErrKeyNotValid, ..., ErrFatalError)",
+      "parameter AppDigestW=384",
+      "parameter APP_REQ_DEFAULT",
+      "parameter APP_RSP_DEFAULT",
+      "rsp_digest_t"
+    ],
+    "tags": [
+      "digest",
+      "error",
+      "secret",
+      "fault"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`APP_REQ_DEFAULT` represents an inactive application request with `valid=0`, zeroed `data`/`strb`, and `last=0`.",
-      "output_signals": [
-        "APP_REQ_DEFAULT.valid",
-        "APP_REQ_DEFAULT.data",
-        "APP_REQ_DEFAULT.strb",
-        "APP_REQ_DEFAULT.last"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "APP_REQ_DEFAULT is defined with valid=1'b0, data='0, strb='0, last=1'b0.",
+      "cond": "always",
+      "signals": [
+        "APP_REQ_DEFAULT"
       ],
-      "source_refs": [
+      "refs": [
         "kmac_pkg.sv:381-386"
       ]
     },
     {
-      "property": "`APP_RSP_DEFAULT` represents a completed error response with `ready=1`, `done=1`, `error=1`, and fixed placeholder digest shares.",
-      "output_signals": [
-        "APP_RSP_DEFAULT.ready",
-        "APP_RSP_DEFAULT.done",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "APP_RSP_DEFAULT is defined with ready=1'b1, done=1'b1, digest_share0=32'hDEADBEEF, digest_share1=32'hFACEBEEF, error=1'b1.",
+      "cond": "always",
+      "signals": [
+        "APP_RSP_DEFAULT"
+      ],
+      "refs": [
+        "kmac_pkg.sv:387-393"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "enum_definition",
+      "claim": "The st_e enum assigns specific 10-bit patterns to critical states: StError=10'b1110010111, StTerminalError=10'b0101110110, StKeyMgrErrKeyNotValid=10'b0111011111, StSw=10'b0010111011.",
+      "cond": "always",
+      "signals": [
+        "st_e"
+      ],
+      "refs": [
+        "kmac_pkg.sv:329-355"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "enum_definition",
+      "claim": "The err_code_e enum defines fault codes: ErrNone=0x00, ErrKeyNotValid=0x01, ErrSwPushedMsgFifo=0x02, ..., ErrFatalError=0xC1, ErrPackerIntegrity=0xC2, ErrMsgFifoIntegrity=0xC3.",
+      "cond": "always",
+      "signals": [
+        "err_code_e"
+      ],
+      "refs": [
+        "kmac_pkg.sv:401-453"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "MsgWidth and MsgStrbW are defined elsewhere with valid positive integer values; if they are zero or undefined, the packed app_req_t type becomes illegal.",
+      "cond": "when app_req_t is used",
+      "risk": "Synthesis or simulation failure due to invalid type definition.",
+      "signals": [
+        "MsgWidth",
+        "MsgStrbW"
+      ],
+      "refs": [
+        "kmac_pkg.sv:365-366"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "Any consumer of app_rsp_t, especially the default APP_RSP_DEFAULT with error=1, must check the error flag before using digest_share0/1; the fixed deadbeef/facebeef patterns are not safe for cryptographic use.",
+      "cond": "when done=1 and error=1 are presented together",
+      "risk": "If a consumer ignores error, it may use predictable dummy digest values, compromising key material or integrity.",
+      "signals": [
         "APP_RSP_DEFAULT.error",
         "APP_RSP_DEFAULT.digest_share0",
         "APP_RSP_DEFAULT.digest_share1"
       ],
-      "source_refs": [
-        "kmac_pkg.sv:387-393"
+      "refs": [
+        "kmac_pkg.sv:370-393"
       ]
     }
   ],
-  "security_implications": "This chunk defines several security-relevant contracts and fault classes. The app response explicitly allows digest outputs to be garbage when `error` is asserted, so consumers such as KeyMgr must gate use of `digest_share0/1` on successful completion and discard them on error [kmac_pkg.sv:375-379]. The state and error enums also encode security/fault scenarios such as invalid secret-key availability, fatal escalation/fault handling, and integrity failures in the message FIFO path [kmac_pkg.sv:344-346, 445-452]. The default response being an immediate error with nonzero placeholder digests is a defensive choice that helps avoid accidentally treating an uninitialized response as a valid digest [kmac_pkg.sv:387-393].",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "Consumers of `app_rsp_t` must only treat `digest_share0`/`digest_share1` as meaningful when the transaction is complete and non-erroneous; the comments only guarantee error validity when `done` is high, and explicitly permit garbage digest data on error.",
-      "bug_relevance": "If violated, downstream logic such as KeyMgr could consume invalid digest material as if it were a successful KDF/hash result, causing functional failure or security misuse.",
-      "related_signals": [
-        "done",
-        "error",
-        "digest_share0",
-        "digest_share1"
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "APP_RSP_DEFAULT sets error=1 and digest shares to well-known non-zero patterns (DEADBEEF, FACEBEEF). If a consumer or test logic erroneously uses the digest without checking error, these fixed values may leak into security-critical pathways.",
+      "cond": "if error is masked or ignored while done=1",
+      "risk": "Predictable values could be used as key material or affect side-channel resistance.",
+      "signals": [
+        "APP_RSP_DEFAULT.digest_share0",
+        "APP_RSP_DEFAULT.digest_share1",
+        "APP_RSP_DEFAULT.error"
       ],
-      "source_refs": [
-        "kmac_pkg.sv:375-379"
+      "refs": [
+        "kmac_pkg.sv:387-393"
       ]
     },
     {
-      "constraint": "Logic using the package state enum should honor the intended arbitration contract described in comments: when software has started an operation (`StSw`), KeyMgr requests are expected to be discarded until that operation ends.",
-      "bug_relevance": "If this contract is not implemented by the consuming FSM, software and KeyMgr operations could overlap, leading to message mixing or incorrect service ownership. This is a behavior-contract assumption inferred from comments rather than enforced in this declarative chunk.",
-      "related_signals": [
-        "StSw"
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "low",
+      "claim": "The err_code_e enum covers only a sparse subset of 8-bit codes (0x00-0x09, 0xC1-0xC3). Downstream error handlers may not have a safe default for undefined codes.",
+      "cond": "if any internal fault or attacker injects an undefined code",
+      "risk": "Undefined error codes could be silently ignored or mishandled, masking faults.",
+      "signals": [
+        "err_code_e"
       ],
-      "source_refs": [
-        "kmac_pkg.sv:339-342"
+      "refs": [
+        "kmac_pkg.sv:401-453"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The 10-bit st_e state encoding uses non-contiguous values (e.g., StError=10'b1110010111). A bit flip could land the FSM in an undefined encoding not covered by a default case, potentially bypassing error or terminal states.",
+      "cond": "if a state register SEU occurs",
+      "risk": "Undefined state traversal may lead to unintended operations, data leakage, or lock-up.",
+      "signals": [
+        "st_e"
+      ],
+      "refs": [
+        "kmac_pkg.sv:329-355"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_pkg.sv:329-356",
-    "kmac_pkg.sv:360-393",
-    "kmac_pkg.sv:400-465"
-  ],
-  "uncertain_points": [
-    "This chunk only declares state encodings; actual state transitions and whether the implementation fully matches the comments for `StAppOutLen`, `StSw`, and `StKeyMgrErrKeyNotValid` must be confirmed in the FSM logic elsewhere [kmac_pkg.sv:333-346].",
-    "The comment says `error` is valid when `done` is high [kmac_pkg.sv:375-378], but this chunk alone does not specify what `error` should be interpreted as when `done` is low.",
-    "The default response sets both `ready=1` and `done=1` together with `error=1` [kmac_pkg.sv:387-393]; whether this constant is used only as a safe fallback or may appear on live idle interfaces depends on surrounding logic not shown here."
+    "kmac_pkg.sv:329-465"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv",
   "line_start": 329,
-  "line_end": 465
+  "line_end": 465,
+  "security_implications": ""
 }

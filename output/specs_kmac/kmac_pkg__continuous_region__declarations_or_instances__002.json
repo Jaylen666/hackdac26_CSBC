@@ -1,46 +1,26 @@
 {
   "chunk_id": "kmac_pkg__continuous_region__declarations_or_instances__002",
-  "summary": "该片段定义了 KMAC 相关命令、熵/PRNG 常量、消息置换类型以及若干应用接口配置常量，为后续模块提供固定编码和默认参数。",
-  "behavior": "这是一段 package 常量与类型声明，不包含过程逻辑；其硬件行为体现在为其他 RTL 提供稳定的编码和默认参数。首先定义了 6 位命令枚举 kmac_cmd_e，其中 CmdNone 被设计为全 0，而非注释中提到的另一种编码；注释说明这样做仍保持最小汉明距离为 3，意味着后续逻辑可依赖这些固定命令码进行较稳健的解码 [96-105]。随后给出定时器相关宽度参数 TimerPrescalerW 和 EdnWaitTimerW，以及熵源模式枚举 entropy_mode_e，区分不使用熵、来自 EDN、以及软件提供三种模式 [107-116]。片段还定义了 PRNG/LFSR 相关类型和默认常量：288 位内部状态种子 RndCnstLfsrSeedDefault、针对 800 位输出的置换表 RndCnstLfsrPermDefault，以及 800 位缓冲用种子 RndCnstBufferLfsrSeedDefault；注释表明这些值由脚本生成，后续熵扩展或扰动逻辑会把它们当作编译期固定初值/置换参数使用 [118-177]。同样地，消息置换类型 msg_perm_t 及默认常量 RndCnstMsgPermDefault 为消息宽度相关的数据置换提供固定映射 [179-187]。应用接口部分定义了 app_mode_e，区分 SHA3、cSHAKE、KMAC 三种算法模式，并通过注释给出设计意图：SHA3 不需要额外前缀；cSHAKE/KMAC 可使用编译期参数或 CSR 提供前缀；KMAC 模式下密钥总是来自 sideload，且需要均匀分布熵，请求在 Reset 状态会被静默丢弃，但这些约束仅在本片段中作为注释意图出现、并无执行逻辑 [193-208]。接着定义若干 encoded_string 常量、前缀宽度 NSPrefixW，以及 app_config_t 结构体，结构中包含模式、Keccak 强度、前缀来源选择 PrefixMode 和前缀值 Prefix [210-233]。最后给出三个预置应用配置：AppCfgKeyMgr 固定使用 KMAC、L256、编译期前缀 {空 custom string, \"KMAC\"}；AppCfgLcCtrl 固定使用 cSHAKE、L128、编译期前缀 {\"LC_CTRL\", 空 fname}；AppCfgRomCtrl 固定使用 cSHAKE、L256、编译期前缀 {\"ROM_CTRL\", 空 fname}。因此其他模块实例化这些配置时，将得到固定算法模式、强度和命名字符串前缀，而不是运行时可变行为 [235-257]。",
+  "header": {
+    "module": "kmac_pkg",
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [],
+    "modes": [],
+    "tags": [
+      "entropy",
+      "parameterization",
+      "secret",
+      "integrity",
+      "enum"
+    ]
+  },
   "guarantees": [
     {
-      "property": "命令编码在本 package 中被固定为：CmdNone=6'b000000、CmdStart=6'b011101、CmdProcess=6'b101110、CmdManualRun=6'b110001、CmdDone=6'b010110。",
-      "output_signals": [
-        "kmac_cmd_e"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:96-105"
-      ]
-    },
-    {
-      "property": "预置应用配置常量 AppCfgKeyMgr、AppCfgLcCtrl 和 AppCfgRomCtrl 均强制 PrefixMode=1，因此使用结构体内给定的编译期 Prefix，而不是外部 CSR 前缀来源。",
-      "output_signals": [
-        "AppCfgKeyMgr",
-        "AppCfgLcCtrl",
-        "AppCfgRomCtrl"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:235-257"
-      ]
-    },
-    {
-      "property": "AppCfgKeyMgr 固定选择 AppKMAC/L256，AppCfgLcCtrl 固定选择 AppCShake/L128，AppCfgRomCtrl 固定选择 AppCShake/L256。",
-      "output_signals": [
-        "AppCfgKeyMgr",
-        "AppCfgLcCtrl",
-        "AppCfgRomCtrl"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:235-257"
-      ]
-    }
-  ],
-  "security_implications": "该片段与安全配置直接相关。命令编码被刻意选择以保持较大的汉明距离 [97-100]，有助于降低命令误判风险。熵模式、LFSR 默认种子/置换和应用预置配置决定了 KMAC/cSHAKE 的默认安全参数 [111-177, 235-257]。其中 AppCfgKeyMgr 被固定为 KMAC 模式且注释声明密钥来自 sideload、需要高质量熵 [204-207, 235-241]；如果后续实现遵循这些常量，它们会影响密钥来源隔离和随机性要求。不过这些安全属性中的一部分在本片段仅由注释表达，需由使用这些定义的模块真正落实。",
-  "assumptions": [
-    {
-      "constraint": "使用 kmac_cmd_e 的解码逻辑必须与这里定义的 6 位固定命令编码完全一致，尤其是将 CmdNone 视为全 0。",
-      "bug_relevance": "如果外部逻辑仍按旧注释掉的非零编码理解 CmdNone，可能导致命令误解码、空命令被误判为有效命令，属于功能错误。",
-      "related_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "kmac_cmd_e enum defines CmdNone = 6'b000000, CmdStart = 6'b011101, CmdProcess = 6'b101110, CmdManualRun = 6'b110001, CmdDone = 6'b010110.",
+      "cond": "always",
+      "signals": [
         "kmac_cmd_e",
         "CmdNone",
         "CmdStart",
@@ -48,41 +28,256 @@
         "CmdManualRun",
         "CmdDone"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:96-105"
+      "refs": [
+        "kmac_pkg.sv:96-105"
       ]
     },
     {
-      "constraint": "依赖 AppCfgKeyMgr、AppCfgLcCtrl 或 AppCfgRomCtrl 的模块需要把 PrefixMode=1 解释为选择结构体内 Prefix，并按 app_mode_e/KeccakStrength 组合驱动相应算法流程。",
-      "bug_relevance": "如果后续模块错误地忽略 PrefixMode 或错误选择 CSR 前缀/算法模式，将导致 cSHAKE/KMAC 域分离字符串错误，进而造成功能结果错误，且在安全场景下可能破坏不同应用域之间的分离性。",
-      "related_signals": [
-        "AppCfgKeyMgr",
-        "AppCfgLcCtrl",
-        "AppCfgRomCtrl",
-        "PrefixMode",
-        "Prefix",
-        "Mode",
-        "KeccakStrength"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "entropy_mode_e enum defines EntropyModeNone = 2'h0, EntropyModeEdn = 2'h1, EntropyModeSw = 2'h2.",
+      "cond": "always",
+      "signals": [
+        "entropy_mode_e",
+        "EntropyModeNone",
+        "EntropyModeEdn",
+        "EntropyModeSw"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:224-257"
+      "refs": [
+        "kmac_pkg.sv:112-116"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "RndCnstLfsrSeedDefault is a 288-bit constant composed of 32-bit and 256-bit hex values as specified.",
+      "cond": "always",
+      "signals": [
+        "RndCnstLfsrSeedDefault"
+      ],
+      "refs": [
+        "kmac_pkg.sv:125-128"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "RndCnstLfsrPermDefault is an 800-element permutation array (each element 10-bit wide) filled with specific hex constants.",
+      "cond": "always",
+      "signals": [
+        "RndCnstLfsrPermDefault",
+        "lfsr_perm_t"
+      ],
+      "refs": [
+        "kmac_pkg.sv:133-167"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "RndCnstBufferLfsrSeedDefault is an 800-bit constant composed of given 32-bit and 256-bit blocks.",
+      "cond": "always",
+      "signals": [
+        "RndCnstBufferLfsrSeedDefault"
+      ],
+      "refs": [
+        "kmac_pkg.sv:172-177"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "RndCnstMsgPermDefault is a MsgWidth-element permutation array (element width $clog2(MsgWidth)-1:0) filled with specified hex constants.",
+      "cond": "always",
+      "signals": [
+        "RndCnstMsgPermDefault",
+        "msg_perm_t"
+      ],
+      "refs": [
+        "kmac_pkg.sv:184-187"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "app_mode_e enum defines AppSHA3 = 0, AppCShake = 1, AppKMAC = 2.",
+      "cond": "always",
+      "signals": [
+        "app_mode_e",
+        "AppSHA3",
+        "AppCShake",
+        "AppKMAC"
+      ],
+      "refs": [
+        "kmac_pkg.sv:195-208"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "assignment",
+      "claim": "EncodedStringEmpty = 16'h0001, EncodedStringKMAC = 48'h4341_4D4B_2001, EncodedStringLcCtrl = 72'h4c_5254_435f_434C_3801, EncodedStringRomCtrl = 80'h4c52_5443_5f4d_4f52_4001.",
+      "cond": "always",
+      "signals": [
+        "EncodedStringEmpty",
+        "EncodedStringKMAC",
+        "EncodedStringLcCtrl",
+        "EncodedStringRomCtrl"
+      ],
+      "refs": [
+        "kmac_pkg.sv:211-216"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "assignment",
+      "claim": "app_config_t struct has fields Mode (app_mode_e), KeccakStrength (sha3_pkg::keccak_strength_e), PrefixMode (bit), Prefix (logic [NSPrefixW-1:0]).",
+      "cond": "always",
+      "signals": [
+        "app_config_t"
+      ],
+      "refs": [
+        "kmac_pkg.sv:219-233"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "assignment",
+      "claim": "AppCfgKeyMgr parameter sets Mode=AppKMAC, KeccakStrength=L256, PrefixMode=1, Prefix = NSPrefixW'({EncodedStringEmpty, EncodedStringKMAC}).",
+      "cond": "always",
+      "signals": [
+        "AppCfgKeyMgr"
+      ],
+      "refs": [
+        "kmac_pkg.sv:235-241"
+      ]
+    },
+    {
+      "id": "G11",
+      "type": "assignment",
+      "claim": "AppCfgLcCtrl parameter sets Mode=AppCShake, KeccakStrength=L128, PrefixMode=1, Prefix = NSPrefixW'({EncodedStringLcCtrl, EncodedStringEmpty}).",
+      "cond": "always",
+      "signals": [
+        "AppCfgLcCtrl"
+      ],
+      "refs": [
+        "kmac_pkg.sv:243-249"
+      ]
+    },
+    {
+      "id": "G12",
+      "type": "assignment",
+      "claim": "AppCfgRomCtrl parameter sets Mode=AppCShake, KeccakStrength=L256, PrefixMode=1, Prefix = NSPrefixW'({EncodedStringRomCtrl, EncodedStringEmpty}).",
+      "cond": "always",
+      "signals": [
+        "AppCfgRomCtrl"
+      ],
+      "refs": [
+        "kmac_pkg.sv:251-257"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The total bit-width of concatenated encoded strings assigned to any Prefix field must equal NSPrefixW to avoid truncation or zero-extension.",
+      "cond": "whenever a app_config_t instance is used with PrefixMode=1",
+      "risk": "Incorrect or truncated Prefix strings may cause misidentification of KMAC/cSHAKE operations, leading to protocol failures or security bypass.",
+      "signals": [
+        "NSPrefixW",
+        "Prefix",
+        "EncodedStringEmpty",
+        "EncodedStringKMAC",
+        "EncodedStringLcCtrl",
+        "EncodedStringRomCtrl"
+      ],
+      "refs": [
+        "kmac_pkg.sv:217, 240, 248, 256"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "MsWidth parameter must be defined externally and be a positive integer to ensure valid msg_perm_t width.",
+      "cond": "any use of msg_perm_t or RndCnstMsgPermDefault",
+      "risk": "Compilation failure or undefined behavior if MsgWidth is missing or zero.",
+      "signals": [
+        "MsgWidth"
+      ],
+      "refs": [
+        "kmac_pkg.sv:183"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "entropy_mode_e enum lacks a definition for value 2'b11, which could appear if an external driver or register delivers an out-of-range setting.",
+      "cond": "when entropy_mode_e signal carries 2'b11",
+      "risk": "Unhandled mode may cause functional errors or fall-through to default that disables entropy incorrectly, potentially affecting security functions.",
+      "signals": [
+        "entropy_mode_e"
+      ],
+      "refs": [
+        "kmac_pkg.sv:112-116"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "app_mode_e enum lacks a definition for value 2'b11; an out-of-range app mode could lead to misconfiguration of KMAC (which uses secret keys) or cSHAKE.",
+      "cond": "when app_mode_e signal carries 2'b11",
+      "risk": "Misclassification of application mode may bypass security properties (e.g., treating KMAC as SHA3) or cause protocol violation with secret data exposure.",
+      "signals": [
+        "app_mode_e"
+      ],
+      "refs": [
+        "kmac_pkg.sv:195-208"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Comment states 'KMAC mode needs uniformly distributed entropy. The request will be silently discarded in Reset state.' This behavior is not defined in this package; it must be implemented in another module (e.g., kmac_core).",
+      "cond": "during reset state with KMAC mode active",
+      "risk": "If discarding is not correctly implemented, non-uniform entropy or premature request handling could weaken cryptographic operations.",
+      "signals": [
+        "app_mode_e",
+        "AppKMAC"
+      ],
+      "refs": [
+        "kmac_pkg.sv:204-207"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment for CmdNone states minimum Hamming distance of 3, but no checker or assertion enforces that the selected command encodings actually maintain this distance; it is a manual claim.",
+      "cond": "reliance on Hamming distance for error detection in command decoding",
+      "risk": "If the encodings do not satisfy distance 3, single- or double-bit errors could be misinterpreted, leading to incorrect command execution.",
+      "signals": [
+        "kmac_cmd_e",
+        "CmdNone",
+        "CmdStart",
+        "CmdProcess",
+        "CmdManualRun",
+        "CmdDone"
+      ],
+      "refs": [
+        "kmac_pkg.sv:99-104"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:96-105",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:107-116",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:118-177",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:179-187",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:193-233",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:235-257"
-  ],
-  "uncertain_points": [
-    "注释称 CmdNone 改为全 0 后“最小汉明距离仍为 3” [97-100]，但该性质在本片段中未被形式化检查，只能视为设计意图。",
-    "注释说明 AppKMAC 模式下密钥总是来自 sideload，且请求在 Reset 状态会被静默丢弃 [204-207]；本片段仅定义枚举和配置常量，并未展示实现这些约束的逻辑，因此无法从该片段单独确认。",
-    "LFSR seed、permutation 和消息置换常量的具体消费方式不在本片段中，虽然注释表明它们由脚本生成并作为默认参数使用 [122-123, 131-132, 169-170, 180-182]，但无法仅凭此处确认后续模块是否直接使用全部常量或是否还有额外保护机制。"
+    "kmac_pkg.sv:96-257"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv",
   "line_start": 96,
-  "line_end": 257
+  "line_end": 257,
+  "security_implications": ""
 }

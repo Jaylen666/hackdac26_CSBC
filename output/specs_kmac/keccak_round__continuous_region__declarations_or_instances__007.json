@@ -1,79 +1,280 @@
 {
   "chunk_id": "keccak_round__continuous_region__declarations_or_instances__007",
-  "summary": "该片段连接 keccak 两份额轮函数数据通路、转发随机数握手信号，并实例化一个带冗余保护的轮计数器来产生 round 值与计数错误指示。",
-  "behavior": "片段首先将内部复位存储错误信号直接透传到输出 `rst_storage_error_o` [keccak_round.sv:518-518]。随后实例化 `keccak_2share` 数据通路，其中参数化宽度、掩码使能和外部随机数策略，并将轮号 `round` 作为 `rnd_i` 输入，将相位/DOM 相关控制信号 `phase_sel`、`dom_out_low_q`、`dom_in_low_q`、`dom_in_rand_ext_q`、`dom_update` 接入，同时把 `keccak_rand_data` 作为随机输入、`storage` 作为状态输入，产生 `keccak_out` 作为轮变换结果；`lc_escalate_en_i` 也被送入该子模块，表明升级/告警状态会影响内部 Keccak 两份额实现 [keccak_round.sv:523-545]。随机数处理上，片段把子模块产生的随机握手信号 `keccak_rand_update`、`keccak_rand_consumed` 直接输出为 `rand_update_o`、`rand_consumed_o`，并将外部随机数据 `rand_data_i` 直接作为 `keccak_rand_data` 提供给 Keccak 数据通路 [keccak_round.sv:547-551]。最后，片段实例化 `prim_count` 作为轮数计数器，注释明确其设计意图是放置一个 hardened counter，且标注了 `SEC_CM: CTR.REDUN`；该计数器宽度为 `RndW`，清零由 `rst_rnd_num` 控制，不支持置位和减计数，步进固定为 1，在 `inc_rnd_num` 有效时递增，始终提交计数结果到 `round`，并在检测到计数器内部错误时通过 `round_count_error_o` 报告 [keccak_round.sv:553-571]。",
+  "header": {
+    "module": "keccak_round",
+    "block_kind": "mixed",
+    "driven": [
+      "rst_storage_error_o",
+      "rand_update_o",
+      "rand_consumed_o",
+      "keccak_rand_data",
+      "keccak_out",
+      "round",
+      "round_count_error_o"
+    ],
+    "used": [
+      "rst_storage_error",
+      "clk_i",
+      "rst_ni",
+      "round",
+      "phase_sel",
+      "dom_out_low_q",
+      "dom_in_low_q",
+      "dom_in_rand_ext_q",
+      "dom_update",
+      "rand_data_i",
+      "storage",
+      "rst_rnd_num",
+      "inc_rnd_num",
+      "lc_escalate_en_i"
+    ],
+    "modes": [
+      "round",
+      "phase_sel",
+      "EnMasking",
+      "ForceRandExt"
+    ],
+    "tags": [
+      "masking",
+      "entropy",
+      "counter",
+      "fault",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`rst_storage_error_o` 始终等于内部信号 `rst_storage_error`。",
-      "output_signals": [
-        "rst_storage_error_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "rst_storage_error_o is continuously driven by internal rst_storage_error.",
+      "cond": "always",
+      "signals": [
+        "rst_storage_error_o",
+        "rst_storage_error"
       ],
-      "source_refs": [
-        "keccak_round.sv:518-518"
+      "refs": [
+        "file:518"
       ]
     },
     {
-      "property": "随机握手输出与 Keccak 子模块内部握手一一对应：`rand_update_o` 等于 `keccak_rand_update`，`rand_consumed_o` 等于 `keccak_rand_consumed`。",
-      "output_signals": [
-        "rand_update_o",
-        "rand_consumed_o"
-      ],
-      "source_refs": [
-        "keccak_round.sv:547-549"
-      ]
-    },
-    {
-      "property": "轮计数器输出 `round` 仅通过清零 `rst_rnd_num` 或在 `inc_rnd_num` 有效时按步长 1 递增来更新，并提供错误指示 `round_count_error_o`。",
-      "output_signals": [
+      "id": "G2",
+      "type": "instance",
+      "claim": "keccak_2share u_keccak_p drives keccak_out from storage, round, keccak_rand_data, phase_sel, and domain-masking control signals.",
+      "cond": "always",
+      "signals": [
+        "keccak_out",
+        "storage",
         "round",
-        "round_count_error_o"
+        "keccak_rand_data",
+        "phase_sel",
+        "dom_out_low_q",
+        "dom_in_low_q",
+        "dom_in_rand_ext_q",
+        "dom_update"
       ],
-      "source_refs": [
-        "keccak_round.sv:556-571"
+      "refs": [
+        "file:523-545"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "rand_update_o and rand_consumed_o are directly connected to the corresponding outputs of keccak_2share.",
+      "cond": "always",
+      "signals": [
+        "rand_update_o",
+        "rand_consumed_o",
+        "keccak_rand_update",
+        "keccak_rand_consumed"
+      ],
+      "refs": [
+        "file:548-549"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "keccak_rand_data is assigned directly from the input rand_data_i, providing the external seed to the masking engine.",
+      "cond": "always",
+      "signals": [
+        "keccak_rand_data",
+        "rand_data_i"
+      ],
+      "refs": [
+        "file:551"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "instance",
+      "claim": "prim_count u_round_count outputs round (incrementing by 1 when inc_rnd_num is high, cleared by rst_rnd_num, commit always true) and round_count_error_o (error flag). Set and decrement are disabled.",
+      "cond": "always",
+      "signals": [
+        "round",
+        "inc_rnd_num",
+        "rst_rnd_num",
+        "round_count_error_o",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:556-571"
       ]
     }
   ],
-  "security_implications": "该片段包含两类安全相关逻辑。其一，Keccak 轮函数使用 `keccak_2share` 并接入 DOM 相关控制与随机输入，说明该实现依赖掩码/随机化来降低侧信道风险；若随机源或 DOM 控制异常，安全属性可能退化 [keccak_round.sv:523-545,551-551]。其二，轮计数器使用带冗余保护的 `prim_count`，注释中的 `SEC_CM: CTR.REDUN` 表明设计意图是通过硬化计数器检测故障注入或状态破坏，并用 `round_count_error_o` 暴露异常 [keccak_round.sv:553-571]。",
   "assumptions": [
     {
-      "constraint": "当 `keccak_2share` 通过 `rand_update_o`/`rand_consumed_o` 请求或指示随机数据使用时，外部环境应按照该握手语义提供有效的 `rand_data_i`；否则 Keccak 掩码计算可能使用不期望的随机值。",
-      "bug_relevance": "这是行为契约；如果外部在合法工作流程中未按握手提供正确随机数，可能导致功能结果错误，或在掩码模式下降低安全性。",
-      "related_signals": [
-        "rand_update_o",
-        "rand_consumed_o",
-        "rand_data_i",
-        "keccak_rand_data"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The domain-masking inputs (dom_out_low_q, dom_in_low_q, dom_in_rand_ext_q, dom_update, phase_sel) must adhere to the expected masking protocol and timing.",
+      "cond": "during keccak round computation",
+      "risk": "Secret state corruption or leakage if violated.",
+      "signals": [
+        "dom_out_low_q",
+        "dom_in_low_q",
+        "dom_in_rand_ext_q",
+        "dom_update",
+        "phase_sel"
       ],
-      "source_refs": [
-        "keccak_round.sv:541-551"
+      "refs": [
+        "file:535-539"
       ]
     },
     {
-      "constraint": "`rst_rnd_num` 与 `inc_rnd_num` 的驱动应符合期望的轮控制协议，避免在一次轮序列中出现非预期清零或额外递增；该片段本身仅按输入命令清零/加一计数。",
-      "bug_relevance": "这是行为契约；若违反，`round` 将偏离预期轮号，导致 `keccak_2share` 接收到错误的 `rnd_i(round)`，从而计算错误轮常数或错误轮变换结果。",
-      "related_signals": [
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "rand_data_i must supply high-quality entropy to the masking engine when consumed.",
+      "cond": "during keccak operation with masking enabled",
+      "risk": "Weak entropy breaks the masking countermeasure.",
+      "signals": [
+        "rand_data_i",
+        "keccak_rand_data"
+      ],
+      "refs": [
+        "file:551"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "rst_rnd_num must accurately reset the round counter at the right cycle, and inc_rnd_num must be asserted for each valid round increment.",
+      "cond": "during round counting",
+      "risk": "Miscounting of rounds leads to incorrect Keccak permutation output.",
+      "signals": [
         "rst_rnd_num",
         "inc_rnd_num",
         "round"
       ],
-      "source_refs": [
-        "keccak_round.sv:533-533",
-        "keccak_round.sv:556-568"
+      "refs": [
+        "file:561,564"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "lifecycle",
+      "claim": "lc_escalate_en_i must be driven correctly by the lifecycle escalation logic to disable operation when required.",
+      "cond": "always",
+      "risk": "Operation may continue in a security-compromised state.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "file:531"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "value_domain",
+      "claim": "The incoming state storage (s_i) is assumed to be valid and consistent with the current round.",
+      "cond": "at start of each round computation",
+      "risk": "State corruption leads to wrong digest.",
+      "signals": [
+        "storage"
+      ],
+      "refs": [
+        "file:543"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The error output round_count_error_o from the hardened counter is not handled in this chunk; its propagation to a fatal alert or system reaction must be verified.",
+      "cond": "when round counter detects a mismatch",
+      "risk": "A counter error may be silently ignored, allowing corrupted rounds to be used.",
+      "signals": [
+        "round_count_error_o"
+      ],
+      "refs": [
+        "file:570"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "If the prim_count asserts err_o, the round value (cnt_o) might still be used; no local logic stops or corrects the counter.",
+      "cond": "error detected by prim_count",
+      "risk": "Corrupted round count fed directly to keccak_2share without containment.",
+      "signals": [
+        "round",
+        "round_count_error_o"
+      ],
+      "refs": [
+        "file:568-570"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The source of rst_storage_error is not visible; its duration and clear mechanism unknown, potentially causing a transient error to be missed externally.",
+      "cond": "when a storage error occurs",
+      "risk": "rst_storage_error_o may pulse too briefly for the consumer to detect.",
+      "signals": [
+        "rst_storage_error_o",
+        "rst_storage_error"
+      ],
+      "refs": [
+        "file:518"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The effect of parameter ForceRandExt on entropy usage and masking strength is not documented here.",
+      "cond": "ForceRandExt enabled",
+      "risk": "Misunderstanding could lead to weaker masking than expected.",
+      "signals": [
+        "ForceRandExt"
+      ],
+      "refs": [
+        "file:526"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The prim_count output cnt_after_commit_o is left unconnected; it may provide a redundant round count that could be used for integrity checks.",
+      "cond": "always",
+      "risk": "Loss of a potential redundancy check, though no immediate bug.",
+      "signals": [
+        "cnt_after_commit_o"
+      ],
+      "refs": [
+        "file:569"
       ]
     }
   ],
   "evidence_refs": [
-    "keccak_round.sv:518-518",
-    "keccak_round.sv:523-545",
-    "keccak_round.sv:547-551",
-    "keccak_round.sv:553-571"
-  ],
-  "uncertain_points": [
-    "`keccak_2share` 的内部组合/时序行为、`keccak_rand_update` 与 `keccak_rand_consumed` 的精确定义不在本片段中，当前只能确认这些信号被直接透传到顶层输出 [keccak_round.sv:523-545,547-549]。",
-    "注释说明 `prim_count` 用于 hardened counter 且属于 `SEC_CM: CTR.REDUN`，但其具体冗余实现、错误检测覆盖范围以及 `round_count_error_o` 的触发条件需查看 `prim_count` 定义确认 [keccak_round.sv:554-556,570-570]。",
-    "依赖列表中出现 `phase_sel_i`、`dom_out_low_i`、`dom_in_low_i`、`dom_in_rand_ext_i`、`dom_update_i` 等名称，而本片段实际接入的是相应的内部信号 `phase_sel`、`dom_out_low_q`、`dom_in_low_q`、`dom_in_rand_ext_q`、`dom_update`；这些内部信号相对外部输入的变换或寄存关系不在本片段中。"
+    "file:518-571"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
   "line_start": 518,
-  "line_end": 571
+  "line_end": 571,
+  "security_implications": ""
 }

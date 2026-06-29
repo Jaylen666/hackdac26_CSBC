@@ -1,0 +1,130 @@
+{
+  "chunk_id": "hmac_core__always_comb__line_254__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "txcount_d"
+    ],
+    "used": [
+      "txcount",
+      "clr_txcount",
+      "load_txcount",
+      "message_length_i",
+      "digest_size_i",
+      "inc_txcount"
+    ],
+    "modes": [
+      "digest_size_i=SHA2_256",
+      "digest_size_i=SHA2_384",
+      "digest_size_i=SHA2_512",
+      "default"
+    ],
+    "tags": [
+      "digest",
+      "counter",
+      "parameterization",
+      "control"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When clr_txcount is asserted, txcount_d is driven to 0 regardless of other control signals.",
+      "cond": "clr_txcount == 1",
+      "signals": [
+        "clr_txcount",
+        "txcount_d"
+      ],
+      "refs": [
+        "line 256-257"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When clr_txcount is deasserted and load_txcount is asserted, txcount_d is set to message_length_i plus a block-size constant: BlockSizeSHA256in64 for SHA2_256, BlockSizeSHA512in64 for SHA2_384 or SHA2_512, and 0 for any other digest_size_i.",
+      "cond": "clr_txcount == 0 and load_txcount == 1",
+      "signals": [
+        "load_txcount",
+        "message_length_i",
+        "digest_size_i",
+        "txcount_d",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "line 258-266"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When neither clr_txcount nor load_txcount is asserted and inc_txcount is asserted, txcount_d is assigned the value of txcount with bits [63:5] incremented by 1, effectively increasing the counter by 32 while preserving the five least-significant bits.",
+      "cond": "clr_txcount == 0 and load_txcount == 0 and inc_txcount == 1",
+      "signals": [
+        "inc_txcount",
+        "txcount",
+        "txcount_d"
+      ],
+      "refs": [
+        "line 267-269",
+        "line 255"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When clr_txcount, load_txcount, and inc_txcount are all deasserted, txcount_d is equal to txcount (hold).",
+      "cond": "clr_txcount == 0, load_txcount == 0, inc_txcount == 0",
+      "signals": [
+        "txcount_d",
+        "txcount"
+      ],
+      "refs": [
+        "line 255"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "When load_txcount is asserted, digest_size_i must be SHA2_256, SHA2_384, or SHA2_512; the default case adds zero block size, which would produce an incorrect total message length used in HMAC computation.",
+      "cond": "load_txcount == 1",
+      "risk": "HMAC tag computed with wrong message length, potentially compromising integrity or security.",
+      "signals": [
+        "digest_size_i",
+        "load_txcount"
+      ],
+      "refs": [
+        "line 261-266"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The default case for digest_size_i under load_txcount adds zero block size. If the HMAC module can operate with digest sizes other than SHA2_256, SHA2_384, SHA2_512 (e.g., future SHA-2 variants or misconfiguration), the message length will lack the required inner-pad block size, leading to an incorrect HMAC result.",
+      "cond": "load_txcount == 1 and digest_size_i not in {SHA2_256, SHA2_384, SHA2_512}",
+      "risk": "Incorrect HMAC tag, potential security bypass.",
+      "signals": [
+        "digest_size_i",
+        "txcount_d"
+      ],
+      "refs": [
+        "line 265"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "line 254-270"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 254,
+  "line_end": 270,
+  "security_implications": ""
+}

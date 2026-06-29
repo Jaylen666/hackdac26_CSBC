@@ -1,38 +1,122 @@
 {
   "chunk_id": "sha3_pkg__continuous_region__int__001",
-  "summary": "This package fragment defines the SHA3/KMAC controller state encodings, including a sparse-encoded FSM type for implementation hardening and a compact logical state enum for abstract state naming.",
-  "behavior": "The fragment declares two state representations. First, `sha3_st_sparse_e` is a 6-bit sparse-encoded enum with explicit constant values for `StIdle_sparse`, `StAbsorb_sparse`, `StSqueeze_sparse`, `StManualRun_sparse`, `StFlush_sparse`, and `StTerminalError_sparse` [130-166]. The comments describe the intended role of these states: absorb waits for sponge absorption completion indicated by `absorbed`; squeeze exposes the internal state for software reads, potentially both shares when masking is enabled; manual-run starts a Keccak round from squeeze and returns to squeeze on completion; flush clears internal and submodule state before returning to idle; and terminal error is an error sink state, though its transition behavior is not specified in this fragment [134-165]. The comments also mention a reserved `StAbort` concept and its intended transition restriction to flush, but that state is commented out and therefore not part of the actual enum in this code [141-147]. Second, `sha3_st_e` defines a 3-bit logical/compact enum with corresponding abstract states `StIdle`, `StAbsorb`, `StSqueeze`, `StManualRun`, `StFlush`, and `StError` [168-177]. This fragment only defines state names and encodings; it does not itself implement transitions, output decoding, or error handling.",
+  "header": {
+    "module": "sha3_pkg",
+    "block_kind": "declaration",
+    "driven": [
+      "sha3_st_sparse_e",
+      "sha3_st_e"
+    ],
+    "used": [],
+    "modes": [
+      "StIdle_sparse",
+      "StAbsorb_sparse",
+      "StSqueeze_sparse",
+      "StManualRun_sparse",
+      "StFlush_sparse",
+      "StTerminalError_sparse",
+      "StIdle",
+      "StAbsorb",
+      "StSqueeze",
+      "StManualRun",
+      "StFlush",
+      "StError"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "The sparse FSM state type uses fixed 6-bit encodings for the implemented states, including a dedicated terminal error code `6'b111010`.",
-      "output_signals": [
-        "sha3_st_sparse_e"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "localparam StateWidth is set to 6 and StateWidthLogic is set to 3.",
+      "cond": "always",
+      "signals": [
+        "StateWidth",
+        "StateWidthLogic"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:130-166"
+      "refs": [
+        "sha3_pkg.sv:130",
+        "sha3_pkg.sv:168"
       ]
     },
     {
-      "property": "The logical FSM state type contains exactly the abstract states `StIdle`, `StAbsorb`, `StSqueeze`, `StManualRun`, `StFlush`, and `StError` in a 3-bit enum.",
-      "output_signals": [
+      "id": "G2",
+      "type": "state_definition",
+      "claim": "sha3_st_sparse_e enumeration defines specific 6-bit sparse values: StIdle_sparse=6'b101100, StAbsorb_sparse=6'b100001, StSqueeze_sparse=6'b001011, StManualRun_sparse=6'b010000, StFlush_sparse=6'b000110, StTerminalError_sparse=6'b111010.",
+      "cond": "always",
+      "signals": [
+        "sha3_st_sparse_e"
+      ],
+      "refs": [
+        "sha3_pkg.sv:131-165"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_definition",
+      "claim": "sha3_st_e enumeration provides a sequential 3-bit encoding: StIdle=3'd0, StAbsorb=3'd1, StSqueeze=3'd2, StManualRun=3'd3, StFlush=3'd4, StError=3'd5 (implicit defaults).",
+      "cond": "always",
+      "signals": [
         "sha3_st_e"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:168-177"
+      "refs": [
+        "sha3_pkg.sv:169-176"
       ]
     }
   ],
-  "security_implications": "The use of explicit sparse state encodings suggests an FSM hardening intent, which can help detect or reduce the risk of invalid or fault-induced state values. Comments around squeeze also indicate controlled software visibility into internal state, including masked shares when masking is enabled, which is security-sensitive and requires downstream logic to enforce the intended access conditions.",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:130-177"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "Downstream decoders must use the sparse 6-bit pattern for glitch-free state decoding; it is assumed the encoding prevents single-bit aliasing between states during transitions.",
+      "cond": "when the state machine operates and the sparse encoding is decoded",
+      "risk": "If a decoder uses standard bit comparisons without glitch filtering, a combinational glitch could transiently alias another sparse state, potentially exposing internal state or secrets.",
+      "signals": [
+        "sha3_st_sparse_e"
+      ],
+      "refs": [
+        "sha3_pkg.sv:131-165"
+      ]
+    }
   ],
   "uncertain_points": [
-    "The comments describe behavioral transitions such as absorb waiting for `absorbed`, manual-run returning to squeeze on round completion, and flush returning to idle, but this fragment only defines enums and does not prove those transitions are implemented here or elsewhere.",
-    "The reserved `StAbort` behavior is documented in comments, but the state is commented out and not part of the actual RTL type definition in this fragment.",
-    "The relationship between the sparse enum `StTerminalError_sparse` and the logical enum `StError` is implied by naming but not explicitly mapped in this fragment."
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The comment for StSqueeze_sparse states that if EnMasking is true, read permission of the two shares of the internal state is opened. The actual read-gating logic is not present in this package and must be verified elsewhere.",
+      "cond": "when SHA3 operates in Squeeze phase with EnMasking active",
+      "risk": "If the read permission is not correctly tied to this sparse state or if another state can erroneously enable the read, secret key/digest shares could be exposed.",
+      "signals": [
+        "StSqueeze_sparse"
+      ],
+      "refs": [
+        "sha3_pkg.sv:149-154"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The StAbort state is commented out in both enums and referenced as reserved for context-switching (issue #3479); its absence may indicate an incomplete feature.",
+      "cond": "when context-switching functionality is required",
+      "risk": "Without StAbort, the design may lack a safe mechanism to pause FSM, store internal state, and later resume, which could compromise secure multi-tenancy or key loading.",
+      "signals": [
+        "StAbort (commented out)"
+      ],
+      "refs": [
+        "sha3_pkg.sv:141-147"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3_pkg.sv:130-177"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv",
   "line_start": 130,
-  "line_end": 177
+  "line_end": 177,
+  "security_implications": ""
 }

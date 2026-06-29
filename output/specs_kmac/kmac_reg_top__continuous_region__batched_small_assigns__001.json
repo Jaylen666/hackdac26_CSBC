@@ -1,52 +1,80 @@
 {
   "chunk_id": "kmac_reg_top__continuous_region__batched_small_assigns__001",
-  "summary": "该片段生成寄存器访问地址未命中指示，并声明与 shadow/reset 完成状态相关的内部信号。",
-  "behavior": "当存在寄存器读或写请求时，`addrmiss` 由 `addr_hit` 是否全为 0 决定：若 `addr_hit` 没有任何命中位，则 `addrmiss` 置 1，否则为 0；当没有读写请求时，`addrmiss` 强制为 0，因此不会在空闲时报告地址未命中。片段后半部分仅声明了内部逻辑信号 `shadow_busy`、`rst_done` 和 `shadow_rst_done`，本片段内未体现它们的驱动或使用行为。",
+  "header": {
+    "module": "kmac_reg_top",
+    "block_kind": "mixed",
+    "driven": [
+      "addrmiss"
+    ],
+    "used": [
+      "reg_re",
+      "reg_we",
+      "addr_hit"
+    ],
+    "modes": [],
+    "tags": [
+      "csr",
+      "handshake",
+      "shadow",
+      "access_control"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `reg_re` 和 `reg_we` 都为 0 时，`addrmiss` 一定为 0，不会在无访问请求时误报地址未命中。",
-      "output_signals": [
-        "addrmiss"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "addrmiss is zero when neither reg_re nor reg_we is asserted; when reg_re or reg_we is high, addrmiss is the reduction NOR (none of the addr_hit bits are set).",
+      "cond": "always",
+      "signals": [
+        "addrmiss",
+        "reg_re",
+        "reg_we",
+        "addr_hit"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2654-2654"
-      ]
-    },
-    {
-      "property": "当存在读或写请求时，若 `addr_hit` 全零，则 `addrmiss` 一定为 1；若 `addr_hit` 存在任一命中位，则 `addrmiss` 一定为 0。",
-      "output_signals": [
-        "addrmiss"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2654-2654"
+      "refs": [
+        "kmac_reg_top.sv:2654"
       ]
     }
   ],
-  "security_implications": "该片段与寄存器地址译码错误检测相关。`addrmiss` 可用于标识非法或未实现的寄存器访问地址，因此对总线错误处理、异常响应或防止错误访问被当作合法访问具有一定安全意义。但本片段本身只产生指示信号，未展示后续是否触发告警、错误返回或访问阻断。",
   "assumptions": [
     {
-      "constraint": "`addr_hit` 需要正确反映当前访问地址对应的所有合法寄存器命中结果；对合法访问，应至少有一位命中。",
-      "bug_relevance": "若该约束不满足，合法访问可能被错误标记为 `addrmiss=1`，或非法访问被漏报为 `addrmiss=0`，从而导致寄存器访问错误处理失效。这属于行为契约，违反时可能构成功能 bug。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "addr_hit must be stable and valid for the entire duration that reg_re or reg_we is high.",
+      "cond": "when reg_re or reg_we is asserted",
+      "risk": "If addr_hit is unstable, addrmiss may glitch or falsely indicate a miss, leading to spurious or missed register access faults in a security-critical KMAC register block.",
+      "signals": [
         "addr_hit",
         "reg_re",
-        "reg_we",
+        "reg_we"
+      ],
+      "refs": [
+        "kmac_reg_top.sv:2654"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "addrmiss is generated, but its downstream effect (bus error, alert, or silent ignore) and whether a miss can bypass access controls is not visible in this chunk.",
+      "cond": "when addrmiss is asserted",
+      "risk": "A true address miss might be silently ignored or handled in a way that violates KMAC security requirements for unauthorized access attempts.",
+      "signals": [
         "addrmiss"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2654-2654"
+      "refs": [
+        "kmac_reg_top.sv:2654"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2654-2654",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:3250-3252"
-  ],
-  "uncertain_points": [
-    "`shadow_busy`、`rst_done` 和 `shadow_rst_done` 在本片段中仅被声明，无法从该片段判断它们分别表示何种状态、由谁驱动、是否参与安全关键流程。",
-    "无法仅凭本片段确认 `addr_hit` 是否设计为 one-hot、multi-hot，或是否可能在非法输入下出现多个命中位；本赋值仅检查是否存在任一命中。"
+    "kmac_reg_top.sv:2654",
+    "kmac_reg_top.sv:3250-3252"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv",
   "line_start": 2653,
-  "line_end": 3252
+  "line_end": 3252,
+  "security_implications": ""
 }

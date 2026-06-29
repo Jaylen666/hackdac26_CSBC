@@ -1,67 +1,183 @@
 {
   "chunk_id": "sha3pad__continuous_region__declarations_or_instances__003",
-  "summary": "This region builds the cSHAKE/KMAC prefix bytes from software-provided namespace data plus a strength-dependent bytepad header, slices that prefix into MsgWidth chunks, and maps the sliced prefix into masking shares.",
-  "behavior": "The logic computes a 16-bit `encode_bytepad` value from `strength_i` via `encode_bytepad_len(strength_i)` and concatenates it with `ns_data_i` to form `prefix` (`{ns_data_i, encode_bytepad}`) [sha3pad.sv:507-520]. Comments state this prefix represents `bytepad(encode_string(N) || encode_string(S), 168 or 136)`, where the `encode_string(N) || encode_string(S)` portion is expected to be precomputed in software and supplied on `ns_data_i`, while the bytepad header depends on `strength_i` [sha3pad.sv:511-517]. The complete `prefix` is then passed through `prim_slicer`, which selects a `MsgWidth`-wide slice indexed by `prefix_index` and exposes it as `prefix_sliced` [sha3pad.sv:522-533]. The selected slice is distributed into `prefix_data` differently depending on masking configuration: when `EnMasking` is enabled, share 0 is forced to all zeroes and share 1 carries the real `prefix_sliced`; when masking is disabled, share 0 directly carries `prefix_sliced` [sha3pad.sv:535-542]. The later `funcpad`/`funcpad_data` signals are only declared in this excerpt; comments describe intended function-specific suffix bits for SHA3/SHAKE/cSHAKE and subsequent `pad10*1`, but no actual driving logic appears yet in this chunk [sha3pad.sv:544-555].",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "mixed",
+    "driven": [
+      "encode_bytepad",
+      "prefix",
+      "prefix_sliced",
+      "prefix_data"
+    ],
+    "used": [
+      "strength_i",
+      "ns_data_i",
+      "prefix_index",
+      "EnMasking"
+    ],
+    "modes": [
+      "PrefixSize",
+      "MsgWidth",
+      "Share",
+      "EnMasking",
+      "KeccakMsgAddrW"
+    ],
+    "tags": [
+      "masking",
+      "padding"
+    ]
+  },
   "guarantees": [
     {
-      "property": "The prefix presented to the slicer is always the concatenation of `ns_data_i` in the upper portion and the strength-dependent `encode_bytepad` in the lower 16 bits.",
-      "output_signals": [
-        "prefix",
+      "id": "G1",
+      "type": "assignment",
+      "claim": "encode_bytepad is always combinatinally driven by the function encode_bytepad_len with input strength_i.",
+      "cond": "always",
+      "signals": [
+        "strength_i",
         "encode_bytepad"
       ],
-      "source_refs": [
-        "sha3pad.sv:507-520"
+      "refs": [
+        "sha3pad.sv:509"
       ]
     },
     {
-      "property": "When masking is enabled, `prefix_data[0]` is always all zeroes and `prefix_data[1]` equals the selected prefix slice; when masking is disabled, `prefix_data[0]` equals the selected prefix slice.",
-      "output_signals": [
-        "prefix_data",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "prefix is always the concatenation {ns_data_i, encode_bytepad}.",
+      "cond": "always",
+      "signals": [
+        "ns_data_i",
+        "encode_bytepad",
+        "prefix"
+      ],
+      "refs": [
+        "sha3pad.sv:520"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "instance",
+      "claim": "prefix_sliced is a slice of the full prefix vector selected by prefix_index via the prim_slicer instance.",
+      "cond": "always",
+      "signals": [
+        "prefix",
+        "prefix_index",
         "prefix_sliced"
       ],
-      "source_refs": [
-        "sha3pad.sv:535-542"
+      "refs": [
+        "sha3pad.sv:525-533"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "When masking is enabled, prefix_data[0] is assigned to all zeros and prefix_data[1] is assigned to prefix_sliced.",
+      "cond": "EnMasking == 1",
+      "signals": [
+        "EnMasking",
+        "prefix_data"
+      ],
+      "refs": [
+        "sha3pad.sv:535-538"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "generate_param",
+      "claim": "When masking is disabled, prefix_data[0] is assigned to prefix_sliced; no other share index is driven.",
+      "cond": "EnMasking == 0",
+      "signals": [
+        "EnMasking",
+        "prefix_data"
+      ],
+      "refs": [
+        "sha3pad.sv:539-542"
       ]
     }
   ],
-  "security_implications": "This chunk participates in domain-separation/padding setup for SHA3-family modes and in masking-share formatting. The comments indicate that the prefix encodes software-supplied namespace/customization data and a strength-dependent bytepad header [sha3pad.sv:511-517], so incorrect `ns_data_i` or `strength_i` would change the absorbed prefix and therefore alter mode/domain separation. In masked mode, placing the entire value in one share and forcing the other share to zero [sha3pad.sv:535-538] preserves functional reconstruction but does not by itself provide randomness-based masking for this prefix material; whether that is acceptable depends on system-level assumptions about the sensitivity of the prefix and the broader masking scheme.",
   "assumptions": [
     {
-      "constraint": "The total prefix represented by `prefix` must fit within one absorption block, as stated by the comment that the prefix is always smaller than the block size.",
-      "bug_relevance": "If this is violated, slicing and downstream padding/absorption may omit or misplace part of the prefix, causing incorrect cSHAKE/KMAC input formatting. The comment suggests this case is not expected by design.",
-      "related_signals": [
-        "prefix",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The combined prefix (ns_data_i concatenated with encode_bytepad) is always smaller than the block size (168 or 136 bits).",
+      "cond": "always",
+      "risk": "If violated, slicing or indexing may span beyond the intended message area, causing incorrect padding or data corruption.",
+      "signals": [
         "ns_data_i",
-        "strength_i",
-        "prefix_index"
+        "encode_bytepad"
       ],
-      "source_refs": [
-        "sha3pad.sv:511-520"
+      "refs": [
+        "sha3pad.sv:517-518"
       ]
     },
     {
-      "constraint": "`ns_data_i` must already contain the software-prepared `encode_string(N) || encode_string(S)` value expected by the prefix construction.",
-      "bug_relevance": "If software provides data in a different format, the hardware still concatenates it with `encode_bytepad`, but the resulting prefix will not match the intended cSHAKE/KMAC bytepad encoding and the cryptographic result will be wrong.",
-      "related_signals": [
-        "ns_data_i",
-        "prefix"
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "prefix_index is always a valid index within the range defined by PrefixSize*8 / MsgWidth slices.",
+      "cond": "always",
+      "risk": "An out-of-range select may produce invalid output or X in simulation, potentially leaking previous state or breaking control.",
+      "signals": [
+        "prefix_index"
       ],
-      "source_refs": [
-        "sha3pad.sv:512-520"
+      "refs": [
+        "sha3pad.sv:530"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "When EnMasking is low but Share > 1, prefix_data[1] is left undriven. This could propagate an uninitialized or floating value to masked datapath consumers.",
+      "cond": "EnMasking == 0 and Share >= 2",
+      "risk": "Secret shares may be uninitialized or deterministically zero, breaking masked SCA countermeasures and possibly exposing secret material.",
+      "signals": [
+        "EnMasking",
+        "Share",
+        "prefix_data"
+      ],
+      "refs": [
+        "sha3pad.sv:539-542"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The size constraint on the prefix (smaller than block size) is only an implicit assumption; no RTL checker enforces it. ns_data_i width is parameterizable and may violate the assumption in some configurations.",
+      "cond": "ns_data_i length combined with encode_bytepad exceeds block size",
+      "risk": "Prefix data may be truncated, misaligned, or overflow into subsequent data, causing non-standard padding or message corruption.",
+      "signals": [
+        "ns_data_i",
+        "PrefixSize"
+      ],
+      "refs": [
+        "sha3pad.sv:517-520"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "The function encode_bytepad_len(strength_i) is used but its implementation is not visible in this chunk. The correctness of the resulting encode_bytepad is essential for SHA3 prefix alignment.",
+      "cond": "strength_i takes a value that the function interprets incorrectly",
+      "risk": "A wrong bytepad encoding leads to non‑compliant padding, potentially breaking protocol interop or enabling side‑channel distinguishers.",
+      "signals": [
+        "strength_i",
+        "encode_bytepad"
+      ],
+      "refs": [
+        "sha3pad.sv:509"
       ]
     }
   ],
   "evidence_refs": [
-    "sha3pad.sv:507-520",
-    "sha3pad.sv:522-542",
-    "sha3pad.sv:544-555"
-  ],
-  "uncertain_points": [
-    "The exact encoding produced by `encode_bytepad_len(strength_i)` is not visible in this chunk, so the mapping from `strength_i` to bytepad length/header cannot be confirmed here.",
-    "The comment says the prefix represents `bytepad(encode_string(N) || encode_string(S), 168 or 136)` [sha3pad.sv:512-517], but this chunk only shows construction as `{ns_data_i, encode_bytepad}`; without the definition of byte ordering and the rest of the datapath, it is not fully clear whether this concatenation exactly matches the canonical byte order of the specification or an internal reordered representation.",
-    "Comments describe `funcpad` semantics for SHA3/SHAKE/cSHAKE [sha3pad.sv:545-553], but this excerpt only declares `funcpad` and `funcpad_data`; no implemented behavior for those signals is shown yet."
+    "sha3pad.sv:507-555"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 507,
-  "line_end": 555
+  "line_end": 555,
+  "security_implications": ""
 }

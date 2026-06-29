@@ -1,0 +1,209 @@
+{
+  "chunk_id": "hmac__always_comb__line_645__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "message_length_d"
+    ],
+    "used": [
+      "message_length",
+      "reg2hw.msg_length_lower.qe",
+      "reg2hw.msg_length_lower.q",
+      "reg2hw.msg_length_upper.qe",
+      "reg2hw.msg_length_upper.q",
+      "cfg_block",
+      "hash_start",
+      "msg_write",
+      "sha_en",
+      "packer_ready",
+      "wmask_ones"
+    ],
+    "modes": [
+      "cfg_block (compile-time false)",
+      "hash_start (dynamic)",
+      "msg_write/sha_en/packer_ready handshake"
+    ],
+    "tags": [
+      "counter",
+      "csr",
+      "integrity",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "message_length_d is initially set to message_length as a default value.",
+      "cond": "always at the start of the combinational block",
+      "signals": [
+        "message_length_d",
+        "message_length"
+      ],
+      "refs": [
+        "line 646"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When hash_start is high, message_length_d is forced to zero, overriding all prior assignments in this block.",
+      "cond": "hash_start == 1'b1",
+      "signals": [
+        "hash_start",
+        "message_length_d"
+      ],
+      "refs": [
+        "line 656-657"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When hash_start is low and msg_write, sha_en, and packer_ready are all high, message_length_d is set to message_length + wmask_ones, overriding CSR loads.",
+      "cond": "!hash_start && msg_write && sha_en && packer_ready",
+      "signals": [
+        "message_length_d",
+        "message_length",
+        "wmask_ones",
+        "msg_write",
+        "sha_en",
+        "packer_ready"
+      ],
+      "refs": [
+        "line 658-659"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When cfg_block is low, hash_start is low, not (msg_write && sha_en && packer_ready), and reg2hw.msg_length_lower.qe is high, the lower 32 bits of message_length_d are loaded from reg2hw.msg_length_lower.q.",
+      "cond": "!cfg_block && !hash_start && !(msg_write && sha_en && packer_ready) && reg2hw.msg_length_lower.qe",
+      "signals": [
+        "message_length_d[31:0]",
+        "reg2hw.msg_length_lower.q",
+        "reg2hw.msg_length_lower.qe"
+      ],
+      "refs": [
+        "line 648-649"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "When cfg_block is low, hash_start is low, not (msg_write && sha_en && packer_ready), and reg2hw.msg_length_upper.qe is high, the upper 32 bits of message_length_d are loaded from reg2hw.msg_length_upper.q.",
+      "cond": "!cfg_block && !hash_start && !(msg_write && sha_en && packer_ready) && reg2hw.msg_length_upper.qe",
+      "signals": [
+        "message_length_d[63:32]",
+        "reg2hw.msg_length_upper.q",
+        "reg2hw.msg_length_upper.qe"
+      ],
+      "refs": [
+        "line 651-652"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "wmask_ones precisely reflects the number of valid bytes in the current write operation.",
+      "cond": "when msg_write, sha_en, and packer_ready are all high",
+      "risk": "If wmask_ones is incorrect, message_length will be corrupted, leading to HMAC tag mismatch or integrity bypass.",
+      "signals": [
+        "wmask_ones",
+        "msg_write",
+        "sha_en",
+        "packer_ready"
+      ],
+      "refs": [
+        "line 659"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "hash_start is asserted only for a single cycle at the beginning of a new hash operation.",
+      "cond": "when a new message is to be hashed",
+      "risk": "If hash_start remains high for multiple cycles, message_length_d stays zero, preventing length accumulation and potentially breaking the hash protocol.",
+      "signals": [
+        "hash_start"
+      ],
+      "refs": [
+        "line 656-657"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "message_length + wmask_ones does not overflow the 64-bit counter.",
+      "cond": "when the increment path is active (hash_start low and handshake asserted)",
+      "risk": "Overflow could cause message length wrap-around, leading to incorrect final padding and HMAC forgery.",
+      "signals": [
+        "message_length",
+        "wmask_ones"
+      ],
+      "refs": [
+        "line 659"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The exact compile-time generate conditions that enable this block are unclear from the guard context; signals like reg2hw.msg_length_lower.qe and hash_start appear as if they could be parameters, potentially causing the block to be absent in configurations where it is needed.",
+      "cond": "depends on elaboration parameters",
+      "risk": "If the block is omitted due to misconfiguration, message_length_d may be undriven or stuck, causing HMAC length tracking to fail.",
+      "signals": [
+        "reg2hw.msg_length_lower.qe",
+        "reg2hw.msg_length_upper.qe",
+        "hash_start"
+      ],
+      "refs": [
+        "line 645-661 (guard_context)"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The CSR load path allows software to directly set message_length_d to arbitrary values via reg2hw.msg_length_lower and upper registers, bypassing the normal incremental length tracking.",
+      "cond": "when reg2hw.msg_length_lower.qe or .msg_length_upper.qe is high and no hash_start or data write is active",
+      "risk": "An adversary or buggy driver could manipulate the message length to produce a valid HMAC for an untrusted message, violating integrity guarantees.",
+      "signals": [
+        "message_length_d",
+        "reg2hw.msg_length_lower.q",
+        "reg2hw.msg_length_upper.q"
+      ],
+      "refs": [
+        "line 648-652"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "If hash_start is asserted during the same cycle as a data write handshake (msg_write && sha_en && packer_ready), the length is reset to zero and the increment from the current write is lost.",
+      "cond": "hash_start == 1'b1 while msg_write, sha_en, packer_ready are all high",
+      "risk": "The message length will be too short, causing HMAC verification failure or possible forgery.",
+      "signals": [
+        "hash_start",
+        "msg_write",
+        "packer_ready"
+      ],
+      "refs": [
+        "line 656-659"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "line 645-661"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 645,
+  "line_end": 661,
+  "security_implications": ""
+}

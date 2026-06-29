@@ -1,38 +1,102 @@
 {
   "chunk_id": "kmac_errchk__always_comb__check_modestrength__001",
-  "summary": "在消息输入阶段结束、状态返回 Idle 时，该组合逻辑检查 mode/strength 配置是否合法，不匹配则拉高错误信号。",
-  "behavior": "该组合块默认将 err_modestrength 置 0，仅在状态满足 st == StIdle 且 st_d == StMsgFeed 时执行一次配置合法性检查，注释表明这是“进入下一阶段”时的配置校验。合法组合被限定为两类：一是 cfg_mode_i 为 Sha3 时，cfg_strength_i 必须属于 {L224, L256, L384, L512}；二是 cfg_mode_i 为 Shake 或 CShake 时，cfg_strength_i 必须属于 {L128, L256}。若当前 mode/strength 不属于上述任一允许组合，则 err_modestrength 置 1；在其他状态或转换条件下，该错误信号保持为 0，不对配置持续报错。",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "always_comb",
+    "driven": [
+      "err_modestrength"
+    ],
+    "used": [
+      "st",
+      "st_d",
+      "cfg_mode_i",
+      "cfg_strength_i"
+    ],
+    "modes": [
+      "StIdle",
+      "StMsgFeed",
+      "Sha3",
+      "Shake",
+      "CShake",
+      "L224",
+      "L256",
+      "L384",
+      "L512",
+      "L128"
+    ],
+    "tags": [
+      "error",
+      "configuration",
+      "handshake",
+      "fault",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 st == StIdle 且 st_d == StMsgFeed，并且 cfg_mode_i/cfg_strength_i 不属于允许的 mode-strength 组合时，err_modestrength 一定为 1。",
-      "output_signals": [
-        "err_modestrength"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "err_modestrength is driven to 1'b1 when st == StIdle, st_d == StMsgFeed, and (cfg_mode_i, cfg_strength_i) is not an allowed combination; otherwise it remains 1'b0.",
+      "cond": "always",
+      "signals": [
+        "err_modestrength",
+        "st",
+        "st_d",
+        "cfg_mode_i",
+        "cfg_strength_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:252-259"
-      ]
-    },
-    {
-      "property": "当不满足 st == StIdle && st_d == StMsgFeed 时，err_modestrength 一定为 0。",
-      "output_signals": [
-        "err_modestrength"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:250-260"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:249-261"
       ]
     }
   ],
-  "security_implications": "该逻辑属于安全相关的配置有效性检查：它阻止在特定阶段推进时使用不被支持的模式/强度组合，从而降低因非法哈希参数配置导致功能异常或安全属性偏离预期的风险。但该片段本身只产生错误指示，是否进一步阻断操作、触发告警或清除状态需要依赖其他逻辑。",
   "assumptions": [
     {
-      "constraint": "st 和 st_d 需要正确反映状态机当前状态与前一拍/派生状态，使得从 StMsgFeed 到 StIdle 的边界恰好对应配置检查时机。",
-      "bug_relevance": "若该状态指示不正确，可能导致非法配置未被检查到，或在错误时机误报 err_modestrength，属于行为契约违例。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "cfg_mode_i and cfg_strength_i are valid enumerated values (not X or Z) so that the inside comparison resolves deterministically.",
+      "cond": "always",
+      "risk": "If they are unknown, err_modestrength may not assert correctly, allowing an invalid configuration to pass undetected.",
+      "signals": [
+        "cfg_mode_i",
+        "cfg_strength_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:254-258"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "cfg_mode_i and cfg_strength_i must remain stable after the StIdle → StMsgFeed transition; the error check occurs only once at that transition.",
+      "cond": "after the cycle where st == StIdle && st_d == StMsgFeed",
+      "risk": "If configuration changes later, the core may operate with an invalid mode/strength without detection, potentially causing incorrect hash output or a security bypass.",
+      "signals": [
         "st",
         "st_d",
-        "err_modestrength"
+        "cfg_mode_i",
+        "cfg_strength_i"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:252-259"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "Mode/strength error detection only executes when st == StIdle && st_d == StMsgFeed. Configuration changes that occur after entering StMsgFeed are never checked.",
+      "cond": "cfg_mode_i or cfg_strength_i change while st or st_d is past StMsgFeed",
+      "risk": "An invalid configuration could be applied mid-operation, leading to incorrect SHA3 processing, potential loss of integrity, or exposure of sensitive data.",
+      "signals": [
+        "cfg_mode_i",
+        "cfg_strength_i",
+        "st",
+        "st_d"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:252-259"
       ]
     }
@@ -40,12 +104,8 @@
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:249-261"
   ],
-  "uncertain_points": [
-    "注释称该检查发生在“moving to the next stage”时，但实际条件是 st == StIdle && st_d == StMsgFeed；没有更多上下文时，无法确认这是否精确等价于设计上定义的阶段切换时刻。",
-    "该片段只覆盖 Sha3、Shake、CShake 三类 mode 的合法 strength 集合；若系统还存在其他合法 cfg_mode_i 编码，则在此处会被一律判错，是否为预期需要结合枚举定义确认。",
-    "无法仅凭该片段判断 err_modestrength 是瞬时错误指示、是否会被锁存，或是否会触发后续恢复/告警流程。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
   "line_start": 249,
-  "line_end": 261
+  "line_end": 261,
+  "security_implications": ""
 }

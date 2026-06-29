@@ -1,0 +1,158 @@
+{
+  "chunk_id": "aes_cipher_core__always_comb__round_key_mux__001",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "round_key"
+    ],
+    "used": [
+      "round_key_sel",
+      "key_bytes",
+      "CiphOpFwdOnly",
+      "key_mix_columns_out"
+    ],
+    "modes": [
+      "ROUND_KEY_DIRECT",
+      "ROUND_KEY_MIXED",
+      "CiphOpFwdOnly"
+    ],
+    "tags": [
+      "key",
+      "mux",
+      "mode_config",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When round_key_sel equals ROUND_KEY_DIRECT, round_key is driven to key_bytes directly.",
+      "cond": "round_key_sel == ROUND_KEY_DIRECT",
+      "signals": [
+        "round_key",
+        "round_key_sel",
+        "key_bytes"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:539"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When round_key_sel equals ROUND_KEY_MIXED and CiphOpFwdOnly is false, round_key is driven to key_mix_columns_out.",
+      "cond": "round_key_sel == ROUND_KEY_MIXED && !CiphOpFwdOnly",
+      "signals": [
+        "round_key",
+        "round_key_sel",
+        "CiphOpFwdOnly",
+        "key_mix_columns_out"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:540"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When round_key_sel equals ROUND_KEY_MIXED and CiphOpFwdOnly is true, round_key is driven to key_bytes (bypassing key_mix_columns_out).",
+      "cond": "round_key_sel == ROUND_KEY_MIXED && CiphOpFwdOnly",
+      "signals": [
+        "round_key",
+        "round_key_sel",
+        "CiphOpFwdOnly",
+        "key_bytes"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:540"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "For any round_key_sel value not matching the two explicit cases, round_key defaults to key_bytes.",
+      "cond": "round_key_sel != ROUND_KEY_DIRECT && round_key_sel != ROUND_KEY_MIXED",
+      "signals": [
+        "round_key",
+        "key_bytes"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:541"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "round_key_sel must take only the two legal enum values ROUND_KEY_DIRECT or ROUND_KEY_MIXED during normal operation.",
+      "cond": "always during functional operation",
+      "risk": "If round_key_sel takes an illegal value (e.g., due to SEU or logic bug), the default path silently drives key_bytes, potentially using an unmixed key when a mixed key was intended. The unique case pragma will trigger a simulation violation but synthesis may just treat default as unreachable.",
+      "signals": [
+        "round_key_sel",
+        "round_key"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:538-542"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "key_mix_columns_out must be valid and stable whenever round_key_sel == ROUND_KEY_MIXED and CiphOpFwdOnly is false, since it is combinatorially forwarded to round_key.",
+      "cond": "round_key_sel == ROUND_KEY_MIXED && !CiphOpFwdOnly",
+      "risk": "Stale or invalid key_mix_columns_out would propagate directly to round_key, corrupting the round key used by downstream cipher logic.",
+      "signals": [
+        "key_mix_columns_out",
+        "round_key",
+        "round_key_sel",
+        "CiphOpFwdOnly"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:540"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "unique case with a default that silently falls back to key_bytes may mask a fault-injected or bug-corrupted round_key_sel value. The design gives no error indicator when the default path is taken.",
+      "cond": "round_key_sel is neither ROUND_KEY_DIRECT nor ROUND_KEY_MIXED",
+      "risk": "A flipped bit in round_key_sel (e.g., from a fault attack) could cause the wrong key source to be used without any integrity alert, potentially enabling a differential side-channel or plaintext recovery attack.",
+      "signals": [
+        "round_key_sel",
+        "round_key"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:538-542"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "The driver of round_key_sel and its timing relative to key_mix_columns_out validity are not visible in this chunk. A glitch on round_key_sel while key_mix_columns_out is changing could transiently expose a mixed/incorrect round_key value.",
+      "cond": "round_key_sel toggles near key_mix_columns_out update",
+      "risk": "A transient combinatorial glitch on round_key could be latched downstream, producing a wrong round key for one cycle and causing silent ciphertext corruption.",
+      "signals": [
+        "round_key_sel",
+        "key_mix_columns_out",
+        "round_key"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:537-543"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_cipher_core.sv:537-543"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
+  "line_start": 537,
+  "line_end": 543,
+  "security_implications": ""
+}

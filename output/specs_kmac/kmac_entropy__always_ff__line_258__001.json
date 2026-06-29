@@ -1,58 +1,164 @@
 {
   "chunk_id": "kmac_entropy__always_ff__line_258__001",
-  "summary": "该时序块维护一个可装载、可递减并在到期后清零保持的计时寄存器 timer_value。",
-  "behavior": "该寄存器在复位时被清零。正常工作时，若 timer_update 为真，则优先将 timer_value 直接装载为 timer_limit。若没有更新请求但 timer_expired 为真，则 timer_value 被写为 0；结合注释“keep the value”，实际代码表现是到期后保持为零而不是保留原非零值。若前两种条件都不成立，且 timer_enable、timer_pulse 同时为真并且 timer_value 非零，则计数器递减 1。其余情况下该寄存器保持原值不变。条件链体现了明确优先级：timer_update 最高，其次是 timer_expired，最后才是使能脉冲驱动的递减逻辑。由 |timer_value 的保护可避免从 0 下溢到全 1。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "timer_value"
+    ],
+    "used": [
+      "rst_ni",
+      "timer_update",
+      "timer_limit",
+      "timer_expired",
+      "timer_enable",
+      "timer_pulse",
+      "timer_value"
+    ],
+    "modes": [],
+    "tags": [
+      "counter",
+      "reset",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位时 timer_value 一定被清零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When rst_ni is low, timer_value is driven to 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "timer_value"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:258-260"
+      "refs": [
+        "kmac_entropy.sv:259-260"
       ]
     },
     {
-      "property": "当 timer_update 为真时，timer_value 装载为 timer_limit，并覆盖同周期可能存在的到期或递减条件。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When timer_update is high (and rst_ni high), timer_value is loaded with timer_limit.",
+      "cond": "timer_update == 1",
+      "signals": [
+        "timer_update",
+        "timer_limit",
         "timer_value"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:261-262"
+      "refs": [
+        "kmac_entropy.sv:261-262"
       ]
     },
     {
-      "property": "在非更新、非到期情况下，只有当 timer_enable 与 timer_pulse 同时为真且 timer_value 非零时，timer_value 才会减 1；因此 timer_value 不会因该递减路径从 0 下溢。",
-      "output_signals": [
-        "timer_value"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:263-266"
-      ]
-    }
-  ],
-  "security_implications": "该片段实现了一个受使能和脉冲控制的倒计时器，常用于熵相关流程中的等待/节流。这里的非零检查避免了计数器从 0 回绕，减少了由于计时异常导致等待窗口被意外拉长的风险。但其安全意义仍取决于 timer_expired、timer_update 和 timer_limit 在更大设计中的用途。",
-  "assumptions": [
-    {
-      "constraint": "timer_expired 应与 timer_value 的语义一致，尤其在计时器到期后不应长期以与本块清零行为矛盾的方式继续驱动错误状态。",
-      "bug_relevance": "如果 timer_expired 的生成逻辑与 timer_value 清零后的含义不一致，可能导致上层误判计时器状态，出现过早/过晚触发后续熵流程的功能错误。",
-      "related_signals": [
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When timer_expired is high (and rst_ni high, timer_update low), timer_value is cleared to 0.",
+      "cond": "timer_expired == 1 && timer_update == 0",
+      "signals": [
         "timer_expired",
         "timer_value"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:263-264"
+      "refs": [
+        "kmac_entropy.sv:263-264"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When timer_enable, timer_pulse are high and timer_value is non-zero (and no higher‑priority condition), timer_value decrements by 1.",
+      "cond": "timer_enable == 1 && timer_pulse == 1 && |timer_value && !(timer_update || timer_expired)",
+      "signals": [
+        "timer_enable",
+        "timer_pulse",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:265-266"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "In all other conditions, timer_value retains its previous value.",
+      "cond": "no other branch taken",
+      "signals": [
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:258-268"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "timer_update and timer_expired must not be asserted simultaneously if the intended response to expired is a clear.",
+      "cond": "simultaneous assertion of timer_update and timer_expired",
+      "risk": "timer_value is reloaded with timer_limit instead of being cleared, extending the countdown interval.",
+      "signals": [
+        "timer_update",
+        "timer_expired",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:261-264"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment says \"keep the value\" but the RTL clears timer_value to 0 on timer_expired. The intended behavior is ambiguous.",
+      "cond": "timer_expired is asserted",
+      "risk": "If the intent was to hold the value, the timer erroneously resets; if to clear, the comment is misleading and may hide a design requirement.",
+      "signals": [
+        "timer_expired",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:264"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "If timer_limit is set to zero, a timer_update loads zero, and the timer will never decrement because the (|timer_value) guard is false. It is unclear whether this is a valid static configuration.",
+      "cond": "timer_limit == 0",
+      "risk": "Timer may be unintentionally stuck at zero, potentially breaking entropy health checks or rate‑limiting.",
+      "signals": [
+        "timer_limit",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:262,265"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The always_ff gives timer_update strict priority over timer_expired. The intended priority order in the surrounding design may differ.",
+      "cond": "timer_update and timer_expired both active",
+      "risk": "If the design expects expired to take precedence, the timer is erroneously reloaded.",
+      "signals": [
+        "timer_update",
+        "timer_expired"
+      ],
+      "refs": [
+        "kmac_entropy.sv:261-264"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:258-268"
-  ],
-  "uncertain_points": [
-    "第 264 行注释“keep the value”与实际赋值 timer_value <= '0 不一致；从代码看，到期后寄存器被清零并随后保持为零，而不是保留原值。需要结合上下文确认是注释过时还是实现有意如此。",
-    "timer_expired 的具体定义不在该片段中，无法仅凭此处判断它是在 timer_value 为 0 时拉高、在减到 1 后下一拍拉高，还是由其他条件产生。"
+    "kmac_entropy.sv:258-268"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 258,
-  "line_end": 268
+  "line_end": 268,
+  "security_implications": ""
 }

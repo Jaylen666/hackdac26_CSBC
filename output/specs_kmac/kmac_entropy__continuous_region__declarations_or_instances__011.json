@@ -1,62 +1,153 @@
 {
   "chunk_id": "kmac_entropy__continuous_region__declarations_or_instances__011",
-  "summary": "该片段将内部计数错误标志直接导出，并声明/实例化一个带复位值的稀疏编码状态寄存器，用于保存熵随机流程的状态机当前状态。",
-  "behavior": "片段唯一的显式组合行为是将输出 `count_error_o` 直接连接到内部信号 `hash_count_error`，因此该输出完全反映内部计数错误检测结果，没有额外门控或变换（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:478-478）。同时，片段声明了状态机的当前状态 `st` 和下一状态 `st_d`，类型为 `rand_st_e`（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:484-484），并通过 `PRIM_FLOP_SPARSE_FSM` 实例 `u_state_regs` 保存状态，其中复位状态被指定为 `StRandReset`（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:486-487）。从该片段本身可确认设计意图是使用稀疏 FSM 状态寄存器承载随机/熵相关状态机，但宏内部是否还包含非法状态检测、自恢复或告警功能，单凭此片段无法确定。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "mixed",
+    "driven": [
+      "count_error_o",
+      "st"
+    ],
+    "used": [
+      "hash_count_error",
+      "st_d",
+      "StRandReset",
+      "rand_st_e"
+    ],
+    "modes": [],
+    "tags": [
+      "sparse_fsm",
+      "error",
+      "state_machine"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`count_error_o` 始终等于内部错误指示 `hash_count_error`，不存在额外条件或编码转换。",
-      "output_signals": [
-        "count_error_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Output count_error_o is continuously driven equal to internal signal hash_count_error.",
+      "cond": "always",
+      "signals": [
+        "count_error_o",
+        "hash_count_error"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:478-478"
+      "refs": [
+        "kmac_entropy.sv:478-478"
       ]
     },
     {
-      "property": "状态机寄存器的复位状态被配置为 `StRandReset`。",
-      "output_signals": [
-        "st"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "State register st updates to next-state st_d on each clock edge and resets to StRandReset upon reset, as implemented by the PRIM_FLOP_SPARSE_FSM primitive.",
+      "cond": "active clock edge and reset condition defined by the macro",
+      "signals": [
+        "st",
+        "st_d",
+        "StRandReset"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:486-487"
+      "refs": [
+        "kmac_entropy.sv:484-487"
       ]
     }
   ],
-  "security_implications": "该片段位于 KMAC 熵相关逻辑中，并显式导出计数错误标志，说明计数异常会被传播到模块外部，可能用于故障检测或安全监测。另一个安全相关点是状态机使用 `PRIM_FLOP_SPARSE_FSM`，这通常意味着采用稀疏编码 FSM 以提升对非法状态或故障注入的鲁棒性；但该宏是否在此处实际实现了错误检测/恢复，需要更多上下文确认。",
   "assumptions": [
     {
-      "constraint": "`hash_count_error` 应由上游逻辑正确定义为计数错误条件；因为此片段对其不做屏蔽、校正或限定。",
-      "bug_relevance": "如果该内部错误信号定义错误，`count_error_o` 会同步错误地漏报或误报计数异常，属于功能错误而非本片段可纠正的问题。",
-      "related_signals": [
-        "hash_count_error",
-        "count_error_o"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "StRandReset must be a legal value of enum rand_st_e.",
+      "cond": "when reset is asserted",
+      "risk": "State machine resets to an invalid encoding, causing undefined behavior or hang.",
+      "signals": [
+        "StRandReset",
+        "rand_st_e"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:478-478"
+      "refs": [
+        "kmac_entropy.sv:484-487"
       ]
     },
     {
-      "constraint": "`st_d` 应由其他组合逻辑产生合法的 `rand_st_e` 编码状态，尤其在正常工作流中不应持续驱动非法稀疏状态。",
-      "bug_relevance": "如果违反，状态寄存器 `st` 的行为将取决于 `PRIM_FLOP_SPARSE_FSM` 宏对非法状态的处理；这可能导致状态机停滞、跳转异常，或若宏带有防御性处理则回退到安全状态。该非法输入场景设计上通常不应发生。",
-      "related_signals": [
-        "st_d",
-        "st"
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "hash_count_error must be a glitch-free, valid logic value (not X) when used to drive count_error_o.",
+      "cond": "during normal operation",
+      "risk": "Glitches or X propagation on count_error_o could cause false error notifications.",
+      "signals": [
+        "hash_count_error",
+        "count_error_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:484-487"
+      "refs": [
+        "kmac_entropy.sv:478-478"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The PRIM_FLOP_SPARSE_FSM macro instance u_state_regs has its clock and reset ports properly connected in the enclosing module.",
+      "cond": "always",
+      "risk": "State updates may not occur or may occur on wrong edge, leading to FSM malfunction.",
+      "signals": [
+        "u_state_regs",
+        "st",
+        "st_d"
+      ],
+      "refs": [
+        "kmac_entropy.sv:487-487"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact behavior of PRIM_FLOP_SPARSE_FSM (clock edge, reset polarity, sparse encoding error detection) is not defined here. Verification must confirm correct integration with parent module’s clock, reset, and that the enum encoding matches sparse FSM requirements.",
+      "cond": "integration",
+      "risk": "Incorrect FSM implementation could lead to state machine faults or undetected errors.",
+      "signals": [
+        "u_state_regs",
+        "st",
+        "rand_st_e",
+        "StRandReset"
+      ],
+      "refs": [
+        "kmac_entropy.sv:484-487"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The direct assignment count_error_o = hash_count_error may propagate transient glitches from hash_count_error. It is unclear if this is intended or if filtering/latching is required elsewhere.",
+      "cond": "hash_count_error changes",
+      "risk": "False error counts could trigger unnecessary recovery actions.",
+      "signals": [
+        "count_error_o",
+        "hash_count_error"
+      ],
+      "refs": [
+        "kmac_entropy.sv:478-478"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "If the sparse FSM encoding allows illegal state values, a fault that causes st to enter such a state might not be detected or recovered.",
+      "cond": "fault or SEU",
+      "risk": "State machine could lock up or produce incorrect outputs.",
+      "signals": [
+        "st",
+        "rand_st_e"
+      ],
+      "refs": [
+        "kmac_entropy.sv:484-487"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:478-478",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:484-487"
-  ],
-  "uncertain_points": [
-    "`PRIM_FLOP_SPARSE_FSM` 宏的具体语义在片段中不可见，因此无法确认它是否只实现普通状态寄存器，还是还带有非法状态检测、告警、纠错或安全加固逻辑。",
-    "虽然注释写有 'State FF'，但状态机的下一状态生成逻辑不在本片段中，因此无法从这里确定 `st_d` 的转移条件和完整状态转换图。",
-    "无法仅凭此片段判断 `hash_count_error` 的具体触发条件，也无法确认 `count_error_o` 是否被上层视为致命错误、告警还是统计信息。"
+    "kmac_entropy.sv:478-487"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 478,
-  "line_end": 487
+  "line_end": 487,
+  "security_implications": ""
 }

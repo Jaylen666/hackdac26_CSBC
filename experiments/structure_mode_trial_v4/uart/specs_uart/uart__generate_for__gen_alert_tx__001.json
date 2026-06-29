@@ -1,0 +1,127 @@
+{
+  "chunk_id": "uart__generate_for__gen_alert_tx__001",
+  "header": {
+    "module": "uart",
+    "block_kind": "generate",
+    "driven": [
+      "alert_tx_o[i]",
+      "(unconnected) alert_ack_o",
+      "(unconnected) alert_state_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "AlertAsyncOn[i]",
+      "alert_test[i]",
+      "alerts[0]",
+      "alert_rx_i[i]"
+    ],
+    "modes": [
+      "parameter NumAlerts",
+      "generate for i",
+      "parameter AlertAsyncOn[i]",
+      "parameter IsFatal (hardcoded 1)"
+    ],
+    "tags": [
+      "alert",
+      "generate",
+      "instance",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "For each i in 0..NumAlerts-1, an instance of prim_alert_sender is generated, driving alert_tx_o[i] according to its internal logic.",
+      "cond": "always (compile-time generation)",
+      "signals": [
+        "alert_tx_o[i]"
+      ],
+      "refs": [
+        "uart.sv:100-113"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "All generated alert sender instances have their alert_req_i input connected to the single signal alerts[0], not indexed by i.",
+      "cond": "always",
+      "signals": [
+        "alerts[0]",
+        "alert_req_i"
+      ],
+      "refs": [
+        "uart.sv:108"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "alerts[0] is driven externally with a valid alert request that meets the protocol of prim_alert_sender.",
+      "cond": "when alert generation is used",
+      "risk": "If alerts has more than one bit and the indexed alert[i] is meant, the wrong request triggers all senders; conversely, if alerts is a single-bit broadcast it is correct but the design intent is unclear.",
+      "signals": [
+        "alerts[0]"
+      ],
+      "refs": [
+        "uart.sv:108"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "AlertAsyncOn[i] parameter correctly configures the synchronizer bypass for each alert sender based on clock-domain requirements.",
+      "cond": "during integration",
+      "risk": "Incorrect AsyncOn setting could cause metastability or timing violations in the alert path.",
+      "signals": [
+        "AlertAsyncOn[i]"
+      ],
+      "refs": [
+        "uart.sv:102"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "It is unclear whether connecting all alert_req_i inputs to alerts[0] is intentional or a mistake (possibly alerts[i] was intended).",
+      "cond": "when NumAlerts > 1 and alerts is a multi-bit bus",
+      "risk": "Could cause all alert senders to fire on a single request instead of individually, or leave higher-indexed alert requests unused, leading to missed alerts.",
+      "signals": [
+        "alerts[0]",
+        "alert_req_i",
+        "i"
+      ],
+      "refs": [
+        "uart.sv:108"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The prim_alert_sender outputs alert_ack_o and alert_state_o are left unconnected; no logic monitors the acknowledgment or internal state of the alert senders.",
+      "cond": "always",
+      "risk": "A stuck or failed alert sender may not be detected; alert transmission could silently fail, breaking the safety/security alert path.",
+      "signals": [
+        "alert_ack_o",
+        "alert_state_o"
+      ],
+      "refs": [
+        "uart.sv:109-110"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart.sv:100-114"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv",
+  "line_start": 100,
+  "line_end": 114,
+  "security_implications": ""
+}

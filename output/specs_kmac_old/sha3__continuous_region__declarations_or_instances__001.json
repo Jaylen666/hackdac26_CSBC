@@ -1,0 +1,67 @@
+{
+  "chunk_id": "sha3__continuous_region__declarations_or_instances__001",
+  "summary": "该片段生成并维持一次 Keccak 运行请求，并在收到对端 ACK 后只发出一次启动脉冲，直到 Keccak 完成后再清除请求与触发状态。",
+  "behavior": "片段声明了 Keccak 消息接口相关信号 `keccak_valid`、`keccak_addr`、`keccak_data` 和 `keccak_ready`，但在本片段内未对它们赋值或驱动，因此这里只能确认这些信号被预留给后续逻辑使用，无法从本片段单独推断其具体行为 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:154-157]。核心逻辑围绕 Keccak 运行控制展开：注释表明运行请求既可由 `sha3pad_keccak_run` 发起，也可由软件侧 `sw_keccak_run` 发起，用于吸收完成后的 sponge squeezing 等额外轮次 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:159-166]。`run_req_o` 直接等于组合信号 `keccak_run_req_d`，而 `keccak_run_req_d` 在任一运行源请求为高时被置 1；若 `keccak_complete` 为高则清为 0；否则保持 `keccak_run_req_q` 的先前状态。这意味着运行请求会被锁存并持续保持，直到完成信号到来，即使原始请求只是短脉冲也不会立刻撤销 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:168-175]。真正送往 Keccak 引擎的启动信号 `keccak_run` 只有在请求已提出、对端 `run_ack_i` 也为高、且此前尚未触发过本次事务时才为高，因此它是一次请求周期内最多出现一次的单次触发条件 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:177-178]。对应地，`keccak_triggered_d` 在 `keccak_run` 发生后置 1，在 `keccak_complete` 到来后清 0，否则保持 `keccak_triggered_q`，用于阻止同一轮请求在 ACK 持续有效期间被重复触发 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:179-181]。",
+  "guarantees": [
+    {
+      "property": "当 `sha3pad_keccak_run` 或 `sw_keccak_run` 任一为高时，`run_req_o` 被拉高；在此后直到 `keccak_complete` 变高之前，`run_req_o` 不会因原始请求撤销而自动清零。",
+      "output_signals": [
+        "run_req_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:172-175"
+      ]
+    },
+    {
+      "property": "在单次请求-完成周期内，一旦 `keccak_run` 触发并置位 `keccak_triggered_q`，后续即使 `run_req_o` 与 `run_ack_i` 继续保持为高，也不会再次产生 `keccak_run`，直到 `keccak_complete` 清除触发状态。",
+      "output_signals": [
+        "keccak_run",
+        "keccak_triggered_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:177-181"
+      ]
+    }
+  ],
+  "security_implications": "该片段属于加密哈希/海绵引擎控制路径。它通过“请求保持直到完成”和“ACK 后单次触发”的机制，降低了同一请求被重复启动或在未完成时被中途撤销的风险，这对海绵 squeezing 阶段的轮次控制和结果一致性有帮助。但其安全效果仍依赖 `keccak_complete` 与 `run_ack_i` 是否由可信且协议正确的对端提供。",
+  "assumptions": [
+    {
+      "constraint": "`run_ack_i` 应当只在对端确实接受本次 `run_req_o` 并准备启动 Keccak 核时给出；这是该请求/应答协议成立的前提。",
+      "bug_relevance": "如果 `run_ack_i` 伪触发或过早到达，`keccak_run` 可能在 Keccak 核未真正准备好时被发出，导致一次运行被错误启动或与外围静默/仲裁时序不一致，属于行为契约违例。",
+      "related_signals": [
+        "run_req_o",
+        "run_ack_i",
+        "keccak_run",
+        "keccak_triggered_q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:168-181"
+      ]
+    },
+    {
+      "constraint": "`keccak_complete` 应在一次已触发的 Keccak 运行真正结束、核心重新回到可再次接受 `keccak_run` 的空闲状态时才拉高，且不应在空闲无事务时乱跳。",
+      "bug_relevance": "如果该信号过早或错误拉高，会提前清除 `run_req_o`/触发状态，造成运行未完成就被视为结束；如果永远不拉高，请求会被持续保持，系统可能卡在等待完成的状态。这是行为契约违例。",
+      "related_signals": [
+        "keccak_complete",
+        "keccak_run_req_d",
+        "keccak_run_req_q",
+        "keccak_triggered_d",
+        "keccak_triggered_q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:168-181"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:154-181"
+  ],
+  "uncertain_points": [
+    "`keccak_run_req_q` 和 `keccak_triggered_q` 的具体寄存器更新方式不在本片段中；本片段依赖外部时序逻辑把 `_d` 采样进 `_q`，否则“保持直到完成”的行为无法单独成立。",
+    "`keccak_complete` 的精确定义依赖 Keccak 核状态机；注释称其在核心回到 Idle、重新可接受 `keccak_run` 时出现，但本片段无法独立验证该实现是否与注释完全一致 [/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:168-171]。",
+    "注释称 `keccak_run` 是“upon receiving the ACK”的单脉冲，但其是否严格为单周期脉冲还取决于 `keccak_triggered_q` 何时被更新以及 `run_ack_i` 的持续时间；从本组合片段只能确认它被设计为每次请求最多触发一次，无法单独证明脉冲宽度。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
+  "line_start": 154,
+  "line_end": 181
+}

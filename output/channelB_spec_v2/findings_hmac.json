@@ -1,0 +1,1946 @@
+{
+  "_stats": {
+    "call_count": 120,
+    "error_count": 0,
+    "total_input_tokens": 293271,
+    "total_output_tokens": 403951,
+    "total_tokens": 697222,
+    "total_wall_seconds": 766.6,
+    "total_wall_minutes": 12.8
+  },
+  "_ag_pairing_mode": "semantic",
+  "_semantic_batch_mode": "guarded",
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "title": "[B-AG+U-UP] The RTL's combinational block for sha_msg_len does not explicitly handle the SHA2_512 digest size, causing it to default to an incorrect length (BlockSizeSHA512in64 + 384",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.675,
+      "contradiction": "The RTL's combinational block for sha_msg_len does not explicitly handle the SHA2_512 digest size, causing it to default to an incorrect length (BlockSizeSHA512in64 + 384 instead of + 512). This leads to wrong message length for SHA-512 operations, resulting in incorrect hash computations.",
+      "involved_signals": [
+        "sha_msg_len",
+        "message_length",
+        "u_msg_fifo.NeverClears",
+        "clr_i",
+        "msg_length_lower_we",
+        "msg_length_upper_we"
+      ],
+      "involved_specs": [
+        "hmac_core__always_comb__assign_sha_message_length__001",
+        "hmac__always_comb__cast_digest_size__001",
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac__always_comb__line_645__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_comb__assign_sha_message_length__001",
+          "field": "assumption",
+          "excerpt": "In the final hash length computation (lines 224-230), SHA2_512 is not explicitly handled; it falls into the default case which assigns sha_msg_len = BlockSizeSHA512in64 + 64'd384, but the correct leng"
+        },
+        {
+          "spec": "hmac__always_comb__cast_digest_size__001",
+          "field": "guarantee",
+          "excerpt": "digest_size equals digest_size_supplied when it is SHA2_256, SHA2_384, or SHA2_512; otherwise digest_size is SHA2_None."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "prim_sha2_32 u_prim_sha2_512 with MultimodeEn=1 instantiates SHA-2 engine; digest_mode_i = digest_size, message_length_i = sha_message_length; outputs digest, hash_done, idle, etc."
+        },
+        {
+          "spec": "hmac_core__always_comb__assign_sha_message_length__001",
+          "field": "assumption",
+          "excerpt": "message_length_i added with block size constants should not overflow 64 bits.\nrisk: Overflow could cause wrap-around resulting in an incorrect length for SHA core, possibly weakening HMAC security."
+        },
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "guarantee",
+          "excerpt": "If hash_start is deasserted and msg_write, sha_en, and packer_ready are all asserted, message_length_d is set to message_length + 64'(wmask_ones)."
+        },
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "guarantee",
+          "excerpt": "When none of the overriding conditions (hash_start, msg_write & sha_en & packer_ready, or !cfg_block with a qe set) are true, message_length_d holds the current message_length value."
+        },
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "guarantee",
+          "excerpt": "If hash_start is asserted, message_length_d is driven to all zeros."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "hw2reg.msg_length_upper.d is driven by message_length[63:32]"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "[B-AG+U-UP] 在非法 digest_size 配置下，FSM 将永久卡在 StPushToMsgFifo 状态，硬件无法自行恢复，也不会产生错误指示。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.675,
+      "contradiction": "The assumption describes a known reset transient: the registered version fifo_empty_q is cleared to 0, so it may briefly indicate a false non-empty. The guarantees implement the registered delay and edge detection, but they do not mask this transient. It is unclear from the available specifications whether this behaviour violates any functional requirement (e.g. whether a consumer expects valid status immediately after reset) or whether the system uses gating to hide it. Without that information",
+      "involved_signals": [
+        "fifo_wdata",
+        "fifo_empty_q",
+        "fifo_rready",
+        "fifo_wready",
+        "fifo_wvalid",
+        "hmac_fifo_wsel",
+        "msg_fifo_gnt",
+        "msg_fifo_req",
+        "reg_fifo_wentry",
+        "msg_allowed",
+        "fifo_empty_negedge",
+        "fifo_full_seen_q",
+        "status_fifo_empty",
+        "msg_write"
+      ],
+      "involved_specs": [
+        "hmac_core__always_comb__next_state__001",
+        "hmac__always_comb__select_fifo_wdata__001",
+        "hmac__always_ff__line_485__001",
+        "hmac__continuous_region__declarations_or_instances__007",
+        "hmac__continuous_region__int__001",
+        "hmac_core__continuous_region__declarations_or_instances__001",
+        "hmac__continuous_region__declarations_or_instances__008",
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac_core__always_ff__line_296__001",
+        "hmac__continuous_region__declarations_or_instances__013"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "assumption",
+          "excerpt": "The condition to exit StPushToMsgFifo only matches three specific (fifo_wdata_sel_o, digest_size_i) pairs; if digest_size_i takes any other value (e.g., misconfiguration), the equality condition never"
+        },
+        {
+          "spec": "hmac__always_comb__select_fifo_wdata__001",
+          "field": "guarantee",
+          "excerpt": "When hmac_fifo_wsel is true and digest_size is not SHA2_256, SHA2_384, or SHA2_512, fifo_wdata remains 0 (from the initial assignment inside the if block) and index remains 1'b0."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "assumption",
+          "excerpt": "The external logic correctly increments fifo_wdata_sel_o so that it matches the last word index (e.g., 7 for SHA2_256, 15 for SHA2_512, 11 for SHA2_384) when all digest words have been written into th"
+        },
+        {
+          "spec": "hmac__always_comb__select_fifo_wdata__001",
+          "field": "guarantee",
+          "excerpt": "When hmac_fifo_wsel is true and digest_size is either SHA2_384 or SHA2_512, index is set to the complement of hmac_fifo_wdata_sel[0], and fifo_wdata is assigned a 32-bit slice of a digest word selecte"
+        },
+        {
+          "spec": "hmac__always_comb__select_fifo_wdata__001",
+          "field": "guarantee",
+          "excerpt": "When hmac_fifo_wsel is true and digest_size equals SHA2_256, fifo_wdata is assigned the lower 32 bits of a digest word selected by hmac_fifo_wdata_sel[2:0], with mask all-ones; index remains at its de"
+        },
+        {
+          "spec": "hmac__always_comb__select_fifo_wdata__001",
+          "field": "guarantee",
+          "excerpt": "When hmac_fifo_wsel is true and digest_size is not SHA2_256, SHA2_384, or SHA2_512, fifo_wdata remains 0 (from the initial assignment inside the if block) and index remains 1'b0."
+        },
+        {
+          "spec": "hmac__always_ff__line_485__001",
+          "field": "assumption",
+          "excerpt": "Immediately after reset deassertion, fifo_empty_q stays 0 for one clock cycle before reflecting the real fifo_empty. A downstream consumer may see a false non-empty state."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__007",
+          "field": "guarantee",
+          "excerpt": "fifo_empty_negedge is asserted when fifo_empty_q is high and fifo_empty is low (falling edge detection)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "AlertIsFatal 作为 localparam 定义为1位常量，但 generate 块期望它是宽度为 NumAlerts 的向量。如果 NumAlerts>1，索引 AlertIsFatal[i] 会超出宽度范围，导致无法正确区分多个警报的致命性。需要将 AlertIsFatal 定义为参数化向量或数组。",
+      "severity": "HIGH",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.625,
+      "contradiction": "AlertIsFatal 作为 localparam 定义为1位常量，但 generate 块期望它是宽度为 NumAlerts 的向量。如果 NumAlerts>1，索引 AlertIsFatal[i] 会超出宽度范围，导致无法正确区分多个警报的致命性。需要将 AlertIsFatal 定义为参数化向量或数组。",
+      "involved_signals": [
+        "AlertIsFatal"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac__generate_for__gen_alert_tx__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "assumption",
+          "excerpt": "NumAlerts parameter not visible in this chunk; localparam AlertIsFatal = {1'b1} assumes only one alert. If NumAlerts>1, the alert_test assignment and AlertIsFatal width would be mismatched, potentiall"
+        },
+        {
+          "spec": "hmac__generate_for__gen_alert_tx__001",
+          "field": "guarantee",
+          "excerpt": "Each instance is parameterized with AsyncOn = AlertAsyncOn[i] and IsFatal = AlertIsFatal[i] from the generate variable i."
+        },
+        {
+          "spec": "hmac__generate_for__gen_alert_tx__001",
+          "field": "guarantee",
+          "excerpt": "For each i, alert_tx_o[i] is driven by the prim_alert_sender instance u_prim_alert_sender with the given port map."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "err_valid asserts when update_seckey_inprocess is true and hmac_err is not active, but it is unclear whether this error ",
+      "severity": "HIGH",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.625,
+      "contradiction": "The assumption is an uncertain flag from LLM, not a confirmed specification requirement. It raises a potential timing concern about wipe_secret_we missing the write when reg_error is a short pulse. The guarantee only describes that wipe_secret output is assigned from the register qe, which does not address the generation or timing of wipe_secret_we or its relationship to reg_error. Without further spec information on whether such a short pulse is legal or how long reg_error must be asserted, we ",
+      "involved_signals": [
+        "update_seckey_inprocess",
+        "err_code",
+        "wipe_secret_we"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__batched_small_assigns__001",
+        "hmac__always_comb__line_846__001",
+        "hmac__continuous_region__declarations_or_instances__008",
+        "hmac__always_comb__line_825__001",
+        "hmac__continuous_region__declarations_or_instances__005",
+        "hmac_reg_top__continuous_region__declarations_or_instances__016"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__batched_small_assigns__001",
+          "field": "assumption",
+          "excerpt": "err_valid asserts when update_seckey_inprocess is true and hmac_err is not active, but it is unclear whether this error alone is sufficient to halt or block further secret key operations."
+        },
+        {
+          "spec": "hmac__always_comb__line_846__001",
+          "field": "guarantee",
+          "excerpt": "Else, when update_seckey_inprocess is true, err_code is assigned SwUpdateSecretKeyInProcess."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__008",
+          "field": "guarantee",
+          "excerpt": "intr_hw_hmac_err drives hw2reg.intr_state.hmac_err.de and .d, and intr_hmac_err_o based on event_intr_i connected to err_valid."
+        },
+        {
+          "spec": "hmac__always_comb__line_825__001",
+          "field": "guarantee",
+          "excerpt": "update_seckey_inprocess is 1 when cfg_block is true and at least one reg2hw.key[i].qe bit is set, else 0."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "err_valid is a clean, glitch-free pulse that is asserted together with a stable err_code"
+        },
+        {
+          "spec": "hmac__always_comb__line_846__001",
+          "field": "guarantee",
+          "excerpt": "Otherwise, err_code is assigned NoError."
+        },
+        {
+          "spec": "hmac__continuous_region__batched_small_assigns__001",
+          "field": "guarantee",
+          "excerpt": "err_valid is asserted when reg2hw.intr_state.hmac_err.q is low and any of hash_start_sha_disabled, update_seckey_inprocess, hash_start_active, msg_push_not_allowed, invalid_config_atstart is high."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "assumption",
+          "excerpt": "wipe_secret_we is conditioned on reg_error being high; if reg_error is a short pulse or deasserts before the write completes, the secret wipe may be missed or incomplete."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "缺少覆盖：当消息FIFO不可写时，msg_allowed可能错误保持高电平。提供的保证未涵盖所有不可写状态，可能导致中断被过早解除屏蔽。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.6,
+      "contradiction": "缺少覆盖：当消息FIFO不可写时，msg_allowed可能错误保持高电平。提供的保证未涵盖所有不可写状态，可能导致中断被过早解除屏蔽。",
+      "involved_signals": [
+        "msg_allowed"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__declarations_or_instances__007",
+        "hmac__continuous_region__declarations_or_instances__010",
+        "hmac__continuous_region__int__001",
+        "hmac__always_ff__line_414__001",
+        "hmac__always_ff__line_414__001 (second property)"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__007",
+          "field": "assumption",
+          "excerpt": "msg_allowed is asserted only when software is permitted to write the message FIFO.\nrisk: If msg_allowed is erroneously high when FIFO not writable, the interrupt could be unmasked prematurely; if erro"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "msg_push_not_allowed is asserted when msg_fifo_req is high and msg_allowed is low."
+        },
+        {
+          "spec": "hmac__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "msg_write is asserted when msg_fifo_req, msg_fifo_we, ~hmac_fifo_wsel, and msg_allowed are all true."
+        },
+        {
+          "spec": "hmac__always_ff__line_414__001",
+          "field": "guarantee",
+          "excerpt": "When no control condition is active (hash_start_or_continue and packer_flush_done both low) and reset is deasserted, msg_allowed retains its previous value."
+        },
+        {
+          "spec": "hmac__always_ff__line_414__001 (second property)",
+          "field": "guarantee",
+          "excerpt": "When hash_start_or_continue is low and packer_flush_done is high at a rising clock edge, msg_allowed is set to 0."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "硬件允许在未加载有效密钥（全零密钥）的情况下启动 HMAC 计算，可能导致致命的安全漏洞。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.6,
+      "contradiction": "假设担忧 secret_key_i 在此模块块中未使用可能导致顶层断连，但提供的 guarantee 仅涉及 secret_key 和 secret_key_d 的内部更新，未说明 secret_key_i 的连接状态，无法判断是否存在断连。信息不足。",
+      "involved_signals": [
+        "secret_key"
+      ],
+      "involved_specs": [
+        "hmac__always_ff__line_229__001",
+        "hmac__always_comb__update_secret_key__001",
+        "hmac_core__always_comb__adjust_key_pad_length__001",
+        "hmac_core__continuous_region__hmac_core__001",
+        "hmac__continuous_region__declarations_or_instances__009"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_ff__line_229__001",
+          "field": "assumption",
+          "excerpt": "secret_key resets to all zeros. It is not clear if a zero key is considered a safe 'not-loaded' state or if the design could inadvertently compute with a zeroed key before a valid key is loaded."
+        },
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "guarantee",
+          "excerpt": "secret_key_d is defaulted to secret_key before any conditional override."
+        },
+        {
+          "spec": "hmac_core__always_comb__adjust_key_pad_length__001",
+          "field": "guarantee",
+          "excerpt": "When key_length_i equals Key_1024, i_pad_256 and o_pad_256 are forced to all zeros; i_pad_512 and o_pad_512 are assigned secret_key_i[1023:0] XORed with the corresponding 1024-bit pad constants (8'h36"
+        },
+        {
+          "spec": "hmac_core__always_comb__adjust_key_pad_length__001",
+          "field": "guarantee",
+          "excerpt": "When key_length_i equals Key_512, i_pad_256 and o_pad_256 are assigned secret_key_i[1023:512] XORed with 8'h36/8'h5c constants directly (no padding needed); i_pad_512 and o_pad_512 zero-pad secret_key"
+        },
+        {
+          "spec": "hmac_core__continuous_region__hmac_core__001",
+          "field": "assumption",
+          "excerpt": "The secret_key_i input port is declared but never used in this chunk. Its handling appears elsewhere; missing usage here could indicate a disconnection risk at the top level."
+        },
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "guarantee",
+          "excerpt": "secret_key_d is defaulted to secret_key before any conditional override."
+        },
+        {
+          "spec": "hmac__always_ff__line_229__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, secret_key is cleared to all zeros (asynchronously asserted, synchronously deasserted on clk_i)."
+        },
+        {
+          "spec": "hmac__always_ff__line_229__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is high, secret_key captures secret_key_d on every posedge clk_i."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "[B-AG+U-UP] Simultaneous assertion of hash_start_or_continue and (reg_hash_done or reg_hash_stop) sets cfg_block to 1, ignoring the ",
+      "severity": "HIGH",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.537,
+      "contradiction": "The assumption describes a potential timing concern about packer_flush_done triggering reg_hash_process_i before all data is transferred. The provided guarantees only address the logical generation of reg_hash_process, hash_process, and sha_hash_process_o, but do not specify any timing relationship between packer_flush_done and data readiness. It is unclear whether this timing scenario is considered a legal condition or an illegal state, as the full specification of the packer data handshake is ",
+      "involved_signals": [
+        "reg_hash_stop",
+        "reg_hash_start",
+        "hash_start_sha_disabled",
+        "reg_hash_process",
+        "hash_continue",
+        "hash_done_event",
+        "hash_process",
+        "hash_start_or_continue",
+        "sha_hash_continue",
+        "sha_en",
+        "cfg_block",
+        "invalid_config",
+        "hash_start",
+        "tl_reg_h2d.a_valid",
+        "tl_reg_h2d.a_user.chk_en"
+      ],
+      "involved_specs": [
+        "hmac__always_ff__line_365__001",
+        "hmac_core__continuous_region__batched_small_assigns__001",
+        "hmac_core__continuous_region__declarations_or_instances__006",
+        "hmac__always_ff__line_931__001",
+        "hmac__continuous_region__declarations_or_instances__005",
+        "hmac_core__continuous_region__hmac_core__001",
+        "hmac__continuous_region__declarations_or_instances__010",
+        "hmac__always_comb__line_846__001",
+        "hmac__continuous_region__declarations_or_instances__007",
+        "hmac_core__always_ff__line_278__001",
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac_core__always_comb__next_state__001",
+        "hmac__always_ff__line_924__001",
+        "hmac__continuous_region__declarations_or_instances__006",
+        "hmac__always_comb__line_149__001",
+        "hmac_core__always_ff__line_464__001",
+        "hmac__continuous_region__batched_small_assigns__001",
+        "hmac__always_ff__line_414__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_ff__line_365__001",
+          "field": "assumption",
+          "excerpt": "Simultaneous assertion of hash_start_or_continue and (reg_hash_done or reg_hash_stop) sets cfg_block to 1, ignoring the done/stop. Is this prioritization intended?"
+        },
+        {
+          "spec": "hmac_core__continuous_region__batched_small_assigns__001",
+          "field": "guarantee",
+          "excerpt": "reg_hash_stop_d is set to 1 if reg_hash_stop_i is 1, cleared to 0 if sha_hash_done_i is 1 and reg_hash_stop_q is 1, else retains reg_hash_stop_q"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "idle_d is assigned by a prioritized ternary chain: if reg_hash_start_i or reg_hash_continue_i is high, idle_d = 0; else if st_q == StIdle, idle_d = 1; else if txcnt_eq_blksz and reg_hash_stop_d are bo"
+        },
+        {
+          "spec": "hmac__always_ff__line_931__001",
+          "field": "guarantee",
+          "excerpt": "initiated is set to 1'b1 on hash_start_or_continue assertion, regardless of hash_process or reg_hash_stop"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "The combinational gating of hash_start/continue/process uses sha_en, cfg_block, invalid_config that are not synchronized to the short reg_hash_* pulse, creating a potential race condition"
+        },
+        {
+          "spec": "hmac_core__continuous_region__hmac_core__001",
+          "field": "guarantee",
+          "excerpt": "sha_hash_start_o is muxed: if hmac_en_i is true it equals internal hash_start, otherwise it equals reg_hash_start_i."
+        },
+        {
+          "spec": "hmac_core__continuous_region__hmac_core__001",
+          "field": "guarantee",
+          "excerpt": "sha_hash_continue_o is muxed: if hmac_en_i is true it equals internal hash_continue, otherwise it equals reg_hash_continue_i."
+        },
+        {
+          "spec": "hmac_core__continuous_region__hmac_core__001",
+          "field": "guarantee",
+          "excerpt": "sha_hash_process_o is muxed: if hmac_en_i is true it equals (reg_hash_process_i OR hash_process), otherwise it equals reg_hash_process_i."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "[B-AG+U-UP] The register interface asserts reg2hw.key[*].qe only during safe update windows (i.e., when the engine is idle), consist",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.487,
+      "contradiction": "The assumption constrains key writes to safe (idle) windows, implying that writes during active processing are illegal/unexpected. Guarantee \"hmac__always_comb__line_825__001\" shows the hardware detects the condition where cfg_block is true (engine busy) and a key write qualifier is asserted, setting update_seckey_inprocess. This represents a defensive detection/response to the violation of the assumption, not a contradiction or functional gap.",
+      "involved_signals": [
+        "reg2hw.key[31-i].qe",
+        "cfg_block",
+        "reg2hw.key[*].qe",
+        "reg2hw.key",
+        "reg2hw.cfg",
+        "reg2hw.key[0].q",
+        "reg2hw.key[*].q",
+        "reg2hw.key[11:31].q",
+        "reg2hw.intr_test.hmac_done.qe",
+        "hmac_reg2hw_wipe_secret_reg_t",
+        "HMAC_WIPE_SECRET_OFFSET",
+        "hmac_reg2hw_intr_test_reg_t",
+        "hmac_reg2hw_alert_test_reg_t"
+      ],
+      "involved_specs": [
+        "hmac__always_comb__update_secret_key__001",
+        "hmac__always_comb__line_825__001",
+        "hmac__always_ff__line_365__001",
+        "hmac__always_comb__line_846__001",
+        "hmac_reg_top__continuous_region__declarations_or_instances__009",
+        "hmac__always_comb__assign_digest_reg__001",
+        "hmac__always_ff__line_375__001",
+        "hmac_reg_top__always_comb__line_2365__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "assumption",
+          "excerpt": "The register interface asserts reg2hw.key[*].qe only during safe update windows (i.e., when the engine is idle), consistent with the cfg_block assumption."
+        },
+        {
+          "spec": "hmac__always_comb__line_825__001",
+          "field": "guarantee",
+          "excerpt": "update_seckey_inprocess is 1 when cfg_block is true and at least one reg2hw.key[i].qe bit is set, else 0."
+        },
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "assumption",
+          "excerpt": "The exact conditions under which cfg_block is asserted must be verified against the HRAC engine state machine to ensure key updates are truly restricted to idle. The comment mentions Idle, but the RTL"
+        },
+        {
+          "spec": "hmac__always_ff__line_365__001",
+          "field": "guarantee",
+          "excerpt": "cfg_block is set to 1 when hash_start_or_continue is asserted, regardless of reg_hash_done or reg_hash_stop."
+        },
+        {
+          "spec": "hmac__always_comb__line_825__001",
+          "field": "guarantee",
+          "excerpt": "update_seckey_inprocess is 1 when cfg_block is true and at least one reg2hw.key[i].qe bit is set, else 0."
+        },
+        {
+          "spec": "hmac__always_comb__line_825__001",
+          "field": "assumption",
+          "excerpt": "update_seckey_inprocess is a glitch-prone combinational OR of cfg_block and key qe bits; if cfg_block deasserts before all key qualifier bits clear, the signal may fall prematurely."
+        },
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "guarantee",
+          "excerpt": "When wipe_secret is deasserted and cfg_block is low, for each word index i from 0 to 31, if reg2hw.key[31-i].qe is true, then secret_key_d[32*i+:32] is updated to conv_endian32(reg2hw.key[31-i].q, key"
+        },
+        {
+          "spec": "hmac__always_comb__line_846__001",
+          "field": "guarantee",
+          "excerpt": "Else, when update_seckey_inprocess is true, err_code is assigned SwUpdateSecretKeyInProcess."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "wipe_v is a vector exactly one key word (32 bits) wide, so the replication {32{wipe_v}} correctly fills the 1024‑bit sec",
+      "severity": "MEDIUM",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.462,
+      "contradiction": "无法确定 wipe_v 的宽度要求是否已被硬件 guarantee 满足。相关 guarantee 仅描述了 wipe 操作的行为，未明确约束 wipe_v 必须为 32 位宽度。且模块端口宽度定义未提供，因此无法判断假设是否被满足。",
+      "involved_signals": [
+        "wipe_v"
+      ],
+      "involved_specs": [
+        "hmac__always_comb__update_secret_key__001",
+        "hmac__continuous_region__declarations_or_instances__016"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "assumption",
+          "excerpt": "wipe_v is a vector exactly one key word (32 bits) wide, so the replication {32{wipe_v}} correctly fills the 1024‑bit secret_key_d without truncation or zero‑extension.\\nrisk: If wipe_v is narrower, ze"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "One cycle after wipe_secret is asserted, secret_key equals the wipe value replicated to match secret_key's width."
+        },
+        {
+          "spec": "hmac__always_comb__update_secret_key__001",
+          "field": "assumption",
+          "excerpt": "The wipe construct `{32{wipe_v}}` assumes wipe_v is exactly 32 bits wide (one key word). If wipe_v is wider (e.g., 64 bits), the replicate‑concatenation will mismatch the width of secret_key_d (likely"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "One cycle after wipe_secret is asserted, secret_key equals the wipe value replicated to match secret_key's width."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "[B-AG+U-UP] Digest registers are writable (digest_*_we) without any visible lock or sequencing; it is unclear if allowing writes to ",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.45,
+      "contradiction": "Assumption requires digest_size_started_q to remain stable during the transfer. The guarantee shows that digest_size_started_d is either updated with digest_size when hash_start_or_continue is asserted, or holds its previous value via digest_size_started_q. The register digest_size_started_q is updated to digest_size_started_d on every clock, so as long as hash_start_or_continue remains deasserted during the transfer, digest_size_started_q remains unchanged. This matches the stable snapshot requ",
+      "involved_signals": [
+        "digest_0_we",
+        "digest_size",
+        "addr_hit",
+        "digest_mode_e",
+        "digest_swap",
+        "digest",
+        "digest_size_started_q",
+        "digest_size_started_d",
+        "reg2hw.digest",
+        "hmac_fifo_wdata_sel",
+        "reg2hw.cfg.hmac_en.qe",
+        "reg2hw.cfg.sha_en.qe",
+        "reg2hw.cfg.endian_swap.qe",
+        "reg2hw.cfg.digest_swap.qe",
+        "reg2hw.cfg.key_swap.qe",
+        "reg2hw.cfg.digest_size.qe",
+        "reg2hw.cfg.key_length.qe",
+        "cfg_reg",
+        "reg_we_check",
+        "key_0_we",
+        "key_1_we",
+        "key_2_we",
+        "key_3_we",
+        "key_4_we",
+        "key_5_we",
+        "key_6_we",
+        "key_7_we",
+        "key_8_we",
+        "key_9_we",
+        "key_10_we",
+        "key_11_we",
+        "key_12_we",
+        "key_13_we",
+        "key_14_we",
+        "key_15_we",
+        "key_16_we",
+        "key_17_we",
+        "key_18_we",
+        "key_19_we",
+        "key_20_we",
+        "key_21_we",
+        "key_22_we",
+        "key_23_we",
+        "key_24_we",
+        "key_25_we",
+        "key_26_we",
+        "key_27_we",
+        "key_28_we",
+        "key_29_we",
+        "key_30_we",
+        "key_31_we",
+        "wipe_secret_we",
+        "digest_1_we",
+        "digest_2_we",
+        "digest_3_we",
+        "digest_4_we",
+        "digest_5_we",
+        "digest_6_we",
+        "digest_7_we",
+        "digest_8_we",
+        "digest_9_we",
+        "digest_10_we",
+        "digest_11_we",
+        "digest_12_we",
+        "digest_13_we",
+        "digest_14_we",
+        "digest_15_we",
+        "..."
+      ],
+      "involved_specs": [
+        "hmac_reg_top__continuous_region__declarations_or_instances__016",
+        "hmac_reg_top__continuous_region__declarations_or_instances__009",
+        "hmac__continuous_region__declarations_or_instances__010",
+        "hmac_core__continuous_region__declarations_or_instances__001",
+        "hmac_core__always_comb__line_236__001",
+        "hmac_reg_top__always_comb__line_2365__001",
+        "hmac_reg_top__always_comb__line_1944__001",
+        "hmac__continuous_region__declarations_or_instances__002",
+        "hmac__continuous_region__declarations_or_instances__005",
+        "hmac__always_comb__assign_digest_reg__001",
+        "hmac__always_comb__select_fifo_wdata__001",
+        "hmac__always_comb__cast_digest_size__001",
+        "hmac_core__always_comb__assign_sha_message_length__001",
+        "hmac__continuous_region__batched_small_assigns__001",
+        "hmac__always_ff__line_314__001",
+        "hmac__always_ff__line_931__001",
+        "hmac__always_comb__update_secret_key__001",
+        "hmac__always_ff__line_375__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "assumption",
+          "excerpt": "Digest registers are writable (digest_*_we) without any visible lock or sequencing; it is unclear if allowing writes to the digest during operation is intended or a potential integrity threat."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "Digest subregisters (0–15) and msg_length_lower/upper have .re connected to a read-enable signal (digest_i_re, etc.), allowing software reads of these registers."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__010",
+          "field": "assumption",
+          "excerpt": "The invalid_config expression only blocks the combination (key_length == Key_1024) with (digest_size == SHA2_256) when HMAC mode is enabled. Other digest sizes (e.g., SHA2_384, SHA2_512) may also have"
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "sha_rdata_o equals '{data: o_pad_512[(BlockSizeSHA512-1)-32*pad_index_512-:32], mask: '1} when HMAC enabled, sel_rdata selects OPad, and digest is SHA-384 or SHA-512."
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "sha_rdata_o equals '{data: i_pad_512[(BlockSizeSHA512-1)-32*pad_index_512-:32], mask: '1} when HMAC enabled, sel_rdata selects IPad, and digest is SHA-384 or SHA-512."
+        },
+        {
+          "spec": "hmac_core__always_comb__line_236__001",
+          "field": "guarantee",
+          "excerpt": "txcnt_eq_blksz is 0 when digest_size_i is not SHA2_256, SHA2_384, or SHA2_512 (including the default case)"
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2365__001",
+          "field": "assumption",
+          "excerpt": "addr_hit indices 10 through 40 all read zero. It is unclear which registers these represent (likely write-only key shares) and why key[2] is not explicitly assigned to any index. Need cross-check with"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "wipe_secret_we is asserted exactly when addr_hit[8] is high, reg_we is high, and reg_error is high."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "For a 1024-bit key, the inner and outer pads for SHA-256 are explicitly zeroed because the configuration is 'not allowed",
+      "severity": "MEDIUM",
+      "verdict": "DEFENSIVE",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.412,
+      "contradiction": "Assumption explicitly states the configuration (1024‑bit key with SHA‑256) is 'not allowed', making it an illegal input scenario. The guarantees show that the hardware responds defensively: it forces the inner and outer pads to zero when this illegal combination is detected, thereby preventing exposure of the real key, and it asserts invalid_config to flag the error condition. Although no explicit interlock stops the HMAC operation, the zeroing of pads is a deliberate defensive fallback that avo",
+      "involved_signals": [
+        "i_pad_256, o_pad_256"
+      ],
+      "involved_specs": [
+        "hmac_core__always_comb__adjust_key_pad_length__001",
+        "hmac__always_comb__cast_key_length__001",
+        "hmac__continuous_region__declarations_or_instances__010"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_comb__adjust_key_pad_length__001",
+          "field": "assumption",
+          "excerpt": "For a 1024-bit key, the inner and outer pads for SHA-256 are explicitly zeroed because the configuration is 'not allowed'. However, no hardware interlock prevents the HMAC from being operated in SHA-2"
+        },
+        {
+          "spec": "hmac__always_comb__cast_key_length__001",
+          "field": "guarantee",
+          "excerpt": "key_length is assigned the value of key_length_supplied if it matches a supported key length (Key_128, Key_256, Key_384, Key_512, Key_1024); for any other value, key_length is assigned Key_None."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "invalid_config is asserted if digest_size equals SHA2_None, or if key_length equals Key_None and hmac_en is high, or if key_length equals Key_1024 and digest_size equals SHA2_256 and hmac_en is high."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "[B-AG+U-UP] 硬编码的地址范围 [4096:8191] 没有任何硬件保证其与实际 HMAC 窗口基址/尺寸一致。若集成时发生偏差，reg_steer 可能将窗口访问误路由至寄存器空间或反之，造成数据破坏或安全漏洞。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "The correctness of address decoding depends entirely on the exact values of the OFFSET parameters. Any mismatch between parameter definitions and the hardware address map would cause hit misrouting.",
+      "involved_signals": [
+        "tl_i.a_address",
+        "intg_err",
+        "reg_addr",
+        "all HMAC_*_OFFSET parameters"
+      ],
+      "involved_specs": [
+        "hmac_reg_top__always_comb__line_129__001",
+        "hmac__continuous_region__declarations_or_instances__016",
+        "hmac_reg_top__continuous_region__hmac_reg_top__001",
+        "hmac_reg_top__continuous_region__declarations_or_instances__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__always_comb__line_129__001",
+          "field": "assumption",
+          "excerpt": "The address range [4096:8191] corresponds to a non-register region (e.g., HMAC window) in the system memory map."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "tl_o.a_ready is driven to a known value after reset."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "tl_o.d_valid is driven to a known value after reset."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_129__001",
+          "field": "assumption",
+          "excerpt": "Hardcoded address range [4096:8191] may not match the actual HMAC window base/size defined elsewhere."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "tl_o.a_ready is driven to a known value after reset."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "tl_o.d_valid is driven to a known value after reset."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__hmac_reg_top__001",
+          "field": "guarantee",
+          "excerpt": "tlul_cmd_intg_chk instance continuously checks incoming TL-UL command integrity and asserts intg_err when an integrity violation is detected on tl_i."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_129__001",
+          "field": "assumption",
+          "excerpt": "intg_err is combinational; a transition mid-transaction could change reg_steer after the address phase, causing a mismatch in steering."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "[B-AG+U-UP] 如果在 StMsg 状态下 sel_rdata 被错误地设为 SelIPad 或 SelOPad，pad 数据可能被注入消息流，破坏 HMAC 内部状态并可能导致内部 pad 值泄露。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "msg_fifo_rdata and msg_fifo_rerror are fixed to all-ones, making every read return garbage data with an error. It is unclear whether the message fifo read path is intentionally disabled (write-only) or is a placeholder that could cause data leakage or denial of service if accidentally read.",
+      "involved_signals": [
+        "sel_rdata / st_q",
+        "sel_rdata",
+        "msg_fifo_rdata",
+        "msg_fifo_rerror",
+        "key_i_qs",
+        "any read data aggregation logic"
+      ],
+      "involved_specs": [
+        "hmac_core__continuous_region__declarations_or_instances__001",
+        "hmac_core__always_comb__next_state__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "When sel_rdata == SelIPad or SelOPad, st_q is not StMsg (i.e., HMAC is not in the message‑streaming phase), so pad data is not mixed with message data flow."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "In StIPad, sel_rdata = SelIPad; if txcnt_eq_blksz, st_d = StMsg and hmac_sha_rvalid=0; else st_d = StIPad and hmac_sha_rvalid=1."
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "The sha_rdata_o multiplexer does not verify that sel_rdata is only asserted during a safe state; it relies on the external HMAC FSM to ensure sel_rdata is never SelIPad/SelOPad while st_q == StMsg."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "For any state not explicitly listed, st_d = StIdle."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "In StOPad, sel_rdata=SelOPad, fifo_wsel_o=1; if txcnt_eq_blksz, st_d=StMsg and hmac_sha_rvalid=0; else st_d=StOPad and hmac_sha_rvalid=1."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "In StIPad, sel_rdata = SelIPad; if txcnt_eq_blksz, st_d = StMsg and hmac_sha_rvalid=0; else st_d = StIPad and hmac_sha_rvalid=1."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "[B-AG+U-UP] The design assumes Inner is stable during reset to prevent round_q from capturing a transient or glitched value, but no guarantee ensures Inner stability. This leaves a g",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "The design assumes Inner is stable during reset to prevent round_q from capturing a transient or glitched value, but no guarantee ensures Inner stability. This leaves a gap where input instability during reset can corrupt the core state.",
+      "involved_signals": [
+        "Inner",
+        "rst_ni",
+        "reg_hash_stop",
+        "round_d",
+        "sha_hash_done"
+      ],
+      "involved_specs": [
+        "hmac_core__always_ff__line_288__001",
+        "hmac_core__always_comb__next_state__001",
+        "hmac_reg_top__always_ff__line_72__001",
+        "hmac_core__continuous_region__batched_small_assigns__001",
+        "hmac_core__always_ff__line_486__001",
+        "hmac__always_ff__line_365__001",
+        "hmac_core__always_ff__line_464__001",
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac_core__continuous_region__hmac_core__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "assumption",
+          "excerpt": "Inner is a stable, constant value during reset so that round_q receives a consistent initial value."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "guarantee",
+          "excerpt": "Unless overridden by a state case, all outputs take default values: ... round_d=Inner, ..."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On asynchronous reset (rst_ni low), err_q is cleared to 0."
+        },
+        {
+          "spec": "hmac_core__continuous_region__batched_small_assigns__001",
+          "field": "guarantee",
+          "excerpt": "sel_msglen is SelIPadMsg when round_q equals Inner, otherwise SelOPadMsg"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_288__001",
+          "field": "assumption",
+          "excerpt": "If rst_ni is released high while Inner is changing, round_q could sample a metastable or incorrect value because the reset assignment is asynchronous and may not meet setup/hold constraints relative t"
+        },
+        {
+          "spec": "hmac_core__always_ff__line_486__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, idle_q is asynchronously forced to 1'b1."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On asynchronous reset (rst_ni low), err_q is cleared to 0."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On each posedge clk_i when rst_ni is high, if intg_err or reg_we_err is high, err_q is set to 1; otherwise it retains its previous value."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "[B-AG+U-UP] The design lacks a lock or block mechanism on the message_length register during hash computations. A write to the message_length register while the hash engine is active",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "(1) The assumption explicitly describes the case of an illegal key_length_i, which is an invalid/unsupported input that software should never supply. This is therefore an illegal input scenario. (2) The guarantees show that the hardware converts an unsupported key_length_supplied to the enumeration Key_None, and asserts the invalid_config flag when key_length is Key_None and hmac_en is active. This provides error detection at the system level. (3) Although the HMAC core internally produces zero ",
+      "involved_signals": [
+        "message_length",
+        "cfg_reg.key_length.q",
+        "key_length",
+        "sha_en",
+        "txcount",
+        "hmac_start",
+        "error_output"
+      ],
+      "involved_specs": [
+        "hmac__always_comb__line_645__001",
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac_core__always_comb__line_254__001",
+        "hmac__continuous_region__batched_small_assigns__001",
+        "hmac__continuous_region__declarations_or_instances__002",
+        "hmac__always_comb__cast_key_length__001",
+        "hmac_core__always_comb__adjust_key_pad_length__001",
+        "hmac__continuous_region__declarations_or_instances__010",
+        "hmac__continuous_region__declarations_or_instances__005",
+        "hmac__continuous_region__int__001",
+        "hmac_core__always_comb__next_state__001",
+        "hmac_core__always_comb__line_236__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "assumption",
+          "excerpt": "If cfg_block is deasserted and a register write occurs while the hash engine is active (after hash_start), message_length_d can be changed, potentially corrupting the final HMAC. Is cfg_block guarante"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "hw2reg.msg_length_upper.d is driven by message_length[63:32]"
+        },
+        {
+          "spec": "hmac_core__always_comb__line_254__001",
+          "field": "guarantee",
+          "excerpt": "When clr_txcount is deasserted and load_txcount is asserted, txcount_d is set to message_length_i plus a block-size constant: BlockSizeSHA256in64 for SHA2_256, BlockSizeSHA512in64 for SHA2_384 or SHA2"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "hw2reg.msg_length_lower.d is driven by message_length[31:0]"
+        },
+        {
+          "spec": "hmac__continuous_region__batched_small_assigns__001",
+          "field": "assumption",
+          "excerpt": "key_length_supplied is a direct combinational wire from cfg_reg.key_length.q; if the register value changes while a key supply operation is in progress, the supplied key length may become inconsistent"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "unused_cfg_qe is the XOR reduction of cfg_reg.sha_en.qe, cfg_reg.hmac_en.qe, cfg_reg.endian_swap.qe, cfg_reg.digest_swap.qe, cfg_reg.key_swap.qe, cfg_reg.digest_size.qe, cfg_reg.key_length.qe"
+        },
+        {
+          "spec": "hmac__always_comb__cast_key_length__001",
+          "field": "guarantee",
+          "excerpt": "key_length is assigned the value of key_length_supplied if it matches a supported key length (Key_128, Key_256, Key_384, Key_512, Key_1024); for any other value, key_length is assigned Key_None."
+        },
+        {
+          "spec": "hmac_core__always_comb__adjust_key_pad_length__001",
+          "field": "assumption",
+          "excerpt": "The unique case default clause leaves all pads at zero when key_length_i is illegal. No error flag is asserted, and the zero pads propagate into the HMAC computation, potentially breaking the MAC secu"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "hmac_en_i is assumed stable during the combinational evaluation; glitches may cause transient incorrect sha_msg_len.\nris",
+      "severity": "MEDIUM",
+      "verdict": "SATISFIED",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "The guarantee states that whenever hmac_en toggles, the core is idle (in_process and initiated low). This ensures that during active hash computation cycles, hmac_en remains stable, directly mitigating the risk described in the assumption.",
+      "involved_signals": [
+        "hmac_en"
+      ],
+      "involved_specs": [
+        "hmac_core__always_comb__assign_sha_message_length__001",
+        "hmac__continuous_region__declarations_or_instances__016"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_comb__assign_sha_message_length__001",
+          "field": "assumption",
+          "excerpt": "hmac_en_i is assumed stable during the combinational evaluation; glitches may cause transient incorrect sha_msg_len.\nrisk: If hmac_en_i changes unintendedly during a hash computation cycle, the length"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "When hmac_en toggles (hmac_en != $past(hmac_en)), both in_process and initiated are low."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0017",
+      "title": "[U-UP] The unconnected alert_ack_o may cause the prim_alert_sender to stall waiting for an acknowledge, preventing the alert from completing.",
+      "severity": "MEDIUM",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.324,
+      "contradiction": "All alert sender instances are triggered by the single signal alerts[0]; it is unclear whether this is intended to trigger all alerts simultaneously or if per‑alert distinction is required.",
+      "involved_signals": [
+        "alert_ack_o",
+        "alert_req_i",
+        "alerts[0]"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0018",
+      "title": "[U-UP] shadow_busy is tied to 0, indicating that shadow register busy status is never asserted.",
+      "severity": "MEDIUM",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.324,
+      "contradiction": "reg_busy is tied to 0 (via shadow_busy), providing no busy indication for register operations.",
+      "involved_signals": [
+        "shadow_busy",
+        "reg_busy"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0019",
+      "title": "Missing guarantee that addr_hit is one-hot; multiple bits could be asserted simultaneously, potentially causing wr_err to be triggered by a permission mismatch on a non-accessed register, falsely abor",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The guarantee describes a condition for wipe_secret_we using a single addr_hit bit, not the error logic involving wr_err. It does not confirm or resolve the potential issue of spurious wr_err due to multi-hit decoder errors. Without more information, we cannot determine if the assumption is satisfied or violated.",
+      "involved_signals": [
+        "addr_hit"
+      ],
+      "involved_specs": [
+        "hmac_reg_top__always_comb__line_2009__001",
+        "hmac_reg_top__continuous_region__declarations_or_instances__016",
+        "hmac_reg_top__always_comb__line_2365__001",
+        "hmac_reg_top__always_comb__line_1944__001",
+        "hmac_reg_top__continuous_region__batched_small_assigns__001",
+        "hmac_reg_top__continuous_region__declarations_or_instances__009"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__always_comb__line_2009__001",
+          "field": "assumption",
+          "excerpt": "addr_hit is a one-hot vector; exactly one addr_hit[i] is high for the currently addressed register."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "wipe_secret_we is asserted exactly when addr_hit[8] is high, reg_we is high, and reg_error is high."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2365__001",
+          "field": "guarantee",
+          "excerpt": "When addr_hit[3] is true, reg_rdata_next[0] = 0."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2365__001",
+          "field": "guarantee",
+          "excerpt": "When addr_hit[2] is true, reg_rdata_next[2:0] = 3'b0."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2365__001",
+          "field": "guarantee",
+          "excerpt": "When addr_hit[5] is true, reg_rdata_next[3:0] = 4'b0."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2365__001",
+          "field": "guarantee",
+          "excerpt": "When any addr_hit[n] for 10 ≤ n ≤ 40 is true, reg_rdata_next[31:0] = 0."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_2365__001",
+          "field": "assumption",
+          "excerpt": "addr_hit must be exactly one-hot at all times. Multiple bits high or all-zero violates intended decoding."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_1944__001",
+          "field": "guarantee",
+          "excerpt": "addr_hit[i] is asserted exactly when reg_addr equals the corresponding HMAC register offset parameter for all defined indices (0 to 58)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0020",
+      "title": "The RTL may lack proper gating of hash_start/continue/process signals when cfg_block or invalid_config is asserted, potentially allowing conflicting hash operations to start while the core is busy or ",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The RTL specification lacks a guarantee that msg_length_lower/upper.q outputs reflect valid written values when their qe bits are set and cfg_block is low. Without such a guarantee, the hardware may not enforce correct loading of message length, potentially allowing garbage values to be used for HMAC length tracking.",
+      "involved_signals": [
+        "cfg_block"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__declarations_or_instances__005",
+        "hmac__always_ff__line_365__001",
+        "hmac__continuous_region__declarations_or_instances__010",
+        "hmac__always_comb__line_645__001",
+        "hmac__always_ff__line_375__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "The qualification of hash_start/continue/process only prevents new operations when invalid_config or cfg_block is asserted; an ongoing hash operation is not aborted or flushed if an error/block condit"
+        },
+        {
+          "spec": "hmac__always_ff__line_365__001",
+          "field": "guarantee",
+          "excerpt": "cfg_block is set to 1 when hash_start_or_continue is asserted, regardless of reg_hash_done or reg_hash_stop."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "invalid_config_atstart is asserted when reg_hash_start or reg_hash_continue is high and invalid_config is high."
+        },
+        {
+          "spec": "hmac__always_comb__line_645__001",
+          "field": "assumption",
+          "excerpt": "reg2hw.msg_length_lower.q and reg2hw.msg_length_upper.q hold valid length values when their qe bits are set and cfg_block is low.\nrisk: Message length may be loaded with garbage, corrupting HMAC lengt"
+        },
+        {
+          "spec": "hmac__always_ff__line_375__001",
+          "field": "guarantee",
+          "excerpt": "When not in reset, cfg_reg is overwritten with the entire reg2hw.cfg struct if cfg_block is low and reg2hw.cfg.hmac_en.qe is high; otherwise cfg_reg retains its previous value."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0021",
+      "title": "缺少对复位信号rst_ni来源的spec保证：没有复位控制器或顶层集成保证加电后rst_ni至少一次为低。这可能导致cool_down_ct_q未初始化，进而破坏HMAC冷却定时器的正确行为，使状态机卡死或违反清洗序列。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "Missing guarantee: digest_size_started_q is not explicitly initialized to SHA2_None (or any safe state) when rst_ni is low, according to the provided guarantees. This could leave the signal in an undefined or harmful state after reset.",
+      "involved_signals": [
+        "rst_ni"
+      ],
+      "involved_specs": [
+        "hmac__always_ff__line_205__001",
+        "hmac_core__always_ff__line_486__001",
+        "hmac_reg_top__always_ff__line_72__001",
+        "hmac_core__always_ff__state_ff__001",
+        "hmac__always_ff__line_414__001",
+        "hmac__always_ff__line_314__001",
+        "hmac__always_ff__line_931__001",
+        "hmac_core__always_ff__line_278__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_ff__line_205__001",
+          "field": "assumption",
+          "excerpt": "The external reset controller must assert rst_ni low at least once after power‑up to bring cool_down_ct_q to a known state of all zeros before the first non‑reset clock edge.\nrisk: If the reset is ski"
+        },
+        {
+          "spec": "hmac__always_ff__line_205__001",
+          "field": "guarantee",
+          "excerpt": "On every rising edge of clk_i, if rst_ni is low cool_down_ct_q is cleared to all zeros; otherwise cool_down_ct_q is loaded with the value of cool_down_ct_d."
+        },
+        {
+          "spec": "hmac_core__always_ff__line_486__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, idle_q is asynchronously forced to 1'b1."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On asynchronous reset (rst_ni low), err_q is cleared to 0."
+        },
+        {
+          "spec": "hmac_core__always_ff__state_ff__001",
+          "field": "guarantee",
+          "excerpt": "When reset is active (rst_ni low), st_q is driven to StIdle. Otherwise, on each rising clock edge, st_q is updated to st_d."
+        },
+        {
+          "spec": "hmac__always_ff__line_414__001",
+          "field": "guarantee",
+          "excerpt": "On active-low asynchronous reset (rst_ni = 0), msg_allowed is cleared to 0 immediately, regardless of clock."
+        },
+        {
+          "spec": "hmac__always_ff__line_314__001",
+          "field": "assumption",
+          "excerpt": "rst_ni must be driven low (active-low reset assertion) to reliably initialize digest_size_started_q to SHA2_None.\nrisk: if reset is not asserted, digest_size_started_q may power up with an undefined v"
+        },
+        {
+          "spec": "hmac__always_ff__line_931__001",
+          "field": "guarantee",
+          "excerpt": "initiated is cleared to 1'b0 when reset (rst_ni low)"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0022",
+      "title": "No hardware check exists to ensure that txcnt_eq_blksz is asserted exclusively at block boundaries. A premature toggle of txcnt_eq_blksz will prematurely assert idle_o, misleading downstream logic int",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "No hardware check exists to ensure that txcnt_eq_blksz is asserted exclusively at block boundaries. A premature toggle of txcnt_eq_blksz will prematurely assert idle_o, misleading downstream logic into believing the core is idle. This can lead to protocol errors or data corruption.",
+      "involved_signals": [
+        "txcnt_eq_blksz"
+      ],
+      "involved_specs": [
+        "hmac_core__continuous_region__declarations_or_instances__006",
+        "hmac_core__always_comb__next_state__001",
+        "hmac_core__always_comb__line_236__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "txcnt_eq_blksz must be asserted only when a complete data block has been processed (i.e., the block boundary has been reached)."
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "idle_o is continuously assigned to the value of idle_d."
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "assumption",
+          "excerpt": "txcnt_eq_blksz will be asserted after exactly one block of the IPad data has been transmitted to the SHA engine, allowing progression from StIPad."
+        },
+        {
+          "spec": "hmac_core__always_comb__line_236__001",
+          "field": "guarantee",
+          "excerpt": "txcnt_eq_blksz is 0 when digest_size_i is not SHA2_256, SHA2_384, or SHA2_512 (including the default case)"
+        },
+        {
+          "spec": "hmac_core__always_comb__line_236__001",
+          "field": "guarantee",
+          "excerpt": "When digest_size_i equals SHA2_256, txcnt_eq_blksz is assigned (txcount[BlockSizeBitsSHA256-1:0] == 0) && (txcount != 0)"
+        },
+        {
+          "spec": "hmac_core__always_comb__next_state__001",
+          "field": "assumption",
+          "excerpt": "txcnt_eq_blksz will be asserted after exactly one block of the OPad data has been transmitted, allowing progression from StOPad."
+        },
+        {
+          "spec": "hmac_core__always_comb__line_236__001",
+          "field": "guarantee",
+          "excerpt": "txcnt_eq_blksz is 0 when digest_size_i is not SHA2_256, SHA2_384, or SHA2_512 (including the default case)"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0023",
+      "title": "组合 OR 输出的 intg_err_o 若出现毛刺，会被 err_q 在时钟沿捕获并保持为 1，引发假性完整性错误中断，干扰系统正常运行。",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "该 assumption 描述的是 socket 不验证设备响应完整性且 u_rsp_intg_gen 重新计算完整性，可能掩盖篡改的潜在安全问题。该场景是否属于需要防护的合法威胁（合法输入）或设计默认的可信环境（非法场景）无法从现有信息确定。提供的 guarantees 仅检查输入命令完整性（tl_i）及地址解码，未涉及设备响应路径（tl_reg_d2h, tl_win_i）或输出生成器的完整性处理，因此无法判断 assumption 是否被满足或存在实际 bug。",
+      "involved_signals": [
+        "intg_err_o",
+        "reg_steer",
+        "u_socket"
+      ],
+      "involved_specs": [
+        "hmac_reg_top__continuous_region__declarations_or_instances__001",
+        "hmac_reg_top__always_comb__line_129__001",
+        "hmac_reg_top__continuous_region__hmac_reg_top__001",
+        "hmac_reg_top__always_ff__line_72__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "intg_err_o is a combinational OR of three error sources, making it susceptible to glitches or hazards."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_129__001",
+          "field": "guarantee",
+          "excerpt": "When intg_err is asserted, reg_steer is forced to 1 regardless of tl_i.a_address."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__hmac_reg_top__001",
+          "field": "guarantee",
+          "excerpt": "tlul_cmd_intg_chk instance continuously checks incoming TL-UL command integrity and asserts intg_err when an integrity violation is detected on tl_i."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On each posedge clk_i when rst_ni is high, if intg_err or reg_we_err is high, err_q is set to 1; otherwise it retains its previous value."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "reg_steer is a stable, glitch-free 1-bit signal that correctly selects the target device for the entire duration of any TL-UL transaction in progress.\nrisk: Changing reg_steer mid-transaction could mi"
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_129__001",
+          "field": "guarantee",
+          "excerpt": "When intg_err is asserted, reg_steer is forced to 1 regardless of tl_i.a_address."
+        },
+        {
+          "spec": "hmac_reg_top__always_comb__line_129__001",
+          "field": "guarantee",
+          "excerpt": "When intg_err is deasserted, reg_steer is 0 if tl_i.a_address[AW-1:0] falls inside [4096:8191]; otherwise reg_steer is 1."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "No explicit synchronization or handshake prevents reg_steer from changing while a TL-UL transaction is in-flight in the socket, risking misrouted responses or protocol deadlock."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0024",
+      "title": "[B-AG+U-UP] wmask_ones bit width is derived from $clog2(MsgFifoDepth+1)=5, but the wmask width for 32-bit data is only 4 bits, sugge",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "The assertion block examines only the lower 32 bits. Whether the design allows msg_fifo_wmask to be wider is unknown. If the signal is invariably 32 bits, the check is sufficient; if parameterization permits wider input, the incomplete check represents a missing coverage of a legal condition. Cannot determine without additional design constraints.",
+      "involved_signals": [
+        "wmask_ones",
+        "msg_fifo_wmask",
+        "clk_i",
+        "rst_ni"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__int__001",
+        "hmac__always_comb__line_632__001",
+        "hmac__continuous_region__declarations_or_instances__009",
+        "hmac__generate_for__gen_assert_wmask_bytealign__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__int__001",
+          "field": "assumption",
+          "excerpt": "wmask_ones bit width is derived from $clog2(MsgFifoDepth+1)=5, but the wmask width for 32-bit data is only 4 bits, suggesting a potential misuse where the counted ones might exceed 4."
+        },
+        {
+          "spec": "hmac__always_comb__line_632__001",
+          "field": "guarantee",
+          "excerpt": "wmask_ones is continuously driven to the integer count of set bits in msg_fifo_wmask[31:0]."
+        },
+        {
+          "spec": "hmac__always_comb__line_632__001",
+          "field": "assumption",
+          "excerpt": "msg_fifo_wmask must have a width of at least 32 bits, because the loop index i ranges from 0 to 31. risk: Out-of-bounds access would occur, causing simulation X-propagation or synthesis mismatch."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "msg_fifo_wmask_endian = conv_endian32(msg_fifo_wmask, endian_swap)"
+        },
+        {
+          "spec": "hmac__always_comb__line_632__001",
+          "field": "assumption",
+          "excerpt": "If msg_fifo_wmask is wider than 32 bits (e.g., due to parameterization), the hardcoded loop ignores bits [32+] and wmask_ones will undercount."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "msg_fifo_wmask_endian = conv_endian32(msg_fifo_wmask, endian_swap)"
+        },
+        {
+          "spec": "hmac__generate_for__gen_assert_wmask_bytealign__001",
+          "field": "assumption",
+          "excerpt": "The generate loop checks only 4 bytes (i=0..3) using msg_fifo_wmask[8*i+:8]; if msg_fifo_wmask has more than 32 bits, the check is incomplete."
+        },
+        {
+          "spec": "hmac__always_comb__line_632__001",
+          "field": "guarantee",
+          "excerpt": "wmask_ones is continuously driven to the integer count of set bits in msg_fifo_wmask[31:0]."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "[B-AG+U-UP] The assignment uses index reversal (31-i). This may incorrectly map key bits if the hardware-to-register bit order does ",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "The generate loop for key zeroing (indices 0..31) assumes hw2reg.key is exactly 32 bits wide. No guarantee checks that the loop actually zeroes the key or that the register width matches the loop bound. If the key field is wider (e.g., 64 bits), bits beyond index 31 could remain non-zero, potentially exposing sensitive key material.",
+      "involved_signals": [
+        "hw2reg",
+        "HMAC_PERMIT[6]",
+        "hmac_hw2reg_status_reg_t"
+      ],
+      "involved_specs": [
+        "hmac__generate_for__gen_key__001",
+        "hmac__always_comb__assign_digest_reg__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__generate_for__gen_key__001",
+          "field": "assumption",
+          "excerpt": "The assignment uses index reversal (31-i). This may incorrectly map key bits if the hardware-to-register bit order does not match the software-facing key layout, potentially swapping key bits."
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "digest_sw, digest_sw_we, and all hw2reg.digest.d are initially driven to 0 before any conditional override."
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "For each i in 0..7, when digest_size_started_q is SHA2_384 or SHA2_512, hw2reg.digest[2*i].d = conv_endian32(digest[i][63:32], digest_swap) and hw2reg.digest[2*i+1].d = conv_endian32(digest[i][31:0], "
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "For each i in 0..7, when digest_size_started_q is neither SHA2_256 nor SHA2_384 nor SHA2_512 (e.g. SHA2_None), hw2reg.digest[i].d = conv_endian32(digest[i][31:0], digest_swap) and hw2reg.digest[i+8].d"
+        },
+        {
+          "spec": "hmac__generate_for__gen_key__001",
+          "field": "assumption",
+          "excerpt": "hw2reg.key is exactly a 32-bit packed field; the generate loop index 0..31 covers the entire field.\nrisk: If the key field is wider than 32 bits, bits beyond index 31 are not assigned zero by this blo"
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "digest_sw, digest_sw_we, and all hw2reg.digest.d are initially driven to 0 before any conditional override."
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "For each i in 0..7, when digest_size_started_q is neither SHA2_256 nor SHA2_384 nor SHA2_512 (e.g. SHA2_None), hw2reg.digest[i].d = conv_endian32(digest[i][31:0], digest_swap) and hw2reg.digest[i+8].d"
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "For each i in 0..7, when digest_size_started_q == SHA2_256, hw2reg.digest[i].d = conv_endian32(digest[i][31:0], digest_swap) and hw2reg.digest[i+8].d = conv_endian32(digest[i][31:0], digest_swap)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "[B-AG+U-UP] The next-state signal done_state_d must always represent a legal state encoding in the done FSM state space.\nrisk: If an",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.188,
+      "contradiction": "(1) The assumption that done_state_d must always represent a legal state encoding would be violated if the current state (done_state_q) were illegal, because the default behavior keeps the same illegal state. (2) However, an illegal current state is a fault scenario that should not occur under normal operation; the FSM is designed to stay within defined states. (3) The guarantee's fallback (holding the current state) is a defensive design choice to prevent arbitrary transitions when an unexpecte",
+      "involved_signals": [
+        "done_state_d",
+        "intr_hmac_done_o",
+        "cool_down_ct_d",
+        "done_state_q"
+      ],
+      "involved_specs": [
+        "hmac__always_ff__line_197__001",
+        "hmac__always_comb__line_149__001",
+        "hmac__continuous_region__declarations_or_instances__006",
+        "hmac__continuous_region__declarations_or_instances__016",
+        "hmac__continuous_region__declarations_or_instances__008"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__always_ff__line_197__001",
+          "field": "assumption",
+          "excerpt": "The next-state signal done_state_d must always represent a legal state encoding in the done FSM state space.\nrisk: If an illegal state value is loaded into done_state_q, the HMAC control logic may beh"
+        },
+        {
+          "spec": "hmac__always_comb__line_149__001",
+          "field": "guarantee",
+          "excerpt": "done_state_d defaults to done_state_q, preserving current state unless modified; hash_done_event is cleared to 8'd0 every cycle before conditional updates."
+        },
+        {
+          "spec": "hmac__always_comb__line_149__001",
+          "field": "guarantee",
+          "excerpt": "In DoneAwaitMessageComplete, if digest_on_blk is asserted, done_state_d advances to DoneAwaitHashComplete; otherwise, no state change."
+        },
+        {
+          "spec": "hmac__always_comb__line_149__001",
+          "field": "guarantee",
+          "excerpt": "In DoneAwaitHashDone, if reg_hash_done is asserted, hash_done_event is set to 1'b1 and done_state_d returns to DoneAwaitCmd; otherwise, done_state_d stays unchanged."
+        },
+        {
+          "spec": "hmac__always_comb__line_149__001",
+          "field": "guarantee",
+          "excerpt": "In DoneAwaitCmd state, cool_down_ct_d is unconditionally cleared to 8'd0. If sha_hash_process is asserted, done_state_d moves to DoneAwaitHashDone; else if reg_hash_stop is asserted, done_state_d move"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "The exact interrupt generation, clear-on-read, and test behavior of intr_hmac_done_o depends on prim_intr_hw's RTL; review for timing hazards or race conditions between event and register state."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__016",
+          "field": "guarantee",
+          "excerpt": "intr_hmac_done_o is driven to a known value (0 or 1, no X/Z) after reset."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__008",
+          "field": "guarantee",
+          "excerpt": "intr_hw_hmac_err drives hw2reg.intr_state.hmac_err.de and .d, and intr_hmac_err_o based on event_intr_i connected to err_valid."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "If digest_size_i can be set to SHA2_512 while txcount bit width is less than BlockSizeBitsSHA512, the bit selection txco",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "假设涉及digest_size_i = SHA2_512这一合法配置，但指出若txcount位宽不足BlockSizeBitsSHA512则部分选择非法。提供的保证未对txcount位宽施加任何约束，也未禁止在SHA2_512下使用非法位宽；同时缺少txcount声明信息，无法确定硬件是否确实满足位宽要求。因此无法判断保证是否满足该假设，判为不确定。",
+      "involved_signals": [
+        "txcount"
+      ],
+      "involved_specs": [
+        "hmac_core__always_comb__line_236__001",
+        "hmac__continuous_region__declarations_or_instances__010",
+        "hmac__always_comb__cast_digest_size__001",
+        "hmac__always_comb__assign_digest_reg__001",
+        "hmac_core__always_comb__line_254__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_core__always_comb__line_236__001",
+          "field": "assumption",
+          "excerpt": "If digest_size_i can be set to SHA2_512 while txcount bit width is less than BlockSizeBitsSHA512, the bit selection txcount[BlockSizeBitsSHA512-1:0] is illegal"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__010",
+          "field": "guarantee",
+          "excerpt": "invalid_config is asserted if digest_size equals SHA2_None, or if key_length equals Key_None and hmac_en is high, or if key_length equals Key_1024 and digest_size equals SHA2_256 and hmac_en is high."
+        },
+        {
+          "spec": "hmac__always_comb__cast_digest_size__001",
+          "field": "guarantee",
+          "excerpt": "digest_size equals digest_size_supplied when it is SHA2_256, SHA2_384, or SHA2_512; otherwise digest_size is SHA2_None."
+        },
+        {
+          "spec": "hmac__always_comb__assign_digest_reg__001",
+          "field": "guarantee",
+          "excerpt": "For each i in 0..7, when digest_size == SHA2_256, digest_sw[i][31:0] = conv_endian32(reg2hw.digest[i].q, digest_swap) and digest_sw_we[i] = reg2hw.digest[i].qe; upper bits of digest_sw[i] remain 0."
+        },
+        {
+          "spec": "hmac_core__always_comb__line_236__001",
+          "field": "assumption",
+          "excerpt": "txcnt_eq_blksz is 0 when txcount == 0, even in a valid mode; it is unclear if a zero-length message should ever trigger a block-boundary flag"
+        },
+        {
+          "spec": "hmac_core__always_comb__line_254__001",
+          "field": "guarantee",
+          "excerpt": "When clr_txcount is asserted, txcount_d is driven to 0 regardless of other control signals."
+        },
+        {
+          "spec": "hmac_core__always_comb__line_254__001",
+          "field": "guarantee",
+          "excerpt": "When clr_txcount is deasserted and load_txcount is asserted, txcount_d is set to message_length_i plus a block-size constant: BlockSizeSHA256in64 for SHA2_256, BlockSizeSHA512in64 for SHA2_384 or SHA2"
+        },
+        {
+          "spec": "hmac_core__always_comb__line_254__001",
+          "field": "guarantee",
+          "excerpt": "When clr_txcount, load_txcount, and inc_txcount are all deasserted, txcount_d is equal to txcount (hold)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "The combinational generation of idle may exhibit glitches if any of its inputs reg_fifo_wvalid, fifo_rvalid, hmac_core_i",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "Downstream logic omits the required MuBi4 integrity check on idle_d. A single-bit fault in idle or idle_d may propagate undetected to idle_o, potentially causing the HMAC to misinterpret the idle state and start/resume operations at incorrect times, risking cryptographic data corruption or internal state leakage.",
+      "involved_signals": [
+        "idle",
+        "idle_d"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__declarations_or_instances__012",
+        "hmac__continuous_region__declarations_or_instances__013",
+        "hmac_core__continuous_region__declarations_or_instances__001",
+        "hmac_core__always_ff__line_486__001",
+        "hmac_core__continuous_region__declarations_or_instances__006",
+        "hmac__continuous_region__hmac__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__012",
+          "field": "assumption",
+          "excerpt": "The combinational generation of idle may exhibit glitches if any of its inputs reg_fifo_wvalid, fifo_rvalid, hmac_core_idle, or sha_core_idle are not synchronous or are unstable."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__013",
+          "field": "guarantee",
+          "excerpt": "idle_o is continuously assigned to idle_q, following its value at all times."
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "sha_rvalid_o equals fifo_rvalid_i when HMAC is disabled, and equals hmac_sha_rvalid when HMAC is enabled."
+        },
+        {
+          "spec": "hmac_core__always_ff__line_486__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, idle_q is asynchronously forced to 1'b1."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__012",
+          "field": "assumption",
+          "excerpt": "Downstream logic must validate idle_d using a mubi4 checking primitive (e.g., mubi4_test_true_strict) before using it as a control signal; a single-bit fault in idle or idle_d could otherwise go undet"
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__013",
+          "field": "guarantee",
+          "excerpt": "idle_o is continuously assigned to idle_q, following its value at all times."
+        },
+        {
+          "spec": "hmac_core__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "idle_o is continuously assigned to the value of idle_d."
+        },
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__012",
+          "field": "assumption",
+          "excerpt": "The correctness of prim_mubi_pkg::mubi4_bool_to_mubi is not verified in this chunk; the function must return a valid mubi4 codeword for both true and false."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "unused_signals is generated by XOR reduction of many reg_fifo_wmask bits but is never connected to any logic (only decla",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "assumption 关注的是 unused_signals 可能是故意实现的 lint 抑制，也可能意味着功能位被丢弃，不属于明确的合法/非法状态假设。相关 guarantee 描述了另一个模块中 unused_be 的类似 XOR 用法来抑制 lint，但两者属于不同模块且无直接信号关联，无法判定是否满足或冲突。场景合法性无法确定，评定为 UNCERTAIN。",
+      "involved_signals": [
+        "unused_signals",
+        "unused_cfg_qe"
+      ],
+      "involved_specs": [
+        "hmac__continuous_region__declarations_or_instances__008",
+        "hmac_reg_top__continuous_region__declarations_or_instances__018"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac__continuous_region__declarations_or_instances__008",
+          "field": "assumption",
+          "excerpt": "unused_signals is generated by XOR reduction of many reg_fifo_wmask bits but is never connected to any logic (only declared and driven). This may be intentional lint suppression, but if any of these b"
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__018",
+          "field": "guarantee",
+          "excerpt": "unused_be is assigned the XOR reduction of reg_be to avoid lint warnings."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "[U-UP] The cool-down counter uses a hardcoded threshold of 127, but the rationale (e.g., pipeline depth, output latency of SHA) is not documented in this blo",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "The cool-down counter uses a hardcoded threshold of 127, but the rationale (e.g., pipeline depth, output latency of SHA) is not documented in this block.",
+      "involved_signals": [
+        "cool_down_ct_q"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "[U-UP] The use of reg_steer in downstream logic (e.g., read mux or FIFO access) is not defined in this chunk.",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "The use of reg_steer in downstream logic (e.g., read mux or FIFO access) is not defined in this chunk.",
+      "involved_signals": [
+        "reg_steer"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "[U-UP] err_q is a sticky error bit that latches high on any error condition and is only cleared by hard reset. It is unclear whether this matches the intende",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "The severity of err_q's sticky-until-reset behavior depends on how it is consumed. If err_q feeds interrupt/alert logic, a missing clear mechanism might be acceptable only if the system is reset on alert; otherwise it could cause spurious or masked alerts.",
+      "involved_signals": [
+        "err_q"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "[U-UP] addrmiss is forced to 0 when no access is active (reg_re == 0 and reg_we == 0). It is unknown whether downstream logic, such as error latches or inter",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "addrmiss is forced to 0 when no access is active (reg_re == 0 and reg_we == 0). It is unknown whether downstream logic, such as error latches or interrupt generation, expects addrmiss to remain asserted from a previous access or whether clearing it during idle cycles is safe.",
+      "involved_signals": [
+        "addrmiss"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "External signal reg_we must be a single-cycle pulse when the module is not in reset.\nrisk: If violated, multiple registe",
+      "severity": "LOW",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.112,
+      "contradiction": "Assumption states that reg_we must be a single-cycle pulse as a legal input requirement. The guarantee includes reg_we_err detection and recording into err_q, which provides a safe fallback when the illegal case (multi-cycle or glitch on reg_we) occurs. This is defensive design, not a bug.",
+      "involved_signals": [
+        "clk_i"
+      ],
+      "involved_specs": [
+        "hmac_reg_top__continuous_region__declarations_or_instances__018",
+        "hmac_reg_top__always_ff__line_72__001",
+        "hmac_core__always_ff__line_464__001",
+        "hmac_core__always_ff__line_486__001",
+        "hmac__always_ff__line_896__001"
+      ],
+      "evidence": [
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__018",
+          "field": "assumption",
+          "excerpt": "External signal reg_we must be a single-cycle pulse when the module is not in reset.\nrisk: If violated, multiple register writes may be triggered or glitches may occur."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On each posedge clk_i when rst_ni is high, if intg_err or reg_we_err is high, err_q is set to 1; otherwise it retains its previous value."
+        },
+        {
+          "spec": "hmac_reg_top__continuous_region__declarations_or_instances__018",
+          "field": "assumption",
+          "excerpt": "External signal reg_re must be a single-cycle pulse when the module is not in reset.\nrisk: If violated, multiple reads may be issued or internal state may be corrupted."
+        },
+        {
+          "spec": "hmac_reg_top__always_ff__line_72__001",
+          "field": "guarantee",
+          "excerpt": "On each posedge clk_i when rst_ni is high, if intg_err or reg_we_err is high, err_q is set to 1; otherwise it retains its previous value."
+        },
+        {
+          "spec": "hmac_core__always_ff__line_464__001",
+          "field": "guarantee",
+          "excerpt": "On posedge clk_i, reg_hash_stop_q is updated to reg_hash_stop_d; when rst_ni is low, reg_hash_stop_q is forced to 1'b0 asynchronously."
+        },
+        {
+          "spec": "hmac_core__always_ff__line_486__001",
+          "field": "assumption",
+          "excerpt": "idle_d must be driven to 1 (idle) after reset deassertion and before the first rising clock edge, matching the reset value of idle_q.\nrisk: If idle_d is 0 when rst_ni goes high, idle_q will transition"
+        },
+        {
+          "spec": "hmac__always_ff__line_896__001",
+          "field": "guarantee",
+          "excerpt": "On negedge rst_ni, idle_q is asynchronously set to prim_mubi_pkg::MuBi4False; on posedge clk_i while rst_ni is high, idle_q is updated to idle_d."
+        }
+      ]
+    }
+  ]
+}

@@ -1,71 +1,171 @@
 {
   "chunk_id": "sha3pad__always_ff__line_266__001",
-  "summary": "该寄存器对一次处理过程进行锁存：收到 process_i 后置位，在严格判定 done_i 为真时清零，复位时回到空闲。",
-  "behavior": "该时序块维护寄存器 process_latched 作为“处理进行中”标志。异步低有效复位时，process_latched 被清为 0，表示无处理在进行中【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:266-269】。正常运行时，若 process_i 为 1，则优先将 process_latched 置为 1，开始或保持一次已锁存的处理请求【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-270】；若 process_i 不为 1，但 prim_mubi_pkg::mubi4_test_true_strict(done_i) 为真，则将 process_latched 清为 0，表示处理完成【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:271-272】。若上述条件都不满足，则寄存器保持原值【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-273】。由于条件顺序为 process_i 在 done_i 之前，所以当二者同周期同时出现时，置位优先于清零，process_latched 将保持/变为 1【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-272】。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_ff",
+    "driven": [
+      "process_latched"
+    ],
+    "used": [
+      "rst_ni",
+      "process_i",
+      "done_i"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位有效时，process_latched 一定被清零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When reset (rst_ni low) is active, process_latched is forced to 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "process_latched"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:266-269"
+      "refs": [
+        "266-268"
       ]
     },
     {
-      "property": "在未复位条件下，只要 process_i 为 1，process_latched 的下一状态一定为 1，不受同周期 done_i 的清零条件影响。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not in reset, if process_i is asserted, process_latched is set to 1, regardless of done_i state.",
+      "cond": "!rst_ni && process_i",
+      "signals": [
+        "process_i",
         "process_latched"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-272"
+      "refs": [
+        "269-270"
       ]
     },
     {
-      "property": "在未复位且 process_i 为 0 的条件下，只有当 mubi4_test_true_strict(done_i) 为真时，process_latched 才会被清为 0；否则保持原值。",
-      "output_signals": [
-        "process_latched"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-273"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑使用 prim_mubi_pkg::mubi4_test_true_strict(done_i) 对 done_i 进行严格多比特布尔判真，说明完成信号属于安全敏感控制路径的一部分：只有严格合法的“真”编码才能结束已锁存的处理过程，异常编码不会误清除 process_latched。这有助于降低毛刺、故障注入或非法编码导致处理状态被过早结束的风险【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:271-272】。",
-  "assumptions": [
-    {
-      "constraint": "合法流程中，done_i 应在对应处理真正完成时才以 mubi4_test_true_strict 可识别的真值出现。",
-      "bug_relevance": "如果 done_i 过早被编码为严格真，process_latched 会被提前清零，可能使后续逻辑误以为处理已完成，构成功能错误；这属于行为契约。",
-      "related_signals": [
-        "done_i",
-        "process_latched"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:271-272"
-      ]
-    },
-    {
-      "constraint": "若设计意图是一次处理完成与下一次处理请求互斥，则 process_i 与严格为真的 done_i 不应在同一周期同时出现；当前实现对该情况有确定回退行为，即 process_i 优先并保持 process_latched 为 1。",
-      "bug_relevance": "若不满足则不会产生未定义行为，但会导致完成清零被覆盖、状态继续保持为忙；该场景按当前代码是安全回退，但通常设计上不应发生。",
-      "related_signals": [
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When not in reset, process_i is deasserted, and done_i passes the strict true mubi4 test, process_latched is cleared to 0.",
+      "cond": "!rst_ni && !process_i && prim_mubi_pkg::mubi4_test_true_strict(done_i) == true",
+      "signals": [
         "process_i",
         "done_i",
         "process_latched"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-272"
+      "refs": [
+        "271-272"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When not in reset, process_i is deasserted, and done_i does not pass the strict true test, process_latched holds its previous value.",
+      "cond": "!rst_ni && !process_i && prim_mubi_pkg::mubi4_test_true_strict(done_i) == false",
+      "signals": [
+        "process_latched"
+      ],
+      "refs": [
+        "266-274"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "done_i must be driven as a valid mubi4 encoding; if driven to an invalid value, the true-strict test will return false, and process_latched will never clear via done_i.",
+      "cond": "always",
+      "risk": "Process latch stuck high, causing functional hang or protocol deadlock.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "271-272"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "External logic must ensure process_i is deasserted before done_i is asserted true strict; otherwise process_latched will not be cleared due to the priority of process_i.",
+      "cond": "done_i true strict while process_i high",
+      "risk": "process_latched remains set, potentially leading to missed done handshake and module hang.",
+      "signals": [
+        "process_i",
+        "done_i"
+      ],
+      "refs": [
+        "269-272"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "done_i must eventually be asserted true strict after a processing operation to clear process_latched; if never asserted, process_latched stays high indefinitely.",
+      "cond": "after process_i has been asserted",
+      "risk": "Stuck process state that prevents future operations.",
+      "signals": [
+        "done_i",
+        "process_latched"
+      ],
+      "refs": [
+        "269-272"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If done_i becomes an invalid mubi4 encoding (e.g., due to a soft error or interface fault), process_latched will never clear, potentially hanging the SHA-3 padding controller. There is no local fault detection or timeout.",
+      "cond": "done_i becomes invalid",
+      "risk": "Loss of liveness in a security-critical hash/mac accelerator, possibly leading to denial of service or silent state inconsistency.",
+      "signals": [
+        "done_i",
+        "process_latched"
+      ],
+      "refs": [
+        "271-272",
+        "266-274"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Priority of process_i over done_i means that a simultaneous assertion will not clear process_latched. The design intent for concurrency must be verified in the surrounding module.",
+      "cond": "process_i and done_i true strict in the same cycle",
+      "risk": "Missed done event could cause functional misalignment in the padding state machine.",
+      "signals": [
+        "process_i",
+        "done_i"
+      ],
+      "refs": [
+        "269-272"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "This chunk has no abort, error, or additional clear input. If the larger design requires aborting a processing operation, process_latched cannot be reset except by done_i or full reset.",
+      "cond": "abort condition elsewhere",
+      "risk": "Hung processing state if an error happens while process_latched is high and done_i never asserts.",
+      "signals": [
+        "process_latched"
+      ],
+      "refs": [
+        "266-274"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:266-274"
-  ],
-  "uncertain_points": [
-    "process_latched 的具体下游用途在该片段中不可见，只能确认其行为像“处理进行中/请求已锁存”标志，无法仅凭此处确定它是否表示 busy、pending 还是其他握手状态。",
-    "done_i 的位宽和精确定义未在该片段中展开；仅能从 mubi4_test_true_strict(done_i) 推断其应为多比特布尔编码信号。",
-    "片段依赖列表中出现 b 和 b0，但本 always_ff 块并未使用，无法判断它们与 process_latched 的更大状态机关系。"
+    "266-274"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 266,
-  "line_end": 274
+  "line_end": 274,
+  "security_implications": ""
 }

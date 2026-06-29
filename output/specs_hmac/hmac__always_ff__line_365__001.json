@@ -1,0 +1,142 @@
+{
+  "chunk_id": "hmac__always_ff__line_365__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "cfg_block"
+    ],
+    "used": [
+      "rst_ni",
+      "hash_start_or_continue",
+      "reg_hash_done",
+      "reg_hash_stop"
+    ],
+    "modes": [
+      "idle",
+      "busy"
+    ],
+    "tags": [
+      "hash",
+      "control",
+      "fault"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "cfg_block is set to 1 when hash_start_or_continue is asserted, regardless of reg_hash_done or reg_hash_stop.",
+      "cond": "hash_start_or_continue == 1",
+      "signals": [
+        "hash_start_or_continue",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-369"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "cfg_block is cleared to 0 when reg_hash_done or reg_hash_stop is asserted, provided hash_start_or_continue is not asserted.",
+      "cond": "!hash_start_or_continue && (reg_hash_done || reg_hash_stop)",
+      "signals": [
+        "reg_hash_done",
+        "reg_hash_stop",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:370-371"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "cfg_block retains its previous value when none of the explicit update conditions are met (no else clause).",
+      "cond": "!hash_start_or_continue && !(reg_hash_done || reg_hash_stop)",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:365-373"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "hash_start_or_continue is a pulse, not a persistent level, so that cfg_block is not permanently stuck at 1.",
+      "cond": "when hash operation ends and reg_hash_done/reg_hash_stop are expected to clear cfg_block",
+      "risk": "Continuous assertion of hash_start_or_continue overrides done/stop, causing cfg_block to stay high, potentially locking the hash engine and preventing new operations.",
+      "signals": [
+        "hash_start_or_continue",
+        "reg_hash_done",
+        "reg_hash_stop",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-371"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "reg_hash_done and reg_hash_stop are asserted only when cfg_block is 1 and not simultaneously with hash_start_or_continue.",
+      "cond": "when clearing cfg_block",
+      "risk": "Asserting done/stop while start is active leads to priority-driven set (cfg_block stays 1) potentially ignoring a legitimate end-of-operation event.",
+      "signals": [
+        "reg_hash_done",
+        "reg_hash_stop",
+        "hash_start_or_continue",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-371"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "Simultaneous assertion of hash_start_or_continue and (reg_hash_done or reg_hash_stop) sets cfg_block to 1, ignoring the done/stop. Is this prioritization intended?",
+      "cond": "hash_start_or_continue && (reg_hash_done || reg_hash_stop) == 1",
+      "risk": "If the design requires that done/stop always clears cfg_block even during a new start request, a stuck busy state could occur, blocking subsequent hash operations.",
+      "signals": [
+        "hash_start_or_continue",
+        "reg_hash_done",
+        "reg_hash_stop",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-371"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "No watchdog or timeout mechanism within this chunk clears cfg_block if reg_hash_done/reg_hash_stop never assert (e.g., due to internal error).",
+      "cond": "hash operation hangs or completes without status flags",
+      "risk": "cfg_block remains 1 indefinitely, potentially rendering the HMAC configuration interface inoperable until reset (denial of service).",
+      "signals": [
+        "cfg_block",
+        "reg_hash_done",
+        "reg_hash_stop"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:365-373"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:365-373"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 365,
+  "line_end": 373,
+  "security_implications": ""
+}

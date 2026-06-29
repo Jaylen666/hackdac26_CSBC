@@ -1,0 +1,54 @@
+{
+  "chunk_id": "kmac_errchk__always_comb__err_return__001",
+  "summary": "该组合逻辑将多种内部错误条件编码为统一的错误返回结构，并按固定优先级只上报其中最高优先级的一项错误。",
+  "behavior": "该块先将错误返回 `err` 默认置为无错误：`valid=0`、`code=ErrNone`、`info=0` [kmac_errchk.sv:321-322]。随后使用 `priority case (1'b1)` 对若干错误条件进行优先选择，因此当多个错误条件同时为真时，只会报告源码顺序最靠前的一项 [kmac_errchk.sv:324-373]。优先级从高到低依次为：`err_swsequence`、`err_modestrength`、`err_prefix`、`err_entropy_ready` [kmac_errchk.sv:325-368]。当 `err_swsequence` 为真时，输出有效错误，错误码为 `ErrSwCmdSequence`，`info` 中打包了三类错误标志 `{err_swsequence, err_modestrength, err_prefix}`、状态 `stL` 以及软件命令 `sw_cmd_i`，其余高位补零 [kmac_errchk.sv:325-333]。当仅更低优先级匹配到 `err_modestrength` 时，错误码为 `ErrUnexpectedModeStrength`，`info` 打包三类错误标志、`cfg_mode_i` 与 `cfg_strength_i`，中间保留字段清零 [kmac_errchk.sv:336-345]。当匹配到 `err_prefix` 时，错误码为 `ErrIncorrectFunctionName`，`info` 仅包含三类错误标志，其余位清零 [kmac_errchk.sv:348-355]。当匹配到 `err_entropy_ready` 时，错误码为 `ErrSwHashingWithoutEntropyReady`，`info` 打包了四个错误标志 `{err_entropy_ready, err_swsequence, err_modestrength, err_prefix}` 以及 `{kmac_en_i, cfg_entropy_ready}`，其余位宽由显式类型转换确定 [kmac_errchk.sv:358-367]。若上述条件均不成立，则保持无错误返回 [kmac_errchk.sv:370-371]。",
+  "guarantees": [
+    {
+      "property": "当 `err_swsequence` 为真时，`err.valid` 一定为 1，`err.code` 一定为 `ErrSwCmdSequence`，且不会输出后续分支的错误码。",
+      "output_signals": [
+        "err"
+      ],
+      "source_refs": [
+        "kmac_errchk.sv:324-333"
+      ]
+    },
+    {
+      "property": "当 `err_swsequence`、`err_modestrength`、`err_prefix`、`err_entropy_ready` 均为假时，`err` 一定为 `{valid:0, code:ErrNone, info:0}`。",
+      "output_signals": [
+        "err"
+      ],
+      "source_refs": [
+        "kmac_errchk.sv:321-322",
+        "kmac_errchk.sv:370-371"
+      ]
+    }
+  ],
+  "security_implications": "该块属于错误检查/上报路径，涉及 KMAC 工作模式、前缀合法性以及熵就绪条件的错误编码 [kmac_errchk.sv:336-367]。其安全意义在于：当配置不合法或在熵未就绪时尝试软件哈希时，逻辑会生成明确错误码并附带诊断信息，便于上层阻止不安全或未授权的操作继续进行。不过该片段本身只负责错误选择和编码，不直接展示阻断、清零或告警传播动作，因此最终安全效果还依赖其他逻辑如何消费 `err`。",
+  "assumptions": [
+    {
+      "constraint": "`err_swsequence`、`err_modestrength`、`err_prefix`、`err_entropy_ready` 的生成逻辑应使其语义与错误码命名一致，因为本块只做优先级选择和信息打包，不再重新校验条件本身。",
+      "bug_relevance": "如果这些条件定义错误，本块仍会稳定输出对应错误码，但会造成误报、漏报或错误优先级上报，属于功能契约违例。",
+      "related_signals": [
+        "err_swsequence",
+        "err_modestrength",
+        "err_prefix",
+        "err_entropy_ready",
+        "err"
+      ],
+      "source_refs": [
+        "kmac_errchk.sv:324-368"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_errchk.sv:321-374"
+  ],
+  "uncertain_points": [
+    "片段显示了 `priority case (1'b1)` 的优先级编码行为，但未展示这些错误条件是否设计上互斥；若不互斥，实际行为是只上报最高优先级错误 [kmac_errchk.sv:324-368]，这是否完全符合系统级意图需结合前文确认。",
+    "`info` 字段的总位宽和各子字段的精确布局需依赖 `err` 结构体定义及相关 typedef；本片段可确认打包内容，但无法单独确认保留位的完整语义 [kmac_errchk.sv:326-366]。",
+    "`8'(...)` 和 `16'(...)` 这种显式尺寸转换在行 361 和 365 的具体 SystemVerilog 书写/工具接受性需结合完整源码或编译环境确认；从意图上看是在将若干标志和状态压缩到固定宽度字段 [kmac_errchk.sv:361-365]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
+  "line_start": 321,
+  "line_end": 374
+}

@@ -1,0 +1,239 @@
+{
+  "chunk_id": "uart_core_continuous_region_declarations_or_instances_004__behavior__001",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "mixed",
+    "driven": [
+      "rx_in_maj",
+      "rx_in_mx",
+      "rx_in",
+      "rx_fifo_wvalid",
+      "rx_valid",
+      "rx_fifo_data",
+      "rx_uart_idle",
+      "event_rx_frame_err",
+      "event_rx_parity_err"
+    ],
+    "used": [
+      "rx_sync",
+      "rx_sync_q1",
+      "rx_sync_q2",
+      "rxnf_enable",
+      "sys_loopback",
+      "tx_out",
+      "line_loopback",
+      "reg2hw.ctrl.parity_en.q",
+      "reg2hw.ctrl.parity_odd.q",
+      "rx_tick_baud",
+      "rx_in",
+      "rx_valid",
+      "event_rx_frame_err",
+      "event_rx_parity_err",
+      "clk_i",
+      "rst_ni",
+      "rx_enable",
+      "tick_baud_x16"
+    ],
+    "modes": [
+      "sys_loopback",
+      "line_loopback",
+      "noise_filter_enable",
+      "parity_enable",
+      "parity_odd"
+    ],
+    "tags": [
+      "rx_path",
+      "loopback",
+      "filter",
+      "fifo",
+      "handshake",
+      "error_detection",
+      "data_gating"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "rx_in_maj is the majority vote of rx_sync, rx_sync_q1, rx_sync_q2.",
+      "cond": "always",
+      "signals": [
+        "rx_in_maj",
+        "rx_sync",
+        "rx_sync_q1",
+        "rx_sync_q2"
+      ],
+      "refs": [
+        "257-259"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "rx_in_mx is rx_in_maj when rxnf_enable is true, otherwise rx_sync.",
+      "cond": "rxnf_enable",
+      "signals": [
+        "rx_in_mx",
+        "rxnf_enable",
+        "rx_in_maj",
+        "rx_sync"
+      ],
+      "refs": [
+        "260"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "rx_in is tx_out when sys_loopback is true, else 1'b1 when line_loopback is true, else rx_in_mx.",
+      "cond": "sys_loopback, line_loopback",
+      "signals": [
+        "rx_in",
+        "sys_loopback",
+        "tx_out",
+        "line_loopback",
+        "rx_in_mx"
+      ],
+      "refs": [
+        "262-264"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "instance_connection",
+      "claim": "uart_rx is instantiated with rx input connected to rx_in, parity_enable and parity_odd to reg2hw control bits, tick_baud to rx_tick_baud, and its outputs rx_valid, rx_data, idle, frame_err, rx_parity_err connected to the corresponding signals.",
+      "cond": "always",
+      "signals": [
+        "rx_in",
+        "reg2hw.ctrl.parity_en.q",
+        "reg2hw.ctrl.parity_odd.q",
+        "rx_tick_baud",
+        "rx_valid",
+        "rx_fifo_data",
+        "rx_uart_idle",
+        "event_rx_frame_err",
+        "event_rx_parity_err"
+      ],
+      "refs": [
+        "266-280"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "rx_fifo_wvalid is asserted only when rx_valid is high and both event_rx_frame_err and event_rx_parity_err are low.",
+      "cond": "always",
+      "signals": [
+        "rx_fifo_wvalid",
+        "rx_valid",
+        "event_rx_frame_err",
+        "event_rx_parity_err"
+      ],
+      "refs": [
+        "282"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "rx_sync, rx_sync_q1, rx_sync_q2 are synchronized, glitch-free versions of the external RX pin.",
+      "cond": "when used for majority vote (rxnf_enable active or normal operation)",
+      "risk": "Metastability in rx_sync could propagate through the majority filter, causing rx_in_maj to glitch and produce false rx data or spurious frame errors.",
+      "signals": [
+        "rx_sync",
+        "rx_sync_q1",
+        "rx_sync_q2"
+      ],
+      "refs": [
+        "257-259"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "rxnf_enable, sys_loopback, line_loopback remain constant while rx_enable is active.",
+      "cond": "during active UART frame reception (rx_enable high)",
+      "risk": "Changing any of these controls mid‑frame could cause a glitch in rx_in, leading to corrupted receive data or spurious framing/parity errors.",
+      "signals": [
+        "rxnf_enable",
+        "sys_loopback",
+        "line_loopback",
+        "rx_enable"
+      ],
+      "refs": [
+        "260-264"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "Parity configuration bits reg2hw.ctrl.parity_en.q and reg2hw.ctrl.parity_odd.q are stable during a frame.",
+      "cond": "while uart_rx is receiving a frame (rx_valid active)",
+      "risk": "Inconsistent parity checking would cause false parity errors or, if parity is disabled mid‑frame, mask true parity errors, compromising data integrity.",
+      "signals": [
+        "reg2hw.ctrl.parity_en.q",
+        "reg2hw.ctrl.parity_odd.q"
+      ],
+      "refs": [
+        "271-272"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "rx_tick_baud is a clean, glitch‑free pulse aligned with the expected RX sampling point.",
+      "cond": "always",
+      "risk": "A glitchy rx_tick_baud would cause uart_rx to sample at wrong times, leading to data corruption.",
+      "signals": [
+        "rx_tick_baud"
+      ],
+      "refs": [
+        "273"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "rx_fifo_wvalid gates only event_rx_frame_err and event_rx_parity_err. If uart_rx provides additional error outputs (break, overrun, etc.) that indicate invalid data, they are not connected, potentially allowing erroneous data into the RX FIFO.",
+      "cond": "when uart_rx asserts an error other than frame or parity error",
+      "risk": "Corrupted or unwanted data may be written into the FIFO, propagating to software and breaking data integrity.",
+      "signals": [
+        "rx_fifo_wvalid",
+        "event_rx_frame_err",
+        "event_rx_parity_err"
+      ],
+      "refs": [
+        "278-279",
+        "282"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "When both sys_loopback and line_loopback are asserted, rx_in receives tx_out (sys_loopback), ignoring the line_loopback idle value 1'b1. The specification may intend an error or an explicit priority, but the RTL silently prioritizes sys_loopback.",
+      "cond": "sys_loopback=1 and line_loopback=1 simultaneously",
+      "risk": "If software erroneously enables both, line_loopback behaviour is overridden, which may mask a software bug or test‑mode misuse. No functional hazard in itself.",
+      "signals": [
+        "sys_loopback",
+        "line_loopback",
+        "rx_in"
+      ],
+      "refs": [
+        "262-264"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "257-283"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 257,
+  "line_end": 283,
+  "security_implications": ""
+}

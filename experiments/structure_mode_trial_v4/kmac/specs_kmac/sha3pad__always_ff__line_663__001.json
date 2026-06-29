@@ -1,0 +1,205 @@
+{
+  "chunk_id": "sha3pad__always_ff__line_663__001",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_ff",
+    "driven": [
+      "msg_buf",
+      "msg_strb"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "en_msgbuf",
+      "msg_data_i",
+      "Share",
+      "MsgWidth",
+      "msg_strb_i",
+      "MsgStrbW",
+      "clr_msgbuf"
+    ],
+    "modes": [
+      "reset",
+      "capture",
+      "clear"
+    ],
+    "tags": [
+      "crypto",
+      "buffer",
+      "reset",
+      "handshake",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is asserted low (reset), msg_buf and msg_strb are synchronously cleared to all zeros.",
+      "cond": "negedge rst_ni or posedge clk_i with rst_ni=0",
+      "signals": [
+        "rst_ni",
+        "msg_buf",
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:664-666"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When en_msgbuf is high (and not reset, and clr_msgbuf low), each msg_buf[i] for i=0..Share-1 is updated with the low (MsgWidth-8) bits of msg_data_i[i], i.e., msg_data_i[i][0+:(MsgWidth-8)].",
+      "cond": "en_msgbuf == 1, rst_ni high, clr_msgbuf == 0",
+      "signals": [
+        "en_msgbuf",
+        "msg_data_i",
+        "msg_buf"
+      ],
+      "refs": [
+        "sha3pad.sv:668-670"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When en_msgbuf is high, msg_strb is assigned msg_strb_i[0+:(MsgStrbW-1)]. Because this RHS width is (MsgStrbW-1) and msg_strb is MsgStrbW bits wide, the top bit of msg_strb is zero-extended, effectively forced to 0.",
+      "cond": "en_msgbuf == 1, rst_ni high, clr_msgbuf == 0",
+      "signals": [
+        "en_msgbuf",
+        "msg_strb_i",
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:671"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When clr_msgbuf is high and not reset, and en_msgbuf low, msg_buf and msg_strb are synchronously cleared to zero.",
+      "cond": "clr_msgbuf == 1, rst_ni high, en_msgbuf == 0",
+      "signals": [
+        "clr_msgbuf",
+        "msg_buf",
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:672-674"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Parameter MsgWidth must be greater than 8, otherwise the part-select width (MsgWidth-8) is zero or negative, causing elaboration error or degenerate storage.",
+      "cond": "at elaboration",
+      "risk": "If MsgWidth <= 8, msg_buf elements become zero‑width or illegal, losing all payload data and breaking downstream padding.",
+      "signals": [
+        "MsgWidth"
+      ],
+      "refs": [
+        "sha3pad.sv:669"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Parameter MsgStrbW must be greater than 1, otherwise the part-select [0+:(MsgStrbW-1)] width is zero or negative, causing elaboration error or loss of strobe bits.",
+      "cond": "at elaboration",
+      "risk": "If MsgStrbW <= 1, all strobe information is lost, disrupting byte‑enable processing in downstream logic.",
+      "signals": [
+        "MsgStrbW"
+      ],
+      "refs": [
+        "sha3pad.sv:671"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The external controller must not assert both en_msgbuf and clr_msgbuf simultaneously when a clear of the buffer is intended, because the block gives precedence to capture.",
+      "cond": "when clear is desired",
+      "risk": "Simultaneous assertion leads to capture instead of clear, leaving the buffer with stale data that was meant to be wiped, potentially affecting security‑sensitive operations.",
+      "signals": [
+        "en_msgbuf",
+        "clr_msgbuf"
+      ],
+      "refs": [
+        "sha3pad.sv:667-672"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The priority of en_msgbuf over clr_msgbuf may conflict with design intent if clr_msgbuf is meant to unconditionally clear the buffer. When both are asserted, the buffer captures instead of clearing.",
+      "cond": "en_msgbuf && clr_msgbuf true",
+      "risk": "A clear request could be silently ignored, retaining data that was supposed to be erased. If the buffer holds key or digest material, this could be a security weakness.",
+      "signals": [
+        "en_msgbuf",
+        "clr_msgbuf",
+        "msg_buf"
+      ],
+      "refs": [
+        "sha3pad.sv:667-675"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The capture of msg_strb uses a part‑select of width (MsgStrbW‑1), causing the most significant bit of msg_strb to be permanently forced to 0 via zero‑extension. The design may have intended to capture the full msg_strb_i vector.",
+      "cond": "always during en_msgbuf",
+      "risk": "If msg_strb is used as byte‑lane strobes for message data, losing the top strobe bit can cause incorrect byte masking or data corruption in subsequent processing.",
+      "signals": [
+        "msg_strb_i",
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:671"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If MsgWidth is set to exactly 8, the part‑select [0+:(MsgWidth-8)] becomes [0+:0], a zero‑width vector. This either prevents compilation or results in msg_buf elements that store no data, discarding all input payload.",
+      "cond": "MsgWidth == 8",
+      "risk": "Complete loss of message data entering the SHA‑3 padding block, yielding faulty digests with no error indication.",
+      "signals": [
+        "MsgWidth",
+        "msg_data_i",
+        "msg_buf"
+      ],
+      "refs": [
+        "sha3pad.sv:669"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The assignment msg_buf[i] <= msg_data_i[i][0+:(MsgWidth-8)] silently drops the upper 8 bits of each input word. The design may assume those bits are always zero, but the interface does not enforce this.",
+      "cond": "always during en_msgbuf",
+      "risk": "If non‑zero upper bytes are supplied, the payload is silently corrupted, leading to incorrect SHA‑3 padding / digest calculation.",
+      "signals": [
+        "msg_data_i",
+        "msg_buf"
+      ],
+      "refs": [
+        "sha3pad.sv:669"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:663-676"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 663,
+  "line_end": 676,
+  "security_implications": ""
+}

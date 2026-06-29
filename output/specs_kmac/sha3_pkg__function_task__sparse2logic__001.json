@@ -1,48 +1,152 @@
 {
   "chunk_id": "sha3_pkg__function_task__sparse2logic__001",
-  "summary": "该函数把稀疏编码的 SHA3 状态值解码为普通逻辑状态，并将任何未匹配编码统一映射为错误状态。",
-  "behavior": "函数 `sparse2logic` 接收一个 `sha3_st_sparse_e` 类型输入 `st`，用 `unique case` 对已知稀疏状态逐一转换为对应的 `sha3_st_e` 逻辑状态：`StIdle_sparse` 映射为 `StIdle`，`StAbsorb_sparse` 映射为 `StAbsorb`，`StSqueeze_sparse` 映射为 `StSqueeze`，`StManualRun_sparse` 映射为 `StManualRun`，`StFlush_sparse` 映射为 `StFlush`。凡是不属于这些显式列出的输入值，都会落入 `default` 并返回 `StError`，因此该函数对未知、非法或未支持的稀疏编码提供了安全回退。注释中存在被注释掉的 `StAbort_sparse -> StAbort` 映射，说明设计上可能曾考虑过该状态，但在当前实际 RTL 中该状态不会被单独转换，而是会因未匹配而返回 `StError`。",
+  "header": {
+    "module": "sha3_pkg",
+    "block_kind": "declaration",
+    "driven": [
+      "return"
+    ],
+    "used": [
+      "st"
+    ],
+    "modes": [
+      "StIdle_sparse",
+      "StAbsorb_sparse",
+      "StSqueeze_sparse",
+      "StManualRun_sparse",
+      "StFlush_sparse",
+      "default (StError)"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "state_mapping"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当输入为已列出的合法稀疏状态之一时，函数一定返回其一一对应的普通逻辑状态。",
-      "output_signals": [
-        "sparse2logic"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When st equals StIdle_sparse, the function returns StIdle.",
+      "cond": "st == StIdle_sparse",
+      "signals": [
+        "st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:180-186"
+      "refs": [
+        "sha3_pkg.sv:181"
       ]
     },
     {
-      "property": "当输入不属于显式支持的稀疏状态编码时，函数一定返回 `StError`，不会产生未定义或保持旧值的结果。",
-      "output_signals": [
-        "sparse2logic"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When st equals StAbsorb_sparse, the function returns StAbsorb.",
+      "cond": "st == StAbsorb_sparse",
+      "signals": [
+        "st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:187-187"
+      "refs": [
+        "sha3_pkg.sv:182"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When st equals StSqueeze_sparse, the function returns StSqueeze.",
+      "cond": "st == StSqueeze_sparse",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "sha3_pkg.sv:184"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "When st equals StManualRun_sparse, the function returns StManualRun.",
+      "cond": "st == StManualRun_sparse",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "sha3_pkg.sv:185"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "mux_case",
+      "claim": "When st equals StFlush_sparse, the function returns StFlush.",
+      "cond": "st == StFlush_sparse",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "sha3_pkg.sv:186"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "For any other value of st (including potential StAbort_sparse or any invalid encoding), the function returns StError.",
+      "cond": "st does not match any explicit case",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "sha3_pkg.sv:187"
       ]
     }
   ],
-  "security_implications": "该函数属于状态解码路径的一部分，并对非法/异常稀疏编码采取统一的错误态回退，而不是误解码成正常工作状态。这有助于降低状态编码被破坏、毛刺或故障注入后继续按有效流程运行的风险。若上游依赖稀疏编码提升抗故障能力，这里的 `default -> StError` 是关键的安全收敛行为。",
   "assumptions": [
     {
-      "constraint": "若系统希望进入某个正常 SHA3 操作状态，则输入 `st` 必须是该状态对应的受支持稀疏编码之一；否则本函数会把该输入视为错误并返回 `StError`。",
-      "bug_relevance": "这是行为契约；若合法流程中出现未列出的编码，后续状态机会被导向错误处理路径，导致预期功能中断或误报状态异常。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The caller or driving logic never supplies StAbort_sparse (if defined in sha3_st_sparse_e) unless StError is an acceptable outcome, because the function maps it to StError.",
+      "cond": "when using this function and StAbort_sparse is a valid sparse state",
+      "risk": "Downstream logic may not handle StError gracefully, causing deadlock or incorrect control flow.",
+      "signals": [
         "st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:180-187"
+      "refs": [
+        "sha3_pkg.sv:183",
+        "sha3_pkg.sv:187"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The commented line suggests a StAbort_sparse state may exist in the enum, but it is not explicitly handled and falls to the default StError.",
+      "cond": "if StAbort_sparse is defined and can be driven to this function",
+      "risk": "Unexpected StError propagation may break downstream state machines expecting a normal state.",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "sha3_pkg.sv:183"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "When the function returns StError (e.g., for unhandled sparse state), the downstream logic must correctly handle StError to avoid critical failures.",
+      "cond": "any call to sparse2logic that triggers the default case",
+      "risk": "If StError is not treated as an error condition and is used as a valid state, the system may proceed with an illegal state.",
+      "signals": [
+        "return"
+      ],
+      "refs": [
+        "sha3_pkg.sv:187"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:179-189"
-  ],
-  "uncertain_points": [
-    "第 183 行注释掉了 `StAbort_sparse` 到 `StAbort` 的映射，暗示设计历史上可能存在 Abort 状态；但仅凭该片段无法确认 `StAbort`/`StAbort_sparse` 是否已被整体删除、暂未启用，或应当仍被支持。",
-    "`unique case` 可能在仿真中对重叠/不完整匹配提供额外检查，但该片段本身未说明工具链和枚举定义细节，无法仅据此判断所有非法编码在不同实现中的诊断行为是否完全一致。"
+    "sha3_pkg.sv:179-189"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv",
   "line_start": 179,
-  "line_end": 189
+  "line_end": 189,
+  "security_implications": ""
 }

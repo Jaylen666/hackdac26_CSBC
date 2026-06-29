@@ -1,81 +1,369 @@
 {
   "chunk_id": "kmac_core__always_comb__line_166__001",
-  "summary": "该组合状态机次态逻辑控制 KMAC 的空闲、写入密钥块、等待消息处理、等待完成和终端错误状态，并在生命周期升级时强制进入终端错误状态。",
-  "behavior": "该块先为次态和控制信号提供默认值：状态和错误计数默认保持，数据通路使能、密钥写使能、清 key 索引、kmac_valid、kmac_process 以及 sparse_fsm_error_o 默认拉低 [kmac_core.sv:167-178]。在 StKmacIdle 中，错误计数被清零；仅当 kmac_en_i 与 start_i 同时为真时转到 StKey，否则停留在空闲态 [kmac_core.sv:181-187]。在 StKey 中，无条件使能 KMAC datapath 和密钥写入，表示该状态会把完整 block size 的 key 写入 SHA3 引擎；若 sent_blocksize 为真则转到 StKmacMsg，同时撤销 kmac_valid 并清除 key 索引 clr_keyidx，否则保持在 StKey 并拉高 kmac_valid 继续发送密钥数据 [kmac_core.sv:190-205]。在 StKmacMsg 中，若 process_i 或先前锁存的 process_latched 为真，则转到 StKmacFlush 并对 SHA3 发出 kmac_process；否则继续停留等待 [kmac_core.sv:208-216]。在 StKmacFlush 中，仅当 done_i 通过 mubi4 严格真值检测时返回 StKmacIdle，否则持续停留在 flush 状态 [kmac_core.sv:219-225]。在 StTerminalError 中，状态保持不变；当错误计数小于 100 时继续递增计数且不报告 sparse_fsm_error_o，达到 100 后才将 sparse_fsm_error_o 拉高 [kmac_core.sv:227-235]。对任何未识别状态，逻辑立即转入 StTerminalError 并立刻拉高 sparse_fsm_error_o [kmac_core.sv:238-242]。此外，无论当前状态为何，只要 lc_escalate_en_i 通过生命周期 loose true 检测，就会覆盖前述次态选择并强制跳转到 StTerminalError；该覆盖只修改 st_d，未在本块中同时强制 sparse_fsm_error_o 立即置位 [kmac_core.sv:245-250]。",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "st_d",
+      "st_err_ct_d",
+      "en_kmac_datapath",
+      "en_key_write",
+      "clr_keyidx",
+      "kmac_valid",
+      "kmac_process",
+      "sparse_fsm_error_o"
+    ],
+    "used": [
+      "st",
+      "st_err_ct",
+      "kmac_en_i",
+      "start_i",
+      "sent_blocksize",
+      "process_i",
+      "process_latched",
+      "done_i",
+      "lc_escalate_en_i"
+    ],
+    "modes": [
+      "StKmacIdle",
+      "StKey",
+      "StKmacMsg",
+      "StKmacFlush",
+      "StTerminalError",
+      "default"
+    ],
+    "tags": [
+      "fsm",
+      "handshake",
+      "sparse_fsm",
+      "alert",
+      "lifecycle",
+      "error",
+      "secret",
+      "key",
+      "counter"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在 StKey 状态下，en_kmac_datapath 和 en_key_write 一定同时为 1，用于驱动密钥块写入数据通路。",
-      "output_signals": [
-        "en_kmac_datapath",
-        "en_key_write"
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "st_d is initially assigned to current state st; it holds st unless a later transition condition explicitly changes it.",
+      "cond": "always",
+      "signals": [
+        "st_d",
+        "st"
       ],
-      "source_refs": [
-        "kmac_core.sv:192-195"
+      "refs": [
+        "kmac_core.sv:167"
       ]
     },
     {
-      "property": "在 StKmacMsg 状态下，只要 process_i 或 process_latched 为真，kmac_process 一定为 1 且次态为 StKmacFlush。",
-      "output_signals": [
-        "kmac_process",
-        "st_d"
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "st_err_ct_d initially holds its previous value st_err_ct.",
+      "cond": "always",
+      "signals": [
+        "st_err_ct_d",
+        "st_err_ct"
       ],
-      "source_refs": [
+      "refs": [
+        "kmac_core.sv:168"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "en_kmac_datapath, en_key_write, clr_keyidx, kmac_valid, kmac_process, sparse_fsm_error_o are all driven low before any state-specific assignments.",
+      "cond": "always",
+      "signals": [
+        "en_kmac_datapath",
+        "en_key_write",
+        "clr_keyidx",
+        "kmac_valid",
+        "kmac_process",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "kmac_core.sv:170-178"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When the FSM is in StKmacIdle, the error counter next value st_err_ct_d is forced to zero.",
+      "cond": "st == StKmacIdle",
+      "signals": [
+        "st_err_ct_d"
+      ],
+      "refs": [
+        "kmac_core.sv:182"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In StKmacIdle, if kmac_en_i and start_i are both high, the next state st_d becomes StKey; otherwise it remains StKmacIdle.",
+      "cond": "st == StKmacIdle",
+      "signals": [
+        "st_d",
+        "kmac_en_i",
+        "start_i"
+      ],
+      "refs": [
+        "kmac_core.sv:183-187"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "While in StKey, en_kmac_datapath and en_key_write are unconditionally driven high.",
+      "cond": "st == StKey",
+      "signals": [
+        "en_kmac_datapath",
+        "en_key_write"
+      ],
+      "refs": [
+        "kmac_core.sv:193-194"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "state_transition",
+      "claim": "In StKey, if sent_blocksize is true, the FSM advances to StKmacMsg with kmac_valid low and clr_keyidx high; otherwise it stays in StKey with kmac_valid high.",
+      "cond": "st == StKey",
+      "signals": [
+        "st_d",
+        "sent_blocksize",
+        "kmac_valid",
+        "clr_keyidx"
+      ],
+      "refs": [
+        "kmac_core.sv:196-205"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "state_transition",
+      "claim": "In StKmacMsg, if process_i or process_latched is true, st_d becomes StKmacFlush and kmac_process is driven high; otherwise the state stays StKmacMsg.",
+      "cond": "st == StKmacMsg",
+      "signals": [
+        "st_d",
+        "process_i",
+        "process_latched",
+        "kmac_process"
+      ],
+      "refs": [
+        "kmac_core.sv:210-216"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "state_transition",
+      "claim": "In StKmacFlush, if done_i passes the mubi4 true strict test, st_d returns to StKmacIdle; otherwise it remains StKmacFlush.",
+      "cond": "st == StKmacFlush",
+      "signals": [
+        "st_d",
+        "done_i"
+      ],
+      "refs": [
+        "kmac_core.sv:220-224"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "state_transition",
+      "claim": "StTerminalError is terminal: st_d is kept at the current state. Additionally, if st_err_ct is less than 100, st_err_ct_d increments by 1 and sparse_fsm_error_o is driven low; otherwise sparse_fsm_error_o is driven high.",
+      "cond": "st == StTerminalError",
+      "signals": [
+        "st_d",
+        "st_err_ct",
+        "st_err_ct_d",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "kmac_core.sv:229-235"
+      ]
+    },
+    {
+      "id": "G11",
+      "type": "error_detection",
+      "claim": "If the state is an unknown or illegal value (default branch), st_d is immediately forced to StTerminalError and sparse_fsm_error_o is driven high.",
+      "cond": "st not mapped to any enumerated state",
+      "signals": [
+        "st_d",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "kmac_core.sv:238-242"
+      ]
+    },
+    {
+      "id": "G12",
+      "type": "assignment",
+      "claim": "After the main case, if lc_escalate_en_i is true according to the lifecycle loose test, st_d is unconditionally overridden to StTerminalError.",
+      "cond": "lc_escalate_en_i true",
+      "signals": [
+        "st_d",
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "kmac_core.sv:248-249"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "The state register st must only hold one of the enumerated states (StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError).",
+      "cond": "always",
+      "risk": "A stray or uninitialized state value triggers the default branch, immediately asserting sparse_fsm_error_o and transitioning to StTerminalError, possibly causing a false alert.",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "kmac_core.sv:180-242"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "sent_blocksize must accurately indicate that a complete key block has been transmitted before it is asserted.",
+      "cond": "in StKey",
+      "risk": "Premature assertion advances the state to StKmacMsg before the full key is loaded, leading to an incomplete key in the SHA3 engine.",
+      "signals": [
+        "sent_blocksize"
+      ],
+      "refs": [
+        "kmac_core.sv:196-197"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "process_i and process_latched must be valid indicators for the end of a message block and must not be spuriously asserted.",
+      "cond": "in StKmacMsg",
+      "risk": "An incorrect process trigger could cause a premature or missed transition to StKmacFlush, resulting in a corrupted or incomplete message digest.",
+      "signals": [
+        "process_i",
+        "process_latched"
+      ],
+      "refs": [
+        "kmac_core.sv:210-211"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "done_i must be a proper mubi4 signal; the mubi4_test_true_strict function requires a strictly correct true encoding.",
+      "cond": "in StKmacFlush",
+      "risk": "If done_i never presents a valid true mubi4 value, the state machine will remain stuck in StKmacFlush, halting further processing.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "kmac_core.sv:220"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "lifecycle",
+      "claim": "lc_escalate_en_i from the life cycle controller must correctly reflect an escalation condition using the loose multi-bit test.",
+      "cond": "always",
+      "risk": "A false escalation forces the FSM to StTerminalError, terminating operation; a missed true escalation allows operation to continue in a compromised life cycle state.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "kmac_core.sv:248-249"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "kmac_valid is asserted only in StKey (and only when sent_blocksize is false). It is never driven high in StKmacMsg, although its name suggests a generic data-valid role.",
+      "cond": "when state is StKmacMsg",
+      "risk": "If downstream logic expects kmac_valid to validate message data words, data in StKmacMsg could be silently ignored, leading to functional failure.",
+      "signals": [
+        "kmac_valid"
+      ],
+      "refs": [
+        "kmac_core.sv:175",
+        "kmac_core.sv:199",
+        "kmac_core.sv:204",
         "kmac_core.sv:208-216"
       ]
     },
     {
-      "property": "当 lc_escalate_en_i 通过 lc_tx_test_true_loose 检测时，次态一定被强制改写为 StTerminalError，不受当前状态分支影响。",
-      "output_signals": [
-        "st_d"
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "In StTerminalError, sparse_fsm_error_o is kept low for up to 100 cycles (while st_err_ct < 100) before being asserted.",
+      "cond": "st == StTerminalError and st_err_ct < 100",
+      "risk": "During this 100-cycle window, the FSM is in terminal error state but the external error indication is not raised, potentially allowing secret/key material to be processed or exposed before containment takes effect.",
+      "signals": [
+        "sparse_fsm_error_o",
+        "st_err_ct"
       ],
-      "source_refs": [
-        "kmac_core.sv:245-250"
-      ]
-    }
-  ],
-  "security_implications": "该片段包含安全相关的错误处理与升级响应。非法/未知 FSM 状态会进入终端错误态，生命周期控制器的 escalation 也会无条件强制进入终端错误态 [kmac_core.sv:238-250]。不过在升级触发的这个组合块内，只保证 st_d 被改写，sparse_fsm_error_o 不会被立即同时置位；而终端错误态中的错误输出还被设计为在计数达到 100 之前保持为 0 [kmac_core.sv:227-235]。因此该设计意图似乎是先锁死状态，再在一定条件后对外报告稀疏 FSM 错误，是否满足系统级告警时序需要依赖上下文确认。",
-  "assumptions": [
-    {
-      "constraint": "start_i 应仅在 kmac_en_i 有效时作为合法启动请求使用；若 start_i 在 kmac_en_i 为假时出现，本状态机会安全地保持在 StKmacIdle，但启动请求会被忽略，这属于设计上不应发生的输入组合。",
-      "bug_relevance": "若不满足则不会错误进入活动状态，但可能导致上层软件或控制逻辑误以为已启动 KMAC，形成功能握手偏差。",
-      "related_signals": [
-        "start_i",
-        "kmac_en_i",
-        "st",
-        "st_d"
-      ],
-      "source_refs": [
-        "kmac_core.sv:181-187"
+      "refs": [
+        "kmac_core.sv:230-234"
       ]
     },
     {
-      "constraint": "当系统期望从 StKmacFlush 退出时，done_i 必须按 prim_mubi_pkg::mubi4_test_true_strict 的编码提供严格真值，而不是普通单比特意义上的“1”。",
-      "bug_relevance": "若违反该契约，即使外界认为计算已完成，本状态机也会继续停留在 StKmacFlush，导致事务无法回到空闲态。",
-      "related_signals": [
-        "done_i",
-        "st",
-        "st_d"
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Default branch (illegal state) immediately asserts sparse_fsm_error_o, while the legitimate StTerminalError entry delays the assertion by up to 100 cycles.",
+      "cond": "unknown state vs. known error state",
+      "risk": "The inconsistency may indicate an unintended specification: immediate alert on illegal states but a delayed response on known error conditions might confuse fault handling or hide a design rule requiring immediate detection.",
+      "signals": [
+        "sparse_fsm_error_o"
       ],
-      "source_refs": [
-        "kmac_core.sv:219-225"
+      "refs": [
+        "kmac_core.sv:238-241",
+        "kmac_core.sv:230-234"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "clr_keyidx is asserted only when transitioning from StKey to StKmacMsg. It is not seen being reset elsewhere in this block.",
+      "cond": "key loading phase complete",
+      "risk": "If key index is not cleared on reset or after error, a residual key index value could be read by later operations, potentially leaking secret metadata.",
+      "signals": [
+        "clr_keyidx"
+      ],
+      "refs": [
+        "kmac_core.sv:173",
+        "kmac_core.sv:200"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "en_kmac_datapath is only driven high in StKey. It is not asserted during StKmacMsg, StKmacFlush, or error states.",
+      "cond": "message processing states",
+      "risk": "If the datapath requires this enable to pass message data, the message phase would be silently inactive, causing a hang or data loss.",
+      "signals": [
+        "en_kmac_datapath"
+      ],
+      "refs": [
+        "kmac_core.sv:170",
+        "kmac_core.sv:193"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_core.sv:167-178",
-    "kmac_core.sv:181-187",
-    "kmac_core.sv:190-205",
-    "kmac_core.sv:208-216",
-    "kmac_core.sv:219-225",
-    "kmac_core.sv:227-242",
-    "kmac_core.sv:245-250"
-  ],
-  "uncertain_points": [
-    "注释说明 StKey 会“regardless of process_i”把完整 block size 的 key 写入 SHA3 引擎 [kmac_core.sv:190-191]；从代码看该状态确实不检查 process_i，但具体“完整 block size”如何由 sent_blocksize、kmac_valid 和外部 datapath 配合实现，需要其他代码确认。",
-    "在 StTerminalError 中，sparse_fsm_error_o 只有当 st_err_ct 达到 100 后才拉高 [kmac_core.sv:230-235]，但 default 分支进入该状态时又立即把 sparse_fsm_error_o 拉高 [kmac_core.sv:238-242]。这看起来像是对“非法编码状态”立即报错、对已进入终端错误态则延迟报错；是否为预期的两类错误策略需结合整体 FSM 安全方案确认。",
-    "生命周期升级检测只在本块末尾强制 st_d = StTerminalError [kmac_core.sv:248-249]，并未同时覆盖 sparse_fsm_error_o、en_kmac_datapath 或其他控制信号；升级当拍是否还允许当前状态相关输出继续有效，需结合寄存器更新和其他块确认。"
+    "kmac_core.sv:166-251"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 166,
-  "line_end": 251
+  "line_end": 251,
+  "security_implications": ""
 }

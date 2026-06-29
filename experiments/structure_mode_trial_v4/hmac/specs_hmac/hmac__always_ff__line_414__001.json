@@ -1,0 +1,139 @@
+{
+  "chunk_id": "hmac__always_ff__line_414__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "msg_allowed"
+    ],
+    "used": [
+      "hash_start_or_continue",
+      "packer_flush_done",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [
+      "reset"
+    ],
+    "tags": [
+      "handshake",
+      "reset",
+      "control"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is active low, msg_allowed is asynchronously cleared to 0.",
+      "cond": "negedge rst_ni or any clock edge while rst_ni=0",
+      "signals": [
+        "msg_allowed",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:415-416"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and hash_start_or_continue is high, msg_allowed is set to 1, overriding any other condition.",
+      "cond": "posedge clk_i, rst_ni==1, hash_start_or_continue==1",
+      "signals": [
+        "msg_allowed",
+        "hash_start_or_continue",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:417-418"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When rst_ni is high, hash_start_or_continue is low, and packer_flush_done is high, msg_allowed is cleared to 0.",
+      "cond": "posedge clk_i, rst_ni==1, hash_start_or_continue==0, packer_flush_done==1",
+      "signals": [
+        "msg_allowed",
+        "packer_flush_done",
+        "hash_start_or_continue",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:419-420"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When none of the above conditions apply (i.e., rst_ni high, both hash_start_or_continue and packer_flush_done low), msg_allowed retains its previous value.",
+      "cond": "else (implicit no assignment)",
+      "signals": [
+        "msg_allowed",
+        "hash_start_or_continue",
+        "packer_flush_done",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:419-421"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "External logic must ensure that hash_start_or_continue and packer_flush_done are not asserted at the same time; this block gives priority to start, which could keep msg_allowed high during a flush if both are high.",
+      "cond": "During any cycle where both signals are high",
+      "risk": "msg_allowed remains high while the packer is flushing, potentially allowing invalid message data to be accepted, leading to data corruption or security violation.",
+      "signals": [
+        "hash_start_or_continue",
+        "packer_flush_done",
+        "msg_allowed"
+      ],
+      "refs": [
+        "file:417-420"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The priority hash_start_or_continue over packer_flush_done may cause msg_allowed to stay high when a new hash start occurs during an ongoing flush. Need to verify that external logic prevents simultaneous assertion or that the overall protocol tolerates this condition.",
+      "cond": "Both hash_start_or_continue and packer_flush_done asserted together or in rapid succession without proper gating.",
+      "risk": "msg_allowed enables message input while packer is not ready, potentially violating HMAC data integrity and causing incorrect hash computation.",
+      "signals": [
+        "hash_start_or_continue",
+        "packer_flush_done",
+        "msg_allowed"
+      ],
+      "refs": [
+        "file:417-420"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "The assignments use 1'b1 and 1'b0, but the reset uses '0. If msg_allowed is wider than 1 bit, the set/clear assignments only affect the LSB, while the reset clears all bits. This width mismatch could leave stale upper bits after a start or flush-done event.",
+      "cond": "If msg_allowed is declared with a width > 1",
+      "risk": "Upper bits may become non-zero and unintended, potentially affecting control logic that interprets msg_allowed as more than a single-bit flag.",
+      "signals": [
+        "msg_allowed"
+      ],
+      "refs": [
+        "file:416,418,420"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:414-422"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 414,
+  "line_end": 422,
+  "security_implications": ""
+}

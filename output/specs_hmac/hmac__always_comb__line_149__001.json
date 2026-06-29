@@ -1,0 +1,205 @@
+{
+  "chunk_id": "hmac__always_comb__line_149__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "done_state_d",
+      "hash_done_event",
+      "cool_down_ct_d"
+    ],
+    "used": [
+      "done_state_q",
+      "sha_hash_process",
+      "reg_hash_stop",
+      "reg_hash_done",
+      "digest_on_blk",
+      "hash_running",
+      "cool_down_ct_q"
+    ],
+    "modes": [
+      "DoneAwaitCmd",
+      "DoneAwaitHashDone",
+      "DoneAwaitMessageComplete",
+      "DoneAwaitHashComplete"
+    ],
+    "tags": [
+      "handshake",
+      "counter",
+      "sparse_fsm"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "done_state_d defaults to done_state_q, preserving current state unless modified; hash_done_event is cleared to 8'd0 every cycle before conditional updates.",
+      "cond": "always",
+      "signals": [
+        "done_state_d",
+        "done_state_q",
+        "hash_done_event"
+      ],
+      "refs": [
+        "hmac.sv:150-151"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "state_transition",
+      "claim": "In DoneAwaitCmd state, cool_down_ct_d is unconditionally cleared to 8'd0. If sha_hash_process is asserted, done_state_d moves to DoneAwaitHashDone; else if reg_hash_stop is asserted, done_state_d moves to DoneAwaitMessageComplete.",
+      "cond": "done_state_q == DoneAwaitCmd",
+      "signals": [
+        "done_state_q",
+        "sha_hash_process",
+        "reg_hash_stop",
+        "done_state_d",
+        "cool_down_ct_d"
+      ],
+      "refs": [
+        "hmac.sv:155-162"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "In DoneAwaitHashDone, if reg_hash_done is asserted, hash_done_event is set to 1'b1 and done_state_d returns to DoneAwaitCmd; otherwise, done_state_d stays unchanged.",
+      "cond": "done_state_q == DoneAwaitHashDone",
+      "signals": [
+        "done_state_q",
+        "reg_hash_done",
+        "hash_done_event",
+        "done_state_d"
+      ],
+      "refs": [
+        "hmac.sv:165-170"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "In DoneAwaitMessageComplete, if digest_on_blk is asserted, done_state_d advances to DoneAwaitHashComplete; otherwise, no state change.",
+      "cond": "done_state_q == DoneAwaitMessageComplete",
+      "signals": [
+        "done_state_q",
+        "digest_on_blk",
+        "done_state_d"
+      ],
+      "refs": [
+        "hmac.sv:172-178"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In DoneAwaitHashComplete, if hash_running is deasserted: if cool_down_ct_q < 127, cool_down_ct_d is incremented, hash_done_event is cleared to 0, done_state_d stays; else (cool_down_ct_q >= 127), hash_done_event is set to 1 and done_state_d moves to DoneAwaitCmd. If hash_running is asserted, no assignments to done_state_d or cool_down_ct_d.",
+      "cond": "done_state_q == DoneAwaitHashComplete",
+      "signals": [
+        "done_state_q",
+        "hash_running",
+        "cool_down_ct_q",
+        "cool_down_ct_d",
+        "hash_done_event",
+        "done_state_d"
+      ],
+      "refs": [
+        "hmac.sv:180-191"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "For any state not matching the four enumerated cases, done_state_d retains its default of done_state_q (no transition), hash_done_event remains 0, and cool_down_ct_d is not assigned, potentially holding its previous combinational value.",
+      "cond": "done_state_q not in {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete}",
+      "signals": [
+        "done_state_d",
+        "hash_done_event",
+        "cool_down_ct_d"
+      ],
+      "refs": [
+        "hmac.sv:193"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "This block assumes that done_state_q always encodes one of the four enumerated states; there is no recovery for illegal encodings.",
+      "cond": "always",
+      "risk": "If done_state_q becomes an illegal value (e.g., due to SEU), the FSM hangs, cool_down_ct_d is not driven (may latch), and hash_done_event is never asserted, blocking HMAC done notification.",
+      "signals": [
+        "done_state_q"
+      ],
+      "refs": [
+        "hmac.sv:153-194"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The block assumes that cool_down_ct_d is registered externally and fed back as cool_down_ct_q each cycle, forming a functional counter.",
+      "cond": "when DoneAwaitHashComplete is active",
+      "risk": "If the external register does not update correctly, the cool-down counter will not count and the DoneAwaitHashComplete state may never exit, stalling HMAC done event.",
+      "signals": [
+        "cool_down_ct_d",
+        "cool_down_ct_q"
+      ],
+      "refs": [
+        "hmac.sv:182-188"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "The block sets hash_done_event as a single-cycle pulse; it assumes the consumer samples it within that cycle, because in the next cycle hash_done_event is cleared to 0 unless reasserted.",
+      "cond": "when hash_done_event is asserted",
+      "risk": "If the consumer expects a level or latched signal, it may miss the done notification.",
+      "signals": [
+        "hash_done_event"
+      ],
+      "refs": [
+        "hmac.sv:151,167,184,187"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The default branch is empty (no assignment), so if done_state_q is corrupted to an illegal state, the FSM stalls, cool_down_ct_d is not driven (possible latch), and there is no recovery mechanism.",
+      "cond": "done_state_q illegal",
+      "risk": "Loss of HMAC done event or counter corruption could block secure hash completion or leak state, impacting security if done notification is required for integrity or further processing.",
+      "signals": [
+        "done_state_d",
+        "cool_down_ct_d",
+        "done_state_q"
+      ],
+      "refs": [
+        "hmac.sv:193"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The cool-down counter uses a hardcoded threshold of 127, but the rationale (e.g., pipeline depth, output latency of SHA) is not documented in this block.",
+      "cond": "when DoneAwaitHashComplete state active",
+      "risk": "Incorrect threshold could lead to premature hash_done_event or unnecessary stalling, but functional risk appears low given the fixed constant.",
+      "signals": [
+        "cool_down_ct_q"
+      ],
+      "refs": [
+        "hmac.sv:182"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:149-195"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 149,
+  "line_end": 195,
+  "security_implications": ""
+}

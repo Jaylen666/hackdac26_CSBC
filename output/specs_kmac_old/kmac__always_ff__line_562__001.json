@@ -1,0 +1,60 @@
+{
+  "chunk_id": "kmac__always_ff__line_562__001",
+  "summary": "该寄存器块生成多比特空闲指示 idle_o：复位后置真，且仅在 SHA3 状态机处于空闲并且消息 FIFO 为空或安全参数允许在空闲态接受软件消息时保持为空闲。",
+  "behavior": "该 always_ff 块驱动寄存器 idle_o。异步低有效复位时，idle_o 被置为 prim_mubi_pkg::MuBi4True。非复位时，只有当 sha3_fsm 等于 sha3_pkg::StIdle，且同时满足 msgfifo_empty 为真或 SecIdleAcceptSwMsg 为真时，idle_o 才被置为 MuBi4True；其余所有情况都被置为 MuBi4False。这意味着 idle_o 不是单纯反映状态机是否处于 StIdle，还额外受消息 FIFO 是否为空以及安全常量 SecIdleAcceptSwMsg 的控制；如果设计配置为允许在空闲态接受软件消息，则即使 FIFO 非空，在 StIdle 时也仍会宣告空闲。源码未显示 SecIdleAcceptSwMsg 的具体来源和含义，因此该条件体现的是设计意图上的安全/配置门控。",
+  "guarantees": [
+    {
+      "property": "复位有效时，idle_o 被强制为 prim_mubi_pkg::MuBi4True。",
+      "output_signals": [
+        "idle_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:562-565"
+      ]
+    },
+    {
+      "property": "在非复位状态下，只要 sha3_fsm 不是 sha3_pkg::StIdle，或处于 StIdle 但 msgfifo_empty 与 SecIdleAcceptSwMsg 均不为真，idle_o 一定为 prim_mubi_pkg::MuBi4False。",
+      "output_signals": [
+        "idle_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565-569"
+      ]
+    }
+  ],
+  "security_implications": "idle_o 使用 MuBi4True/MuBi4False 多比特编码而非单比特，说明该空闲指示带有抗故障/抗篡改意图。其置真条件不仅要求 SHA3 状态机空闲，还受 msgfifo_empty 或安全配置 SecIdleAcceptSwMsg 约束，避免在存在待处理消息时错误宣告空闲；但若 SecIdleAcceptSwMsg 被配置为真，则会放宽这一限制，使空闲态下允许带未清空 FIFO 仍报告空闲，这一行为是否安全取决于系统对该安全参数的定义。",
+  "assumptions": [
+    {
+      "constraint": "sha3_fsm 的编码需与 sha3_pkg::StIdle 一致且稳定；该块将其作为 idle_o 的主要状态判据。",
+      "bug_relevance": "若状态编码错误或比较对象不一致，idle_o 可能在忙状态误报为空闲，或在空闲状态误报为非空闲，从而影响上层调度或访问控制。这属于行为契约违规。",
+      "related_signals": [
+        "sha3_fsm"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565-568"
+      ]
+    },
+    {
+      "constraint": "SecIdleAcceptSwMsg 的取值应符合系统安全配置预期；若设计上不允许在空闲态接受待处理软件消息，则该常量不应为真。",
+      "bug_relevance": "若不满足则 idle_o 会在 StIdle 且 FIFO 非空时仍报告空闲；这可能是有意的防御性/配置化行为，但如果系统假定“空闲”必然意味着无待处理消息，则会造成功能或安全语义偏差。",
+      "related_signals": [
+        "SecIdleAcceptSwMsg",
+        "msgfifo_empty",
+        "idle_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565-568"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:562-570"
+  ],
+  "uncertain_points": [
+    "SecIdleAcceptSwMsg 的具体定义在该片段外，无法仅凭此处确认其是编译期常量、生命周期安全配置，还是临时绕过条件。",
+    "idle_o 的语义是否被系统严格解释为“完全无待处理工作”，还是仅表示“状态机当前停在 StIdle 并可接受软件消息”，需要结合其他上下文确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 562,
+  "line_end": 570
+}

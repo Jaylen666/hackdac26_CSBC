@@ -1,0 +1,201 @@
+{
+  "chunk_id": "aes_cipher_control_fsm_continuous_region_declarations_or_instances_003__behavior__002",
+  "header": {
+    "module": "aes_cipher_control_fsm",
+    "block_kind": "mixed",
+    "driven": [
+      "cyc_ctr_q",
+      "unused_cyc_ctr",
+      "cyc_ctr_expr"
+    ],
+    "used": [
+      "cyc_ctr_d",
+      "cfg_valid_i",
+      "op_i",
+      "key_len_i",
+      "alert_o",
+      "aes_cipher_ctrl_cs"
+    ],
+    "modes": [],
+    "tags": [
+      "secret",
+      "mask",
+      "assertion",
+      "security",
+      "fault",
+      "state"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "cyc_ctr_q is continuously driven by cyc_ctr_d.",
+      "cond": "always",
+      "signals": [
+        "cyc_ctr_q",
+        "cyc_ctr_d"
+      ],
+      "refs": [
+        "file:479"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "unused_cyc_ctr is continuously driven by cyc_ctr_q, likely to satisfy lint or pin connectivity.",
+      "cond": "always",
+      "signals": [
+        "unused_cyc_ctr",
+        "cyc_ctr_q"
+      ],
+      "refs": [
+        "file:480"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "cyc_ctr_expr is tied to 1'b1, possibly to bypass an expression or enable a path.",
+      "cond": "always",
+      "signals": [
+        "cyc_ctr_expr"
+      ],
+      "refs": [
+        "file:481"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "Compile-time static lint error ensures the SecMasking parameter is 1, forcing masking to be enabled.",
+      "cond": "compile time",
+      "signals": [],
+      "refs": [
+        "file:489"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "generate_param",
+      "claim": "Compile-time static lint error ensures SecSBoxImpl equals SBoxImplDom, enforcing the most secure SBox implementation.",
+      "cond": "compile time",
+      "signals": [],
+      "refs": [
+        "file:493"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "When cfg_valid_i is high, op_i must be one of the legal cipher operations CIPH_FWD or CIPH_INV.",
+      "cond": "cfg_valid_i == 1",
+      "risk": "If violated, the cipher may use an illegal operation, leading to undefined or insecure cipher behavior.",
+      "signals": [
+        "cfg_valid_i",
+        "op_i"
+      ],
+      "refs": [
+        "file:496-499"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "When cfg_valid_i is high, key_len_i must be one of AES_128, AES_192, or AES_256.",
+      "cond": "cfg_valid_i == 1",
+      "risk": "If violated, an invalid key length may corrupt encryption rounds or cause unexpected data exposure.",
+      "signals": [
+        "cfg_valid_i",
+        "key_len_i"
+      ],
+      "refs": [
+        "file:500-504"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "When alert_o is not asserted, the FSM state aes_cipher_ctrl_cs must belong to the set of seven legal states (IDLE, INIT, ROUND, FINISH, PRNG_RESEED, CLEAR_S, CLEAR_KD).",
+      "cond": "!alert_o",
+      "risk": "If an illegal state is entered without alert, the module may process data in an undefined state, potentially leaking secrets or bypassing security measures.",
+      "signals": [
+        "alert_o",
+        "aes_cipher_ctrl_cs"
+      ],
+      "refs": [
+        "file:505-513"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The assertion AesCiphOpValid checks op_i validity, but if op_i is illegal and cfg_valid_i is high, the module may proceed using the illegal value because no explicit blocking or gating is shown in this chunk.",
+      "cond": "cfg_valid_i == 1 and op_i not in {CIPH_FWD, CIPH_INV}",
+      "risk": "Illegal operation could be executed, leading to incorrect or insecure cipher processing and possible secret leakage.",
+      "signals": [
+        "cfg_valid_i",
+        "op_i"
+      ],
+      "refs": [
+        "file:496-499"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The assertion AesKeyLenValid checks key_len_i validity, but if key_len_i is illegal and cfg_valid_i is high, the module may still accept and use the illegal length, breaking key-schedule assumptions.",
+      "cond": "cfg_valid_i == 1 and key_len_i not in {AES_128, AES_192, AES_256}",
+      "risk": "Operations with a malformed key length could corrupt internal state and expose key material or produce incorrect ciphertext.",
+      "signals": [
+        "cfg_valid_i",
+        "key_len_i"
+      ],
+      "refs": [
+        "file:500-504"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The assertion AesCipherControlStateValid fires if the FSM enters an illegal state while alert_o is low, but the illegal state itself is not prevented. The module may perform unauthorized actions in an invalid state.",
+      "cond": "!alert_o and aes_cipher_ctrl_cs outside legal set",
+      "risk": "FSM error propagation without alarm can violate data integrity and confidentiality.",
+      "signals": [
+        "alert_o",
+        "aes_cipher_ctrl_cs"
+      ],
+      "refs": [
+        "file:505-513"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal unused_cyc_ctr is assigned from cyc_ctr_q but may never be read elsewhere, serving only as a connectivity placeholder.",
+      "cond": "unknown",
+      "risk": "If truly unused, it is not harmful, but if intended for observability, its omission could hide debug failure.",
+      "signals": [
+        "unused_cyc_ctr"
+      ],
+      "refs": [
+        "file:480"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:479-515"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv",
+  "line_start": 479,
+  "line_end": 515,
+  "security_implications": ""
+}

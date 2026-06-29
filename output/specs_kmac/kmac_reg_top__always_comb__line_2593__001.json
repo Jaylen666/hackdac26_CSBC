@@ -1,50 +1,130 @@
 {
   "chunk_id": "kmac_reg_top__always_comb__line_2593__001",
-  "summary": "将当前寄存器地址解码为一组一热候选命中位，用于标识 KMAC 各控制、状态、熵配置、密钥 share、prefix 和错误码寄存器是否被选中。",
-  "behavior": "该组合逻辑逐项比较输入地址 reg_addr 与各个已定义的 KMAC 寄存器偏移地址，并把比较结果写入 addr_hit[0:56]。每一位 addr_hit 对应一个固定寄存器槽位：包括中断状态/使能/测试、alert 测试、配置寄存器、命令/状态、熵相关寄存器、KEY_SHARE0 的 16 个字、KEY_SHARE1 的 16 个字、KEY_LEN、PREFIX_0 到 PREFIX_10，以及 ERR_CODE；当 reg_addr 等于某个寄存器偏移时，对应的 addr_hit 位为 1，否则为 0。该片段本身只做地址到位图的静态译码，不包含优先级、冲突处理、默认兜底或寄存器读写使能控制；是否要求这些偏移彼此唯一、以及 addr_hit 是否被下游当作一热信号使用，需要依赖片段外上下文确认。",
+  "header": {
+    "module": "kmac_reg_top",
+    "block_kind": "always_comb",
+    "driven": [
+      "addr_hit"
+    ],
+    "used": [
+      "reg_addr",
+      "KMAC_INTR_STATE_OFFSET",
+      "KMAC_INTR_ENABLE_OFFSET",
+      "KMAC_INTR_TEST_OFFSET",
+      "KMAC_ALERT_TEST_OFFSET",
+      "KMAC_CFG_REGWEN_OFFSET",
+      "KMAC_CFG_SHADOWED_OFFSET",
+      "KMAC_CMD_OFFSET",
+      "KMAC_STATUS_OFFSET",
+      "KMAC_ENTROPY_PERIOD_OFFSET",
+      "KMAC_ENTROPY_REFRESH_HASH_CNT_OFFSET",
+      "KMAC_ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET",
+      "KMAC_ENTROPY_SEED_OFFSET",
+      "KMAC_KEY_SHARE0_0_OFFSET",
+      "KMAC_KEY_SHARE0_1_OFFSET",
+      "KMAC_KEY_SHARE0_2_OFFSET",
+      "KMAC_KEY_SHARE0_3_OFFSET",
+      "KMAC_KEY_SHARE0_4_OFFSET",
+      "KMAC_KEY_SHARE0_5_OFFSET",
+      "KMAC_KEY_SHARE0_6_OFFSET",
+      "KMAC_KEY_SHARE0_7_OFFSET",
+      "KMAC_KEY_SHARE0_8_OFFSET",
+      "KMAC_KEY_SHARE0_9_OFFSET",
+      "KMAC_KEY_SHARE0_10_OFFSET",
+      "KMAC_KEY_SHARE0_11_OFFSET",
+      "KMAC_KEY_SHARE0_12_OFFSET",
+      "KMAC_KEY_SHARE0_13_OFFSET",
+      "KMAC_KEY_SHARE0_14_OFFSET",
+      "KMAC_KEY_SHARE0_15_OFFSET",
+      "KMAC_KEY_SHARE1_0_OFFSET",
+      "KMAC_KEY_SHARE1_1_OFFSET",
+      "KMAC_KEY_SHARE1_2_OFFSET",
+      "KMAC_KEY_SHARE1_3_OFFSET",
+      "KMAC_KEY_SHARE1_4_OFFSET",
+      "KMAC_KEY_SHARE1_5_OFFSET",
+      "KMAC_KEY_SHARE1_6_OFFSET",
+      "KMAC_KEY_SHARE1_7_OFFSET",
+      "KMAC_KEY_SHARE1_8_OFFSET",
+      "KMAC_KEY_SHARE1_9_OFFSET"
+    ],
+    "modes": [],
+    "tags": [
+      "csr",
+      "secret",
+      "entropy"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 reg_addr 等于某个列出的寄存器偏移时，该寄存器对应的 addr_hit 位必为 1。",
-      "output_signals": [
-        "addr_hit"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Each addr_hit[i] is 1 if reg_addr equals the specific KMAC_*_OFFSET constant for that index, otherwise 0.",
+      "cond": "always",
+      "signals": [
+        "addr_hit",
+        "reg_addr"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2594-2650"
-      ]
-    },
-    {
-      "property": "对于每个列出的寄存器槽位，其对应的 addr_hit 位仅由 reg_addr 是否等于该槽位偏移决定，不受其他条件门控。",
-      "output_signals": [
-        "addr_hit"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2594-2650"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2593-2651"
       ]
     }
   ],
-  "security_implications": "该地址译码覆盖了密钥 share 寄存器、prefix 寄存器和错误码寄存器，因此其正确性直接影响对安全敏感寄存器的访问路由。若不同 OFFSET 常量发生别名或下游错误地假定 addr_hit 严格一热，可能导致错误寄存器被访问，进而影响密钥材料装载或错误状态处理。",
   "assumptions": [
     {
-      "constraint": "所有参与比较的寄存器 OFFSET 常量应彼此唯一，使同一个 reg_addr 不会同时匹配多个条目。",
-      "bug_relevance": "这是行为契约；若违反，则多个 addr_hit 位可能同时置 1，导致下游寄存器选择、读写路由或访问检查出现歧义，可能误访问安全敏感寄存器。",
-      "related_signals": [
-        "reg_addr",
-        "addr_hit"
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "reg_addr stays stable during the entire bus transaction address phase.",
+      "cond": "when a bus transaction targeting this module is in progress",
+      "risk": "If reg_addr changes mid‑transaction, addr_hit may glitch or decode a different register, causing incorrect read/write to a wrong register.",
+      "signals": [
+        "reg_addr"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2594-2650"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2593-2651"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The decoder unconditionally enables access to key share and entropy seed registers. It is unclear whether a higher‑level lock (e.g., KMAC_CFG_REGWEN) is supposed to gate these decodes.",
+      "cond": "when software reads or writes key/entropy registers",
+      "risk": "Sensitive key material or entropy could be exposed or modified regardless of configuration lock state, violating security assumptions.",
+      "signals": [
+        "addr_hit[12:27]",
+        "addr_hit[28:43]",
+        "KMAC_KEY_SHARE0_*_OFFSET",
+        "KMAC_KEY_SHARE1_*_OFFSET",
+        "KMAC_ENTROPY_SEED_OFFSET",
+        "KMAC_CFG_REGWEN_OFFSET"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2606-2631"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The decoder produces a hit for the configuration register write enable (KMAC_CFG_REGWEN_OFFSET) itself, but does not participate in any self‑locking mechanism.",
+      "cond": "when the regwen register is accessed",
+      "risk": "If the bus interface does not impose a separate write‑once or lock mechanism, software could unlock configuration after it is supposed to be locked.",
+      "signals": [
+        "addr_hit[4]",
+        "KMAC_CFG_REGWEN_OFFSET"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2598"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:2593-2651"
   ],
-  "uncertain_points": [
-    "该片段未展示 addr_hit 的位宽和默认赋值方式；虽然此处显式赋值了 0 到 56 位，但无法仅凭本片段确认是否已覆盖整个向量或是否存在额外位。",
-    "无法仅凭本片段确认下游是否要求 addr_hit 严格一热，还是允许无命中/多命中作为异常情况处理。",
-    "依赖列表未列出 KMAC_KEY_SHARE1_10_OFFSET 到 KMAC_ERR_CODE_OFFSET 等常量，但代码中实际使用了这些符号；这是摘要不完整还是上下文缺失，需结合完整文件确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv",
   "line_start": 2593,
-  "line_end": 2651
+  "line_end": 2651,
+  "security_implications": ""
 }

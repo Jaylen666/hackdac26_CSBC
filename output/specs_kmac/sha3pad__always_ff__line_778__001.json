@@ -1,60 +1,130 @@
 {
   "chunk_id": "sha3pad__always_ff__line_778__001",
-  "summary": "该寄存器块维护一次操作开始许可位 start_valid：复位后允许启动，接收到 start_i 后禁止再次启动，直到 done_i 被严格判定为真时重新允许启动。",
-  "behavior": "该块实现了一个简单的 busy/ready 型许可寄存器。复位时，start_valid 被置为 1，表示模块处于可接受启动的状态 [sha3pad.sv:778-780]。正常运行时，如果 start_i 为高，则 start_valid 被清为 0，从而在一次启动发生后撤销后续启动许可 [sha3pad.sv:781-782]。若没有 start_i，但 done_i 通过 prim_mubi_pkg::mubi4_test_true_strict() 的严格真值检查，则 start_valid 被重新置为 1，表示本次处理结束后再次允许新的启动 [sha3pad.sv:783-784]。由于条件使用 if / else if 优先级链，在 start_i 与 done_i 同时满足时，start_i 分支优先，start_valid 会被置 0 而不是 1 [sha3pad.sv:781-784]。若上述条件都不满足，则该寄存器保持原值 [sha3pad.sv:781-785]。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_ff",
+    "driven": [
+      "start_valid"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "start_i",
+      "done_i"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "reset",
+      "mubi"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位激活时，start_valid 一定被置为 1，模块回到可接受新启动的状态。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "On reset (rst_ni low), start_valid is set to 1.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "start_valid"
       ],
-      "source_refs": [
-        "sha3pad.sv:778-780"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:779-780"
       ]
     },
     {
-      "property": "一旦检测到 start_i，start_valid 会被清为 0，并在之后只有当 done_i 通过严格 true 检查时才会重新置为 1。",
-      "output_signals": [
-        "start_valid"
-      ],
-      "source_refs": [
-        "sha3pad.sv:781-784"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑通过 start_valid 对启动窗口进行门控，防止一次操作尚未完成时重复接受新的 start，从而降低状态机被重入、消息边界被破坏或填充流程被并发扰乱的风险。done_i 采用 mubi4 严格真值判定，说明设计有意把完成信号当作安全敏感握手处理，避免宽松解释非法或毛刺编码导致过早重新开放启动。",
-  "assumptions": [
-    {
-      "constraint": "start_i 应仅在确实需要开始一次新操作时拉高；设计虽会在 start_i 后关闭 start_valid 以防重入，但如果上游在错误时机发起 start_i，当前块仍会无条件撤销启动许可。",
-      "bug_relevance": "若不满足则可能导致模块被过早置为非可启动状态，进而丢失合法后续启动机会；这更像上游协议违例，当前块对该场景的防御行为是关闭许可而非报错。",
-      "related_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When start_i is asserted, start_valid is set to 0.",
+      "cond": "start_i == 1",
+      "signals": [
         "start_i",
         "start_valid"
       ],
-      "source_refs": [
-        "sha3pad.sv:781-782"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:781-782"
       ]
     },
     {
-      "constraint": "done_i 必须按照 MuBi4 协议驱动为严格合法的 true 编码，才能在操作完成后重新开放 start_valid。",
-      "bug_relevance": "若违反该约束，即使外部认为操作已完成，start_valid 也可能一直不被重新置 1，导致后续启动被阻塞；若 done_i 非法编码却被系统上层当作完成，可能构成功能错误。",
-      "related_signals": [
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When done_i is true as per mubi4_test_true_strict, start_valid is set to 1.",
+      "cond": "prim_mubi_pkg::mubi4_test_true_strict(done_i) == true",
+      "signals": [
         "done_i",
         "start_valid"
       ],
-      "source_refs": [
-        "sha3pad.sv:783-784"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:783-784"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "If no reset, start_i not asserted, and done_i not true, start_valid retains its previous value.",
+      "cond": "!rst_ni false, start_i false, mubi4_test_true_strict(done_i) false",
+      "signals": [
+        "start_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:778-786 (implicit else)"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "done_i must be driven with a stable, valid 4-bit multi-bit encoding, such that mubi4_test_true_strict returns true only when done is genuinely true.",
+      "cond": "During normal operation when a previous operation completes.",
+      "risk": "If done_i carries an invalid or incorrect encoding, the condition may never be true, causing start_valid to remain low indefinitely and the padder to hang.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:783"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When both start_i and done_i are true in the same cycle, start_i takes priority and start_valid becomes 0. It is unclear if this priority is intentional or could miss a required done acknowledgment.",
+      "cond": "start_i and done_i true simultaneously",
+      "risk": "If not intended, a new start request could be incorrectly cleared, leading to a missed start or deadlock.",
+      "signals": [
+        "start_i",
+        "done_i",
+        "start_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:781-785"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "No explicit check or error handling for an invalid or unexpected encoding on done_i; the mubi test simply returns false, causing start_valid to remain low. This could be exploited or accidentally lead to a hang without fault detection.",
+      "cond": "done_i carries a non-true, non-false encoding (e.g., X, Z, or illegal mubi value)",
+      "risk": "Silent hang; the system may not detect a faulty done source and could stall indefinitely.",
+      "signals": [
+        "done_i",
+        "start_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:783"
       ]
     }
   ],
   "evidence_refs": [
-    "sha3pad.sv:778-786"
-  ],
-  "uncertain_points": [
-    "该片段只更新 start_valid，但未显示 start_valid 是否在其他组合/时序逻辑中实际用于屏蔽 start_i；因此这里只能确认它记录“是否允许启动”的状态，不能仅凭此片段断言重复 start 一定被全局阻止。",
-    "注释缺失，无法仅凭该片段确认 done_i 的语义是单拍完成脉冲还是持续有效完成状态；不过本块对两者都会在严格 true 时重新置 start_valid。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:778-786"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 778,
-  "line_end": 786
+  "line_end": 786,
+  "security_implications": ""
 }

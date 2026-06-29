@@ -1,0 +1,191 @@
+{
+  "chunk_id": "aes_control_fsm_continuous_region_declarations_or_instances_004__behavior__001",
+  "header": {
+    "module": "aes_control_fsm",
+    "block_kind": "assign",
+    "driven": [
+      "clear_in_out_status",
+      "data_in_new_d",
+      "data_in_new",
+      "data_out_read_d",
+      "data_out_read"
+    ],
+    "used": [
+      "ctrl_we_q",
+      "data_in_load",
+      "data_in_qe_i",
+      "data_in_new_q",
+      "data_out_read_q",
+      "data_out_re_i"
+    ],
+    "modes": [],
+    "tags": [
+      "wipe",
+      "secret"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "clear_in_out_status is directly assigned to ctrl_we_q.",
+      "cond": "always",
+      "signals": [
+        "clear_in_out_status",
+        "ctrl_we_q"
+      ],
+      "refs": [
+        "705"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "data_in_new_d is reset to all zeros when data_in_load is true, all bits of data_in_qe_i are high, or clear_in_out_status is true; otherwise it accumulates writes as the bitwise OR of data_in_new_q and data_in_qe_i.",
+      "cond": "always",
+      "signals": [
+        "data_in_new_d",
+        "data_in_load",
+        "data_in_qe_i",
+        "clear_in_out_status",
+        "data_in_new_q"
+      ],
+      "refs": [
+        "711-712"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "data_in_new is high when all bits of data_in_new_d are high.",
+      "cond": "always",
+      "signals": [
+        "data_in_new",
+        "data_in_new_d"
+      ],
+      "refs": [
+        "713"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "data_out_read_d is reset to all zeros when all bits of data_out_read_q are high or clear_in_out_status is true; otherwise it accumulates reads as the bitwise OR of data_out_read_q and data_out_re_i.",
+      "cond": "always",
+      "signals": [
+        "data_out_read_d",
+        "data_out_read_q",
+        "clear_in_out_status",
+        "data_out_re_i"
+      ],
+      "refs": [
+        "719-720"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "data_out_read is high when all bits of data_out_read_d are high.",
+      "cond": "always",
+      "signals": [
+        "data_out_read",
+        "data_out_read_d"
+      ],
+      "refs": [
+        "721"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "External logic must not set all bits of data_in_qe_i during normal write operations, because that pattern is reserved for clearing data input registers with random data.",
+      "cond": "when a write to data input registers occurs and not a clear operation.",
+      "risk": "If a legitimate write asserts all data_in_qe_i bits, data_in_new_d is cleared to zero, causing data_in_new to deassert early. This may cause downstream logic to miss the indication that new input data is ready.",
+      "signals": [
+        "data_in_qe_i",
+        "data_in_new_d",
+        "data_in_new"
+      ],
+      "refs": [
+        "710-713"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When all bits of data_out_read_q are high (indicating all output registers have been read), external logic must not simultaneously assert any bit of data_out_re_i.",
+      "cond": "a cycle where &data_out_read_q is true.",
+      "risk": "data_out_read_d is forced to zero, ignoring new read request. data_out_read remains low, and the read tracking state is cleared without recording the new read, potentially losing an output read event.",
+      "signals": [
+        "data_out_read_q",
+        "data_out_re_i",
+        "data_out_read_d",
+        "data_out_read"
+      ],
+      "refs": [
+        "719-721"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The condition `&data_in_qe_i` that resets data_in_new_d may also be triggered by a legitimate full‑word write to the data input registers, because all byte‑enable bits would be high.",
+      "cond": "a normal write that happens to set all bits of data_in_qe_i.",
+      "risk": "Write status clears prematurely; data_in_new never asserts for that write, causing the cipher core to miss new input data (data could be ignored or not loaded).",
+      "signals": [
+        "data_in_qe_i",
+        "data_in_new_d",
+        "data_in_new"
+      ],
+      "refs": [
+        "711-713"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "When data_out_read_q is all ones and a new read is requested in the same cycle, the read event is dropped because data_out_read_d is forced to zero.",
+      "cond": "simultaneous `&data_out_read_q == 1'b1` and any bit of `data_out_re_i` asserted.",
+      "risk": "A valid read operation is not reflected in data_out_read, potentially causing the system to believe no read occurred and leading to stale status or dropped read acknowledgements.",
+      "signals": [
+        "data_out_read_q",
+        "data_out_re_i",
+        "data_out_read"
+      ],
+      "refs": [
+        "719-721"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "data_in_new and data_out_read assert only when ALL bits of the corresponding accumulation vector are high, indicating the entire register bank has been written/read. It is unclear whether partial accesses must also be detected.",
+      "cond": "when only a subset of register bytes are written or read.",
+      "risk": "If partial writes/reads are legal and expected, the tracking signals will never assert, stalling downstream logic that waits for data_in_new or data_out_read.",
+      "signals": [
+        "data_in_new_d",
+        "data_in_new",
+        "data_out_read_d",
+        "data_out_read"
+      ],
+      "refs": [
+        "713",
+        "721"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "705-721"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv",
+  "line_start": 705,
+  "line_end": 721,
+  "security_implications": ""
+}

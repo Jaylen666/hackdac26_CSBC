@@ -1,53 +1,328 @@
 {
   "chunk_id": "uart_core__continuous_region__uart_core__001",
-  "summary": "将 CSR 寄存器映射到内部控制信号，并产生 break 检测所需的全零计数器下一状态及标志信号",
-  "behavior": "该区域通过连续赋值将 reg2hw 中的控制位直接驱动到内部逻辑信号：tx_enable、rx_enable、rxnf_enable、sys_loopback、line_loopback 分别由 reg2hw.ctrl.tx.q、rx.q、nf.q、slpbk.q、llpbk.q 得到（行75-79）。FIFO 复位信号 uart_fifo_rxrst / uart_fifo_txrst 采用写脉冲模式，由对应寄存器的数据位 q 与写使能 qe 相与产生（行81-82）。FIFO 水位级别 uart_fifo_rxilvl / txilvl 及覆盖控制 ovrd_tx_en / ovrd_tx_val 均为直通赋值（行83-87）。\n\nbreak 检测部分：定义枚举类型 break_st_e，包含 BRK_CHK 和 BRK_WAIT 两个状态（行89-94）。组合逻辑信号 not_allzero_char 在 rx_valid 有效且（无帧错误 或 rx_fifo_data 非零）时置 1（行96）。allzero_err 在帧错误且 rx_fifo_data 为 0 时置 1（行97）。全零计数器下一值 allzero_cnt_d 依据当前状态 break_st_q 和上述标志组合生成：若状态为 BRK_WAIT 或 not_allzero_char 有效，清零；否则若 allzero_err 有效，递增（allzero_cnt_q + 1）；否则保持原值（行100-104）。注释中提及 allzero_cnt_q[4] 在非 BRK_WAIT 状态下不会为 1，但对应的饱和逻辑被注释掉，实际未实现。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "assign",
+    "driven": [
+      "tx_enable",
+      "rx_enable",
+      "rxnf_enable",
+      "sys_loopback",
+      "line_loopback",
+      "uart_fifo_rxrst",
+      "uart_fifo_txrst",
+      "uart_fifo_rxilvl",
+      "uart_fifo_txilvl",
+      "ovrd_tx_en",
+      "ovrd_tx_val",
+      "not_allzero_char",
+      "allzero_err",
+      "allzero_cnt_d"
+    ],
+    "used": [
+      "reg2hw.ctrl.tx.q",
+      "reg2hw.ctrl.rx.q",
+      "reg2hw.ctrl.nf.q",
+      "reg2hw.ctrl.slpbk.q",
+      "reg2hw.ctrl.llpbk.q",
+      "reg2hw.fifo_ctrl.rxrst.q",
+      "reg2hw.fifo_ctrl.rxrst.qe",
+      "reg2hw.fifo_ctrl.txrst.q",
+      "reg2hw.fifo_ctrl.txrst.qe",
+      "reg2hw.fifo_ctrl.rxilvl.q",
+      "reg2hw.fifo_ctrl.txilvl.q",
+      "reg2hw.ovrd.txen.q",
+      "reg2hw.ovrd.txval.q",
+      "rx_valid",
+      "event_rx_frame_err",
+      "rx_fifo_data",
+      "break_st_q",
+      "allzero_cnt_q",
+      "allzero_err",
+      "not_allzero_char"
+    ],
+    "modes": [
+      "break_st_e (BRK_CHK, BRK_WAIT)"
+    ],
+    "tags": [
+      "fifo",
+      "loopback",
+      "break",
+      "reset",
+      "csr",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "allzero_cnt_d 完全由当前时钟周期的输入组合决定，当 break_st_q == BRK_WAIT 或 not_allzero_char 为真时，输出恒为 0",
-      "output_signals": [
-        "allzero_cnt_d"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "tx_enable equals reg2hw.ctrl.tx.q",
+      "cond": "always",
+      "signals": [
+        "tx_enable",
+        "reg2hw.ctrl.tx.q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:100-104"
-      ]
-    }
-  ],
-  "security_implications": "",
-  "assumptions": [
-    {
-      "constraint": "reg2hw.fifo_ctrl.rxrst.qe 和 txrst.qe 仅在对应的寄存器写入周期内保持高电平，其余时间为低，以保证 uart_fifo_rxrst / txrst 为单周期脉冲",
-      "bug_relevance": "若 qe 出现多周期高电平或意外翻转，可能造成 FIFO 复位信号持续有效或意外复位，导致数据丢失或状态错误",
-      "related_signals": [
-        "uart_fifo_rxrst",
-        "uart_fifo_txrst",
-        "reg2hw.fifo_ctrl.rxrst.qe",
-        "reg2hw.fifo_ctrl.txrst.qe"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:81-82"
+      "refs": [
+        "file:75"
       ]
     },
     {
-      "constraint": "rx_valid、event_rx_frame_err 和 rx_fifo_data 必须在同一周期内同步有效，且 rx_fifo_data 对应于当前正在处理的字符",
-      "bug_relevance": "若不满足，not_allzero_char 和 allzero_err 可能出现错误，导致 break 检测计数器行为异常，进而影响 break 指示和帧错误处理",
-      "related_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "rx_enable equals reg2hw.ctrl.rx.q",
+      "cond": "always",
+      "signals": [
+        "rx_enable",
+        "reg2hw.ctrl.rx.q"
+      ],
+      "refs": [
+        "file:76"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "rxnf_enable equals reg2hw.ctrl.nf.q",
+      "cond": "always",
+      "signals": [
+        "rxnf_enable",
+        "reg2hw.ctrl.nf.q"
+      ],
+      "refs": [
+        "file:77"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "sys_loopback equals reg2hw.ctrl.slpbk.q",
+      "cond": "always",
+      "signals": [
+        "sys_loopback",
+        "reg2hw.ctrl.slpbk.q"
+      ],
+      "refs": [
+        "file:78"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "line_loopback equals reg2hw.ctrl.llpbk.q",
+      "cond": "always",
+      "signals": [
+        "line_loopback",
+        "reg2hw.ctrl.llpbk.q"
+      ],
+      "refs": [
+        "file:79"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "uart_fifo_rxrst is asserted only when both reg2hw.fifo_ctrl.rxrst.q and reg2hw.fifo_ctrl.rxrst.qe are high",
+      "cond": "always",
+      "signals": [
+        "uart_fifo_rxrst",
+        "reg2hw.fifo_ctrl.rxrst.q",
+        "reg2hw.fifo_ctrl.rxrst.qe"
+      ],
+      "refs": [
+        "file:81"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "uart_fifo_txrst is asserted only when both reg2hw.fifo_ctrl.txrst.q and reg2hw.fifo_ctrl.txrst.qe are high",
+      "cond": "always",
+      "signals": [
+        "uart_fifo_txrst",
+        "reg2hw.fifo_ctrl.txrst.q",
+        "reg2hw.fifo_ctrl.txrst.qe"
+      ],
+      "refs": [
+        "file:82"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "assignment",
+      "claim": "uart_fifo_rxilvl equals reg2hw.fifo_ctrl.rxilvl.q",
+      "cond": "always",
+      "signals": [
+        "uart_fifo_rxilvl",
+        "reg2hw.fifo_ctrl.rxilvl.q"
+      ],
+      "refs": [
+        "file:83"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "assignment",
+      "claim": "uart_fifo_txilvl equals reg2hw.fifo_ctrl.txilvl.q",
+      "cond": "always",
+      "signals": [
+        "uart_fifo_txilvl",
+        "reg2hw.fifo_ctrl.txilvl.q"
+      ],
+      "refs": [
+        "file:84"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "assignment",
+      "claim": "ovrd_tx_en equals reg2hw.ovrd.txen.q",
+      "cond": "always",
+      "signals": [
+        "ovrd_tx_en",
+        "reg2hw.ovrd.txen.q"
+      ],
+      "refs": [
+        "file:86"
+      ]
+    },
+    {
+      "id": "G11",
+      "type": "assignment",
+      "claim": "ovrd_tx_val equals reg2hw.ovrd.txval.q",
+      "cond": "always",
+      "signals": [
+        "ovrd_tx_val",
+        "reg2hw.ovrd.txval.q"
+      ],
+      "refs": [
+        "file:87"
+      ]
+    },
+    {
+      "id": "G12",
+      "type": "assignment",
+      "claim": "not_allzero_char is high when rx_valid is high and either no frame error or rx_fifo_data is non-zero",
+      "cond": "always",
+      "signals": [
+        "not_allzero_char",
         "rx_valid",
         "event_rx_frame_err",
         "rx_fifo_data"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:96-97"
+      "refs": [
+        "file:96"
+      ]
+    },
+    {
+      "id": "G13",
+      "type": "assignment",
+      "claim": "allzero_err is high when event_rx_frame_err is high and rx_fifo_data equals zero",
+      "cond": "always",
+      "signals": [
+        "allzero_err",
+        "event_rx_frame_err",
+        "rx_fifo_data"
+      ],
+      "refs": [
+        "file:97"
+      ]
+    },
+    {
+      "id": "G14",
+      "type": "assignment",
+      "claim": "allzero_cnt_d is reset to 0 when break_st_q is BRK_WAIT or not_allzero_char is high; otherwise if allzero_err is high it increments by 1 from allzero_cnt_q; otherwise holds previous value",
+      "cond": "always",
+      "signals": [
+        "allzero_cnt_d",
+        "break_st_q",
+        "not_allzero_char",
+        "allzero_err",
+        "allzero_cnt_q"
+      ],
+      "refs": [
+        "file:100-104"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "TxFifoDepth and RxFifoDepth parameters are less than 256",
+      "cond": "at synthesis/compile time",
+      "risk": "FIFO depth handling logic (watermarks, depth signals) may malfunction, causing data corruption or missed overflow events",
+      "signals": [
+        "TxFifoDepth",
+        "RxFifoDepth"
+      ],
+      "refs": [
+        "file:37-39"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The hardware/firmware must assert reg2hw.fifo_ctrl.rxrst.qe and .txrst.qe concurrently with the corresponding .q bit to assert uart_fifo_rxrst or uart_fifo_txrst",
+      "cond": "whenever a FIFO reset is intended",
+      "risk": "If qe is not set, the reset signal remains de-asserted, leaving the FIFO in an uncleared state, potentially exposing old sensitive data",
+      "signals": [
+        "reg2hw.fifo_ctrl.rxrst.q",
+        "reg2hw.fifo_ctrl.rxrst.qe",
+        "reg2hw.fifo_ctrl.txrst.q",
+        "reg2hw.fifo_ctrl.txrst.qe",
+        "uart_fifo_rxrst",
+        "uart_fifo_txrst"
+      ],
+      "refs": [
+        "file:81-82"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The FIFO reset signals are gated by a qualifying enable (qe). If qe is not set, a reset write is silently ignored. This could leave FIFO data uncleared, posing a potential data wipe vulnerability when the FIFO contains sensitive information.",
+      "cond": "when software writes fifo_ctrl.rxrst or .txrst without setting the corresponding qe bit",
+      "risk": "Sensitive data may persist in FIFO after an intended clear operation",
+      "signals": [
+        "uart_fifo_rxrst",
+        "uart_fifo_txrst",
+        "reg2hw.fifo_ctrl.rxrst.q",
+        "reg2hw.fifo_ctrl.rxrst.qe",
+        "reg2hw.fifo_ctrl.txrst.q",
+        "reg2hw.fifo_ctrl.txrst.qe"
+      ],
+      "refs": [
+        "file:81-82"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The allzero break counter (allzero_cnt_d) increments on every allzero_err without saturation, relying on the state machine to transition to BRK_WAIT before allzero_cnt_q[4] becomes 1. A commented-out saturation line suggests this was considered but removed. If the state machine fails to transition, the counter may overflow and wrap to 0, causing missed break detection.",
+      "cond": "if break_st_q remains in BRK_CHK for 16 or more cycles of allzero_err",
+      "risk": "Break condition may not be detected, leading to protocol errors or stuck state",
+      "signals": [
+        "allzero_cnt_d",
+        "allzero_cnt_q",
+        "allzero_err",
+        "break_st_q",
+        "not_allzero_char"
+      ],
+      "refs": [
+        "file:96-104"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:8-104"
-  ],
-  "uncertain_points": [
-    "行102的注释代码 'allzero_cnt_q[4] ? allzero_cnt_q :' 被注释掉，不确定本意是防止计数器溢出，还是有意省略。当前设计在连续全零错误时 allzero_cnt_q 可自由递增至5'h1F后可能翻转，实际影响需结合后续逻辑判断。"
+    "file:8-104"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 8,
-  "line_end": 104
+  "line_end": 104,
+  "security_implications": ""
 }

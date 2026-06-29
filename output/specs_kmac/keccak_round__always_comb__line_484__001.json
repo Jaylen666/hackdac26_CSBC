@@ -1,4 +1,175 @@
 {
   "chunk_id": "keccak_round__always_comb__line_484__001",
-  "error": "Expecting value: line 1 column 1 (char 0)"
+  "header": {
+    "module": "keccak_round",
+    "block_kind": "always_comb",
+    "driven": [
+      "storage_d"
+    ],
+    "used": [
+      "keccak_out",
+      "xor_message",
+      "storage",
+      "data_i",
+      "addr_i",
+      "Share",
+      "DInEntry",
+      "DInWidth",
+      "DInAddr"
+    ],
+    "modes": [
+      "xor_message"
+    ],
+    "tags": [
+      "digest",
+      "integrity",
+      "xor",
+      "absorb",
+      "mask"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When xor_message is low, storage_d equals keccak_out.",
+      "cond": "xor_message == 0",
+      "signals": [
+        "storage_d",
+        "keccak_out",
+        "xor_message"
+      ],
+      "refs": [
+        "file:485",
+        "file:500"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When xor_message is high, for each share j in 0..Share-1 and each entry i in 0..DInEntry-1, the word slice storage_d[j][i*DInWidth+:DInWidth] is assigned storage[j][i*DInWidth+:DInWidth] XOR data_i[j] if the lower DInAddr bits of i equal addr_i; otherwise it is assigned storage[j][i*DInWidth+:DInWidth].",
+      "cond": "xor_message == 1",
+      "signals": [
+        "storage_d",
+        "storage",
+        "data_i",
+        "addr_i",
+        "xor_message",
+        "Share",
+        "DInEntry",
+        "DInWidth",
+        "DInAddr"
+      ],
+      "refs": [
+        "file:486-499"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The width of data_i[j] must equal DInWidth. If narrower, the XOR will zero-extend; if wider, upper bits are ignored.",
+      "cond": "xor_message == 1",
+      "risk": "Zero-extension weakens XOR mixing and may cause unintended zero-padding; truncation discards critical data, compromising state integrity.",
+      "signals": [
+        "data_i",
+        "DInWidth"
+      ],
+      "refs": [
+        "file:493-494"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "DInEntry must not exceed 2^DInAddr, otherwise multiple entry indices i share the same lower DInAddr bits and all will be updated simultaneously when addr_i matches that value.",
+      "cond": "xor_message == 1",
+      "risk": "Multiple state words are overwritten with the same data_i, violating the per-lane XOR invariant and corrupting the Keccak state.",
+      "signals": [
+        "addr_i",
+        "DInAddr",
+        "DInEntry"
+      ],
+      "refs": [
+        "file:492-494"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "The per-share width of storage/keccak_out must equal DInEntry * DInWidth; otherwise the slice i*DInWidth+:DInWidth may go out of bounds.",
+      "cond": "xor_message == 1",
+      "risk": "Out-of-range part-select produces X, corrupting the state and potentially leaking secret information during simulation or through synthesis quirks.",
+      "signals": [
+        "storage",
+        "storage_d",
+        "keccak_out",
+        "DInEntry",
+        "DInWidth"
+      ],
+      "refs": [
+        "file:493-494"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If DInWidth * DInEntry does not match the actual per-share bit width of the storage arrays, the slice i*DInWidth+:DInWidth can be out of bounds, causing X in the state. The design relies on an external assertion (WidthDivisableByDInWidth_A) but that may not be present in all flows.",
+      "cond": "Parameters set such that per-share width != DInEntry*DInWidth.",
+      "risk": "X propagation in state compromises hash integrity and may leak secrets in simulation or via hardware glitches.",
+      "signals": [
+        "storage_d",
+        "storage",
+        "DInEntry",
+        "DInWidth"
+      ],
+      "refs": [
+        "file:493-494",
+        "file:491"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "If DInEntry exceeds 2^DInAddr, multiple entry indices i will have identical lower DInAddr bits, causing a single addr_i match to update all of them. This multi-write behavior is a legal parameter combination and may conflict with the intended one-entry-per-address model.",
+      "cond": "DInEntry > 2^DInAddr and xor_message == 1.",
+      "risk": "Unintended multi-lane XOR corrupts the Keccak state, leading to incorrect digest computation.",
+      "signals": [
+        "addr_i",
+        "DInAddr",
+        "DInEntry",
+        "storage_d"
+      ],
+      "refs": [
+        "file:492-494"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "ICEBOX #18029 indicates that partial writes (when the total width is not divisible by DInWidth) are not handled; the chunk depends solely on the external assertion WidthDivisableByDInWidth_A. It is unclear whether the absence of in-chunk protection is acceptable for all integrations.",
+      "cond": "When the total width per share is not a multiple of DInWidth.",
+      "risk": "If the assertion is disabled or not enforced, partial-word accesses could cause misaligned XORs or X's, corrupting the state and potentially leaking secret material.",
+      "signals": [
+        "DInWidth",
+        "DInEntry"
+      ],
+      "refs": [
+        "file:489-491"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:484-501"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
+  "line_start": 484,
+  "line_end": 501,
+  "security_implications": ""
 }

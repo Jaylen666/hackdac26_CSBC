@@ -1,0 +1,2078 @@
+{
+  "summary": {
+    "total_findings": 165,
+    "reviewed_count": 165,
+    "confirmed_count": 1,
+    "false_alarm_count": 150,
+    "uncertain_count": 14,
+    "notes": "Merged from shard1, shard2_rerun, shard3, shard4."
+  },
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "finding_title": "[B-AG+U-UP] The comment 'Should fatal alerts clear the status and trigger register?' indicates an unresolved design specification; t",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:764-786",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:905-937",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:35-50"
+      ],
+      "reasoning": "Fatal-alert clear behavior is an intentional parameterized path, and the clearing PRNG is a separate module with its own constants; the report does not show an RTL defect.",
+      "counter_evidence": "The RTL explicitly gates status/trigger clearing with clear_on_fatal and separately instantiates the clearing PRNG, so the comment is not evidence of a bug.",
+      "confidence": 0.91
+    },
+    {
+      "finding_id": "F-0002",
+      "finding_title": "[B-AG+U-UP] In the AES cipher core, when key_len_i != AES_256 (i.e. AES\u2011128 or AES\u2011192), the default branch of the state_d multiplexer is assigned state_d = state_d, creating a combi",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-255",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:634-714"
+      ],
+      "reasoning": "The self-reference only appears in the illegal default arm for state_sel. The design already checker-buffs sparse selectors and raises mux_sel_err on invalid encodings.",
+      "counter_evidence": "Illegal selector values are treated as fault cases, not normal functional traffic; the RTL does not expose a live combinational loop on a valid path.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0003",
+      "finding_title": "[B-AG+U-UP] The specification lacks a guarantee that key_mix_columns_out produces the correct and stable mixed-columns value when round_key_sel is ROUND_KEY_MIXED and CiphOpFwdOnly i",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:530-540",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:272-274"
+      ],
+      "reasoning": "The mixed round-key path is intentional: inverse cipher mode uses inverse MixColumns, and the control FSM only selects ROUND_KEY_MIXED when that mode is active.",
+      "counter_evidence": "The code matches the AES equivalent-inverse key schedule rather than showing a stability or correctness defect.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0004",
+      "finding_title": "[B-AG+U-UP] When KEY_FULL_CLEAR is active, key_full_d is incorrectly assigned from key_expand_out instead of a clearing constant (e.g., prd_clearing_key_i or all-zero), potentially l",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "CONFIRMED",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-425",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:496-511",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:104-129,440-442"
+      ],
+      "reasoning": "KEY_FULL_CLEAR is routed to key_expand_out, but the clear FSM does not force a clearing constant in that state. key_expand_out is just the expanded key derived from key_full_q, so the clear path reuses key material instead of wiping it.",
+      "counter_evidence": "No alternate wipe source is selected for KEY_FULL_CLEAR; the control FSM only asserts key_expand_clear during start-up, not during the clear-key state.",
+      "confidence": 0.99
+    },
+    {
+      "finding_id": "F-0005",
+      "finding_title": "[B-AG+U-UP] No guarantee verifies that the arrays key_init_q[0] and key_init_q[1] are dimensioned to at least NumRegsKey elements. If NumRegsKey exceeds the declared array bounds, ou",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:100-107",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:19-19",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:231-245"
+      ],
+      "reasoning": "key_init_q is declared with the same NumRegsKey bound that the report questions, and the keymgr type is fixed at two 256-bit shares. The reported out-of-bounds condition is not present in the RTL.",
+      "counter_evidence": "The array dimensions and the indexing loop are aligned in the source.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0006",
+      "finding_title": "[B-AG+U-UP] Missing guarantee that add_round_key_in, round_key, and add_round_key_out have identical dimensions per share; potential bit-width mismatch leading to truncated data or s",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "add_round_key_in, round_key, and add_round_key_out are all the same 4x4x8 shape in the cipher core, so there is no per-share width mismatch to confirm.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0007",
+      "finding_title": "No guarantee verifies that keymgr_key_i.key[0] and keymgr_key_i.key[1] each have a bit-width of at least NumRegsKey*32. If the actual width is smaller, the bit-slice [i*32+:32] will be out of range, y",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:10-20",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:231-245",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:259-261"
+      ],
+      "reasoning": "The keymgr sideload type is 2 shares by 256 bits, and aes_core slices it into 8 words of 32 bits. The report\u2019s width concern is not supported by the package definition.",
+      "counter_evidence": "The source types and the slice width line up exactly.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0008",
+      "finding_title": "key_dec_sel \u7f3a\u5c11\u5408\u6cd5\u503c\u8303\u56f4\u7684\u4fdd\u8bc1\u3002\u82e5\u56e0\u903b\u8f91\u9519\u8bef\u6216\u6bdb\u523a\u5bfc\u81f4 key_dec_sel \u53d6\u672a\u5b9a\u4e49\u503c\uff0c\u7ec4\u5408\u903b\u8f91\u53ef\u80fd\u5c06 prd_clearing_key_i \u9009\u901a\u5230 key_dec_d\uff0c\u9020\u6210\u5bc6\u94a5\u6570\u636e\u6cc4\u9732\u6216\u89e3\u5bc6\u5931\u8d25\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:673-714"
+      ],
+      "reasoning": "key_dec_sel is buffered and checked by aes_sel_buf_chk before it reaches the muxes, and invalid encodings raise key_dec_sel_err/mux_sel_err.",
+      "counter_evidence": "The defensive default branch is paired with an explicit selector checker, so this is not an unchecked illegal-value path.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0009",
+      "finding_title": "\u5f53 key_full_sel \u9009\u4e2d key_expand_out \u65f6\uff0ckey_expand_out \u7684\u9a71\u52a8\u6e90\u6ca1\u6709\u4fdd\u8bc1\u5176\u503c\u4e3a\u975e X/Z\uff0c\u53ef\u80fd\u5c06\u65e0\u6548\u503c\u5199\u5165\u5bc6\u94a5\u5bc4\u5b58\u5668\uff0c\u5bfc\u81f4\u5bc6\u94a5\u635f\u574f\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "key_expand_out is a driven module output with buffering/checking around the handshake; the report only speculates about transient X/Z values without a source defect.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0010",
+      "finding_title": "[B-AG+U-UP] The internal check logic of AesControlFsmCheck_A is not visible here; it is unknown whether it covers all possible illeg",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The visible controller logic already validates sparse control flow and asserts on invalid op/mode combinations; the alleged hidden checker gap is not demonstrated as a bug.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.88
+    },
+    {
+      "finding_id": "F-0011",
+      "finding_title": "Parameter NumShares is a positive integer, ensuring at least one driver for state_done_muxed. A value of 0 would leave t",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "NumShares is a fixed positive configuration in this core, and the done-mux logic is only instantiated over the defined share count.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0012",
+      "finding_title": "[B-AG+U-UP] If NumSlicesCtr can be zero, the bit assignment ctr_we_o_rev[ctr_slice_idx] is an out-of-bounds access because ctr_we_o_",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "NumSlicesCtr is derived from fixed AES register sizing and is not zero in this design, so the claimed out-of-bounds access cannot occur.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0013",
+      "finding_title": "[B-AG+U-UP] The Pipeline parameter's effect on output timing (combinational vs. registered) is not specified in this header. It is u",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The timing behavior is controlled by the implementation parameters and the source does not show a functional defect; this is at most a documentation concern.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0014",
+      "finding_title": "[B-AG+U-UP] The aes_wrap wrapper hardcodes a constant entropy value (0x12345678) instead of using true random entropy, breaking the FIPS compliance assumption required by the AES cor",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_wrap.sv:90-93"
+      ],
+      "reasoning": "The constant entropy literal appears in the aes_wrap test wrapper, not in the production AES datapath. That wrapper is a harness for exercising the DUT, so it is not a contest-relevant hardware bug.",
+      "counter_evidence": "The cited code is a wrapper stimulus source, not the AES RTL itself.",
+      "confidence": 0.99
+    },
+    {
+      "finding_id": "F-0015",
+      "finding_title": "[B-AG+U-UP] \u7f3a\u5c11\u5bf9\u63a9\u7801\u8f6c\u6362\u4e2d\u5e38\u6570\u52a0\u6cd5\u4e0e\u6570\u636e\u8def\u5f84\u8f93\u51fa\u4e4b\u95f4\u4ee3\u6570\u63a9\u7801\u5173\u7cfb\u7684\u4fdd\u8bc1\uff0c\u53ef\u80fd\u5bfc\u81f4\u64cd\u4f5c\u6a21\u5f0f\u52a8\u6001\u5207\u6362\u65f6\u63a9\u7801\u4e0d\u4e00\u81f4\u6216\u4fa7\u4fe1\u9053\u6cc4\u6f0f\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The masking relations are implemented in the AES data path and the report does not show a broken RTL edge; it only points to an unproven invariant.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.86
+    },
+    {
+      "finding_id": "F-0016",
+      "finding_title": "[B-AG+U-UP] \u7f3a\u5c11\u5bf9RndCnstLfsrPerm\u7d22\u5f15\u8303\u56f4\u7684\u8fd0\u884c\u65f6\u6216\u9759\u6001\u68c0\u67e5\uff0c\u82e5\u53c2\u6570\u914d\u7f6e\u9519\u8bef\uff0c\u4f1a\u5728\u4eff\u771f\u4e2d\u5f15\u53d1\u6570\u7ec4\u7d22\u5f15\u9519\u8bef\uff0c\u53ef\u80fd\u4e2d\u65ad\u9a8c\u8bc1\u6216\u63a9\u76d6\u771f\u5b9e\u7684\u7f6e\u6362\u68c0\u67e5\u9519\u8bef\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "RndCnstLfsrPerm is a generated constant table in aes_pkg; the source does not contain a runtime-indexed path that would fault in normal operation.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0017",
+      "finding_title": "[B-AG+U-UP] No guarantee enforces that external iv_we signal uses SP2V_HIGH encoding correctly; if violated, IV register may not update, causing reuse of stale IV.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "iv_we is derived through sparse-signal checking before it is consumed, so the report\u2019s unsupported-encoding scenario is already guarded.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0018",
+      "finding_title": "[B-AG+U-UP] Driver specification fails to guarantee the bit-width of b1_inv and b0_inv elements; consumer explicitly assumes 2-bit elements. This mismatch could lead to unconnected o",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The b1_inv and b0_inv arrays are 2-bit by construction, and the consuming module uses the same widths.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0019",
+      "finding_title": "[B-AG+U-UP] \u5f53\u4efb\u4e00\u8f93\u5165\u4fe1\u53f7\u51fa\u73b0\u6bdb\u523a\u6216\u975e\u6cd5\u7f16\u7801\u65f6\uff0c\u7ec4\u5408\u903b\u8f91\u8f93\u51fa\u53ef\u80fd\u4ea7\u751f\u77ac\u6001\u9519\u8bef\u503c\uff0c\u8fdb\u800c\u7834\u574f masked inverse \u8ba1\u7b97\u7684\u6b63\u786e\u6027\uff0c\u800c\u8bbe\u8ba1\u4e2d\u65e0\u4efb\u4f55\u9632\u62a4\u673a\u5236\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is generic glitch speculation. The visible RTL contains the expected buffering and pipelining for the masked inverse path, so no specific defect is proven.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.78
+    },
+    {
+      "finding_id": "F-0020",
+      "finding_title": "[B-AG+U-UP] RTL spec \u672a\u4fdd\u8bc1 b_buf[0] \u4ee5\u53ca\u76f8\u5173\u7684 q, ss_a1_a0, mul_*_buf \u7b49\u4fe1\u53f7\u6ee1\u8db3\u6ce8\u91ca\u4e2d\u9690\u542b\u7684\u975e\u5b8c\u5907\u6027\u4f9d\u8d56\u8981\u6c42\uff0c\u53ef\u80fd\u5bfc\u81f4\u4fa7\u4fe1\u9053\u6cc4\u9732\u672a\u88ab\u5145\u5206\u9a8c\u8bc1\u6216\u8bbe\u8ba1\u672a\u6ee1\u8db3\u5b89\u5168\u5c5e\u6027\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The module comments document the masking assumptions and the RTL uses explicit buffering/pipelining to preserve them; the report does not identify a concrete broken connection.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.87
+    },
+    {
+      "finding_id": "F-0021",
+      "finding_title": "[B-AG+U-UP] \u786c\u4ef6\u5b89\u5168\u6a21\u5757\u5047\u8bbe\u8f93\u5165\u5171\u4eab\u4e4b\u95f4\u7684\u72ec\u7acb\u6027\uff0c\u4f46\u6ca1\u6709\u786c\u4ef6\u4fdd\u8bc1\u6216\u65ad\u8a00\u6765\u9a8c\u8bc1\u8fd9\u4e00\u5c5e\u6027\uff0c\u82e5\u4e0a\u6e38\u672a\u6b63\u786e\u751f\u6210\u72ec\u7acb\u5171\u4eab\uff0c\u5f02\u6216\u64cd\u4f5c\u53ef\u80fd\u6cc4\u6f0f\u63a9\u7801\u76f8\u5173\u6027\uff0c\u7834\u574f\u4e00\u9636\u4fa7\u4fe1\u9053\u9632\u62a4\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "Input-share independence is an external security assumption, not a hardware self-check the RTL can enforce. No source defect is shown.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.75
+    },
+    {
+      "finding_id": "F-0022",
+      "finding_title": "[B-AG+U-UP] The error detection and state encoding of the cipher control FSM's state register primitive (PRIM_FLOP_SPARSE_FSM, instanced as u_state_regs) are not verified against pot",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The sparse FSM primitive and selector checker are integrated in the control path; the report does not establish a concrete encoding failure in the visible RTL.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.82
+    },
+    {
+      "finding_id": "F-0023",
+      "finding_title": "[B-AG+U-UP] The guarantee does not specify or enforce the required operand order in the computation of b1_inv and b0_inv. Without correct ordering, unmasked intermediate values may a",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:174-229"
+      ],
+      "reasoning": "The operand order is explicitly documented and implemented in aes_sbox_canright_masked.sv, including the ordered b1_inv/b0_inv formulas and the stepwise assignments.",
+      "counter_evidence": "The source already matches the reported dependency order, so there is no inversion or swap bug.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0024",
+      "finding_title": "[B-AG+U-UP] in_valid \u4fe1\u53f7\u5728 aes_cipher_control_fsm_p \u6a21\u5757\u4e2d\u58f0\u660e\u4f46\u672a\u53d1\u73b0\u4efb\u4f55\u6709\u6548\u7684\u8d4b\u503c\u6216\u4f7f\u7528\uff0c\u53ef\u80fd\u5bfc\u81f4\u8be5\u63a7\u5236\u8f93\u5165\u88ab\u5b8c\u5168\u5ffd\u7565\uff0c\u9020\u6210\u529f\u80fd\u7f3a\u5931\u6216\u4e0e\u9884\u671f\u534f\u8bae\u4e0d\u7b26\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The reported input is used through the sparse-control buffering path; the visible source does not show an ignored live control input.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0025",
+      "finding_title": "[B-AG+U-UP] The destination logic driven by key_touch_forces_reseed and force_masks is not present in this chunk; the security impac",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The force-masks and key-touch reseed paths are present in the core and PRNG RTL, so the claimed missing destination logic is not missing.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0026",
+      "finding_title": "[B-AG+U-UP] RTL\u4e2d\u7f3a\u5c11\u7528\u4e8e\u963b\u6b62\u56db\u4e2a\u72ec\u7acb\u4e58\u6cd5\u5668\u5b9e\u4f8b\u88ab\u7efc\u5408\u5408\u5e76\u7684\u7ea6\u675f\uff08\u5982 `dont_merge`/`preserve` \u5c5e\u6027\u6216\u7efc\u5408\u6307\u4ee4\uff09\uff0c\u53ef\u80fd\u5bfc\u81f4\u4fa7\u4fe1\u9053\u63a9\u7801\u5206\u79bb\u88ab\u7834\u574f\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a synthesis-optimization concern, not a functional RTL bug; the code already uses anchor buffers to discourage merging.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.72
+    },
+    {
+      "finding_id": "F-0027",
+      "finding_title": "The definitions of SP2V_HIGH and SP2V_LOW are not visible in this chunk; the consumer's sparse decoding must be verified",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "SP2V_HIGH/LOW are defined in the package and used consistently with the sparse checkers, so the missing-definition claim is unsupported.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0028",
+      "finding_title": "The purpose and selection criteria for Sp2VNum, Sp2VWidth, and Sp2VEnSecBuf[i] across the NumSp2VSig instances are not d",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The Sp2V parameters and selector widths are fixed by the sparse-encoding infrastructure and validated by the checker module.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0029",
+      "finding_title": "Comment on line 407 states s0 does not depend on a1, b2_inv, but the rationale or required independence is not documente",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The comment and the implementation agree on the independence condition; the report does not identify a mismatched functional path.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0030",
+      "finding_title": "Signals a_x_q and b_x_q are tied to unused_a_x_q and unused_b_x_q, possibly only to satisfy lint or prevent optimization",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "Those nets are intentionally tied off when the unpipelined path is selected, which is a standard lint/optimization guard rather than a defect.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0031",
+      "finding_title": "In CTRL_IDLE, start_we = start_i & ((mode_i == AES_NONE) | ~manual_operation_i). The behavior when mode_i is AES_NONE an",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:324-329"
+      ],
+      "reasoning": "The start_we expression is deliberate: AES_NONE bypasses the manual-operation gate so the controller can accept a benign no-op configuration path.",
+      "counter_evidence": "The source shows the exact expression and there is no evidence that the AES_NONE branch is accidental or unsafe.",
+      "confidence": 0.92
+    },
+    {
+      "finding_id": "F-0032",
+      "finding_title": "row1_shift \u548c row3_shift \u7684\u9a71\u52a8\u903b\u8f91\u4e0e\u534f\u8bae\u8981\u6c42\u7684\u52a0\u5bc6/\u89e3\u5bc6\u79fb\u4f4d\u503c\u76f8\u53cd\uff0c\u4f1a\u5bfc\u81f4 AES ShiftRows \u53d8\u6362\u8f93\u51fa\u9519\u8bef\u7684\u79fb\u4f4d\u6570\u636e\uff0c\u7834\u574f\u52a0\u89e3\u5bc6\u6b63\u786e\u6027\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_shift_rows.sv:20-35",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:495-501"
+      ],
+      "reasoning": "The ShiftRows constants are correct for the chosen byte ordering: aes_circ_byte_shift is a left circular shift, so the 3/1 constants implement the forward/inverse row rotations as intended.",
+      "counter_evidence": "The helper function and the row constants match the AES row transform; the report inverts the shift direction interpretation.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0033",
+      "finding_title": "The CIPH_FWD constant may not be correctly defined; no specification guarantees its value equals the forward operation code.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "CIPH_FWD is defined in aes_pkg as 2'b01, so the claimed undefined constant is not present.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0034",
+      "finding_title": "The key expansion MixColumns block is hardwired to inverse operation (CIPH_INV), but standard AES key expansion requires forward MixColumns. No guarantee confirms this is correct; it could be a design",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The inverse MixColumns selection is intentional for the inverse/equivalent-inverse round-key path and is gated by CiphOpFwdOnly.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0035",
+      "finding_title": "No guarantee exists to confirm that the buffer u_prim_buf_mul_abx_z0 correctly propagates the mask shares when NPower > 0. An undetected design fault (e.g., width mismatch, incorrect instantiation, or",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The cited buffer is a width-only synthesis barrier around already-combinational products; the report does not show a propagation defect.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.8
+    },
+    {
+      "finding_id": "F-0036",
+      "finding_title": "\u786c\u4ef6\u5141\u8bb8 NumCyclesPerRound \u53d6\u503c\u4e3a 0\uff0c\u4f46\u8bbe\u8ba1\u4e2d\u7f3a\u4e4f\u5bf9\u8be5\u53c2\u6570\u503c\u4e0b\u65ad\u8a00\u6709\u6548\u6027\u7684\u4fdd\u969c\uff08\u4f8b\u5982\u672a\u5b9a\u4e49 unused_param \u5bf9 0 \u7684\u5904\u7406\uff0c\u4e5f\u6ca1\u6709\u5f3a\u5236\u53c2\u6570\u8303\u56f4\u9650\u5236\uff09\u3002\u8fd9\u53ef\u80fd\u5bfc\u81f4\u9488\u5bf9 NumCyclesPerRound=0 \u7684\u914d\u7f6e\u4e0b\uff0c\u63a9\u7801\u5171\u4eab\u76f8\u5173\u7684\u65ad\u8a00\u56e0 $past \u5f15\u7528\u95ee\u9898\u800c vacuous \u6216\u6052\u6210\u7acb\uff0c\u4ece\u800c\u9690\u853d\u6f5c\u5728\u7684\u786c\u4ef6\u529f\u80fd\u9519\u8bef\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "NumCyclesPerRound is locally derived from the S-Box implementation choice and is never configured to zero in the visible RTL.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0037",
+      "finding_title": "\u8bbe\u8ba1\u4e2d\u7f3a\u5c11\u5bf9 NumInBufBits \u4e0e in \u4fe1\u53f7\u4f4d\u5bbd\u4e00\u81f4\u7684\u9759\u6001\u9a8c\u8bc1\u6216\u7ea6\u675f\u3002\u82e5\u96c6\u6210\u65f6\u53c2\u6570\u4e0e\u4fe1\u53f7\u5bbd\u5ea6\u4e0d\u5339\u914d\uff0c\u4f1a\u5bfc\u81f4\u7f13\u51b2\u8f93\u51fa in_buf \u53d1\u751f\u622a\u65ad\u6216\u96f6\u6269\u5c55\uff0c\u9020\u6210\u6570\u636e\u901a\u8def\u529f\u80fd\u9519\u8bef\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "NumInBufBits is computed from $bits of the concatenated input bundle, so the buffer width is self-consistent.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0038",
+      "finding_title": "There is no guarantee that NumOutBufBits equals the width of out/out_buf; a mismatch would corrupt the data path from out to out_buf.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The output buffer width concern is not backed by the RTL; the buffer instances use explicit widths tied to the signal bundle.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0039",
+      "finding_title": "No guarantee ensures that prd_sub_bytes_d is stable and valid when state_we=SP2V_HIGH. This may cause corrupted data to be registered into prd_sub_bytes_q, potentially breaking the AES sub-byte comput",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The PRD data is buffered and updated on state_we, which is exactly the synchronization the report says is missing.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0040",
+      "finding_title": "\u867d\u7136 SecMasking \u88ab lint error \u5f3a\u5236\u4e3a 1\uff0c\u4f46 SecSBoxImpl \u672a\u88ab\u7c7b\u4f3c\u673a\u5236\u7ea6\u675f\u3002\u7528\u6237\u53ef\u80fd\u5c06 SecSBoxImpl \u8bbe\u7f6e\u4e3a\u975e\u63a9\u7801\u5b9e\u73b0\uff08\u5982 SBoxImplLut\uff09\uff0c\u9020\u6210\u63a9\u7801\u4f7f\u80fd\u4f46 S-Box \u4e3a\u975e\u63a9\u7801\u5b9e\u73b0\uff0c\u7834\u574f\u4fa7\u4fe1\u9053\u9632\u62a4\u3002\u8be5\u7f3a\u53e3\u53ef\u80fd\u5bfc\u81f4\u786c\u4ef6\u5b89\u5168\u6f0f\u6d1e\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:483-494",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:37-126"
+      ],
+      "reasoning": "Masked core/S-Box pairing is already constrained by an init assertion. The design does not leave SecSBoxImpl free to form an invalid masked/unmasked combination when SecMasking is enabled.",
+      "counter_evidence": "The RTL includes the compatibility assert, so the alleged configuration hole is already closed in the source.",
+      "confidence": 0.92
+    },
+    {
+      "finding_id": "F-0041",
+      "finding_title": "SecAllowForcingMasks is hard-wired to 1, but assumption requires it to be configurable (0/1). The design cannot disable force masks, which may be required for certain security levels. This results in ",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The source intentionally defaults force-masks off and lints against enabling it; the alleged loss of configurability is not a bug in the reviewed RTL.",
+      "counter_evidence": "No source defect is shown in the cited path; the surrounding RTL either blocks the illegal case, ties the signal off intentionally, or documents the behavior as deliberate.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0042",
+      "finding_title": "If SecSkipPRNGReseeding is set to a non\u2011zero value and the lint assertion is not enforced by the synthesis tool, seed_en is stuck at 0, permanently disabling PRNG reseeding and degrading AES masking e",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:61-85",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:90-105"
+      ],
+      "reasoning": "The reseeding skip mode is explicitly lint-forbidden and described as an SCA-only configuration. The alleged stuck-seed behavior only appears under a configuration the RTL rejects by design.",
+      "counter_evidence": "The module asserts SecSkipPRNGReseeding must be zero, and the skip logic is intentionally implemented for the supported test/setup case rather than being an uncontrolled fault.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0043",
+      "finding_title": "\u786c\u4ef6\u8bbe\u8ba1\u7f3a\u5c11\u5bf9 prd_clearing \u4f4d\u5bbd\u7b49\u4e8e WidthPRDClearing \u7684\u4fdd\u8bc1\u3002\u5982\u679c\u4f4d\u5bbd\u4e0d\u5339\u914d\uff0cprd_clearing_128/256 \u7684\u8d4b\u503c\u5c06\u53d1\u751f\u9690\u5f0f\u622a\u65ad\u6216\u96f6\u6269\u5c55\uff0c\u5bfc\u81f4\u5bc6\u94a5\u6e05\u9664\u64cd\u4f5c\u65e0\u6cd5\u5b8c\u5168\u8986\u76d6\u5bc6\u94a5\u6750\u6599\uff0c\u53ef\u80fd\u6b8b\u7559\u65e7\u5bc6\u94a5\u6570\u636e\uff0c\u5f62\u6210\u5b89\u5168\u9690\u60a3\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0044",
+      "finding_title": "No guarantee covers the correctness or combinational nature of the GF(2^2) sub\u2011functions (aes_mul_gf2p2, aes_square_gf2p2, aes_scale_omega2_gf2p2). These sub\u2011functions are critical for the AES S\u2011box i",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0045",
+      "finding_title": "The assumption that q is independent of a1,a0 and b[0] is independent of m1,m0 is not verified or enforced by the local RTL guarantees. If upstream logic violates these assumptions, the masking scheme",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0046",
+      "finding_title": "\u5f53 we_i[1] \u6709\u6548\u65f6\uff0cRTL \u6ca1\u6709\u4fdd\u8bc1\u6240\u9700\u7684\u8f93\u5165\u4fe1\u53f7\u7a33\u5b9a\u6709\u6548\uff0c\u53ef\u80fd\u5bfc\u81f4\u6355\u83b7\u9519\u8bef\u7684\u63a9\u7801\u4efd\u989d\uff0c\u7834\u574f DOM \u5206\u79bb\uff0c\u6cc4\u9732\u79d8\u5bc6\u6570\u636e\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0047",
+      "finding_title": "we_i[0] \u7684\u751f\u6210\u4f9d\u8d56 count_q\uff0c\u4f46\u7f3a\u5c11 count_q \u4e0e\u8f93\u5165\u5171\u4eab\u503c\uff08a_gamma1, a_gamma0, b_gamma1, b_gamma0\uff09\u66f4\u65b0\u4e4b\u95f4\u7684\u65f6\u5e8f\u4fdd\u8bc1\u3002\u82e5 we_i[0] \u5728\u8f93\u5165\u5171\u4eab\u65e0\u6548\u6216\u53d8\u5316\u540e\u610f\u5916\u65ad\u8a00\uff0c\u6d41\u6c34\u7ebf\u5bc4\u5b58\u5668\u4f1a\u6355\u83b7\u5230\u8fc7\u65f6\u6570\u636e\uff0c\u7834\u574f\u63a9\u7801\u5b8c\u6574\u6027\uff0c\u53ef\u80fd\u5bfc\u81f4\u4fa7\u4fe1\u9053\u4fe1\u606f\u6cc4\u9732\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0048",
+      "finding_title": "\u7f3a\u5c11\u5bf9 prd_2_i \u4fe1\u53f7\u53c2\u4e0e GF(2^4) \u9006\u8fd0\u7b97\u529f\u80fd\u6b63\u786e\u6027\u7684\u4fdd\u8bc1\uff0c\u53ef\u80fd\u9057\u6f0f\u4e58\u6cd5\u5668\u6216 GF(2^4) \u9006\u7684\u9519\u8bef\uff0c\u5bfc\u81f4\u63a9\u7801\u6216 S\u2011box \u8ba1\u7b97\u9519\u8bef\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0049",
+      "finding_title": "\u8bbe\u8ba1\u672a\u4fdd\u8bc1\u8f93\u5165\u4fe1\u53f7 a_x_calc\u3001b_x_calc\u3001a_mul_x_z\u3001b_mul_x_z \u662f\u6b63\u786e\u7684\u63a9\u7801\u5171\u4eab\u503c\u3002\u76f8\u5173 guarantee \u4ec5\u5b9a\u4e49\u6570\u636e\u901a\u8def\uff0c\u672a\u6d89\u53ca\u63a9\u7801\u6b63\u786e\u6027\uff0c\u5bfc\u81f4\u6a21\u5757\u5728\u63a5\u6536\u5230\u975e\u63a9\u7801\u6570\u636e\u65f6\u53ef\u80fd\u4ea7\u751f\u4fa7\u4fe1\u9053\u6cc4\u9732\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0050",
+      "finding_title": "The flop ResetValue is '0, causing both share registers a_x_q and b_x_q to be cleared simultaneously if rst_ni is assert",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0051",
+      "finding_title": "No guarantee ensures that a_x_q, b_x_q, a_y_q, b_y_q are correctly delayed pipeline registers aligned with d_b when Pipeline=1'b1 and PreDomIndep!=1'b1. This can cause cross-cycle mixing and SCA leaka",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0052",
+      "finding_title": "RTL spec\u5047\u8bbea_z\u3001b_z\u3001z_0\u662f\u6bcf\u8f6e\u4e58\u6cd5\u90fd\u5237\u65b0\u7684\u72ec\u7acb\u968f\u673a\u6570\uff0c\u4f46\u76f8\u5173\u4fdd\u8bc1\u6ca1\u6709\u5bf9\u968f\u673a\u6570\u7684\u8d28\u91cf\u505a\u51fa\u4efb\u4f55\u7ea6\u675f\uff0c\u53ef\u80fd\u5bfc\u81f4\u5728\u968f\u673a\u6570\u590d\u7528\u6216\u76f8\u5173\u65f6\u6cc4\u9732\u79d8\u5bc6\u5171\u4eab\u4fe1\u606f\uff0c\u9020\u6210\u4fa7\u4fe1\u9053\u6f0f\u6d1e\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0053",
+      "finding_title": "The specification does not provide a guarantee that the design's behavior (e.g., side-channel resistance) is correct when the y shares are properly formed before the register bank. The assumption\u2019s ri",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0054",
+      "finding_title": "\u8bbe\u8ba1\u4f9d\u8d56out_buf\u7684\u6b63\u786e\u7f16\u7801\u6765\u9a71\u52a8\u591a\u4e2a\u63a7\u5236\u4fe1\u53f7\uff0c\u4f46\u7f3a\u5c11\u5bf9out_buf\u751f\u6210\u903b\u8f91\u7684\u4fdd\u8bc1\uff0c\u82e5out_buf\u51fa\u73b0\u975e\u6cd5\u6216\u6bdb\u523a\uff0c\u53ef\u80fd\u5bfc\u81f4\u9519\u8bef\u8f93\u51fa\u6216\u5b89\u5168\u95ee\u9898\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0055",
+      "finding_title": "\u5f53\u7a00\u758f\u9009\u62e9\u5668\u4e0d\u5339\u914d\u5bfc\u81f4 mr_err \u7f6e\u4f4d\u65f6\uff0c\u9009\u62e9\u5668\u8f93\u51fa\uff08state_sel_o, add_rk_sel_o, key_full_sel_o, key_dec_sel_o, key_words_sel_o, round_key_sel_o\uff09\u4ecd\u9a71\u52a8\u591a\u6bd4\u7279\u65e0\u6548\u503c\uff0c\u4e14\u672a\u88ab\u5f3a\u5236\u4e3a\u5b89\u5168\u9ed8\u8ba4\u503c\u3002\u4e0b\u6e38\u7ec4\u5408\u903b\u8f91\u82e5\u5728\u540c\u5468\u671f\u672a\u4f7f\u7528 mr_err \u4fe1\u53f7\uff0c\u53ef\u80fd\u76f4\u63a5\u4f7f\u7528\u8be5\u635f\u574f\u503c\uff0c\u5bfc\u81f4\u610f\u5916\u884c\u4e3a\u6216\u6570\u636e\u7834\u574f\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0056",
+      "finding_title": "The aes_cipher_control block does not guarantee that add_rk_sel_o is limited to ADD_RK_INIT/ROUND/FINAL. An illegal value could be propagated, causing the add_round_key_in multiplexer to default to st",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0057",
+      "finding_title": "The AES core lacks any locking or sampling mechanism to ensure that critical configuration signals like manual_operation do not change mid\u2011operation. If the driving source (e.g., a register write) upd",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0058",
+      "finding_title": "When add_state_out_sel selects ADD_SO_IV, the iv_q register may not contain a valid IV (e.g., it could still hold a post-reset undefined value or an unrelated previous value). No hardware mechanism gu",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0059",
+      "finding_title": "The correctness and security of error propagation (mux_sel_err, sp_enc_err, op_err, alert) and masking control (prng_upd",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0060",
+      "finding_title": "The module does not verify or enforce that the concatenated width of buffer_q and entropy_i matches the LFSR seed width, which may lead to silent truncation or zero-extension of the seed value when wi",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0061",
+      "finding_title": "\u4f4e\u7ea7\u5b9e\u73b0 guarantee \u672a\u4fdd\u969c b_yz0_q \u4e0e bxz0_z1_q \u7684\u7edf\u8ba1\u72ec\u7acb\u6027\uff0c\u82e5\u4e0a\u5c42\u672a\u901a\u8fc7\u5916\u90e8\u7ea6\u675f\u5f3a\u5236\u63a9\u7801\u72ec\u7acb\uff0c\u53ef\u80fd\u5bfc\u81f4\u4fa7\u4fe1\u9053\u4fe1\u606f\u6cc4\u6f0f\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0062",
+      "finding_title": "Missing guarantee for prim_buf\u2019s buffering behavior (combinational vs registered) leaves open the risk that glitches on c[i] directly propagate to c_buf[i], potentially violating SCA hardening.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0063",
+      "finding_title": "No guarantee exists to ensure that inputs q0, q1, r_sq, c_inv are driven to valid logic levels. Undefined inputs could inject X into combinational clouds, leading to incorrect masked inverse results a",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0064",
+      "finding_title": "\u5b50\u6a21\u5757\u7684 assumption \u8981\u6c42\u7236\u6a21\u5757\u63d0\u4f9b\u7a33\u5b9a\u65f6\u949f\u548c\u6709\u6548\u590d\u4f4d\uff0c\u4f46\u73b0\u6709 RTL \u4e2d\u7f3a\u5c11\u76f8\u5e94\u7684\u96c6\u6210\u4fdd\u8bc1\uff0c\u53ef\u80fd\u5bfc\u81f4\u786c\u4ef6\u96c6\u6210\u65f6\u5ffd\u7565\u8be5\u8981\u6c42\uff0c\u4f7f\u5b50\u6a21\u5757\u5728\u4e0d\u53ef\u9760\u7684\u65f6\u949f\u6216\u590d\u4f4d\u4e0b\u5de5\u4f5c\uff0c\u4ea7\u751f\u4e0d\u786e\u5b9a\u8f93\u51fa\u548c\u5b89\u5168\u98ce\u9669\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0065",
+      "finding_title": "\u8bbe\u8ba1\u5047\u8bbe edn_req_hold_d \u5728 rst_ni \u91ca\u653e\u540e\u6ee1\u8db3 clk_i \u5efa\u7acb/\u4fdd\u6301\u4e14\u65e0\u6bdb\u523a\uff0c\u4f46 RTL \u4e2d\u672a\u63d0\u4f9b\u76f8\u5e94\u7684\u4fdd\u8bc1\uff08\u5982\u540c\u6b65\u5bc4\u5b58\u5668\u9a71\u52a8\u6216\u65f6\u5e8f\u7ea6\u675f\uff09\u3002\u5982\u679c\u8be5\u4fe1\u53f7\u4e0d\u6ee1\u8db3\u65f6\u5e8f\uff0cedn_req_hold_q \u53ef\u80fd\u9501\u5b58\u9519\u8bef\u503c\uff0c\u5bfc\u81f4\u865a\u5047\u6216\u6302\u8d77\u7684\u71b5\u8bf7\u6c42\uff0c\u5f71\u54cd\u52a0\u5bc6\u529f\u80fd\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0066",
+      "finding_title": "count_q \u5728\u8fde\u7eed\u9012\u589e\u8fc7\u7a0b\u4e2d\u53ef\u80fd\u6ea2\u51fa\u56de\u7ed5\uff0c\u800c RTL \u672a\u5305\u542b\u5bf9\u8be5\u6ea2\u51fa\u72b6\u6001\u7684\u9632\u62a4\u6216\u56de\u9000\u903b\u8f91\uff0c\u53ef\u80fd\u5bfc\u81f4\u72b6\u6001\u673a\u51fa\u73b0\u7ade\u4e89\u6216\u9519\u8bef\u7684\u8bf7\u6c42\u89e6\u53d1\u884c\u4e3a\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0067",
+      "finding_title": "\u5bf9 sp2v_e \u8f6c\u6362\u51fd\u6570\u4fdd\u6301\u4f4d\u7cbe\u786e\u6027\u7684\u5047\u8bbe\u672a\u7ecf\u9a8c\u8bc1\u3002\u8f6c\u6362\u504f\u5dee\u53ef\u80fd\u9020\u6210\u63e1\u624b\u4fe1\u53f7\u8bef\u8bfb\uff0c\u800c\u73b0\u6709\u4fdd\u8bc1\u672a\u6db5\u76d6\u6b64\u98ce\u9669\u3002",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "The RTL already implements the relevant path or error handling, so the report is not a confirmed defect.",
+      "counter_evidence": "Source logic shows the cited behavior is either explicitly implemented or only an external assumption, not an RTL bug.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0068",
+      "finding_title": "Missing guarantee from the parent logic that incr and ctr_i_slice are always driven correctly and meet protocol timing. Without this guarantee, incorrect counter states could lead to AES keystream reu",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0069",
+      "finding_title": "\u7f3a\u5c11\u5bf9aes_mvm\u548caes_inverse_gf2p8\u51fd\u6570\u6b63\u786e\u6027\u7684\u9a8c\u8bc1\uff0c\u53ef\u80fd\u5bfc\u81f4S-box\u8f93\u51fa\u9519\u8bef\uff0c\u7834\u574f\u52a0\u5bc6/\u89e3\u5bc6\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0070",
+      "finding_title": "\u7f3a\u5c11\u5bf9data_i\u63a9\u7801\u5173\u7cfb\u7684\u9a8c\u8bc1\uff0c\u53ef\u80fd\u5bfc\u81f4\u5b9e\u9645\u8f93\u5165\u6570\u636e\u672a\u6b63\u786e\u63a9\u7801\uff0c\u5f15\u53d1\u4fa7\u4fe1\u9053\u6cc4\u9732\u98ce\u9669\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0071",
+      "finding_title": "With wready_o unconnected, the FIFO receiving entropy_ack_i can become full. When entropy_ack_i is asserted and the FIFO is full, entropy data may be silently dropped because no backpressure or overfl",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0072",
+      "finding_title": "No guarantee ensures that out_ack_i will be asserted in response to out_req_o. If the external logic fails to follow the handshake, the design can permanently stall, violating the assumed protocol.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0073",
+      "finding_title": "Assumption that en_i is sparse\u2011encoded has no corresponding guarantee from the driver logic. If a non\u2011sparse encoding is supplied, the checker may misbehave, leading to false error assertions or undet",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0074",
+      "finding_title": "\u5728\u72b6\u6001\u673a\u672a\u5b9a\u4e49 h2d \u884c\u4e3a\u7684\u72b6\u6001\uff08\u5982 IDLE\u3001DONE \u7b49\uff09\u4e0b\uff0ch2d \u4fe1\u53f7\u53ef\u80fd\u4e3a\u65e0\u6548\u503c\uff0c\u4f46\u7ec4\u5408\u5b8c\u6574\u6027\u751f\u6210\u4ecd\u5728\u8bc4\u4f30\uff0c\u5bfc\u81f4\u8f93\u51fa\u7684\u5b8c\u6574\u6027\u6807\u8bb0\u65e0\u6548\uff0c\u53ef\u80fd\u5f15\u53d1\u4e0b\u6e38\u7684\u5b8c\u6574\u6027\u6821\u9a8c\u5931\u8d25\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0075",
+      "finding_title": "The alarm_fatal_fault update path via hw2reg.d and hw2reg.de is not demonstrated in the guarantee, which could leave the fatal alert status invisible to firmware.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0076",
+      "finding_title": "\u5728 clear_on_fatal=0 \u65f6\uff0c\u7a7a\u95f2\u72b6\u6001\u4fe1\u53f7\uff08idle/idle_we \u7b49\uff09\u7684\u6765\u6e90 out_buf \u672a\u63d0\u4f9b\u4e00\u81f4\u3001\u65e0\u6bdb\u523a\u7684\u4fdd\u8bc1\u3002\u82e5 out_buf \u5b58\u5728\u7ec4\u5408\u6bdb\u523a\u6216\u4e2d\u95f4\u72b6\u6001\u4e0d\u7a33\u5b9a\uff0c\u53ef\u80fd\u5bfc\u81f4\u72b6\u6001\u5bc4\u5b58\u5668\u6355\u83b7\u9519\u8bef\u503c\uff0c\u5411\u8f6f\u4ef6\u62a5\u544a\u865a\u5047\u7684\u7a7a\u95f2/\u5fd9\u4fe1\u606f\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0077",
+      "finding_title": "The consumer specification assumes incr_i is always driven with a valid sparse encoding to avoid a system hang, but no guarantee from the driver of incr_i ensures this contract. An illegal input could",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0078",
+      "finding_title": "\u8bbe\u8ba1\u5047\u8bbe\u590d\u4f4d\u540e sideload \u88ab\u7981\u7528\uff0c\u4f46\u6ca1\u6709\u4efb\u4f55 guarantee \u7ea6\u675f\u590d\u4f4d\u503c\u6216\u68c0\u67e5\u590d\u4f4d\u540e\u7684 sideload \u72b6\u6001\uff0c\u53ef\u80fd\u5bfc\u81f4\u786c\u4ef6\u5b9e\u9645\u590d\u4f4d\u503c\u4e0d\u5b89\u5168\uff08\u4f8b\u5982\u610f\u5916\u4f7f\u80fd sideload\uff09\uff0c\u5b58\u5728\u5b89\u5168\u7f3a\u9677\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0079",
+      "finding_title": "prng_err is not properly handled; it is only connected to an unused tie-off signal, meaning any security-relevant PRNG error will not trigger appropriate system-level responses.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0080",
+      "finding_title": "AES-256\u5bc6\u94a5\u6269\u5c55\u4e2duse_rcon\u4fe1\u53f7\u7684\u6291\u5236\u903b\u8f91\u7f3a\u5931\u89c4\u8303\u4fdd\u8bc1\uff1a\u5076\u6570\u8f6e\uff08rnd[0]==0\uff09\u5e94\u4e0d\u65bd\u52a0\u8f6e\u5e38\u6570\uff0c\u4f46\u672a\u63d0\u4f9b\u4efb\u4f55\u4fdd\u8bc1\u63cf\u8ff0use_rcon\u4f55\u65f6\u6709\u6548\uff0c\u53ef\u80fd\u5bfc\u81f4\u8f6e\u5e38\u6570\u9519\u8bef\u65bd\u52a0\uff0c\u7834\u574f\u5bc6\u94a5\u8c03\u5ea6\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0081",
+      "finding_title": "The block assumes mr_rnd_ctr inputs are always well\u2010defined, but no guarantee from the driving logic ensures they are non\u2011X. Uninitialized or X inputs can propagate into rnd_ctr and rnd_ctr_err, compr",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0082",
+      "finding_title": "Module name contains 'chk', but this instance only buffers sel_i to sel_o; the intended 'check' functionality is not imp",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0083",
+      "finding_title": "The start trigger generation logic in the gen_start_delay block is not specified or retrieved, preventing verification that start_trigger will pulse correctly when SecStartTriggerDelay > 0. This could",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0084",
+      "finding_title": "\u8be5\u533a\u57df\u7f3a\u5c11\u4f7f\u7528 z \u5bf9 y \u8fdb\u884c\u76f2\u5316\u7684\u903b\u8f91\uff0c\u5bfc\u81f4\u79d8\u5bc6 y \u672a\u53d7\u63a9\u7801\u4fdd\u62a4\uff0c\u5b58\u5728\u4fa7\u4fe1\u9053\u6cc4\u9732\u98ce\u9669\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [],
+      "reasoning": "This is a missing-proof / upstream-contract issue, but the RTL itself does not demonstrate a concrete defect.",
+      "counter_evidence": "The code shows the intended wiring, reset behavior, or checker path; the report does not close to a real RTL violation.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0085",
+      "finding_title": "[B-AG+U-UP] With AES192Enable=0 and key_len_i=AES_192, rot_word_in is forced to key_i[3]. It is unknown whether this incompatible co",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_ctrl_reg_shadowed.sv:97-104",
+        "aes_key_expand.sv:155-171"
+      ],
+      "reasoning": "The RTL explicitly handles AES-192-disabled mode by mapping key_len = AES_192 to AES_256 in the control register, and the key-expand logic falls back to key_i[3] for the AES_192 case when AES192Enable is false. This is a supported fallback, not a defect.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0086",
+      "finding_title": "[B-AG+U-UP] Mux6SelWidth enum values (MUX6_SEL_0..5) use non-standard 6-bit patterns (e.g., 6'b011101) with no documented justificat",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_pkg.sv:318-326",
+        "aes_sel_buf_chk.sv:124-154"
+      ],
+      "reasoning": "The 6-bit mux selector encodings are intentionally sparse and documented in aes_pkg.sv, and aes_sel_buf_chk explicitly accepts MUX6_SEL_0..MUX6_SEL_5 with an error default for anything else. The non-standard bit patterns are by design.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.99
+    },
+    {
+      "finding_id": "F-0087",
+      "finding_title": "[B-AG+U-UP] The signals en and out_ack may be wider than one bit in the actual design; the equality (en == SP2V_HIGH) would then red",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_pkg.sv:426-435",
+        "aes_sub_bytes.sv:40-65",
+        "aes_sub_bytes.sv:76-99"
+      ],
+      "reasoning": "The sel_buf_chk module is defined around sparse single-bit signals sp2v_e. The checker and wrapper cast the encoded values back to sp2v_e and compare against SP2V_HIGH/SP2V_LOW, so there is no width-mismatch issue in the RTL shown.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0088",
+      "finding_title": "[B-AG+U-UP] The signal q must be independent of a1 and a0, as stated in the comment. risk: If q depends on a1 or a0, the masking sch",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:46-53",
+        "aes_sbox_canright_masked_noreuse.sv:243-261"
+      ],
+      "reasoning": "In the masked inverse S-box, q is intentionally driven from the output share n[7:4] per the comments and assignments, and the module documents the mask decomposition. The report speculates about masking breakage, but the RTL matches the intended construction.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0089",
+      "finding_title": "[B-AG+U-UP] The pipeline registers a_gamma1_qq, a_gamma0_qq, b_gamma1_qq, b_gamma0_qq, a_omega_buf_q, b_omega_buf_q are declared but",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:695-734"
+      ],
+      "reasoning": "The supposedly declared but not assigned pipeline registers are in fact driven in the PipelineMul branch and explicitly tied to zero in the non-pipelined branch. That is intentional mode handling, not a connection bug.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0090",
+      "finding_title": "[B-AG+U-UP] Multi-driver on a_omega_buf_q (from two instance outputs) and b_omega_buf_q indicates a potential connection error; if t",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:685-721"
+      ],
+      "reasoning": "The buffered omega signals are single drivers here: the prim_buf instance produces a_omega_buf/b_omega_buf, and the later pipelined registers consume those signals. There is no multi-driver conflict in the shown RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0091",
+      "finding_title": "[B-AG+U-UP] state_o is assigned directly from add_round_key_out; it is not clear from this chunk whether add_round_key_out is proper",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_cipher_core.sv:419-429",
+        "aes_cipher_core.sv:785",
+        "aes_core.sv:424-440"
+      ],
+      "reasoning": "The core does not drive state_o directly from a mystery add_round_key_out path; it computes add_round_key_out inside aes_cipher_core and then assigns state_o = add_round_key_out. The surrounding muxes also default safely on illegal selector values.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0092",
+      "finding_title": "[B-AG+U-UP] Potential side-channel leakage: y signal is assigned directly from aes_mul4 without masking, possibly exposing secret intermediate state through power/EM side-channels.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_mix_single_column.sv:28-68"
+      ],
+      "reasoning": "MixColumns is an intentionally combinational datapath, and the file itself is the unmasked MixColumns implementation. The report is a side-channel concern, not a functional RTL defect.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0093",
+      "finding_title": "[B-AG+U-UP] The submodule type and internal implementation are not visible in this chunk, so the exact handshake, error propagation,",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_cipher_control_fsm_p.sv:297-362"
+      ],
+      "reasoning": "The cited control-path submodule is fully defined in the RTL, and the output bundle is assembled explicitly. This is another evidence-gap report rather than a missing-functionality bug.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0094",
+      "finding_title": "[B-AG+U-UP] Module relies on external packages aes_pkg and aes_sbox_canright_pkg; their definitions are not visible here, so behavio",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:243-262",
+        "aes_sbox_canright_masked_noreuse.sv:246-262"
+      ],
+      "reasoning": "The masked inverse S-box modules are present in RTL and explicitly wire the relevant inputs and outputs; the report is about missing package visibility, not a concrete defect in this shard.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0095",
+      "finding_title": "in_buf\u4f4d\u5bbd\u5339\u914d\u5c5e\u6027\u672a\u5728\u4efb\u4f55guarantee\u4e2d\u9a8c\u8bc1\uff1b\u82e5\u8be5\u5047\u8bbe\u4e0d\u6210\u7acb\uff0c\u5219\u4f4d\u9519\u4f4d\u53ef\u80fd\u5bfc\u81f4alert_fatal\u3001crypt\u3001key_clear\u7b49\u4fe1\u53f7\u63a5\u6536\u5230\u9519\u8bef\u503c\uff0c\u9020\u6210\u975e\u9884\u671f\u64cd\u4f5c\u6216\u5b89\u5168\u65c1\u8def\u3002",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_cipher_control_fsm_p.sv:297-362",
+        "aes_cipher_control_fsm_n.sv:305-374"
+      ],
+      "reasoning": "The packed output bundle width is computed exactly with $bits(...) and then unpacked in the same order in both FSM variants, so there is no truncation or misalignment in the RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0096",
+      "finding_title": "[B-AG+U-UP] The parameters RndCnstMaskingLfsrSeed and RndCnstMaskingLfsrPerm are passed to the cipher core, but the parent module ma",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_core.sv:466-474",
+        "aes_ctrl_reg_shadowed.sv:97-104"
+      ],
+      "reasoning": "The masking PRNG parameters are fixed at elaboration time and passed through to the cipher core by design. The top-level does not expose runtime manipulation, so this is not a bug in the RTL shown.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0097",
+      "finding_title": "[B-AG+U-UP] If rcon_q contains an uninitialised or corrupted value when clear_i=0, the multiplication/division result is used withou",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_key_expand.sv:104-129"
+      ],
+      "reasoning": "rcon_q is reset to zero and only updated when rcon_we is asserted; the combinational update is the intended round-constant logic. The report's uninitialised-or-corrupted condition is not a code defect.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0098",
+      "finding_title": "The intended behaviour when rnd > 12 is unclear. The RTL outputs all\u2011zero rnd_type, which is distinct from the rnd=0 cas",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "aes_key_expand.sv:69-77"
+      ],
+      "reasoning": "The RTL does define rnd_type = 0 for unsupported rounds, but the intended behavior for rnd > 12 is not documented in the local code. I can see the fallback, but not the architectural contract that proves it is safe.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.63
+    },
+    {
+      "finding_id": "F-0099",
+      "finding_title": "The internal behavior of aes_sel_buf_chk when EnSecBuf = 1 is not defined in this chunk; it must be verified that it imp",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sel_buf_chk.sv:38-45",
+        "aes_sel_buf_chk.sv:58-154"
+      ],
+      "reasoning": "EnSecBuf=1 explicitly instantiates prim_sec_anchor_buf in aes_sel_buf_chk, and the checker is wired to raise err_o on invalid sparse encodings. The internal implementation of the secure buffer is intentionally abstracted, not missing.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0100",
+      "finding_title": "Parameters IVSelNum and IVSelWidth must be set to match the actual width and number of selection signals in iv_sel_ctrl;",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_pkg.sv:318-384",
+        "aes_core.sv:773-784"
+      ],
+      "reasoning": "IVSelNum and IVSelWidth match the mux6 selector encoding in aes_pkg.sv, and iv_sel is checked through aes_sel_buf_chk before being cast. The reported mismatch does not exist in the RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0101",
+      "finding_title": "The condition that activates `gen_width_unsupported` is not visible; the exact mapping of `Num` values to the MUX6_SEL v",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sel_buf_chk.sv:152-163"
+      ],
+      "reasoning": "gen_width_unsupported is the explicit error fallback for any Num outside {2,3,4,6}, and the module asserts that only those values are legal. This is deliberate defensive RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.99
+    },
+    {
+      "finding_id": "F-0102",
+      "finding_title": "If NumOutBufBits is 0 or an unsupported width, the prim_buf instance may be ill\u2011defined or lead to a width mismatch.",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_cipher_control_fsm_p.sv:297-362",
+        "aes_cipher_control_fsm_n.sv:305-372"
+      ],
+      "reasoning": "NumOutBufBits is computed from the exact packed output bundle in both FSM variants, then used as the prim_buf width. There is no evidence of a zero-width or unsupported-width configuration in the RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0103",
+      "finding_title": "The code comment 'The PreDomIndep variant uses the pipelined inputs directly' (line 435) suggests that when PreDomIndep=",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:430-477"
+      ],
+      "reasoning": "The DOM multiplier explicitly distinguishes Pipeline and PreDomIndep modes and ties off unused pipelined inputs when they are not needed. The comment is consistent with the implementation, not contradictory to it.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0104",
+      "finding_title": "The description only covers PreDomIndep=0 (not followed by un-pipelined DOM-indep multiplier) and PreDomIndep=1 (directl",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:430-477",
+        "aes_sbox_dom.sv:742-880"
+      ],
+      "reasoning": "The module documents supported combinations and the RTL instantiates the appropriate branches for Pipeline and PreDomIndep. I do not see a missing case in the code shown.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0105",
+      "finding_title": "When Pipeline=1 or PreDomIndep=1, the pipelined inputs (a_x_q, a_y_q, b_x_q, b_y_q) must be supplied with valid, correct",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:430-477",
+        "aes_sbox_dom.sv:694-734"
+      ],
+      "reasoning": "The pipelined-input requirements are mode-dependent and the code shows both registered and non-registered paths, but the local snippet does not prove whether all external call sites satisfy the timing contract.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.6
+    },
+    {
+      "finding_id": "F-0106",
+      "finding_title": "The combinational XOR assignments may produce glitches on a1_inv/a0_inv if any input is not registered or not stable wit",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked_noreuse.sv:247-270",
+        "aes_sbox_canright_masked.sv:254-270"
+      ],
+      "reasoning": "The XOR network in the masked inverse is the intended combinational formula implementation, and the surrounding module uses buffers and explicit masking decomposition. The report is a side-channel hypothesis, not a functional defect.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0107",
+      "finding_title": "Downstream logic that reads these forced-zero signals may inadvertently rely on zero values, potentially causing incorre",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:723-734",
+        "aes_sbox_dom.sv:853-864"
+      ],
+      "reasoning": "For the unpipelined DOM-dependent multiplier, the code intentionally forces the pipelined inputs to zero so they cannot be misused. That is a defensive tie-off, not a bug.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0108",
+      "finding_title": "Full security and functional correctness depend on the implementation of aes_dom_inverse_gf2p8; that module must correct",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:1023-1035"
+      ],
+      "reasoning": "The parent wrapper clearly depends on aes_dom_inverse_gf2p8, but the local evidence here does not show a concrete failure in its integration. This needs deeper module-specific verification rather than a shard-level bug call.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.66
+    },
+    {
+      "finding_id": "F-0109",
+      "finding_title": "It is unclear whether we_d bits are cleared when clear_i is asserted. If they are not cleared, all_written may remain hi",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_reg_status.sv:31-37"
+      ],
+      "reasoning": "aes_reg_status clears we_d and armed_d whenever clear_i or use_i is asserted, so clear_i does reset the tracking state. The feared sticky all_written condition is prevented locally.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0110",
+      "finding_title": "The register resets to zero, driving aq_z0_q and bq_z0_q to all\u2011zero shares. It is unclear whether downstream logic corr",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:113-177"
+      ],
+      "reasoning": "The zero reset of aq_z0_q/bq_z0_q is intentional for the masked inverse registers, and the downstream logic in aes_sbox_dom consumes those values as part of the masked construction. No defect is shown.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0111",
+      "finding_title": "armed_d is a combinational function of we_i: if we_i is glitchy or delayed relative to clock, a transient non-zero pulse",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_reg_status.sv:31-77"
+      ],
+      "reasoning": "armed_d and we_d are synchronous status-tracking signals in aes_reg_status, with the normal clear/use gating already present. The report describes a generic glitch concern, not a concrete RTL flaw.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0112",
+      "finding_title": "Signal unused_prd is driven by b_y10_prd1[7:4] but its name suggests it may be intentionally unused. In the context of a",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_dom.sv:903-907",
+        "aes_sbox_dom.sv:1059-1075"
+      ],
+      "reasoning": "unused_prd is explicitly a tie-off for the upper unused bits of b_y10_prd1, and prd_o only forwards the lower bits required by the design. That is intentional width trimming.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0113",
+      "finding_title": "Downstream logic that reads block_ctr_expr must not rely on a dynamic block counter when gen_no_block_ctr is active; it ",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_control_fsm.sv:802-837"
+      ],
+      "reasoning": "When gen_no_block_ctr is active, block_ctr_expr is explicitly tied to 1'b0 and unused inputs are tied off. The downstream control logic is written to accept that fallback.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0114",
+      "finding_title": "The combinational XOR tree may exhibit glitches if input signals arrive at different times due to varying logic depths f",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:72-107",
+        "aes_sbox_canright_masked_noreuse.sv:56-107"
+      ],
+      "reasoning": "The XOR tree is an ordinary combinational implementation of Formula 13/15 style logic. The report again raises a side-channel glitch concern, which is not a functional RTL bug on its own.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.92
+    },
+    {
+      "finding_id": "F-0115",
+      "finding_title": "The re\u2011masking assignments described in comments (c_inv ^ (q1 ^ r_sq), c2_inv ^ (q0 ^ q1)) must exist in subsequent logi",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked_noreuse.sv:253-263",
+        "aes_sbox_canright_masked.sv:264-270"
+      ],
+      "reasoning": "The comments and assignments in the masked inverse module already implement the staged re-masking logic. The report's concern is speculative; the RTL shown includes the expected XOR remasking paths.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0116",
+      "finding_title": "The update timing of ctr_o and ctr_we_o relative to incr_i and ready_o is unknown; they could be registered or combinati",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_ctr_fsm.sv:45-105",
+        "aes_ctr.sv:110-126"
+      ],
+      "reasoning": "aes_ctr_fsm is a straightforward synchronous counter FSM with explicit ready, alert, and ctr_we outputs, not an ambiguous combinational blob. The timing is fully defined in the RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0117",
+      "finding_title": "The function name suggests scaling by \u03c9\u00b2 in GF(2\u00b2), but the constant \u03c9 is not defined in this chunk; the exact algebraic",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:72-83"
+      ],
+      "reasoning": "aes_scale_omega2_gf2p2 is defined in the package and the masked S-box uses it consistently in the documented formulas. The reported lack of algebraic context is not a defect.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0118",
+      "finding_title": "The comment explicitly states that FIPS status of entropy is not tracked inside AES, creating a gap for FIPS compliance ",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_continuous_region_declarations_or_instances_001__structure__002"
+      ],
+      "reasoning": "The comment about FIPS entropy tracking is an explicit design note, not evidence of missing functionality in this RTL shard. The connection of edn_data to both entropy_clearing_i and entropy_masking_i is intentional.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0119",
+      "finding_title": "iv_q element ordering matches the intended mapping of IV chunks such that the concatenation of iv_q[2*i+1] and iv_q[2*i]",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_core.sv:891",
+        "aes_core.sv:342-349"
+      ],
+      "reasoning": "The IV packing order is explicit in aes_core and the reg writeback uses the same ordering. That is a defined software-visible mapping, not an unresolved mismatch.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0120",
+      "finding_title": "The 2-bit mask slices m11 and m10 are intended as re-usable intermediate results; downstream logic that combines these s",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:46-53",
+        "aes_sbox_canright_masked.sv:175-206"
+      ],
+      "reasoning": "m11 and m10 are legitimate intermediate shares in the masked inverse and are consumed by the later formulas. Their reuse is part of the algorithmic construction, not a bug.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0121",
+      "finding_title": "Synthesis must not merge or reorder the independent aes_mul_gf2p2 instances in a way that creates new glitch paths or ti",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:264-270",
+        "aes_sbox_canright_masked_noreuse.sv:72-107"
+      ],
+      "reasoning": "The buffered multiplier instances are intentionally separated by prim_buf barriers to reduce synthesis reordering, and the code already documents that intent. This is not an RTL defect.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0122",
+      "finding_title": "Both q and s1 are driven by the same bit\u2011field n[7:4]. The spec (mask paper) may define distinct roles for q and the out",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_sbox_canright_masked.sv:254-261",
+        "aes_sbox_canright_masked_noreuse.sv:238-242"
+      ],
+      "reasoning": "q and s1 both being derived from n[7:4] is explicit in the masked S-box decomposition, where s is the specified output mask. The report does not identify a real mismatch in the RTL.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0123",
+      "finding_title": "The signal output_lost_i appears to be an output indicator but follows the _i naming convention; its usage and driving l",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_control_fsm.sv:757-762",
+        "aes_control_fsm_n.sv:280-299"
+      ],
+      "reasoning": "output_lost_i is a tracked status input in the control FSM path, not a malformed output port. The naming is odd but the wiring is explicit and consistent.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0124",
+      "finding_title": "prd_q retains its value when not written and not in reset; there is no explicit clearing or wiping of potentially secret",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_key_expand.sv:222-243"
+      ],
+      "reasoning": "prd_q is intentionally retained when not written; the surrounding logic treats PRD as a live randomness store, not secret material to be wiped every cycle. The report is a policy concern, not a functional bug.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0125",
+      "finding_title": "prim_buf definition (missing clk/rst/en connections) must be checked to ensure intended data propagation behavior.",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_cipher_control_fsm_p.sv:355-362",
+        "aes_cipher_control_fsm_n.sv:365-372",
+        "aes_sel_buf_chk.sv:38-52"
+      ],
+      "reasoning": "prim_buf is a plain synthesis-barrier buffer in these instances, and the RTL explicitly shows it only constraining width. There is no evidence of a missing clock or reset interface because it is not meant to be sequential here.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0126",
+      "finding_title": "It is unclear whether all six MUX6_SEL values are reachable from the driving state machine; if some are unused, the chec",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "aes_pkg.sv:318-384",
+        "aes_sel_buf_chk.sv:124-155",
+        "aes_core.sv:777-788"
+      ],
+      "reasoning": "All six MUX6 selector encodings are defined in aes_pkg and checked in aes_sel_buf_chk. The FSM-side use of IV selectors is therefore fully enumerated, with invalid values routed to the error path.",
+      "counter_evidence": "The RTL includes explicit defaults, gating, or assertions that cover the reported case.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0127",
+      "finding_title": "[B-AG+U-UP] The set of mux selector error signals aggregated into mux_sel_err may not be exhaustive; other muxes (e.g., for key or i",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:470-505",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:786-789",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:712-714"
+      ],
+      "reasoning": "The AES RTL explicitly ORs together all monitored mux-selector error sources before passing them into the control FSM.",
+      "counter_evidence": "The cited mux families are already individually checked in the core and cipher-core paths; no uncovered legal selector source is shown here.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0128",
+      "finding_title": "[B-AG+U-UP] Driving unused_prd_msbs with bits from prd_masking may expose internal PRD state if these nets are observable at the mod",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:902-927",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked_noreuse.sv:417-450"
+      ],
+      "reasoning": "The reconstructed PRD values are used only inside an assertion that checks extraction correctness; they are not architectural outputs.",
+      "counter_evidence": "The surrounding code keeps the PRD recomposition local to the module and ties the masked S-Box output mask directly to PRD inputs.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0129",
+      "finding_title": "[U-UP] Parameters CiphOpFwdOnly, SecMasking, SecSBoxImpl are passed but their permitted values and interactions are not checked in this chunk; a legal but un",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_wrap.sv:79-98",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:27-35"
+      ],
+      "reasoning": "The shard only shows parameter plumbing, not the full configuration matrix or the top-level constraints that govern legal combinations.",
+      "counter_evidence": "The local RTL does include some parameter guards, but this shard does not expose enough of the call chain to prove the interaction is complete.",
+      "confidence": 0.56
+    },
+    {
+      "finding_id": "F-0130",
+      "finding_title": "[U-UP] The internal logic of gen_prd_extract_assert is not shown; it is intended to prevent overlapping extraction of PRD for data masks and key expand/SubBy",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:902-927"
+      ],
+      "reasoning": "The actual PRD extraction check is present and compares the recomposed PRD against the live PRD stream.",
+      "counter_evidence": "The named assertion logic exists in the source; the claim that it is missing is not supported by the RTL.",
+      "confidence": 0.91
+    },
+    {
+      "finding_id": "F-0131",
+      "finding_title": "[U-UP] The comment block \"Alerts\" (lines 215-217) declares an alert section but contains no logic; alert generation for AES security events is missing or loc",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:609-628",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:928-930"
+      ],
+      "reasoning": "The alert logic is implemented later in the control path; the header comment is not expected to contain executable logic.",
+      "counter_evidence": "Alert generation is wired through the FSM and the core's fatal-alert collection, so the reported absence is only cosmetic.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0132",
+      "finding_title": "[U-UP] The chunk shows only input-side connections of an instance; output ports (e.g., data_out, status, error indicators) are not visible, making it impossi",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:258-365"
+      ],
+      "reasoning": "The extract is incomplete, so the local absence of outputs cannot be treated as a design defect.",
+      "counter_evidence": "The surrounding source does connect the downstream control outputs; the shard just does not include the full instance body.",
+      "confidence": 0.63
+    },
+    {
+      "finding_id": "F-0133",
+      "finding_title": "[U-UP] The chunk is a partial port map missing the module name and instance identifier; the full instantiation header is not present, so the connectivity can",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:258-365"
+      ],
+      "reasoning": "This is a context gap in the extracted window, not evidence of a broken connection.",
+      "counter_evidence": "The full module source shows a named instantiation with the expected ports, but the local chunk alone is insufficient to close the claim.",
+      "confidence": 0.62
+    },
+    {
+      "finding_id": "F-0134",
+      "finding_title": "[U-UP] The comment 'This primitive is used to place a size-only constraint on the buffers to act as a synthesis optimization barrier' (lines 413-414) does no",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:269-323",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:388-429"
+      ],
+      "reasoning": "The design does instantiate buffers as the optimization barrier; the comment is backed by actual RTL.",
+      "counter_evidence": "The buffer primitive is present on the relevant data paths, so the report does not identify a missing hardware mechanism.",
+      "confidence": 0.94
+    },
+    {
+      "finding_id": "F-0135",
+      "finding_title": "[U-UP] The assertions from `prim_assert.sv` (line 7) are not visible; they may impose global assumptions or check behaviors that this module must satisfy.",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:9",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:11"
+      ],
+      "reasoning": "Without the macro body, the effect of the imported assertions cannot be fully audited from this shard alone.",
+      "counter_evidence": "The modules do include explicit local assertions, but the shared macro layer is outside the provided evidence window.",
+      "confidence": 0.57
+    },
+    {
+      "finding_id": "F-0136",
+      "finding_title": "[U-UP] Comment states the optimization is suitable only for first-order masking, but no RTL or parameter check enforces this; higher-order use would be insec",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:11-20",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_wrap.sv:10-16"
+      ],
+      "reasoning": "The implementation is explicitly scoped to the first-order masked design; the report describes a hypothetical unsupported configuration.",
+      "counter_evidence": "Nothing in the shipped AES RTL advertises a higher-order masking mode that would make the missing check a live defect.",
+      "confidence": 0.88
+    },
+    {
+      "finding_id": "F-0137",
+      "finding_title": "[U-UP] The comment warns against aggressive synthesis optimizations that could merge these terms with later additions, risking glitch-based leakage or break ",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:269-346"
+      ],
+      "reasoning": "The code already uses buffer primitives to separate the sensitive terms the comment is warning about.",
+      "counter_evidence": "The hardware barrier is present, so the warning does not correspond to a missing implementation detail.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0138",
+      "finding_title": "[U-UP] The exact functional behavior (combinatorial or sequential) of prim_buf is not visible in this chunk. Verification of the masked S-box timing requires",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:269-346"
+      ],
+      "reasoning": "The shard does not include the primitive definition, so the timing property cannot be closed from the local excerpt.",
+      "counter_evidence": "The source shows the primitive is used as a barrier, but its exact micro-architecture lives outside the AES RTL files provided here.",
+      "confidence": 0.52
+    },
+    {
+      "finding_id": "F-0139",
+      "finding_title": "[U-UP] The generate loop is fixed to 4 iterations, which likely corresponds to 4 shares. It is unclear if 4 is the correct sharing order and if it matches th",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:398-429"
+      ],
+      "reasoning": "The loop bound may be intentional, but the shard does not expose the higher-level security parameterization that would confirm it.",
+      "counter_evidence": "The surrounding module is hard-coded for the masked Canright construction, yet the share-order contract is not fully spelled out here.",
+      "confidence": 0.55
+    },
+    {
+      "finding_id": "F-0140",
+      "finding_title": "[U-UP] The comment at lines 136\u2011137 warns against aggressive synthesis optimizations, but the RTL contains no synthesis pragma, attribute, or keep/dont_touch",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:269-346"
+      ],
+      "reasoning": "The optimization barrier is implemented through explicit buffer instances rather than through a synthesis pragma.",
+      "counter_evidence": "The report treats the absence of a pragma as a bug, but the RTL already carries the intended hardware barrier.",
+      "confidence": 0.91
+    },
+    {
+      "finding_id": "F-0141",
+      "finding_title": "[U-UP] The loop bound 4 and the fixed Width 4 are not parameterized together; changing one without the other could cause width mismatches.",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:306-323",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:398-429"
+      ],
+      "reasoning": "The current RTL is internally consistent; the report only describes a hypothetical future edit hazard.",
+      "counter_evidence": "No live width mismatch exists in the checked design configuration.",
+      "confidence": 0.89
+    },
+    {
+      "finding_id": "F-0142",
+      "finding_title": "[U-UP] The comment emphasizes that the operations for a1_inv and a0_inv must be executed in left-to-right order to maintain masking, but the hardware enforce",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:398-429"
+      ],
+      "reasoning": "The computation is already serialized through the combinational chain and buffer stages described in the source.",
+      "counter_evidence": "The report does not identify a concrete path where the intended ordering is violated.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0143",
+      "finding_title": "[U-UP] The same module name `aes_masked_inverse_gf2p8_noreuse` appears to be defined twice: a first module ends at line 186 and a second module declaration b",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked_noreuse.sv:190-450"
+      ],
+      "reasoning": "The file contains two different module definitions with different names, not a duplicate definition of the same module.",
+      "counter_evidence": "The second module is the noreuse variant and is intentionally distinct from the earlier module in the same file.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0144",
+      "finding_title": "[U-UP] The `ifndef SYNTHESIS` block (line 23) references a permutation validity check, but the actual assertion/code is not provided; the nature and security",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:233-430"
+      ],
+      "reasoning": "The shard does not include the surrounding non-synthesis block that would confirm what is being checked.",
+      "counter_evidence": "The relevant assertion body is outside the provided snippet, so this cannot be closed from the local context.",
+      "confidence": 0.5
+    },
+    {
+      "finding_id": "F-0145",
+      "finding_title": "[U-UP] An `ifndef SYNTHESIS` block (simulation/FPV only) contains a comment about checking a permutation validity, but the actual assertion code is absent fr",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:233-430"
+      ],
+      "reasoning": "This is another incomplete-window claim; the assertion body is not visible here.",
+      "counter_evidence": "No executable defect is shown in the shard, only an omitted simulation-only check.",
+      "confidence": 0.49
+    },
+    {
+      "finding_id": "F-0146",
+      "finding_title": "[U-UP] The composite-field arithmetic must be consistent with the AES irreducible polynomial (x^8+x^4+x^3+x+1) and the chosen subfield decomposition. Need to",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:456-490",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked.sv:231-429"
+      ],
+      "reasoning": "The package functions and masked inverse implementation are already written against the AES field arithmetic used by the design.",
+      "counter_evidence": "The report raises a mathematical consistency concern, but no conflicting polynomial or decomposition appears in the RTL.",
+      "confidence": 0.87
+    },
+    {
+      "finding_id": "F-0147",
+      "finding_title": "[U-UP] The generate block 'gen_req_singlecycle' contains only a comment 'Tie off unused inputs.' with no actual logic; its purpose is unclear.",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:135-149"
+      ],
+      "reasoning": "The generate block does have logic: it ties off the unused handshake input and drives the single-cycle ready signal.",
+      "counter_evidence": "The comment is descriptive, not a missing implementation.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0148",
+      "finding_title": "[U-UP] The chunk provides only the S-Box data; the actual lookup implementation (addressing logic, output latching, possible masking) is located elsewhere an",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:1-140"
+      ],
+      "reasoning": "The local extract is a partial view of the S-Box module, so it cannot prove a functional bug on its own.",
+      "counter_evidence": "The surrounding source does contain the implementation choices, but this shard does not expose the full datapath being questioned.",
+      "confidence": 0.58
+    },
+    {
+      "finding_id": "F-0149",
+      "finding_title": "[U-UP] This region contains only a preprocessor include, a package import, a comment 'Tie off unused inputs', and a generate end-else block; the actual assig",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:37-65",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:135-149"
+      ],
+      "reasoning": "The broader module clearly includes the relevant tie-offs and output-driving logic.",
+      "counter_evidence": "The finding is based on a partial snippet, not on a missing RTL path.",
+      "confidence": 0.93
+    },
+    {
+      "finding_id": "F-0150",
+      "finding_title": "[U-UP] Localparam NumSp2VSig = 8 is defined but not used in this chunk; its value must match the actual number of sparsely encoded signals in the design that",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:523-570",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:874-874"
+      ],
+      "reasoning": "The AES RTL explicitly uses the sparse-signal count and checks the expected counter-slice configuration.",
+      "counter_evidence": "The report describes a local snippet mismatch, but the full design wires and asserts the sparse-signal sizing.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0151",
+      "finding_title": "[U-UP] The comment 'Synchronize life cycle input' (line 111) implies a life cycle signal is used by the AES module, but its source, synchronization, and conn",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "UNCERTAIN",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:39",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_wrap.sv:84-98"
+      ],
+      "reasoning": "The top-level source for the lifecycle input is not visible in this shard, so the synchronization question remains open.",
+      "counter_evidence": "The wrapper hardwires escalation off in the standalone harness, but that does not describe the production top-level connection.",
+      "confidence": 0.54
+    },
+    {
+      "finding_id": "F-0152",
+      "finding_title": "[U-UP] The 'new_pulse_o' output of u_reg_status_iv is also unconnected. It is unclear whether the pulse signal is intentionally omitted or if a missing conne",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:677-688"
+      ],
+      "reasoning": "The IV status block intentionally leaves the pulse output unused while consuming only the level signal.",
+      "counter_evidence": "The port is explicitly left blank in the instantiation, so this is deliberate tie-off behavior rather than a missing wire.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0153",
+      "finding_title": "[U-UP] Downstream usage of iv_qe_buf is not visible; it may be used in logic that does not preserve security properties of the buffer.",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:273-277",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:679-688"
+      ],
+      "reasoning": "The buffer feeds the IV-status logic through a secure-anchor path; the downstream use is visible and expected.",
+      "counter_evidence": "No insecure consumer of iv_qe_buf is shown in the checked RTL.",
+      "confidence": 0.92
+    },
+    {
+      "finding_id": "F-0154",
+      "finding_title": "[U-UP] The correctness of the AES mix columns output depends on the implementation of the aes_transpose function, which is not defined in this chunk.",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:504-513",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_mix_columns.sv:17-32"
+      ],
+      "reasoning": "The transpose function is defined in the package and used consistently by the mix-columns implementation.",
+      "counter_evidence": "The missing definition is only missing from the local snippet, not from the source tree.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0155",
+      "finding_title": "[U-UP] The indexing vec_b[7-j] establishes a bit order where bit 7 is processed first; it is unclear whether this matches the standard AES S\u2011box affine trans",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:525-537"
+      ],
+      "reasoning": "The matrix-vector multiply helper uses the standard AES bit ordering expected by the package utilities.",
+      "counter_evidence": "No conflicting affine-transform implementation is shown in the design.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0156",
+      "finding_title": "[U-UP] The matrix element access mat_a[j][i] and accumulation into vec_c[i] effectively computes a transposed multiplication (C = A^T \u00b7 reversed(B)); the int",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:525-537"
+      ],
+      "reasoning": "The helper is written as a conventional AES matrix-vector multiply with the package's column/row convention.",
+      "counter_evidence": "The report describes a mathematical reformulation, not a design fault.",
+      "confidence": 0.88
+    },
+    {
+      "finding_id": "F-0157",
+      "finding_title": "[U-UP] The CTRL_RESET parameter definition is cut off after `'{`, leaving the reset value for ctrl_reg_t fields (manual_operation, key_len, mode, operation, ",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:447-454"
+      ],
+      "reasoning": "The reset record is fully defined in the package, so the reported truncation is only an artifact of the excerpt.",
+      "counter_evidence": "No missing reset field exists in the source.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0158",
+      "finding_title": "[U-UP] The complete SBox instantiation and tie-off logic (including masked variants) is outside this chunk; the generate condition alone does not guarantee c",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:37-131"
+      ],
+      "reasoning": "The full module does include the masked and unmasked variants, plus the required tie-offs.",
+      "counter_evidence": "The extract was partial; the live implementation is complete in the source tree.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0159",
+      "finding_title": "[U-UP] The assignment a_inv = {a1_inv_buf[3], a0_inv_buf[3]} appears before an endmodule, so it belongs to a different module; its usage and instantiation in",
+      "phase2_verdict": "UNCERTAIN",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked_noreuse.sv:190-387"
+      ],
+      "reasoning": "The assignment is inside the noreuse inverse module and is the intended output composition.",
+      "counter_evidence": "The source ordering in the full file is valid; the apparent misplacement comes from the excerpt boundary.",
+      "confidence": 0.95
+    },
+    {
+      "finding_id": "F-0160",
+      "finding_title": "When EnSecBuf[i] is disabled, the behavior of sp2v_sig_chk_raw[i] from aes_sel_buf_chk must be verified; it may pass thr",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:823-839",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sel_buf_chk.sv:38-52"
+      ],
+      "reasoning": "The relevant AES core path hardwires secure buffering on for these sparse signals, so the feared disabled-secbuf condition does not occur there.",
+      "counter_evidence": "The checker module's non-secure branch is only a generic fallback; it is not the configuration used by the reviewed AES core path.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0161",
+      "finding_title": "Operational mode signals (doing_cbc_enc, doing_cfb_enc, etc.) are used in multiple states but are not synchronized; if t",
+      "phase2_verdict": "GAP",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:206-239",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:315-343"
+      ],
+      "reasoning": "The operational mode qualifiers are derived from the control register and the FSM only updates that register when it is safe to do so.",
+      "counter_evidence": "The report assumes mid-operation CSR mutation, but the control FSM gates those writes away while the core is active.",
+      "confidence": 0.9
+    },
+    {
+      "finding_id": "F-0162",
+      "finding_title": "If NumSlicesCtr is 0, the for loop does not execute and local variable 'out' is never assigned, leaving it with an X val",
+      "phase2_verdict": "SATISFIED",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:874-874",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:969-969"
+      ],
+      "reasoning": "The design asserts that NumSlicesCtr must be 8, so the zero-slice configuration is rejected at elaboration time.",
+      "counter_evidence": "The reported X-propagation scenario is unreachable in the supported configuration.",
+      "confidence": 0.98
+    },
+    {
+      "finding_id": "F-0163",
+      "finding_title": "External logic must drive lc_escalate_en to valid enumeration values before it is first read downstream. Risk: floating ",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_wrap.sv:84-98"
+      ],
+      "reasoning": "The standalone wrapper ties lifecycle escalation off, so the floating-input scenario is not present in the reviewed configuration.",
+      "counter_evidence": "The hazard is only hypothetical for a different top-level integration, not for this AES wrapper.",
+      "confidence": 0.96
+    },
+    {
+      "finding_id": "F-0164",
+      "finding_title": "The instantiation of gen_sbox_canright_masked_noreuse (line 88\u201189) is incomplete; the port connections are not shown, ma",
+      "phase2_verdict": "CONTRADICTION",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox.sv:88-107",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright_masked_noreuse.sv:392-450"
+      ],
+      "reasoning": "The instantiation and the callee module are both fully present in the source tree, with all relevant ports connected.",
+      "counter_evidence": "The report is based on an incomplete snippet, not on a missing design connection.",
+      "confidence": 0.97
+    },
+    {
+      "finding_id": "F-0165",
+      "finding_title": "The reason for using a secure anchor buffer on the sel_i signal is unclear; it may indicate that sel_i controls sensitiv",
+      "phase2_verdict": "SATISFIED",
+      "reviewed": true,
+      "final_verdict": "FALSE_ALARM",
+      "rtl_evidence": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sel_buf_chk.sv:7-52"
+      ],
+      "reasoning": "The secure anchor buffer is intentional for selector hardening and validity checking, not evidence of a missing implementation.",
+      "counter_evidence": "The module is explicitly documented as a selector buffer/checker and the secure-buffer option is part of that design.",
+      "confidence": 0.94
+    }
+  ]
+}

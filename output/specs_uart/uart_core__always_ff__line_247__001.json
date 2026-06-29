@@ -1,34 +1,110 @@
 {
   "chunk_id": "uart_core__always_ff__line_247__001",
-  "summary": "两级同步器将异步输入 rx_sync 同步到 clk_i 时钟域，输出稳定信号 rx_sync_q2。",
-  "behavior": "该块为双触发器同步器。异步复位（rst_ni 低）时，rx_sync_q1 和 rx_sync_q2 均被置为 1。复位释放后，每个时钟上升沿将 rx_sync 采样到 rx_sync_q1，并将上一拍的 rx_sync_q1 采样到 rx_sync_q2；因此 rx_sync_q2 是 rx_sync 延迟两个时钟周期的同步后版本。复位值为 1 对应 UART 空闲状态（RX 线高电平）。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "rx_sync_q1",
+      "rx_sync_q2"
+    ],
+    "used": [
+      "rx_sync",
+      "rx_sync_q1"
+    ],
+    "modes": [
+      "reset",
+      "normal"
+    ],
+    "tags": [
+      "reset",
+      "clock_domain"
+    ]
+  },
   "guarantees": [
     {
-      "property": "异步复位解除后，rx_sync_q2 保持高电平至少两个时钟周期（因为两级寄存器复位值均为 1）。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On active low reset (!rst_ni), both synchronizer flops rx_sync_q1 and rx_sync_q2 are assigned to 1'b1.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "rx_sync_q1",
         "rx_sync_q2"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:247-255"
+      "refs": [
+        "uart_core.sv:248-250"
       ]
     },
     {
-      "property": "正常工作时，rx_sync_q2 稳定输出两个 clk_i 时钟周期前 rx_sync 的值，且无亚稳态传播到下游逻辑。",
-      "output_signals": [
-        "rx_sync_q2"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not in reset, rx_sync_q1 is updated with the incoming rx_sync on every clk_i posedge, and rx_sync_q2 is updated with the previous rx_sync_q1.",
+      "cond": "rst_ni",
+      "signals": [
+        "rx_sync",
+        "rx_sync_q1",
+        "rx_sync_q2",
+        "clk_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:247-255"
+      "refs": [
+        "uart_core.sv:251-254"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:247-255"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The external UART RX signal (rx_sync) idles high (1'b1) because the synchronizer reset value is 1'b1.",
+      "cond": "After reset deassertion",
+      "risk": "If rx_sync idles low, the synchronizer's initial high output could cause the receiver to see a spurious start bit.",
+      "signals": [
+        "rx_sync",
+        "rst_ni"
+      ],
+      "refs": [
+        "uart_core.sv:248-250"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The 2-stage synchronizer is assumed to be sufficient to resolve metastability for the given clk_i frequency and technology.",
+      "cond": "During normal operation",
+      "risk": "If metastability is not resolved within two clock cycles, rx_sync_q2 may become metastable or capture an incorrect value, leading to downstream logic sampling a wrong bit.",
+      "signals": [
+        "rx_sync",
+        "clk_i",
+        "rx_sync_q1",
+        "rx_sync_q2"
+      ],
+      "refs": [
+        "uart_core.sv:247-255"
+      ]
+    }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The synchronizer uses only two flip-flop stages; it is uncertain whether additional stages or a more robust CDC scheme are required for reliable operation at the highest supported UART baud rate.",
+      "cond": "During normal operation",
+      "risk": "Insufficient synchronization could result in metastable sampling in the edge detector or bit counter, leading to data corruption or framing errors.",
+      "signals": [
+        "rx_sync_q1",
+        "rx_sync_q2"
+      ],
+      "refs": [
+        "uart_core.sv:247-255"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_core.sv:247-255"
+  ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 247,
-  "line_end": 255
+  "line_end": 255,
+  "security_implications": ""
 }

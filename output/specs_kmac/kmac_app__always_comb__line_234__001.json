@@ -1,52 +1,217 @@
 {
   "chunk_id": "kmac_app__always_comb__line_234__001",
-  "summary": "该组合逻辑只向当前选中的应用接口 app_id 驱动 KMAC 结果与状态，其他所有应用接口输出被强制清零。",
-  "behavior": "该块遍历全部应用接口索引 i，并仅在 i 等于当前选中接口 app_id 时对 app_o[i] 输出有效状态；未被选中的所有 app_o[i] 都被驱动为 ready=0、done=0、digest_share0=0、digest_share1=0、error=0，形成单一被服务接口的多路分发行为 [kmac_app.sv:235-255]。对被选中的 app_o[app_id]，ready 由 app_data_ready 与 fsm_data_ready 取或得到，done 由 app_digest_done 与 fsm_digest_done_q 取或得到，digest_share0/1 直接转发 app_digest[0]/[1]，error 则为 error_i、fsm_digest_done_q、sparse_fsm_error_o、service_rejected_error 的或 [kmac_app.sv:236-245]。注释表明若由 FSM 置位 done，应视为错误场景，因此实际 RTL 也明确将 fsm_digest_done_q 同时并入 done 和 error；这意味着接口可能在 done 拉高的同时也报告 error，表示一次异常结束而非正常完成 [kmac_app.sv:239-244]。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "app_o"
+    ],
+    "used": [
+      "i",
+      "app_id",
+      "app_data_ready",
+      "fsm_data_ready",
+      "app_digest_done",
+      "fsm_digest_done_q",
+      "app_digest",
+      "error_i",
+      "sparse_fsm_error_o",
+      "service_rejected_error"
+    ],
+    "modes": [
+      "app_id",
+      "NumAppIntf"
+    ],
+    "tags": [
+      "digest",
+      "handshake",
+      "error",
+      "parameterization",
+      "sparse_fsm"
+    ]
+  },
   "guarantees": [
     {
-      "property": "任意未被 app_id 选中的应用接口，其 app_o 输出恒为全空闲/零值：ready=0、done=0、digest_share0=0、digest_share1=0、error=0。",
-      "output_signals": [
-        "app_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When app_id matches the loop index i, app_o[i].ready is driven as app_data_ready | fsm_data_ready.",
+      "cond": "i == app_id",
+      "signals": [
+        "app_o",
+        "app_data_ready",
+        "fsm_data_ready"
       ],
-      "source_refs": [
-        "kmac_app.sv:246-253"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:237-238"
       ]
     },
     {
-      "property": "被选中的应用接口 app_o[app_id] 上，digest_share0 与 digest_share1 直接等于 app_digest[0] 和 app_digest[1]，且 ready、done、error 分别等于其对应输入条件的按位或结果。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When app_id matches the loop index i, app_o[i].done is driven as app_digest_done | fsm_digest_done_q.",
+      "cond": "i == app_id",
+      "signals": [
+        "app_o",
+        "app_digest_done",
+        "fsm_digest_done_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:239"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When app_id matches the loop index i, app_o[i].digest_share0 is driven as app_digest[0].",
+      "cond": "i == app_id",
+      "signals": [
+        "app_o",
+        "app_digest"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:240"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When app_id matches the loop index i, app_o[i].digest_share1 is driven as app_digest[1].",
+      "cond": "i == app_id",
+      "signals": [
+        "app_o",
+        "app_digest"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:241"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "When app_id matches the loop index i, app_o[i].error is driven as error_i | fsm_digest_done_q | sparse_fsm_error_o | service_rejected_error.",
+      "cond": "i == app_id",
+      "signals": [
+        "app_o",
+        "error_i",
+        "fsm_digest_done_q",
+        "sparse_fsm_error_o",
+        "service_rejected_error"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:243-244"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "For all other i (i != app_id), app_o[i] is driven to all zeros (ready=0, done=0, digest_share0='0, digest_share1='0, error=0).",
+      "cond": "i != app_id",
+      "signals": [
         "app_o"
       ],
-      "source_refs": [
-        "kmac_app.sv:236-245"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:247-253"
       ]
     }
   ],
-  "security_implications": "该片段涉及 digest 与错误状态的接口隔离：只有当前 app_id 对应的应用接口能看到摘要和状态，其他接口被清零，从而减少跨应用泄露风险 [kmac_app.sv:236-253]。同时，FSM 异常完成、稀疏 FSM 错误或服务拒绝都会反映到 error，支持上层将异常完成与正常 digest 完成区分开 [kmac_app.sv:242-244]。",
   "assumptions": [
     {
-      "constraint": "app_id 必须始终表示 0 到 NumAppIntf-1 范围内的合法接口索引。",
-      "bug_relevance": "如果违反，则 for 循环中不会有任何 i 满足 i==app_id，导致所有 app_o 接口都被清零；这更像对非法选择的安全回退，但设计上不应发生，否则合法请求方将收不到 ready/done/digest/error。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "app_id is a valid index within [0, NumAppIntf-1].",
+      "cond": "always",
+      "risk": "If app_id is out-of-bounds, no interface is selected, all app_o outputs remain zero, and the consumer may hang or miss completions.",
+      "signals": [
         "app_id",
         "NumAppIntf",
         "app_o"
       ],
-      "source_refs": [
-        "kmac_app.sv:235-247"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:235-236"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "fsm_digest_done_q is only asserted when a genuine error condition exists, as implied by the comment 'if fsm asserts done, should be an error case.'",
+      "cond": "when fsm_digest_done_q is high",
+      "risk": "If fsm_digest_done_q is asserted without an actual error, app_o[i].error incorrectly becomes high while done is also high, misleading the consumer into taking error recovery for a normal completion.",
+      "signals": [
+        "fsm_digest_done_q",
+        "app_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:242-243"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "NumAppIntf is at least 1.",
+      "cond": "always",
+      "risk": "If NumAppIntf == 0, the for-loop does not execute, app_o is not assigned, leading to latched behavior or undriven outputs in the combinational process.",
+      "signals": [
+        "NumAppIntf",
+        "app_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:235"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The condition under which fsm_digest_done_q is asserted and considered an error is unclear. The comment 'if fsm asserts done, should be an error case' lacks definition.",
+      "cond": "when fsm_digest_done_q = 1",
+      "risk": "Consumer interprets done+error incorrectly, leading to wrong protocol handling or missed error recovery.",
+      "signals": [
+        "fsm_digest_done_q",
+        "app_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:242"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "app_digest[1:0] are output as digest shares unconditionally when i == app_id. If these contain secret shares (e.g., masked digest), they may be exposed without any security gating.",
+      "cond": "always when i == app_id",
+      "risk": "Unauthorized disclosure of secret key material or sensitive intermediate values to the application interface.",
+      "signals": [
+        "app_digest",
+        "app_o",
+        "app_id"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:240-241"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If NumAppIntf is 0, the for-loop body never executes and app_o is undriven, likely causing latches or unconnected outputs.",
+      "cond": "NumAppIntf == 0",
+      "risk": "Synthesis infers latches or leaves app_o floating, leading to functional failure.",
+      "signals": [
+        "NumAppIntf",
+        "app_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:235"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_app.sv:235-255",
-    "kmac_app.sv:238-244",
-    "kmac_app.sv:242-243"
-  ],
-  "uncertain_points": [
-    "无法仅凭该片段确认 app_digest_done 与 fsm_digest_done_q 的语义边界：前者看似正常完成，后者按注释表示 FSM 触发的异常完成，但两者都进入 done，需要结合上游状态机确认系统是否要求消费者以 error=1 区分异常完成 [kmac_app.sv:239-244]。",
-    "无法从该片段单独确认 app_digest[0]/[1] 在 done 未置位时是否也可能包含有效或历史数据；本块只是无条件将其转发给被选中的接口 [kmac_app.sv:240-241]。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:234-256"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 234,
-  "line_end": 256
+  "line_end": 256,
+  "security_implications": ""
 }

@@ -1,0 +1,226 @@
+{
+  "chunk_id": "hmac_continuous_region_declarations_or_instances_009__structure__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "instance",
+    "driven": [
+      "packer_ready",
+      "reg_fifo_wvalid",
+      "reg_fifo_wdata",
+      "reg_fifo_wmask",
+      "packer_flush_done"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "msg_write",
+      "sha_en",
+      "msg_fifo_wdata_endian",
+      "msg_fifo_wmask_endian",
+      "fifo_wready",
+      "hmac_fifo_wsel",
+      "hash_process"
+    ],
+    "modes": [
+      "sha_en",
+      "hmac_fifo_wsel",
+      "hash_process"
+    ],
+    "tags": [
+      "handshake",
+      "fifo"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "prim_packer valid_i is asserted only when both msg_write and sha_en are active.",
+      "cond": "combinational",
+      "signals": [
+        "msg_write",
+        "sha_en"
+      ],
+      "refs": [
+        "674:682"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "prim_packer ready_i is asserted only when fifo_wready is high and hmac_fifo_wsel is low.",
+      "cond": "combinational",
+      "signals": [
+        "fifo_wready",
+        "hmac_fifo_wsel"
+      ],
+      "refs": [
+        "674:690"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "prim_packer flush_i is driven directly by the hash_process signal.",
+      "cond": "combinational",
+      "signals": [
+        "hash_process"
+      ],
+      "refs": [
+        "674:692"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "prim_packer output valid, data, and mask are connected to reg_fifo_wvalid, reg_fifo_wdata, and reg_fifo_wmask respectively.",
+      "cond": "structural",
+      "signals": [
+        "reg_fifo_wvalid",
+        "reg_fifo_wdata",
+        "reg_fifo_wmask"
+      ],
+      "refs": [
+        "674:687-689"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "prim_packer ready output is connected to packer_ready.",
+      "cond": "structural",
+      "signals": [
+        "packer_ready"
+      ],
+      "refs": [
+        "674:685"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "prim_packer flush_done_o is connected to packer_flush_done.",
+      "cond": "structural",
+      "signals": [
+        "packer_flush_done"
+      ],
+      "refs": [
+        "674:693"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "prim_packer error output is left unconnected, so any error indication from the packer is ignored.",
+      "cond": "structural",
+      "signals": [
+        "err_o"
+      ],
+      "refs": [
+        "674:695"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "msg_fifo_wdata_endian and msg_fifo_wmask_endian must remain stable while valid_i (msg_write & sha_en) is asserted, satisfying the packer's input protocol.",
+      "cond": "when valid_i is high",
+      "risk": "incorrect data or mask may be captured by the packer.",
+      "signals": [
+        "msg_fifo_wdata_endian",
+        "msg_fifo_wmask_endian",
+        "msg_write",
+        "sha_en"
+      ],
+      "refs": [
+        "674:682-684"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "fifo_wready and hmac_fifo_wsel must together provide a valid ready handshake (ready_i high) when the packer has valid data, otherwise the packer may stall indefinitely.",
+      "cond": "when reg_fifo_wvalid is asserted",
+      "risk": "transaction never completes, causing backpressure or data loss.",
+      "signals": [
+        "fifo_wready",
+        "hmac_fifo_wsel",
+        "reg_fifo_wvalid"
+      ],
+      "refs": [
+        "674:690",
+        "687"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "hash_process must meet prim_packer's flush protocol (likely a one-shot pulse) and valid_i must not be re-asserted until flush completes to avoid data corruption.",
+      "cond": "during flush operation",
+      "risk": "flush may be missed or partial data may be mixed with new input.",
+      "signals": [
+        "hash_process",
+        "msg_write",
+        "sha_en"
+      ],
+      "refs": [
+        "674:692",
+        "682"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "hmac_fifo_wsel must remain low whenever the packer needs to write to the register FIFO through reg_fifo_w* signals, because the ready_i gating blocks output when it is high.",
+      "cond": "during active packer output",
+      "risk": "packer stalls and accumulated data may be lost or overwritten.",
+      "signals": [
+        "hmac_fifo_wsel",
+        "fifo_wready"
+      ],
+      "refs": [
+        "674:690"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "packer_flush_done is connected but the comment 'ignore at this moment' suggests it may not be monitored by surrounding logic; if flush completion is needed for correct sequencing, ignoring it could hide incomplete flush states.",
+      "cond": "after hash_process pulse if flush must complete before next operation",
+      "risk": "downstream logic may operate on stale data, leading to functional or integrity errors.",
+      "signals": [
+        "packer_flush_done",
+        "hash_process"
+      ],
+      "refs": [
+        "674:693"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "low",
+      "claim": "prim_packer error output is left unconnected, so any packer-detected error (even with EnProtection=0) is silently dropped; if the packer can assert err_o under fault conditions, the error will not be handled.",
+      "cond": "if prim_packer asserts err_o",
+      "risk": "undetected data corruption may propagate through reg_fifo_wdata/mask.",
+      "signals": [
+        "err_o"
+      ],
+      "refs": [
+        "674:695"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "674:696"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 674,
+  "line_end": 697,
+  "security_implications": ""
+}

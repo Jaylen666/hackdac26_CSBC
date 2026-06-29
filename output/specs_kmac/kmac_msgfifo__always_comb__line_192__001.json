@@ -1,64 +1,202 @@
 {
   "chunk_id": "kmac_msgfifo__always_comb__line_192__001",
-  "summary": "该组合逻辑实现消息 FIFO flush 流程的下一状态控制，并在 FIFO 已清空时拉高 flush 完成指示。",
-  "behavior": "该块根据当前 flush_st 生成下一状态 flush_st_d，并默认将 msgfifo_flush_done 置 0。状态机流程为：在 FlushIdle 状态，若 process_i 为真则启动 flush 并转到 FlushPacker，否则保持空闲；在 FlushPacker 状态，等待 packer_flush_done 置位后转到 FlushFifo，否则停留；在 FlushFifo 状态，等待 fifo_empty_o 为真，满足时转到 FlushClear 并同时将 msgfifo_flush_done 置 1，否则继续等待；在 FlushClear 状态，只有当 clear_i 通过 prim_mubi_pkg::mubi4_test_true_strict 的严格真值检测时才回到 FlushIdle，否则保持在 FlushClear。default 分支将未知/非法状态回退到 FlushIdle。代码体现的设计意图是按“先清 packer、再等 FIFO 空、最后等待显式 clear 确认”的顺序完成一次 flush；其中 msgfifo_flush_done 只在 FlushFifo 且 fifo_empty_o 为真时被组合拉高，是否需要保持更久需由外部时序或相邻寄存器逻辑决定。",
+  "header": {
+    "module": "kmac_msgfifo",
+    "block_kind": "always_comb",
+    "driven": [
+      "flush_st_d",
+      "msgfifo_flush_done"
+    ],
+    "used": [
+      "flush_st",
+      "process_i",
+      "packer_flush_done",
+      "fifo_empty_o",
+      "clear_i"
+    ],
+    "modes": [
+      "FlushIdle",
+      "FlushPacker",
+      "FlushFifo",
+      "FlushClear"
+    ],
+    "tags": [
+      "fifo",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 flush_st 为 FlushFifo 且 fifo_empty_o 为真时，msgfifo_flush_done 一定为 1，且下一状态为 FlushClear。",
-      "output_signals": [
-        "msgfifo_flush_done",
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When flush_st is FlushIdle and process_i is asserted, flush_st_d becomes FlushPacker; otherwise flush_st_d remains FlushIdle.",
+      "cond": "flush_st == FlushIdle, process_i == 1",
+      "signals": [
+        "flush_st",
+        "process_i",
         "flush_st_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:214-219"
+      "refs": [
+        "kmac_msgfifo.sv:198-203"
       ]
     },
     {
-      "property": "当 flush_st 取未列举值时，下一状态被强制回退为 FlushIdle。",
-      "output_signals": [
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When flush_st is FlushPacker and packer_flush_done is asserted, flush_st_d becomes FlushFifo; otherwise flush_st_d remains FlushPacker.",
+      "cond": "flush_st == FlushPacker, packer_flush_done == 1",
+      "signals": [
+        "flush_st",
+        "packer_flush_done",
         "flush_st_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:232-234"
+      "refs": [
+        "kmac_msgfifo.sv:206-211"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When flush_st is FlushFifo and fifo_empty_o is asserted, flush_st_d becomes FlushClear and msgfifo_flush_done is set to 1; otherwise flush_st_d remains FlushFifo.",
+      "cond": "flush_st == FlushFifo, fifo_empty_o == 1",
+      "signals": [
+        "flush_st",
+        "fifo_empty_o",
+        "flush_st_d",
+        "msgfifo_flush_done"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:214-221"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "When flush_st is FlushClear and clear_i passes prim_mubi_pkg::mubi4_test_true_strict, flush_st_d becomes FlushIdle; otherwise flush_st_d remains FlushClear.",
+      "cond": "flush_st == FlushClear, mubi4_test_true_strict(clear_i) is true",
+      "signals": [
+        "flush_st",
+        "clear_i",
+        "flush_st_d"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:224-229"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "For any undefined flush_st state, flush_st_d is forced to FlushIdle.",
+      "cond": "flush_st not in {FlushIdle, FlushPacker, FlushFifo, FlushClear}",
+      "signals": [
+        "flush_st",
+        "flush_st_d"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:232-234"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "msgfifo_flush_done is driven to 0 at the top of the always_comb block and is set to 1 only when flush_st is FlushFifo and fifo_empty_o is true.",
+      "cond": "always",
+      "signals": [
+        "msgfifo_flush_done",
+        "flush_st",
+        "fifo_empty_o"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:195",
+        "kmac_msgfifo.sv:218"
       ]
     }
   ],
-  "security_implications": "该逻辑参与数据清空流程，并且在 FlushClear 阶段使用 mubi4 的严格真值检测确认 clear_i，说明设计试图避免非严格编码的 clear 信号误触发状态退出。这样可降低异常编码或故障注入导致 flush/clear 流程过早结束的风险。另一方面，msgfifo_flush_done 在 FIFO 为空时即拉高，而真正回到 Idle 还要等待 clear_i，因此依赖该信号的其他安全相关逻辑需要明确区分“FIFO 已空”和“整个 clear 握手已结束”这两个阶段。",
   "assumptions": [
     {
-      "constraint": "process_i 应仅在确实需要启动一次消息处理/flush 序列时拉高；若在不应启动的场景下拉高，状态机会从 FlushIdle 进入 FlushPacker，但这更像上游协议误用而非本块失效。",
-      "bug_relevance": "若不满足则可能触发一次非预期的 flush 流程，导致消息路径被提前清空或处理流程被打断；不过该块对未启动时会安全保持在 FlushIdle。",
-      "related_signals": [
-        "process_i",
-        "flush_st",
-        "flush_st_d"
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "clear_i must eventually be driven to a true mubi4 value (passing mubi4_test_true_strict) so the FSM can leave FlushClear state.",
+      "cond": "FSM is in FlushClear state",
+      "risk": "If clear_i remains false or invalid, the FSM deadlocks in FlushClear, preventing subsequent processing and blocking the flush handshake indefinitely.",
+      "signals": [
+        "clear_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:198-203"
+      "refs": [
+        "kmac_msgfifo.sv:225"
       ]
     },
     {
-      "constraint": "若系统期望 flush 流程最终回到 FlushIdle，则 clear_i 必须提供能通过 prim_mubi_pkg::mubi4_test_true_strict 的合法 mubi4 真值编码；仅置为普通 1 比特真或无效编码可能不足以释放 FlushClear。",
-      "bug_relevance": "若违反该契约，状态机会停留在 FlushClear，后续流程可能无法重新开始，形成功能性卡死；对安全流程而言也可能导致清空完成后的重新使能被阻塞。",
-      "related_signals": [
-        "clear_i",
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "packer_flush_done and fifo_empty_o must accurately report completion of their respective operations; these signals are produced outside this chunk.",
+      "cond": "when the FSM waits in FlushPacker or FlushFifo",
+      "risk": "If these indicators are asserted prematurely or glitch, the FSM may advance before the underlying flush is finished, potentially leaving data or state inconsistent.",
+      "signals": [
+        "packer_flush_done",
+        "fifo_empty_o"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:207",
+        "kmac_msgfifo.sv:215"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "msgfifo_flush_done is a combinational pulse that appears only when flush_st is FlushFifo and fifo_empty_o is true; external logic must capture it synchronously before the next clock edge.",
+      "cond": "flush_st == FlushFifo, fifo_empty_o == 1",
+      "risk": "If the done pulse is too narrow or sampled incorrectly, the external controller may miss the flush completion event, leaving the interface stalled or misaligned.",
+      "signals": [
+        "msgfifo_flush_done",
+        "fifo_empty_o",
+        "flush_st"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:218"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The FSM asserts msgfifo_flush_done upon entering FlushClear, before the clear_i acknowledgment is handled; it is unclear whether the external environment expects flush done after the clear phase.",
+      "cond": "flush sequence transition from FlushFifo to FlushClear",
+      "risk": "The external controller might deassert process_i or start new operations on receipt of done, while the clear_i handshake is still pending, potentially leaving the FIFO partially cleared or causing a protocol race.",
+      "signals": [
+        "msgfifo_flush_done",
+        "flush_st",
+        "clear_i"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:215-218",
+        "kmac_msgfifo.sv:224-226"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "If flush_st becomes an illegal value (e.g., due to a soft error), the default case silently resets the FSM to FlushIdle, aborting any ongoing flush without an error signal.",
+      "cond": "flush_st takes an undefined encoding",
+      "risk": "A silent abort could drop a security-critical flush or wipe sequence before it completes, leaving internal state uncleared and possibly leaking sensitive data.",
+      "signals": [
         "flush_st",
         "flush_st_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:224-229"
+      "refs": [
+        "kmac_msgfifo.sv:232-234"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:192-236"
-  ],
-  "uncertain_points": [
-    "msgfifo_flush_done 在进入 FlushClear 的同一组合条件下即拉高，但从该片段无法确认外部是否将其解释为“FIFO 已空”还是“整个 flush/clear 流程完成”。",
-    "该片段只生成 flush_st_d，未包含 flush_st 的寄存更新逻辑，因此无法单独确认状态驻留拍数及 process_i/packer_flush_done/fifo_empty_o/clear_i 与状态采样之间的完整时序关系。",
-    "注释缺失，无法确认 default 回到 FlushIdle 是纯容错恢复策略，还是也覆盖某些编码压缩/未使用状态的正式设计意图。"
+    "kmac_msgfifo.sv:192-236"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
   "line_start": 192,
-  "line_end": 236
+  "line_end": 236,
+  "security_implications": ""
 }

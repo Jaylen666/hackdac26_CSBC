@@ -1,0 +1,125 @@
+{
+  "chunk_id": "uart_core_continuous_region_declarations_or_instances_002__behavior__001",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "assign",
+    "driven": [
+      "tick_baud_x16",
+      "tx_fifo_rready"
+    ],
+    "used": [
+      "nco_sum_q[16]",
+      "tx_uart_idle",
+      "tx_fifo_rvalid",
+      "tx_enable"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "fifo"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "tick_baud_x16 is directly driven as the 16th bit of nco_sum_q.",
+      "cond": "always",
+      "signals": [
+        "tick_baud_x16",
+        "nco_sum_q"
+      ],
+      "refs": [
+        "uart_core.sv:175"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "tx_fifo_rready is the logical AND of tx_uart_idle, tx_fifo_rvalid, and tx_enable.",
+      "cond": "always",
+      "signals": [
+        "tx_fifo_rready",
+        "tx_uart_idle",
+        "tx_fifo_rvalid",
+        "tx_enable"
+      ],
+      "refs": [
+        "uart_core.sv:181"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "nco_sum_q[16] provides a clean, glitch-free baud tick aligned with the desired baud rate.",
+      "cond": "when baud timing is in use",
+      "risk": "Incorrect or glitchy nco_sum_q[16] yields erroneous baud timing, corrupting UART communication.",
+      "signals": [
+        "nco_sum_q",
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "uart_core.sv:175"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "tx_uart_idle correctly indicates that the TX shift register is idle, tx_fifo_rvalid indicates valid data in the TX FIFO, and tx_enable is asserted only when transmission is permitted.",
+      "cond": "when UART TX is active",
+      "risk": "Premature assertion of tx_fifo_rready could read invalid data or violate handshake, leading to TX corruption or protocol violations.",
+      "signals": [
+        "tx_uart_idle",
+        "tx_fifo_rvalid",
+        "tx_enable",
+        "tx_fifo_rready"
+      ],
+      "refs": [
+        "uart_core.sv:181"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "The bit-index [16] on nco_sum_q assumes nco_sum_q has at least 17 bits. If the actual width is smaller, tick_baud_x16 will be out-of-bounds or constant.",
+      "cond": "if the module is parameterized with an insufficient NCO sum width.",
+      "risk": "Baud tick may become stuck or out-of-range, breaking UART timing.",
+      "signals": [
+        "nco_sum_q",
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "uart_core.sv:175"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "tx_fifo_rready is purely combinational and may glitch if tx_fifo_rvalid changes combinatorially in response to a read, potentially creating a timing hazard in the handshake.",
+      "cond": "when tx_fifo_rvalid is updated in the same cycle as tx_fifo_rready assertion due to FIFO read",
+      "risk": "Could cause the TX logic to sample invalid data or violate handshake protocol, leading to transmit errors.",
+      "signals": [
+        "tx_fifo_rready",
+        "tx_fifo_rvalid",
+        "tx_uart_idle",
+        "tx_enable"
+      ],
+      "refs": [
+        "uart_core.sv:181"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_core.sv:175-182"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 175,
+  "line_end": 182,
+  "security_implications": ""
+}

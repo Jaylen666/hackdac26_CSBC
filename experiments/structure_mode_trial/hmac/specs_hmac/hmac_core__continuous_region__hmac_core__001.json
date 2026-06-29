@@ -1,0 +1,236 @@
+{
+  "chunk_id": "hmac_core__continuous_region__hmac_core__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "mixed",
+    "driven": [
+      "sha_hash_start_o",
+      "sha_hash_continue_o",
+      "sha_hash_process_o",
+      "hash_done_o",
+      "pad_index_512",
+      "pad_index_256"
+    ],
+    "used": [
+      "hmac_en_i",
+      "reg_hash_start_i",
+      "hash_start",
+      "reg_hash_continue_i",
+      "hash_continue",
+      "reg_hash_process_i",
+      "hash_process",
+      "hmac_hash_done",
+      "sha_hash_done_i",
+      "txcount",
+      "BlockSizeBitsSHA256",
+      "BlockSizeBitsSHA512",
+      "HashWordBitsSHA256"
+    ],
+    "modes": [
+      "hmac_en_i",
+      "digest_size_i",
+      "key_length_i"
+    ],
+    "tags": [
+      "hmac",
+      "secret",
+      "digest",
+      "key",
+      "fifo",
+      "csr",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When hmac_en_i is true, sha_hash_start_o routes the internal hash_start signal; otherwise it passes reg_hash_start_i directly.",
+      "cond": "always",
+      "signals": [
+        "hmac_en_i",
+        "hash_start",
+        "reg_hash_start_i",
+        "sha_hash_start_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:120"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "sha_hash_continue_o is hash_continue when hmac_en_i is true, else reg_hash_continue_i.",
+      "cond": "always",
+      "signals": [
+        "hmac_en_i",
+        "hash_continue",
+        "reg_hash_continue_i",
+        "sha_hash_continue_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:121"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "sha_hash_process_o is (reg_hash_process_i | hash_process) when hmac_en_i is true, else reg_hash_process_i alone.",
+      "cond": "always",
+      "signals": [
+        "hmac_en_i",
+        "reg_hash_process_i",
+        "hash_process",
+        "sha_hash_process_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:123"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "hash_done_o is hmac_hash_done when hmac_en_i is true, else sha_hash_done_i.",
+      "cond": "always",
+      "signals": [
+        "hmac_en_i",
+        "hmac_hash_done",
+        "sha_hash_done_i",
+        "hash_done_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:124"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "pad_index_512 is assigned as bit slice txcount[BlockSizeBitsSHA512-1:HashWordBitsSHA256].",
+      "cond": "always",
+      "signals": [
+        "txcount",
+        "pad_index_512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:126"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "pad_index_256 is assigned as bit slice txcount[BlockSizeBitsSHA256-1:HashWordBitsSHA256].",
+      "cond": "always",
+      "signals": [
+        "txcount",
+        "pad_index_256"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:127"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When hmac_en_i is true, the internal signals hash_start, hash_continue, hash_process, hmac_hash_done, and txcount must be correctly driven by the state machine not shown in this chunk.",
+      "cond": "hmac_en_i = 1",
+      "risk": "Incorrect HMAC sequencing can lead to wrong hash operations or data corruption.",
+      "signals": [
+        "hash_start",
+        "hash_continue",
+        "hash_process",
+        "hmac_hash_done",
+        "txcount"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:120-127"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "In bypass mode (hmac_en_i=0), the external reg_hash_start_i, reg_hash_continue_i, reg_hash_process_i, and sha_hash_done_i must form a valid, non‑conflicting SHA‑2 operation sequence.",
+      "cond": "hmac_en_i = 0",
+      "risk": "Glitch or spurious hash_done/start/continue signals could cause the SHA engine to misbehave or enter an unexpected state.",
+      "signals": [
+        "reg_hash_start_i",
+        "reg_hash_continue_i",
+        "reg_hash_process_i",
+        "sha_hash_done_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:120-124"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "txcount must never exceed a value that causes pad_index_512 or pad_index_256 to index beyond the declared dimensions of i_pad_256/i_pad_512/o_pad_256/o_pad_512 arrays.",
+      "cond": "when HMAC state machine uses txcount to generate pad indices",
+      "risk": "Out‑of‑bounds read from pad arrays could expose secret key bytes (XORed with ipad/opad) to the data path, violating key secrecy.",
+      "signals": [
+        "txcount",
+        "pad_index_512",
+        "pad_index_256"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:126-127",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:64-67"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The chunks that use pad_index_512/pad_index_256 to index i_pad_256/i_pad_512/o_pad_256/o_pad_512 arrays may lack bounds checking; an out‑of‑range index could read secret key material.",
+      "cond": "When HMAC is active and txcount is incremented beyond the safe word count.",
+      "risk": "Secret key leakage on the HMAC data output or into the hash engine.",
+      "signals": [
+        "pad_index_512",
+        "pad_index_256",
+        "i_pad_256",
+        "i_pad_512",
+        "o_pad_256",
+        "o_pad_512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:64-67",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:126-127"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Bypass mode (hmac_en_i=0) directly passes external control signals to the SHA engine without any clearing of HMAC‑internal key state or forced idle transition; residual key material from a previous HMAC operation could contaminate the bypass hash or be leaked.",
+      "cond": "When hmac_en_i transitions from 1 to 0 or the core is reused after an HMAC computation.",
+      "risk": "Key material might be inferable through timing or data correlations in subsequent bypass hashes.",
+      "signals": [
+        "hmac_en_i",
+        "hash_done_o",
+        "sha_hash_start_o",
+        "sha_hash_continue_o",
+        "sha_hash_process_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:120-124"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:120",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:121",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:123",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:124",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:126",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:127",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:64-67"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 7,
+  "line_end": 127,
+  "security_implications": ""
+}

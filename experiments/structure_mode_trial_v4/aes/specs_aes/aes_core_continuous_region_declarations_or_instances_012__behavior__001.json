@@ -1,0 +1,166 @@
+{
+  "chunk_id": "aes_core_continuous_region_declarations_or_instances_012__behavior__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "assign",
+    "driven": [
+      "data_in_prev_we",
+      "data_out_we",
+      "sp_enc_err_d"
+    ],
+    "used": [
+      "sp2v_sig_chk",
+      "sp2v_sig_err",
+      "NumSharesKey",
+      "NumRegsKey",
+      "NumSlicesCtr"
+    ],
+    "modes": [
+      "NumSharesKey",
+      "NumRegsKey",
+      "NumSlicesCtr"
+    ],
+    "tags": [
+      "error",
+      "integrity",
+      "sparse_fsm"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "data_in_prev_we is continuously assigned to the bit of sp2v_sig_chk at index NumSharesKey * NumRegsKey + NumSlicesCtr + 0.",
+      "cond": "always",
+      "signals": [
+        "data_in_prev_we",
+        "sp2v_sig_chk",
+        "NumSharesKey",
+        "NumRegsKey",
+        "NumSlicesCtr"
+      ],
+      "refs": [
+        "aes_core.sv:850"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "data_out_we is continuously assigned to the bit of sp2v_sig_chk at index NumSharesKey * NumRegsKey + NumSlicesCtr + 1.",
+      "cond": "always",
+      "signals": [
+        "data_out_we",
+        "sp2v_sig_chk",
+        "NumSharesKey",
+        "NumRegsKey",
+        "NumSlicesCtr"
+      ],
+      "refs": [
+        "aes_core.sv:851"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "error_detection",
+      "claim": "sp_enc_err_d is the OR-reduction of the entire sp2v_sig_err bus, asserting high whenever any sparse-encoding error signal is active.",
+      "cond": "always",
+      "signals": [
+        "sp_enc_err_d",
+        "sp2v_sig_err"
+      ],
+      "refs": [
+        "aes_core.sv:856"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The bits of sp2v_sig_chk used for data_in_prev_we and data_out_we are properly driven by upstream sparse-encoding checker modules and reflect the intended write-enable signals.",
+      "cond": "at all times during operation",
+      "risk": "If misconnected or driven incorrectly, data write enables may be erroneous, leading to data corruption or security bypass in the AES data path.",
+      "signals": [
+        "sp2v_sig_chk",
+        "data_in_prev_we",
+        "data_out_we"
+      ],
+      "refs": [
+        "aes_core.sv:850-851"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The sp2v_sig_err bus correctly aggregates all sparse-encoding error indicator signals from across the AES core as intended.",
+      "cond": "always",
+      "risk": "Missing or incorrect error signals will cause sp_enc_err_d to fail to detect encoding errors, potentially allowing corrupted data to propagate unnoticed.",
+      "signals": [
+        "sp2v_sig_err",
+        "sp_enc_err_d"
+      ],
+      "refs": [
+        "aes_core.sv:856"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The computed index NumSharesKey * NumRegsKey + NumSlicesCtr + 1 may exceed the declared width of sp2v_sig_chk, causing an out-of-bounds read on security-critical write-enable assignment.",
+      "cond": "If (NumSharesKey * NumRegsKey + NumSlicesCtr + 1) >= width(sp2v_sig_chk)",
+      "risk": "Undefined bit values could be assigned to data_in_prev_we or data_out_we, leading to unauthorized writes or data integrity violations.",
+      "signals": [
+        "data_in_prev_we",
+        "data_out_we",
+        "sp2v_sig_chk",
+        "NumSharesKey",
+        "NumRegsKey",
+        "NumSlicesCtr"
+      ],
+      "refs": [
+        "aes_core.sv:850-851"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "sp_enc_err_d is a combinational OR of potentially asynchronous error sources; glitches may occur if sp2v_sig_err changes transiently, causing unreliable error capture by downstream logic.",
+      "cond": "whenever any bit of sp2v_sig_err toggles asynchronously",
+      "risk": "A glitchy sp_enc_err_d may be sampled as a false error or missed, reducing the reliability of the error reporting mechanism.",
+      "signals": [
+        "sp_enc_err_d",
+        "sp2v_sig_err"
+      ],
+      "refs": [
+        "aes_core.sv:856"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact mapping of sp2v_sig_chk bits to data_in_prev_we and data_out_we depends on the ordering of checker module instantiations and the values of NumSharesKey, NumRegsKey, NumSlicesCtr; verification must confirm the intended control signals are accessed.",
+      "cond": "at elaboration time",
+      "risk": "Incorrect mapping could swap write-enable signals or connect an unrelated checker output, undermining the sparse-encoding protection scheme.",
+      "signals": [
+        "sp2v_sig_chk",
+        "data_in_prev_we",
+        "data_out_we"
+      ],
+      "refs": [
+        "aes_core.sv:850-851"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_core.sv:850-856"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 850,
+  "line_end": 856,
+  "security_implications": ""
+}

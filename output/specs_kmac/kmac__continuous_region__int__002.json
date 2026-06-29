@@ -1,51 +1,243 @@
 {
   "chunk_id": "kmac__continuous_region__int__002",
-  "summary": "当启用 SecCmdDelay 时，该片段为命令寄存器写入引入一个可选延迟/缓冲机制，但对 CmdManualRun 明确旁路延迟、立即触发。",
-  "behavior": "该逻辑仅在 `SecCmdDelay > 0` 时生成一组命令延迟相关信号和状态声明，用于“为 SCA 测量延迟并缓冲命令”（注释，行 357）。`cmd_buf_empty` 在命令缓冲寄存器 `cmd_buf_q` 为 `CmdNone` 时为真（行 364），可作为缓冲是否已清空的判据。`counting_d` 的组合更新规则是：一旦检测到对 `cmd` 寄存器的写使能 `reg2hw.cmd.cmd.qe`，就开始计数；之后只有在 `cmd_update` 发生且命令缓冲为空时才停止计数，否则保持原状态（行 366-369）。`count_d` 在两种情况下清零：软件再次写 `cmd` 寄存器，或 `cmd_update` 置位；若当前处于计数中，则递增 `count_q`，否则保持不变（行 371-374）。`cmd_update` 是该延迟机制的触发输出：若当前命令 `cmd_q` 是 `CmdManualRun`，则无条件立即触发，不经过延迟；否则当计数器值达到 `SecCmdDelay` 时触发（行 376-380）。因此，普通命令在写入后会等待至计数达到配置延迟后才更新，而手动运行命令被设计为不能延迟，以满足软件立即观察状态变化的预期（行 376-378）。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "assign",
+    "driven": [
+      "cmd_buf_empty",
+      "counting_d",
+      "count_d",
+      "cmd_update"
+    ],
+    "used": [
+      "cmd_buf_q",
+      "CmdNone",
+      "reg2hw.cmd.cmd.qe",
+      "cmd_update",
+      "counting_q",
+      "count_q",
+      "cmd_q",
+      "CmdManualRun",
+      "SecCmdDelay",
+      "WidthCounter"
+    ],
+    "modes": [
+      "gen_cmd_delay_buf",
+      "SecCmdDelay"
+    ],
+    "tags": [
+      "counter",
+      "mask",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `cmd_q` 为 `CmdManualRun` 时，`cmd_update` 必定为 1，不受 `count_q` 与 `SecCmdDelay` 的限制。",
-      "output_signals": [
-        "cmd_update"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "cmd_buf_empty is true if and only if cmd_buf_q equals CmdNone.",
+      "cond": "always",
+      "signals": [
+        "cmd_buf_empty",
+        "cmd_buf_q",
+        "CmdNone"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:376-380"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:364"
       ]
     },
     {
-      "property": "当 `cmd_buf_q` 等于 `CmdNone` 时，`cmd_buf_empty` 必定为 1；否则为 0。",
-      "output_signals": [
-        "cmd_buf_empty"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "counting_d becomes 1 when reg2hw.cmd.cmd.qe is high; becomes 0 when cmd_update is high and cmd_buf_empty is high; otherwise holds counting_q.",
+      "cond": "always",
+      "signals": [
+        "counting_d",
+        "reg2hw.cmd.cmd.qe",
+        "cmd_update",
+        "cmd_buf_empty",
+        "counting_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:364-364"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:368-369"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "count_d clears to all zeros when reg2hw.cmd.cmd.qe or cmd_update is high; increments by 1 when counting_q is true; otherwise holds count_q.",
+      "cond": "always",
+      "signals": [
+        "count_d",
+        "reg2hw.cmd.cmd.qe",
+        "cmd_update",
+        "counting_q",
+        "count_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:372-374"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "cmd_update is asserted when cmd_q equals CmdManualRun, or when count_q equals SecCmdDelay truncated to WidthCounter bits; otherwise deasserted.",
+      "cond": "always",
+      "signals": [
+        "cmd_update",
+        "cmd_q",
+        "CmdManualRun",
+        "count_q",
+        "SecCmdDelay",
+        "WidthCounter"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:379-380"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When none of the explicit conditions hold, counting_d retains counting_q, count_d retains count_q, and cmd_update remains 0, ensuring no unintended state changes.",
+      "cond": "combined else of all assign branches",
+      "signals": [
+        "counting_d",
+        "count_d",
+        "cmd_update"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:368-380"
       ]
     }
   ],
-  "security_implications": "该片段直接涉及安全侧信道缓解：注释明确说明命令会被延迟和缓冲以支持 SCA measurements（行 357）。同时，`CmdManualRun` 被显式排除在延迟机制之外（行 376-380），这降低了该命令路径上的时间扰动；这一旁路是软件可见行为契约，但也意味着该命令不享受同样的时序隐藏效果。",
   "assumptions": [
     {
-      "constraint": "`reg2hw.cmd.cmd.qe` 应只在软件确实发起新的 `cmd` 写入时拉高，而不是在无效周期或重复周期中误触发。",
-      "bug_relevance": "若违反，该逻辑会反复重启计数并清零 `count_d`，导致普通命令的延迟窗口被意外延长或命令更新时间异常；这属于行为契约，可能直接造成功能错误。",
-      "related_signals": [
-        "reg2hw.cmd.cmd.qe",
-        "counting_d",
-        "count_d"
+      "id": "A1",
+      "type": "handshake",
+      "claim": "reg2hw.cmd.cmd.qe is a single-cycle pulse that asserts exactly once per command write; it must not remain high across multiple cycles.",
+      "cond": "when a new command is written via the register interface",
+      "risk": "If qe is a level instead of a pulse, counting_d stays 1 and count_d stays 0 continuously, stalling the delay counter forever and potentially halting all command processing.",
+      "signals": [
+        "reg2hw.cmd.cmd.qe"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:366-374"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:368",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:372"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "cmd_q is a stable, glitch-free registered signal that accurately reflects the core's current command and does not spuriously become CmdManualRun.",
+      "cond": "during the combinational evaluation of cmd_update",
+      "risk": "A glitch on cmd_q to CmdManualRun could immediately assert cmd_update, forwarding a delayed command early or executing a manual run out of sequence, breaking the SCA delay protection.",
+      "signals": [
+        "cmd_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:379"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The external logic that updates cmd_buf_q correctly stores the written command on a reg2hw.cmd.cmd.qe pulse and resets it to CmdNone once the buffered command is consumed and cmd_buf_empty becomes true.",
+      "cond": "when a command is written or consumed",
+      "risk": "If cmd_buf_q is not properly managed, cmd_buf_empty may be incorrect, causing counting to never reset (stuck counting) or reset too early (losing a command).",
+      "signals": [
+        "cmd_buf_q",
+        "cmd_buf_empty"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:364",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:369"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "count_q and counting_q are updated on the same active clock edge with count_d and counting_d respectively, forming a single-cycle synchronous loop.",
+      "cond": "while the generate block is active",
+      "risk": "If the registers are not updated synchronously, the finite state machine becomes unreliable and the delay counter may misbehave.",
+      "signals": [
+        "count_q",
+        "counting_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:358-360"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "It is unclear whether reg2hw.cmd.cmd.qe is a pulse or a level signal; the lack of explicit pulse-width documentation may lead to a functional deadlock if it is asserted for multiple cycles.",
+      "cond": "when a command register write occurs and remains active",
+      "risk": "If qe is held high, the delay counter is continuously reset, causing indefinite stall of all delayed commands and potentially locking the engine.",
+      "signals": [
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:368",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:372"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The source and setup/hold of cmd_q relative to the clock are not visible; a glitch on cmd_q during evaluation could falsely set cmd_update for a CmdManualRun condition.",
+      "cond": "if cmd_q is an asynchronous or combinational signal near the clock edge",
+      "risk": "Spurious firing of cmd_update could cause premature command forwarding, violating the SCA delay property or triggering an unexpected manual run.",
+      "signals": [
+        "cmd_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:379"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "No saturation or overflow protection is present on the delay counter; if counting_q is stuck high and cmd_update never fires, count_q could wrap around and cause a spurious cmd_update.",
+      "cond": "when count_q reaches the maximum value and wraps to zero",
+      "risk": "Erroneous command dispatch could occur long after the intended delay, potentially breaking protocol or security timing.",
+      "signals": [
+        "count_q",
+        "counting_q",
+        "cmd_update"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:372-374",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:379-380"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The logic that loads and clears cmd_buf_q is outside this chunk; its behavior must be verified to ensure that cmd_buf_empty reliably indicates buffer emptiness at the right time, because it directly gates the reset of counting_d.",
+      "cond": "during command buffering lifecycle",
+      "risk": "If cmd_buf_q is not cleared when the buffered command is applied, counting may never reset, blocking all subsequent commands.",
+      "signals": [
+        "cmd_buf_q",
+        "cmd_buf_empty",
+        "counting_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:364",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:369"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:356-380"
   ],
-  "uncertain_points": [
-    "`cmd_buf_q` 在本片段中仅被用于判定是否为空，未显示其装载/清空机制，因此无法仅凭本段确认普通命令是如何被缓冲、何时写入该缓冲的。",
-    "`cmd_update` 被注释和命名暗示为“命令生效/更新”触发，但其具体下游作用和是否对应单周期脉冲需要结合其他片段确认。",
-    "注释称在“计数器到期且命令缓冲为空”时停止计数（行 366-367），而实际组合式停止条件是 `cmd_update & cmd_buf_empty`（行 369）；若 `cmd_update` 的语义不完全等同于“计数器到期或手动运行立即触发”，则注释与实现可能存在细微语义差异。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 356,
-  "line_end": 380
+  "line_end": 380,
+  "security_implications": ""
 }

@@ -1,0 +1,248 @@
+{
+  "chunk_id": "aes_wrap_continuous_region_aes_wrap_001__behavior__004",
+  "header": {
+    "module": "aes_wrap",
+    "block_kind": "mixed",
+    "driven": [
+      "keymgr_key.valid",
+      "keymgr_key.key[0][255:0]",
+      "keymgr_key.key[1][255:0]",
+      "alert_rx[0].ping_p",
+      "alert_rx[0].ping_n",
+      "alert_rx[0].ack_p",
+      "alert_rx[0].ack_n",
+      "alert_rx[1].ping_p",
+      "alert_rx[1].ping_n",
+      "alert_rx[1].ack_p",
+      "alert_rx[1].ack_n",
+      "alert_recov_o",
+      "alert_fatal_o",
+      "h2d_intg",
+      "unused_wdata"
+    ],
+    "used": [
+      "aes_key",
+      "alert_tx[0].alert_p",
+      "alert_tx[0].alert_n",
+      "alert_tx[1].alert_p",
+      "alert_tx[1].alert_n",
+      "h2d",
+      "h2d.a_data"
+    ],
+    "modes": [
+      "NumAlerts (parameter used in array declaration)"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "integrity",
+      "alert",
+      "error",
+      "simulation"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "keymgr_key.valid is always asserted high (1'b1), bypassing any key-manager handshake.",
+      "cond": "always",
+      "signals": [
+        "keymgr_key.valid"
+      ],
+      "refs": [
+        "file:48"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "keymgr_key.key[0] is always driven by aes_key; keymgr_key.key[1] is always driven to 0.",
+      "cond": "always",
+      "signals": [
+        "keymgr_key.key",
+        "aes_key"
+      ],
+      "refs": [
+        "file:49-50"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "All alert_rx ping and acknowledge signals are driven to idle state (ping_p=0, ping_n=1, ack_p=0, ack_n=1), disabling alert reception.",
+      "cond": "always",
+      "signals": [
+        "alert_rx[0]",
+        "alert_rx[1]"
+      ],
+      "refs": [
+        "file:53-60"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "alert_recov_o asserts when alert_tx[0] signals an alert (alert_p high or alert_n low); alert_fatal_o asserts when alert_tx[1] signals an alert.",
+      "cond": "always",
+      "signals": [
+        "alert_recov_o",
+        "alert_fatal_o",
+        "alert_tx"
+      ],
+      "refs": [
+        "file:63-64"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "h2d_intg receives command integrity computed by tlul_cmd_intg_gen from h2d.",
+      "cond": "always",
+      "signals": [
+        "h2d",
+        "h2d_intg"
+      ],
+      "refs": [
+        "file:67-70"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "h2d_intg.a_user.data_intg is driven by the SECDED ECC encoding of h2d.a_data; leftover encoding bits flow to unused_wdata.",
+      "cond": "always",
+      "signals": [
+        "h2d.a_data",
+        "h2d_intg.a_user.data_intg",
+        "unused_wdata"
+      ],
+      "refs": [
+        "file:73-76"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The forced keymgr_key assignments are intended for simulation only; in silicon, the key manager must provide the key through the proper handshake.",
+      "cond": "when the design is synthesized for production",
+      "risk": "Bypassing the key manager in silicon gives a static, hardwired key with no lifecycle management, violating key secrecy and secure key provisioning.",
+      "signals": [
+        "keymgr_key",
+        "aes_key"
+      ],
+      "refs": [
+        "file:48-50"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The alert receiver interface is unused; no external alert source is expected to ping or acknowledge this module.",
+      "cond": "during normal operation",
+      "risk": "If an external alert sender attempts to ping, the lack of response could cause an alert protocol timeout or missed fault detection.",
+      "signals": [
+        "alert_rx"
+      ],
+      "refs": [
+        "file:53-60"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "h2d is a valid TL-UL host-to-device request with all required fields (opcode, param, size, source, address, mask, data, user) correctly driven when this combinational integrity generation evaluates.",
+      "cond": "always (continuous evaluation)",
+      "risk": "If h2d fields are incomplete or incorrectly mapped, the generated integrity values will be invalid, causing downstream integrity check failures.",
+      "signals": [
+        "h2d"
+      ],
+      "refs": [
+        "file:67-76"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The sideload keymgr_key assignments are unconditional; it is unclear whether they are intended to be gated by a simulation-only compile-time define or a test-mode input.",
+      "cond": "always present in current code",
+      "risk": "In silicon, this would drive keymgr_key with a static key, bypassing the key manager entirely and potentially causing a multi-driver conflict or permanent exposure of the AES key.",
+      "signals": [
+        "keymgr_key.valid",
+        "keymgr_key.key"
+      ],
+      "refs": [
+        "file:48-50"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "alert_rx is tied to idle and never read; it is unknown whether the aes_wrap is ever expected to handle incoming alerts.",
+      "cond": "always",
+      "risk": "If the integration requires alert reception (e.g., from a recovery controller or another AES instance), this tie-off would silently ignore critical fault signals.",
+      "signals": [
+        "alert_rx"
+      ],
+      "refs": [
+        "file:44",
+        "file:53-60"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "The u_data_gen instance writes to h2d_intg.a_user.data_intg, but it is unclear whether tlul_cmd_intg_gen also drives that field or leaves it open.",
+      "cond": "always",
+      "risk": "If tlul_cmd_intg_gen also assigns a_user.data_intg, a bus conflict may occur, leading to X-propagation or corrupted integrity values.",
+      "signals": [
+        "h2d_intg.a_user.data_intg"
+      ],
+      "refs": [
+        "file:67-76"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "unused_wdata receives the excess bits from the secded encoder but is not connected to any further logic.",
+      "cond": "always",
+      "risk": "If those bits are needed for downstream data integrity checking, they are lost; otherwise the signal is dead logic.",
+      "signals": [
+        "unused_wdata"
+      ],
+      "refs": [
+        "file:76"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "keymgr_key.key[1] is forced to 0 while key[0] receives aes_key; it is unclear whether dual-key modes require a meaningful value in key[1].",
+      "cond": "when AES operates in modes that might use a second key",
+      "risk": "Incorrect key supply for decryption or dual-key operations could lead to wrong ciphertext or functional failure.",
+      "signals": [
+        "keymgr_key.key[1]"
+      ],
+      "refs": [
+        "file:50"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:41-78"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_wrap.sv",
+  "line_start": 41,
+  "line_end": 78,
+  "security_implications": ""
+}

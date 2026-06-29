@@ -1,0 +1,53 @@
+{
+  "chunk_id": "kmac__continuous_region__declarations_or_instances__019",
+  "summary": "该片段主要用形式约束和安全断言为 KMAC 命令编码、冗余计数器、稀疏 FSM 状态、FIFO/打包器指针以及寄存器写使能 onehot 错误建立一致的告警触发规则，集中将异常映射到 alert_tx_o[1]。",
+  "behavior": "该片段本身不实现新的功能数据通路，而是对设计行为施加约束并声明安全检查。首先，对寄存器命令接口施加假设：当 reg2hw.cmd.cmd.qe 有效时，reg2hw.cmd.cmd.q 必须属于 {CmdStart, CmdProcess, CmdManualRun, CmdDone, CmdNone} 这些稀疏合法命令值，排除其它编码作为输入前提 [1546-1547]。随后，一组冗余计数器错误断言把内部计数保护失败统一绑定到 alert_tx_o[1]，覆盖 SHA3 padding 的 sent message counter、Keccak round counter、以及 KMAC core 的 key index counter [1549-1555]。另一组稀疏 FSM 状态错误断言对多个状态寄存器实施编码完整性检查，只要 u_kmac_core、u_app_intf、u_sha3、u_sha3.u_pad、u_sha3.u_keccak、u_errchk 或顶层 kmac 自身的 u_state_regs 出现非法/损坏状态，就触发同一个 alert 通道 alert_tx_o[1] [1557-1565]。当参数 EnMasking==1 时，还额外检查熵模块的 FSM 和 hash 计数器，以及消息 FIFO 打包器位置计数和 FIFO 安全读写指针；这些检查仅在启用 masking、相应实例存在时生效，任何对应的冗余计数/安全指针错误同样触发 alert_tx_o[1] [1567-1593]。最后，对寄存器块 u_reg 的写使能 onehot 完整性进行断言，违反 onehot 约束时也会触发 alert_tx_o[1] [1595-1596]。",
+  "guarantees": [
+    {
+      "property": "若被这些 prim 断言监测到的任一冗余计数器完整性错误发生，则会触发 alert_tx_o[1]。",
+      "output_signals": [
+        "alert_tx_o[1]"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1550-1555",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1572-1592"
+      ]
+    },
+    {
+      "property": "若被这些 prim 断言监测到的任一稀疏 FSM 状态错误或寄存器写使能 onehot 错误发生，则会触发 alert_tx_o[1]。",
+      "output_signals": [
+        "alert_tx_o[1]"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1558-1565",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1569-1570",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1595-1596"
+      ]
+    }
+  ],
+  "security_implications": "该片段明显属于安全监测面：它把控制命令稀疏编码、多个关键 FSM 的状态完整性、冗余计数器、防篡改 FIFO 安全指针以及寄存器写使能 onehot 违规统一映射到 alert_tx_o[1]。这意味着设计意图是在状态编码损坏、计数器冗余失配、非法寄存器写选通等可能由故障注入、硬件失效或篡改导致的异常出现时发出安全告警。EnMasking 打开时还覆盖熵路径相关检查，表明掩码/熵生成链路被视为安全关键路径 [1567-1593]。",
+  "assumptions": [
+    {
+      "constraint": "当 reg2hw.cmd.cmd.qe 为 1 时，reg2hw.cmd.cmd.q 只能取 CmdStart、CmdProcess、CmdManualRun、CmdDone 或 CmdNone 之一。",
+      "bug_relevance": "这是行为契约；若违反，则形式验证/断言环境可能把非法命令编码排除在外，而真实硬件在收到未定义编码时的功能与安全后果无法由该片段保证，可能掩盖命令解码相关 bug。",
+      "related_signals": [
+        "reg2hw.cmd.cmd.qe",
+        "reg2hw.cmd.cmd.q"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1546-1547"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1546-1596"
+  ],
+  "uncertain_points": [
+    "这些 `ASSERT_PRIM_*_TRIGGER_ALERT 宏的精确定义不在片段中；这里依据宏名和连线推断为“检测到对应错误时触发 alert_tx_o[1]”，但具体是脉冲、锁存还是伴随额外副作用，需查看宏实现确认。",
+    "CmdSparse_M 是 ASSUME 而非 ASSERT，因此它反映的是验证环境/输入前提，不代表硬件一定主动阻止非法 cmd 编码；真实 RTL 对非法编码的运行时处理在本片段中不可见。",
+    "EnMasking==1 时才存在的熵模块、hash count、packer/FIFO 指针检查是条件化实例；当 EnMasking!=1 时并非这些错误被证明不会发生，而是对应硬件/检查可能不存在。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 1546,
+  "line_end": 1597
+}

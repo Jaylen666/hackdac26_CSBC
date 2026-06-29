@@ -1,49 +1,131 @@
 {
   "chunk_id": "kmac_entropy__always_ff__line_272__001",
-  "summary": "维护定时器到期标志：复位或更新时清零，启用且计数值为零时置位。",
-  "behavior": "该寄存器过程仅控制 `timer_expired`。在异步低有效复位下，`timer_expired` 被清为 0。复位释放后，如果 `timer_update` 为高，也会将该标志清零，表明一次新的定时器装载或更新会取消先前的到期状态。否则当 `timer_enable` 为高且 `timer_value` 等于全零时，`timer_expired` 被置为 1。若上述条件都不满足，则该寄存器保持原值，因此一旦置位后会持续保持，直到复位或 `timer_update` 再次将其清零。条件优先级是：复位最高，其次 `timer_update` 清零，高于基于 `timer_enable && (timer_value == '0)` 的置位。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "timer_expired"
+    ],
+    "used": [
+      "timer_update",
+      "timer_enable",
+      "timer_value"
+    ],
+    "modes": [],
+    "tags": [
+      "timer",
+      "entropy"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `rst_ni` 为低时，`timer_expired` 一定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, timer_expired is cleared to 0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "timer_expired"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:272-275"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:273-274"
       ]
     },
     {
-      "property": "当 `timer_update` 为高时，`timer_expired` 会被清为 0；仅当未复位且未更新时，`timer_enable` 为高且 `timer_value` 为全零才会将 `timer_expired` 置为 1，否则保持原值。",
-      "output_signals": [
-        "timer_expired"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:275-279"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑参与熵相关定时状态管理。`timer_expired` 会在计时值到零时锁存为已到期，并在 `timer_update` 前持续保持，因此下游若依赖该标志触发熵请求、重试或错误处理，可以获得稳定的到期指示。若外部错误地产生 `timer_update`，则可能提前清除到期状态，影响熵获取节奏或监测行为，但本片段本身未显示额外的防护。",
-  "assumptions": [
-    {
-      "constraint": "`timer_update` 应仅在设计期望的定时器重新装载/重启时拉高，而不应无故脉冲。",
-      "bug_relevance": "若违反该约束，`timer_expired` 可能被意外清零，导致下游漏检真实的超时/到期事件；这更像行为契约问题，因为该块对意外 `timer_update` 没有额外防护。",
-      "related_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and timer_update is asserted, timer_expired is cleared to 0, overriding any other condition.",
+      "cond": "rst_ni && timer_update",
+      "signals": [
         "timer_update",
         "timer_expired"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:275-276"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When rst_ni is high, timer_update is low, timer_enable is high, and timer_value equals all zeros, timer_expired is set to 1.",
+      "cond": "rst_ni && !timer_update && timer_enable && (timer_value == '0)",
+      "signals": [
+        "timer_enable",
+        "timer_value",
+        "timer_expired"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:277-278"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When none of the explicit conditions apply (rst_ni high, timer_update low, and not (timer_enable && timer_value == 0)), timer_expired retains its previous value.",
+      "cond": "rst_ni && !timer_update && !(timer_enable && timer_value == '0)",
+      "signals": [
+        "timer_expired"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:272-280"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When timer_enable is high, timer_value == '0 means the external timer has reached its terminal count (i.e., truly expired).",
+      "cond": "timer_enable",
+      "risk": "If timer_value can be zero at a time that does not correspond to expiry (e.g., premature reset, incorrect counting), timer_expired will be set spuriously, causing downstream logic to act on a false expiry.",
+      "signals": [
+        "timer_enable",
+        "timer_value",
+        "timer_expired"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:277-278"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "timer_update must be asserted externally after a true timer expiration to clear timer_expired and allow subsequent expiry events to be detected.",
+      "cond": "after timer_expired becomes 1",
+      "risk": "If timer_update is never asserted, timer_expired stays high permanently, potentially stalling or misleading consumers that expect a one‑shot expiry indication.",
+      "signals": [
+        "timer_update",
+        "timer_expired"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:275-276"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When both timer_update and (timer_enable && timer_value == 0) are true at the same time, the code clears timer_expired instead of setting it; it is unclear if this concurrent condition can occur and what the intended behavior is.",
+      "cond": "timer_update && timer_enable && timer_value == '0",
+      "risk": "If both conditions can legally coincide, a real expiration could be missed, potentially breaking protocol timing (e.g., entropy accumulation timeout) or causing safety/security violations.",
+      "signals": [
+        "timer_update",
+        "timer_enable",
+        "timer_value",
+        "timer_expired"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:275-278"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:272-280"
   ],
-  "uncertain_points": [
-    "`timer_update` 的具体语义在该片段中未定义；从行为看它像是定时器重装载或状态清除请求，但需要结合其他代码确认。",
-    "该片段只在 `timer_enable && (timer_value == '0)` 时置位 `timer_expired`，未显示 `timer_value` 如何递减，也未说明在禁用状态下计数值为零是否应视为到期；这属于片段外上下文。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 272,
-  "line_end": 280
+  "line_end": 280,
+  "security_implications": ""
 }

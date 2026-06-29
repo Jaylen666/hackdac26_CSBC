@@ -1,4 +1,248 @@
 {
   "chunk_id": "uart_rx__always_comb__line_53__001",
-  "error": "Expecting ',' delimiter: line 24 column 6 (char 1697)"
+  "header": {
+    "module": "uart_rx",
+    "block_kind": "always_comb",
+    "driven": [
+      "sreg_d",
+      "bit_cnt_d",
+      "baud_div_d",
+      "tick_baud_d",
+      "idle_d"
+    ],
+    "used": [
+      "rx_enable",
+      "tick_baud_x16",
+      "idle_q",
+      "rx",
+      "parity_enable",
+      "tick_baud_q",
+      "bit_cnt_q",
+      "sreg_q",
+      "baud_div_q"
+    ],
+    "modes": [
+      "rx_enable",
+      "parity_enable"
+    ],
+    "tags": [
+      "handshake",
+      "counter",
+      "error"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When rx_enable is 0, sreg_d, bit_cnt_d, baud_div_d, tick_baud_d are driven to 0 and idle_d to 1.",
+      "cond": "!rx_enable",
+      "signals": [
+        "rx_enable",
+        "sreg_d",
+        "bit_cnt_d",
+        "baud_div_d",
+        "tick_baud_d",
+        "idle_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:54-59"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When rx_enable is 1 and tick_baud_x16 is 0, sreg_d, bit_cnt_d, baud_div_d, idle_d retain their prior values, and tick_baud_d is forced to 0.",
+      "cond": "rx_enable & !tick_baud_x16",
+      "signals": [
+        "rx_enable",
+        "tick_baud_x16",
+        "sreg_d",
+        "bit_cnt_d",
+        "baud_div_d",
+        "idle_d",
+        "tick_baud_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:61-65"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When rx_enable is 1 and tick_baud_x16 is 1, baud_div_d increments by 1, and tick_baud_d is set to 1 on overflow (carry out of 4‑bit addition).",
+      "cond": "tick_baud_x16",
+      "signals": [
+        "tick_baud_x16",
+        "baud_div_d",
+        "tick_baud_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:66-68"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "When rx_enable is 1, idle_q is high and rx falls low, the receiver enters start‑of‑frame state: baud_div_d set to 8, tick_baud_d cleared, bit_cnt_d set to 11 or 10 based on parity_enable, sreg_d cleared, idle_d cleared.",
+      "cond": "rx_enable & idle_q & !rx",
+      "signals": [
+        "rx_enable",
+        "idle_q",
+        "rx",
+        "parity_enable",
+        "baud_div_d",
+        "tick_baud_d",
+        "bit_cnt_d",
+        "sreg_d",
+        "idle_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:70-76"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "error_detection",
+      "claim": "When rx_enable is 1, not idle, tick_baud_q=1 and bit_cnt_q equals the total bit count (11 or 10), if rx is high (invalid start bit at mid‑bit), the receiver aborts: idle_d set to 1, bit_cnt_d cleared; sreg_d unchanged.",
+      "cond": "!idle_q & tick_baud_q & (bit_cnt_q == (parity_enable ? 4'd11 : 4'd10)) & rx",
+      "signals": [
+        "idle_q",
+        "tick_baud_q",
+        "bit_cnt_q",
+        "parity_enable",
+        "rx",
+        "idle_d",
+        "bit_cnt_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:77-83"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "When rx_enable is 1, not idle, tick_baud_q=1, and not in the glitch abort case, the shift register sreg_d takes rx and shifts left (sreg_d = {rx, sreg_q[10:1]}), bit_cnt_d decrements by 1, and idle_d is set to 1 when bit_cnt_q reaches 1.",
+      "cond": "rx_enable & !idle_q & tick_baud_q & !((bit_cnt_q == (parity_enable ? 4'd11 : 4'd10)) & rx)",
+      "signals": [
+        "rx_enable",
+        "idle_q",
+        "tick_baud_q",
+        "rx",
+        "sreg_d",
+        "sreg_q",
+        "bit_cnt_d",
+        "bit_cnt_q",
+        "idle_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:83-87"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "tick_baud_x16 is a one‑cycle pulse occurring 16 times per bit period, and tick_baud_q is the registered version of the tick signal, synchronous to the UART clock.",
+      "cond": "when rx_enable is 1",
+      "risk": "Misaligned baud counter and tick_baud_q would cause bit sampling at wrong times, leading to data corruption.",
+      "signals": [
+        "tick_baud_x16",
+        "tick_baud_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:66-68",
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:77"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "rx_enable must be asserted before and held during the entire reception of a character; deassertion will reset the receiver state and discard any in‑progress byte.",
+      "cond": "intended reception",
+      "risk": "Loss of data without error indication; controlling logic may not detect the abort.",
+      "signals": [
+        "rx_enable"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:54"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "After a falling edge on rx while idle, rx must remain low for at least half a bit period (until the middle of the start bit) to prevent glitch abort.",
+      "cond": "start bit detection",
+      "risk": "Receiver will abort and return to idle, potentially missing the character or falsely interpreting noise.",
+      "signals": [
+        "rx",
+        "idle_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:70",
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:78"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "If tick_baud_x16 and the start condition (idle_q && !rx) are true in the same cycle, baud_div_d is assigned 8, overwriting the tick‑based increment. This may skip a baud tick or offset the start bit timing.",
+      "cond": "coincidence of tick_baud_x16 and rx falling edge",
+      "risk": "Start bit sampling may be offset, leading to framing errors or data corruption.",
+      "signals": [
+        "tick_baud_x16",
+        "rx",
+        "idle_q",
+        "baud_div_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:66-68",
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:72"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The relationship between tick_baud_d and tick_baud_q is not shown here; it is assumed that tick_baud_d feeds a flop to produce tick_baud_q. Need to confirm that tick_baud_q is exactly tick_baud_d delayed by one cycle without glitches, and that no combinatorial loop exists.",
+      "cond": "always",
+      "risk": "If feedback is incorrect, tick_baud_q may be misaligned with baud counts.",
+      "signals": [
+        "tick_baud_d",
+        "tick_baud_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:61",
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:67",
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:77"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "low",
+      "claim": "Glitch detection only occurs at the middle of the start bit. If rx noise causes a transition after that but before the first data bit, the receiver may sample corrupt data without abort.",
+      "cond": "noise after start bit validation",
+      "risk": "Corrupt data may be accepted as a valid byte.",
+      "signals": [
+        "rx",
+        "tick_baud_q",
+        "bit_cnt_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:78-80"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:53-90"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv",
+  "line_start": 53,
+  "line_end": 90,
+  "security_implications": ""
 }

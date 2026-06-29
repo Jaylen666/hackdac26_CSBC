@@ -1,0 +1,59 @@
+{
+  "chunk_id": "aes_control__always_comb__combine_sparse_signals__001",
+  "summary": "将多个稀疏选择信号按位 OR 合并成统一输出，并检测合并过程中是否发生位冲突（即同一 bit 被多个输入设置），产生错误标志。",
+  "behavior": "此 always_comb 块首先将六个输出选择信号（data_in_prev_sel_o、state_in_sel_o、add_state_in_sel_o、add_state_out_sel_o、key_init_sel_o、iv_sel_o）及错误标志 mr_err 初始化为全零。随后第一个循环遍历 Sp2VWidth 个输入，将每个输入向量 mr_data_in_prev_sel[i]、mr_state_in_sel[i] 等分别与对应的累积输出进行位宽匹配后的按位 OR，从而实现稀疏信号的合并。合并完成后，第二个循环再次遍历相同索引范围，检查合并结果是否与每一个原始输入完全相等；若任一输入与合并后输出不匹配，则将 mr_err 置为 1。这种检测机制旨在确保所有输入稀疏信号在相同比特位上没有重叠，即不存在两个不同的 i 在同一个信号总线的同一位上同时有效的情况。如果不匹配发生，mr_err 被置 1 并保持，不会自动清除（组合逻辑，只要条件成立就一直为 1）。",
+  "guarantees": [
+    {
+      "property": "当输入稀疏信号内部不存在比特位冲突时，mr_err 保持为 0；任一冲突都会将 mr_err 强制为 1",
+      "output_signals": [
+        "mr_err"
+      ],
+      "source_refs": [
+        "aes_control.sv:481-501"
+      ]
+    },
+    {
+      "property": "六个选择输出信号始终等于各自全部输入稀疏信号向量的按位 OR 结果",
+      "output_signals": [
+        "data_in_prev_sel_o",
+        "state_in_sel_o",
+        "add_state_in_sel_o",
+        "add_state_out_sel_o",
+        "key_init_sel_o",
+        "iv_sel_o"
+      ],
+      "source_refs": [
+        "aes_control.sv:483-490"
+      ]
+    }
+  ],
+  "security_implications": "",
+  "assumptions": [
+    {
+      "constraint": "不同控制周期（对应不同 i 索引）的稀疏选择信号（如 mr_data_in_prev_sel[i]）在同一总线的同一位上不能同时有效（即必须互斥）",
+      "bug_relevance": "违反此约束会导致 mr_err 置 1，同时合并后的选择总线将出现多个驱动源重叠，可能导致数据通路选择错误。该检查属于防御性设计，正常情况下不应发生冲突。",
+      "related_signals": [
+        "mr_data_in_prev_sel",
+        "mr_state_in_sel",
+        "mr_add_state_in_sel",
+        "mr_add_state_out_sel",
+        "mr_key_init_sel",
+        "mr_iv_sel",
+        "mr_err"
+      ],
+      "source_refs": [
+        "aes_control.sv:483-500"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_control.sv:474-502"
+  ],
+  "uncertain_points": [
+    "需要确认 Sp2VWidth 的实际含义（例如代表流水线级数或其他周期数）以及各 mr_*_sel[i] 的确切位宽是否与对应 dip_sel_e/si_sel_e 等类型宽度一致。",
+    "需确认 mr_err 是否在当前模块外部被采样或用来触发中断/复位，此处仅描述本 always_comb 的局部行为。"
+  ],
+  "source_file": "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_control.sv",
+  "line_start": 474,
+  "line_end": 502
+}

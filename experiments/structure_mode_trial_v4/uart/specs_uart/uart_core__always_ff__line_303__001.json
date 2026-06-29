@@ -1,0 +1,116 @@
+{
+  "chunk_id": "uart_core__always_ff__line_303__001",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "rx_val_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "tick_baud_x16",
+      "rx_in"
+    ],
+    "modes": [
+      "reset",
+      "shift"
+    ],
+    "tags": [
+      "reset"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "On negation of rst_ni (reset), rx_val_q is asynchronously set to 16'h0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "rx_val_q"
+      ],
+      "refs": [
+        "file:304"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and tick_baud_x16 is asserted, rx_val_q is synchronously updated to the shifted value {rx_val_q[14:0], rx_in}.",
+      "cond": "rst_ni && tick_baud_x16",
+      "signals": [
+        "tick_baud_x16",
+        "rx_val_q",
+        "rx_in"
+      ],
+      "refs": [
+        "file:305"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When tick_baud_x16 is deasserted and rst_ni remains high, rx_val_q retains its previous value.",
+      "cond": "!tick_baud_x16 && rst_ni",
+      "signals": [
+        "rx_val_q"
+      ],
+      "refs": [
+        "file:303-306"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "tick_baud_x16 must be a single-cycle pulse to prevent multiple shifts within one baud period.",
+      "cond": "when tick_baud_x16 is used to qualify shifting",
+      "risk": "If tick_baud_x16 stays high for multiple cycles, rx_val_q shifts multiple times, corrupting the sample buffer used for bit detection.",
+      "signals": [
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "file:305"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "rx_in must be stable and valid during the cycle when tick_baud_x16 is asserted.",
+      "cond": "tick_baud_x16 is high",
+      "risk": "A glitch or transition on rx_in during sampling would capture an incorrect bit into rx_val_q, potentially causing framing or data corruption.",
+      "signals": [
+        "rx_in",
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "file:305"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "rx_val_q is hardcoded to 16 bits, implying a fixed 16x oversampling ratio. If the UART configuration parameterizes the oversampling rate, this chunk would silently mismatch.",
+      "cond": "design-time change of oversampling/baud-rate parameters",
+      "risk": "Mismatch between shift register depth and actual oversampling count could lead to incorrect bit sampling or corrupted data reception.",
+      "signals": [
+        "rx_val_q"
+      ],
+      "refs": [
+        "file:305"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:303-306"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 303,
+  "line_end": 306,
+  "security_implications": ""
+}

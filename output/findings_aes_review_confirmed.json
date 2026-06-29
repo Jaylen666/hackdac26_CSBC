@@ -1,0 +1,37 @@
+{
+  "summary": {
+    "total_findings": 55,
+    "confirmed_count": 2,
+    "confirmed_known_bug_count": 2,
+    "confirmed_unknown_count": 0,
+    "false_alarm_count": 53,
+    "uncertain_count": 0,
+    "notes": "Two findings are source-confirmed: F-0013 on the key-decryption clear mux and F-0026 on the state-mux default clear path. Both match known AES bugs in bug_comparison_table.csv (rows 005 and 004 respectively). F-0015 overlaps the key-clear area but is not confirmed because KEY_FULL_DEC_INIT already selects prd_clearing_key_i at line 441."
+  },
+  "findings": [
+    {
+      "finding_id": "F-0013",
+      "verdict": "CONFIRMED",
+      "confidence": 0.94,
+      "summary": "The decryption-key clear path is misrouted: KEY_DEC_CLEAR loads key_expand_out instead of a clearing value.",
+      "root_cause": "In /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463, key_dec_mux maps both KEY_DEC_EXPAND and KEY_DEC_CLEAR to key_expand_out, with no prd_clearing_key_i path for KEY_DEC_CLEAR.",
+      "trigger_condition": "When the cipher is built with !CiphOpFwdOnly and key_dec_sel == KEY_DEC_CLEAR, then key_dec_we == SP2V_HIGH loads key_expand_out into key_dec_q.",
+      "security_impact": "A requested key wipe does not wipe the decryption key register, so derived key material can persist and be reused later, weakening zeroization and confidentiality.",
+      "software_visible": true,
+      "reasoning": "The register update itself is standard at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:467-470, but the defect is in the driving mux. The clear case at lines 460-463 routes KEY_DEC_CLEAR to key_expand_out, not to prd_clearing_key_i. That is the same root cause as the known AES key-clear mux bug in bug_comparison_table.csv row 005. The report text about multi-cycle key_dec_we is not the real mechanism, but the same signal path is definitely broken.",
+      "matched_known_bug": "bug_comparison_table.csv row 005"
+    },
+    {
+      "finding_id": "F-0026",
+      "verdict": "CONFIRMED",
+      "confidence": 0.9,
+      "summary": "The state mux default branch self-references state_d for non-AES-256 configurations instead of forcing a clear value.",
+      "root_cause": "In /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-254, the default branch assigns state_d = (key_len_i == AES_256) ? prd_clearing_state_i : state_d;, so for AES-128/192 it preserves the previous combinational value instead of clearing state.",
+      "trigger_condition": "When state_sel falls into the default branch and key_len_i != AES_256, such as on an illegal state_sel encoding or faulted control path during AES-128/192 operation.",
+      "security_impact": "A stale state value can survive a path that should clear the state, which can leak or reuse sensitive AES state material and produce incorrect ciphertext behavior.",
+      "software_visible": true,
+      "reasoning": "The relevant code is the state mux at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-254. The default case is self-referential for key_len_i != AES_256, so it does not drive prd_clearing_state_i on the non-AES-256 clear path. This matches the known AES state-clear default-branch bug in bug_comparison_table.csv row 004. The report’s timing-language is imprecise, but the RTL defect is real.",
+      "matched_known_bug": "bug_comparison_table.csv row 004"
+    }
+  ]
+}

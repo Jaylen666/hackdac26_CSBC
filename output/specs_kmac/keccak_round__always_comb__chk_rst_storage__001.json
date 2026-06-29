@@ -1,51 +1,80 @@
 {
   "chunk_id": "keccak_round__always_comb__chk_rst_storage__001",
-  "summary": "检测存储复位请求是否只在空闲且清除请求有效时发生，否则拉高错误指示。",
-  "behavior": "该组合逻辑默认将 rst_storage_error 置 0。只有在 rst_storage 为真时才执行一致性检查：注释表明此时状态机应处于 KeccakStIdle，且 clear_i 应为高；实际代码若发现 keccak_st 不等于 KeccakStIdle，或 prim_mubi_pkg::mubi4_test_false_loose(clear_i) 为真，就将 rst_storage_error 置 1。也就是说，只要触发存储复位时模块不在空闲态，或 clear_i 被该 MuBi 判定函数视为“宽松假”，就报告错误；在 rst_storage 未置位时，无论其他输入如何都不会报该错误。这里注释所说的“clear_i should be high”与代码通过 mubi4_test_false_loose() 仅排除‘假/偏假’编码之间存在语义松紧差异：代码可能允许某些非严格高值不报错，需结合 MuBi 编码约定确认。",
+  "header": {
+    "module": "keccak_round",
+    "block_kind": "always_comb",
+    "driven": [
+      "rst_storage_error"
+    ],
+    "used": [
+      "rst_storage",
+      "keccak_st",
+      "clear_i"
+    ],
+    "modes": [
+      "KeccakStIdle"
+    ],
+    "tags": [
+      "error",
+      "reset",
+      "fsm",
+      "secret",
+      "clear"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 rst_storage 为 0 时，rst_storage_error 一定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When rst_storage is 0, or when rst_storage is 1 but both keccak_st == KeccakStIdle and clear_i is not false (as tested by mubi4_test_false_loose), rst_storage_error stays 0.",
+      "cond": "always",
+      "signals": [
         "rst_storage_error"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:507-515"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:507"
       ]
     },
     {
-      "property": "当 rst_storage 为 1 且 keccak_st 不等于 KeccakStIdle，或 clear_i 被 mubi4_test_false_loose() 判定为假时，rst_storage_error 一定为 1。",
-      "output_signals": [
-        "rst_storage_error"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:509-514"
-      ]
-    }
-  ],
-  "security_implications": "该检查属于安全/健壮性相关防护：它约束内部存储复位只能在空闲并配合清除请求时发生，异常情况下置位 rst_storage_error，可用于发现非法时序、控制流异常或故障注入导致的非预期清除/复位行为。由于 clear_i 使用 MuBi 宽松假值检测，设计意图上还带有对多比特布尔异常编码的容错/告警意味。",
-  "assumptions": [
-    {
-      "constraint": "合法使用场景下，rst_storage 只应在 keccak_st == KeccakStIdle 且 clear_i 不会被 prim_mubi_pkg::mubi4_test_false_loose() 判定为假的条件下被拉高。",
-      "bug_relevance": "若不满足则 rst_storage_error 会被置位；这更像防御性设计下的非法输入/非法时序检测，设计上不应发生，但若发生说明上游控制或安全条件异常。",
-      "related_signals": [
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "If rst_storage is 1 and either keccak_st is not KeccakStIdle or prim_mubi_pkg::mubi4_test_false_loose(clear_i) is true, rst_storage_error is driven to 1.",
+      "cond": "rst_storage == 1",
+      "signals": [
         "rst_storage",
         "keccak_st",
         "clear_i",
         "rst_storage_error"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:509-514"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:509-515"
+      ]
+    }
+  ],
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "prim_mubi_pkg::mubi4_test_false_loose may use a loose check on the multi-bit encoded clear_i signal, potentially missing some invalid encodings that do not represent a true 'high' condition. The security intent expects clear_i to be high during storage reset to ensure wiping; an undetected invalid encoding could cause rst_storage_error to remain 0 while clear_i is not actually asserted, breaking the safety condition.",
+      "cond": "rst_storage == 1 and clear_i is an invalid mubi4 encoding that makes mubi4_test_false_loose return false",
+      "risk": "Secret or internal state may not be cleared during a storage reset because the error flag is not raised, leading to residual key/material exposure.",
+      "signals": [
+        "clear_i",
+        "rst_storage_error",
+        "rst_storage"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:511-512"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:506-516"
   ],
-  "uncertain_points": [
-    "注释要求“clear_i should be high”，但实际判断是 prim_mubi_pkg::mubi4_test_false_loose(clear_i)；这是否意味着允许除严格 MuBi 高值之外的某些编码通过，需要结合 mubi4_test_false_loose 的精确定义确认。",
-    "rst_storage_error 仅在本片段中被置位，后续该错误是作为告警、状态寄存器还是恢复控制使用，需结合其他代码确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
   "line_start": 506,
-  "line_end": 516
+  "line_end": 516,
+  "security_implications": ""
 }

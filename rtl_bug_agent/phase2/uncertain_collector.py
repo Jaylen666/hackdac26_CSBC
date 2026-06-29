@@ -30,6 +30,25 @@ _NOISE = {
 }
 
 
+def _uncertain_point_text(point: Any) -> str:
+    """Normalize uncertain-point representations to plain text.
+
+    Newer specs may emit structured dicts instead of bare strings.  We keep
+    the collector tolerant so downstream legacy logic still works.
+    """
+    if isinstance(point, dict):
+        parts = [
+            str(point.get("claim", "")).strip(),
+            str(point.get("cond", "")).strip(),
+            str(point.get("risk", "")).strip(),
+            str(point.get("property", "")).strip(),
+            str(point.get("constraint", "")).strip(),
+            str(point.get("bug_relevance", "")).strip(),
+        ]
+        return " ".join(part for part in parts if part)
+    return str(point).strip()
+
+
 def collect_and_classify(
     graph: SignalGraph,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -46,15 +65,16 @@ def collect_and_classify(
 
     for chunk_id, spec in graph.specs.items():
         for up in spec.get("uncertain_points", []):
-            if not up or not up.strip():
+            up_text = _uncertain_point_text(up)
+            if not up_text:
                 continue
-            key = f"{chunk_id}::{up[:80]}"
+            key = f"{chunk_id}::{up_text[:80]}"
             if key in seen:
                 continue
             seen.add(key)
 
             # Extract signal names from text
-            sigs = _extract_signals(up)
+            sigs = _extract_signals(up_text)
             sigs = [s for s in sigs if s in graph.signals]
 
             # Check: do any extracted signals have drivers?
@@ -70,7 +90,7 @@ def collect_and_classify(
             if has_driver:
                 for a in spec.get("assumptions", []):
                     if any(sig in a.get("related_signals", []) for sig in sigs):
-                        sim = _text_similarity(up, a.get("constraint", ""))
+                        sim = _text_similarity(up_text, a.get("constraint", ""))
                         if sim >= 0.3:  # high overlap → truly redundant
                             redundant = True
                             break
@@ -80,14 +100,14 @@ def collect_and_classify(
                 "source_file": spec.get("source_file", ""),
                 "line_start": spec.get("line_start", 0),
                 "line_end": spec.get("line_end", 0),
-                "uncertain_text": up[:400],
+                "uncertain_text": up_text[:400],
                 "signals": sigs,
                 "summary": spec.get("summary", "")[:120],
             }
 
             if has_driver and not redundant:
                 # Build a weak assumption for Channel B injection
-                candidate["weak_assumption"] = _build_weak_assumption(up, sigs)
+                candidate["weak_assumption"] = _build_weak_assumption(up_text, sigs)
                 channel_b.append(candidate)
             elif not redundant:
                 # No driver — can't form A-G pair; send directly to Phase 3

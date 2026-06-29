@@ -70,7 +70,13 @@ Output JSON schema:
       "claim": "concise actual RTL behavior with condition and result",
       "cond": "condition, or always",
       "signals": ["relevant signals"],
-      "refs": ["file:line-line"]
+      "refs": ["file:line-line"],
+      "formal": {
+        "temporal_shape": "comb|next_cycle|always",
+        "antecedent": "trigger expression in SystemVerilog-like syntax, or empty",
+        "consequent": "asserted result expression in SystemVerilog-like syntax",
+        "formalizability": "direct|partial|none"
+      }
     }
   ],
   "assumptions": [
@@ -81,7 +87,13 @@ Output JSON schema:
       "cond": "when this assumption matters",
       "risk": "specific failure if violated",
       "signals": ["relevant signals"],
-      "refs": ["file:line-line"]
+      "refs": ["file:line-line"],
+      "formal": {
+        "temporal_shape": "comb|next_cycle|always",
+        "antecedent": "precondition expression, or empty",
+        "consequent": "required expression that must hold",
+        "formalizability": "direct|partial|none"
+      }
     }
   ],
   "uncertain_points": [
@@ -93,10 +105,29 @@ Output JSON schema:
       "cond": "trigger condition, or unknown",
       "risk": "specific risk if confirmed",
       "signals": ["relevant signals"],
-      "refs": ["file:line-line"]
+      "refs": ["file:line-line"],
+      "formal": {
+        "temporal_shape": "comb|next_cycle|always",
+        "antecedent": "trigger expression, or empty",
+        "consequent": "suspected property expression, or empty",
+        "formalizability": "direct|partial|none"
+      }
     }
   ],
   "evidence_refs": ["file:line-line"]
 }
 
 Keep claims short. Prefer one precise sentence per `claim` and `risk`.
+
+Formal field rules (IMPORTANT for downstream proof generation):
+- `formal.antecedent` / `formal.consequent`: write machine-readable expressions
+  using real signal names and SystemVerilog operators (`==`, `!=`, `&&`, `||`,
+  `!`, `>=`, `<=`). Example: antecedent `iv_sel == IV_CTR && mux_sel_err == 1`,
+  consequent `iv_we == 0`. Do NOT write prose here. Leave empty only if no
+  concrete expression can be extracted from the code.
+- `formal.temporal_shape`: `comb` for same-cycle (assign / always_comb),
+  `next_cycle` for registered behavior (always_ff, 1-cycle delay), `always`
+  for an invariant that holds every cycle.
+- `formal.formalizability`: `direct` if the claim maps cleanly to a checkable
+  assertion; `partial` if only part is expressible; `none` if it is purely a
+  design-intent question with no checkable expression.

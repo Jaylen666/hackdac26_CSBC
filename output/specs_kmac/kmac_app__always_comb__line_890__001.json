@@ -1,50 +1,108 @@
 {
   "chunk_id": "kmac_app__always_comb__line_890__001",
-  "summary": "该组合逻辑在两个错误源之间按优先级选择输出错误信息，没有任何错误有效时输出一个明确的“无错误”默认值。",
-  "behavior": "该片段对输出 `error_o` 进行优先级选择，输入为 `fsm_err.valid` 和 `mux_err.valid` 两个错误有效位组成的 2 位向量。`priority casez` 使 `mux_err` 具有更高优先级：只要 `mux_err.valid` 为 1，不论 `fsm_err.valid` 是否也为 1，`error_o` 都取 `mux_err`；仅当 `mux_err.valid` 为 0 且 `fsm_err.valid` 为 1 时，`error_o` 取 `fsm_err`。当两者都无效时，`error_o` 被驱动为一个明确的空错误结构：`valid=0`、`code=ErrNone`、`info='0`。因此该块实现的是两个错误来源的仲裁与规范化默认输出，而不是错误信息的合并。若两个错误同时有效，实际 RTL 明确选择 `mux_err`，这也意味着 `fsm_err` 在该情况下会被屏蔽。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "error_o"
+    ],
+    "used": [
+      "fsm_err.valid",
+      "mux_err.valid",
+      "fsm_err",
+      "mux_err"
+    ],
+    "modes": [],
+    "tags": [
+      "error"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `mux_err.valid` 为 1 时，`error_o` 一定等于 `mux_err`，即使 `fsm_err.valid` 同时为 1。",
-      "output_signals": [
-        "error_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When mux_err.valid is high, error_o is assigned the entire mux_err struct regardless of fsm_err.valid.",
+      "cond": "mux_err.valid == 1",
+      "signals": [
+        "error_o",
+        "mux_err.valid",
+        "mux_err"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:891-893"
+      "refs": [
+        "kmac_app.sv:892"
       ]
     },
     {
-      "property": "当 `fsm_err.valid` 和 `mux_err.valid` 都为 0 时，`error_o` 一定为 `{valid:0, code:ErrNone, info:'0}`，不会保留旧错误值。",
-      "output_signals": [
-        "error_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When mux_err.valid is low and fsm_err.valid is high, error_o is assigned the fsm_err struct.",
+      "cond": "mux_err.valid == 0 && fsm_err.valid == 1",
+      "signals": [
+        "error_o",
+        "mux_err.valid",
+        "fsm_err.valid",
+        "fsm_err"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:891-894"
+      "refs": [
+        "kmac_app.sv:893"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "For all other combinations of fsm_err.valid and mux_err.valid, error_o is driven to a zeroed error structure (valid=0, code=ErrNone, info=0).",
+      "cond": "default branch when no other case matched",
+      "signals": [
+        "error_o",
+        "fsm_err.valid",
+        "mux_err.valid"
+      ],
+      "refs": [
+        "kmac_app.sv:894"
       ]
     }
   ],
-  "security_implications": "该片段属于错误上报仲裁逻辑。它保证无错误时输出被清零，避免将陈旧错误持续暴露；同时在多错误同时出现时优先上报 `mux_err`，因此安全监测或软件诊断若需要完整根因，必须意识到 `fsm_err` 可能被该优先级规则掩盖。",
   "assumptions": [
     {
-      "constraint": "`fsm_err` 与 `mux_err` 应共享兼容的错误结构语义，至少包括 `valid/code/info` 字段且可直接赋给 `error_o`；否则该仲裁输出的错误编码含义可能不一致。",
-      "bug_relevance": "如果两路错误结构编码语义不一致，即使赋值在语法上成立，外部看到的 `error_o` 也可能被错误解读，构成功能性诊断错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "fsm_err and mux_err are structs of the same type as error_o, with fields valid, code, info, and ErrNone is a defined enumeration value.",
+      "cond": "always",
+      "risk": "Type mismatch would cause compilation error or incorrect width extension/truncation; undefined ErrNone would cause compile failure.",
+      "signals": [
+        "error_o",
         "fsm_err",
         "mux_err",
+        "ErrNone"
+      ],
+      "refs": [
+        "kmac_app.sv:894"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "If either valid signal is X or Z, the casez may not match the expected branch. For example, if fsm_err.valid = 1 and mux_err.valid = X, the default branch is taken, outputting a no-error value and suppressing the real fsm_err.",
+      "cond": "fsm_err.valid = 1, mux_err.valid = X/Z",
+      "risk": "Real error from FSM could be masked during simulation or when valid signals are uninitialized/metastable, leading to missed error reporting.",
+      "signals": [
+        "fsm_err.valid",
+        "mux_err.valid",
         "error_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:892-894"
+      "refs": [
+        "kmac_app.sv:891-895"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:890-896"
-  ],
-  "uncertain_points": [
-    "片段只体现了 `mux_err` 高于 `fsm_err` 的实际优先级，但未说明这种优先级是否出于设计意图、错误严重性排序，还是仅为实现便利；需要结合上游定义确认。",
-    "当两个错误同时有效时，是否允许丢失 `fsm_err` 的可见性在本片段外不可确定；若系统期望保留全部错误源，则该行为可能与更高层诊断意图存在差异。"
+    "kmac_app.sv:890-896"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 890,
-  "line_end": 896
+  "line_end": 896,
+  "security_implications": ""
 }

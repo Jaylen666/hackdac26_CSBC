@@ -1,81 +1,275 @@
 {
   "chunk_id": "kmac_app__always_comb__line_612__001",
-  "summary": "该组合逻辑根据 mux_sel_buf_kmac 在应用端、输出长度注入和软件端之间选择送往 KMAC 的 valid/data/mask，并把 ready 反馈给对应的输入源。",
-  "behavior": "该块先给输出和握手信号设定默认值：app_data_ready 为 0，sw_ready_o 为 1，且送往 KMAC 的 kmac_valid_o/kmac_data_o/kmac_mask_o 默认为全 0 [kmac_app.sv:613-618]。随后按 mux_sel_buf_kmac 选择数据来源 [kmac_app.sv:620-652]。当选择 SelApp 时，KMAC 输出直接取自当前 app_id 指向的 app_i 项：valid 透传 app_i[app_id].valid，data 透传 app_i[app_id].data，并将 app_i[app_id].strb 的每一位扩展成对应字节全 1/全 0 的 8-bit mask，形成 kmac_mask_o；同时仅将 kmac_ready_i 回传到 app_data_ready，表示应用侧是否可继续提供数据 [kmac_app.sv:621-629]。当选择 SelOutLen 时，该块不依赖外部 valid，强制 kmac_valid_o 为 1，把 encoded_outlen 和 encoded_outlen_mask 转成 MsgWidth 宽度后送到 KMAC，用于写入编码后的输出长度 [kmac_app.sv:632-637]。当选择 SelSw 时，KMAC 输入由软件路径驱动：kmac_valid_o、kmac_data_o、kmac_mask_o 分别取 sw_valid_i、sw_data_i、sw_mask_i，并把 kmac_ready_i 回传到 sw_ready_o [kmac_app.sv:639-644]。默认分支（含 SelNone）保持对 KMAC 的 valid/data/mask 全 0，从而不发起传输 [kmac_app.sv:646-650]。代码默认把 sw_ready_o 置 1，但在 SelSw 时才改为真实的 kmac_ready_i，因此未选中软件路径时软件侧会看到 ready=1；这更像是“当前未背压软件源”的空闲默认，而不是实际 KMAC 接受能力的反映 [kmac_app.sv:614,639-644]。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "app_data_ready",
+      "sw_ready_o",
+      "kmac_valid_o",
+      "kmac_data_o",
+      "kmac_mask_o"
+    ],
+    "used": [
+      "mux_sel_buf_kmac",
+      "app_i",
+      "app_id",
+      "kmac_ready_i",
+      "sw_valid_i",
+      "sw_data_i",
+      "sw_mask_i",
+      "encoded_outlen",
+      "encoded_outlen_mask",
+      "MsgWidth"
+    ],
+    "modes": [
+      "SelApp",
+      "SelOutLen",
+      "SelSw",
+      "default (incl. SelNone)"
+    ],
+    "tags": [
+      "handshake",
+      "mask",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 mux_sel_buf_kmac 为 SelApp 时，送往 KMAC 的 valid 和 data 分别等于 app_i[app_id].valid 与 app_i[app_id].data，且 kmac_mask_o 的每个字节由对应 strb 位复制 8 次生成。",
-      "output_signals": [
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When mux_sel_buf_kmac == SelApp, kmac_valid_o = app_i[app_id].valid, kmac_data_o = app_i[app_id].data, and kmac_mask_o byte lanes are formed by expanding each bit of app_i[app_id].strb to 8 identical bits via a for loop; app_data_ready = kmac_ready_i; sw_ready_o remains 1 (default).",
+      "cond": "mux_sel_buf_kmac == SelApp",
+      "signals": [
         "kmac_valid_o",
         "kmac_data_o",
         "kmac_mask_o",
+        "app_i[app_id]",
+        "kmac_ready_i",
+        "app_data_ready",
+        "sw_ready_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:621-630"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When mux_sel_buf_kmac == SelOutLen, kmac_valid_o is driven to 1, kmac_data_o = MsgWidth'(encoded_outlen), kmac_mask_o = MsgWidth'(encoded_outlen_mask); app_data_ready stays 0, sw_ready_o stays 1.",
+      "cond": "mux_sel_buf_kmac == SelOutLen",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_data_o",
+        "kmac_mask_o",
+        "encoded_outlen",
+        "encoded_outlen_mask",
+        "app_data_ready",
+        "sw_ready_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:632-637",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:613-614"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When mux_sel_buf_kmac == SelSw, kmac_valid_o = sw_valid_i, kmac_data_o = sw_data_i, kmac_mask_o = sw_mask_i, sw_ready_o = kmac_ready_i; app_data_ready stays 0.",
+      "cond": "mux_sel_buf_kmac == SelSw",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_data_o",
+        "kmac_mask_o",
+        "sw_valid_i",
+        "sw_data_i",
+        "sw_mask_i",
+        "sw_ready_o",
+        "kmac_ready_i",
         "app_data_ready"
       ],
-      "source_refs": [
-        "kmac_app.sv:621-629"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:639-644"
       ]
     },
     {
-      "property": "当 mux_sel_buf_kmac 为 SelOutLen 时，该块保证向 KMAC 发起一次固定有效的传输：kmac_valid_o 恒为 1，数据与掩码分别为扩展到 MsgWidth 的 encoded_outlen 和 encoded_outlen_mask。",
-      "output_signals": [
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "For any other value of mux_sel_buf_kmac (including SelNone), all outputs take the default safe values: kmac_valid_o = 0, kmac_data_o = '0, kmac_mask_o = '0, app_data_ready = 0, sw_ready_o = 1.",
+      "cond": "mux_sel_buf_kmac not in {SelApp, SelOutLen, SelSw}",
+      "signals": [
         "kmac_valid_o",
         "kmac_data_o",
-        "kmac_mask_o"
+        "kmac_mask_o",
+        "app_data_ready",
+        "sw_ready_o"
       ],
-      "source_refs": [
-        "kmac_app.sv:632-637"
-      ]
-    },
-    {
-      "property": "当 mux_sel_buf_kmac 为默认分支（包括 SelNone）时，送往 KMAC 的 valid、data、mask 全为 0，不会由该块驱动任何有效输入事务。",
-      "output_signals": [
-        "kmac_valid_o",
-        "kmac_data_o",
-        "kmac_mask_o"
-      ],
-      "source_refs": [
-        "kmac_app.sv:646-650"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:646-650",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:613-618"
       ]
     }
   ],
-  "security_implications": "该块参与选择哪些消息字节进入 KMAC，并用 byte mask 控制哪些字节有效 [kmac_app.sv:625-627,632-637,639-642]。其中 SelOutLen 会无条件注入编码后的输出长度 [kmac_app.sv:634-636]，因此上游对 mux_sel_buf_kmac 的控制必须正确，否则可能把错误来源的数据或长度字段送入哈希/KMAC 消息流，改变摘要或认证结果。默认分支输出全 0 是一种安全回退，可避免未知选择值时误发送有效数据 [kmac_app.sv:646-650]。",
   "assumptions": [
     {
-      "constraint": "当选择 SelApp 时，app_id 必须始终索引到一个有效的 app_i 项；源码注释也明确写明“app_id is valid at this time”。",
-      "bug_relevance": "如果违反，该组合读取 app_i[app_id] 可能变成越界/未知值传播，导致错误的 KMAC 输入数据、mask 或 valid；这属于行为契约，而非设计内的安全回退。",
-      "related_signals": [
-        "mux_sel_buf_kmac",
-        "app_id",
-        "app_i"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "mux_sel_buf_kmac is a legal one-hot digital signal with no X/Z; the unique case expects at most one branch to match, otherwise X propagation may occur.",
+      "cond": "always",
+      "risk": "X propagation could silently corrupt kmac_valid_o and downstream state.",
+      "signals": [
+        "mux_sel_buf_kmac"
       ],
-      "source_refs": [
-        "kmac_app.sv:621-627"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:620"
       ]
     },
     {
-      "constraint": "软件侧应仅在 SelSw 被选中时把 sw_ready_o 解释为与 KMAC 的真实 ready 握手；未选中 SelSw 时 sw_ready_o 默认恒为 1，不表示当前软件数据会被送入 KMAC。",
-      "bug_relevance": "若外部在非 SelSw 状态仍把 sw_ready_o 当作真实消费确认，可能错误地推进软件发送状态，造成数据丢失或与实际发送到 KMAC 的内容不一致。不过该场景设计上不应发生，因为 mux 已明确未选择软件路径。",
-      "related_signals": [
-        "mux_sel_buf_kmac",
-        "sw_ready_o",
-        "sw_valid_i",
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When mux_sel_buf_kmac == SelApp, app_id must be a valid index into the app_i array and the referenced entry must contain initialized fields.",
+      "cond": "mux_sel_buf_kmac == SelApp",
+      "risk": "Out‑of‑bounds read could return X or stale data, which is then driven to kmac_data_o/kmac_mask_o, potentially leaking secret material.",
+      "signals": [
+        "app_id",
+        "app_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:622-628"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "The parameter/signal widths satisfy MsgWidth == 8 * $bits(app_i[app_id].strb); the mask expansion loop relies on this equality to write exactly to all bytes of kmac_mask_o.",
+      "cond": "mux_sel_buf_kmac == SelApp",
+      "risk": "Width mismatch leads to out‑of‑range writes or incomplete mask, breaking data integrity and potentially allowing secret data leakage.",
+      "signals": [
+        "MsgWidth",
+        "app_i[app_id].strb",
+        "kmac_mask_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:626-628"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "In SelOutLen mode, kmac_ready_i is asserted (or downstream can accept data) during the cycle when SelOutLen is active, because kmac_valid_o is unconditionally driven to 1 without back‑pressure check.",
+      "cond": "mux_sel_buf_kmac == SelOutLen",
+      "risk": "If kmac_ready_i is low, the output length data is lost, causing protocol failure and possibly leaving KMAC misconfigured.",
+      "signals": [
+        "kmac_valid_o",
         "kmac_ready_i"
       ],
-      "source_refs": [
-        "kmac_app.sv:614",
-        "kmac_app.sv:639-644"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:632-637"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "handshake",
+      "claim": "In SelSw mode, sw_data_i and sw_mask_i are held stable while sw_valid_i is high and sw_ready_o (which follows kmac_ready_i) is high, conforming to a standard valid/ready handshake.",
+      "cond": "mux_sel_buf_kmac == SelSw and sw_valid_i == 1",
+      "risk": "Data corruption if sw_data_i/sw_mask_i change before the transfer is acknowledged.",
+      "signals": [
+        "sw_data_i",
+        "sw_mask_i",
+        "sw_valid_i",
+        "sw_ready_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:639-644"
+      ]
+    },
+    {
+      "id": "A6",
+      "type": "value_domain",
+      "claim": "encoded_outlen and encoded_outlen_mask are of a width compatible with MsgWidth'; they must not be truncated in a way that loses meaningful bits.",
+      "cond": "mux_sel_buf_kmac == SelOutLen",
+      "risk": "Truncated length or mask could cause incorrect output length reporting, possibly enabling security bypass (e.g., a shorter‑than‑allowed output).",
+      "signals": [
+        "encoded_outlen",
+        "encoded_outlen_mask",
+        "MsgWidth"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:635-636"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "app_id is used without bounds checking to index app_i. A corrupted or illegal app_id while mux_sel_buf_kmac == SelApp may read out-of-bounds and drive arbitrary data to kmac_data_o/kmac_mask_o, potentially exposing secrets.",
+      "cond": "mux_sel_buf_kmac == SelApp and app_id out of range",
+      "risk": "Secret data leakage or critical KMAC state corruption.",
+      "signals": [
+        "app_id",
+        "app_i",
+        "kmac_data_o",
+        "kmac_mask_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:622-628"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The mask expansion loop assumes MsgWidth == 8 * $bits(app_i[app_id].strb). If these widths differ, the loop may write beyond kmac_mask_o bounds or leave high bytes unset, corrupting mask integrity.",
+      "cond": "mux_sel_buf_kmac == SelApp and MsgWidth != 8*strb_width",
+      "risk": "Corrupted mask can lead to incorrect message padding, enabling sensitive data exposure or integrity failure.",
+      "signals": [
+        "MsgWidth",
+        "strb",
+        "kmac_mask_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:626-628"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "In SelOutLen branch, kmac_valid_o is driven to 1 without checking kmac_ready_i. If kmac_ready_i is deasserted during that cycle, the output length data may be dropped, causing protocol failure and potential deadlock.",
+      "cond": "mux_sel_buf_kmac == SelOutLen and kmac_ready_i == 0",
+      "risk": "KMAC may proceed with an incorrect output length, a security‑critical misconfiguration.",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_ready_i",
+        "mux_sel_buf_kmac"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:632-637"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "sw_ready_o is asserted (1) by default in all states except SelSw, where it follows kmac_ready_i. Software may interpret this as always‑ready when in fact the mux may not be pointing to the SW interface, risking data loss if software writes during a non‑SelSw period.",
+      "cond": "mux_sel_buf_kmac != SelSw and sw_valid_i rising",
+      "risk": "Functional misbehavior if the software handshake expects ready to be deasserted outside the SelSw window.",
+      "signals": [
+        "sw_ready_o",
+        "mux_sel_buf_kmac"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:614,639-644"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_app.sv:613-618",
-    "kmac_app.sv:620-650"
-  ],
-  "uncertain_points": [
-    "SelOutLen 分支把 kmac_valid_o 强制为 1 且没有显式检查 kmac_ready_i [kmac_app.sv:634]；从该片段无法单独确认系统是否通过保持 mux_sel_buf_kmac=SelOutLen 直到握手完成来保证不丢失该字，还是依赖下游总是可接收。",
-    "sw_ready_o 在默认情况下被置 1 [kmac_app.sv:614]，仅在 SelSw 时才反映 kmac_ready_i [kmac_app.sv:643]；这是否为有意的“未选中即永远 ready”接口语义，需要结合软件路径上游协议确认。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:612-653"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 612,
-  "line_end": 653
+  "line_end": 653,
+  "security_implications": ""
 }

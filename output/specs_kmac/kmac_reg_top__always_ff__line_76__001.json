@@ -1,50 +1,122 @@
 {
   "chunk_id": "kmac_reg_top__always_ff__line_76__001",
-  "summary": "该寄存器块实现一个粘滞错误标志：复位时清零，检测到完整性错误或寄存器写使能错误后置位并保持。",
-  "behavior": "该过程块维护寄存器 err_q。异步低有效复位 rst_ni 拉低时，err_q 被清为 0；复位释放后，只要检测到 intg_err 或 reg_we_err 任一为真，就将 err_q 置为 1。代码中没有在其他条件下对 err_q 赋值，因此一旦置位后会保持为 1，直到下一次复位清除。这体现了对错误事件进行锁存/粘滞记录的意图。源码中赋值为 1'b1，而复位赋值为 '0，暗示 err_q 很可能是单比特；若其实际位宽大于 1，则当前逻辑仅在置位时写入最低位，设计意图需结合声明确认。 ",
+  "header": {
+    "module": "kmac_reg_top",
+    "block_kind": "always_ff",
+    "driven": [
+      "err_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "intg_err",
+      "reg_we_err"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 rst_ni 为低时，err_q 被强制清零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (asynchronous reset), err_q is driven to 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "err_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76-79"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76-78"
       ]
     },
     {
-      "property": "在未复位状态下，一旦 intg_err 或 reg_we_err 发生，err_q 将被置为 1，并且在后续没有复位的情况下不会被该过程块清回 0。",
-      "output_signals": [
-        "err_q"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:79-80"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑与安全/完整性检测相关：intg_err 或 reg_we_err 会被锁存到 err_q，形成可持续观察的错误状态，避免瞬时错误脉冲被遗漏。若上游错误检测失效，则该粘滞标志也无法反映相关异常。",
-  "assumptions": [
-    {
-      "constraint": "intg_err 和 reg_we_err 应准确表示需要被永久锁存记录的错误事件，而不是正常工作期间可能出现的无害脉冲。",
-      "bug_relevance": "如果这些输入被误触发，err_q 会被置位并持续保持到复位，可能导致错误告警或功能进入异常处理；若设计上这些脉冲本不应出现但硬件能通过复位恢复，则属于防御性设计场景。",
-      "related_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On positive edge of clk_i when rst_ni is high, if intg_err or reg_we_err is high, err_q is driven to 1.",
+      "cond": "posedge clk_i and rst_ni and (intg_err || reg_we_err)",
+      "signals": [
+        "clk_i",
+        "rst_ni",
         "intg_err",
         "reg_we_err",
         "err_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:79-80"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76,79-81"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "On positive edge of clk_i when rst_ni is high, if neither intg_err nor reg_we_err is high, err_q retains its previous value.",
+      "cond": "posedge clk_i and rst_ni and !(intg_err || reg_we_err)",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "intg_err",
+        "reg_we_err",
+        "err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76,79-82"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "lifecycle",
+      "claim": "The system must assert rst_ni (async reset) to clear err_q back to 0 after an error condition has been handled, because err_q has no local clear mechanism.",
+      "cond": "After err_q has been set to 1",
+      "risk": "err_q remains high indefinitely, causing permanent error status and potentially preventing detection of new errors.",
+      "signals": [
+        "rst_ni",
+        "err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76-82"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "intg_err and reg_we_err must be stable at the rising edge of clk_i to ensure correct sampling.",
+      "cond": "Always when posedge clk_i occurs",
+      "risk": "Metastability or a missed pulse could cause err_q to not reflect the actual error, leading to silent error masking.",
+      "signals": [
+        "intg_err",
+        "reg_we_err",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76-81"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "err_q is a sticky error flag with no clear mechanism other than reset. It is unclear if this behavior is intended or if a software-clearable bit should exist.",
+      "cond": "After any error event",
+      "risk": "If software expects to clear the flag after handling an error but cannot, the flag may remain high and cause confusion or incorrect error reporting.",
+      "signals": [
+        "err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76-82"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv:76-82"
   ],
-  "uncertain_points": [
-    "err_q 的实际位宽在该片段中不可见；复位使用 '0 而置位使用 1'b1，若 err_q 不是 1 位，则置位行为是否只期望拉高最低位需要结合其声明确认。",
-    "片段只显示 err_q 的置位与复位逻辑，无法确认该错误标志后续是否驱动告警、屏蔽访问或触发其他恢复机制。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv",
   "line_start": 76,
-  "line_end": 82
+  "line_end": 82,
+  "security_implications": ""
 }

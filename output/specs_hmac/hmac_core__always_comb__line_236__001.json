@@ -1,0 +1,137 @@
+{
+  "chunk_id": "hmac_core__always_comb__line_236__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "txcnt_eq_blksz"
+    ],
+    "used": [
+      "txcount",
+      "digest_size_i",
+      "BlockSizeBitsSHA256",
+      "BlockSizeBitsSHA512"
+    ],
+    "modes": [
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512"
+    ],
+    "tags": [
+      "counter",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "txcnt_eq_blksz is 0 when digest_size_i is not SHA2_256, SHA2_384, or SHA2_512 (including the default case)",
+      "cond": "digest_size_i takes any other value",
+      "signals": [
+        "txcnt_eq_blksz",
+        "digest_size_i"
+      ],
+      "refs": [
+        "file:237,239,243"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When digest_size_i equals SHA2_256, txcnt_eq_blksz is assigned (txcount[BlockSizeBitsSHA256-1:0] == 0) && (txcount != 0)",
+      "cond": "digest_size_i == SHA2_256",
+      "signals": [
+        "txcnt_eq_blksz",
+        "digest_size_i",
+        "txcount"
+      ],
+      "refs": [
+        "file:240"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When digest_size_i equals SHA2_384 or SHA2_512, txcnt_eq_blksz is assigned (txcount[BlockSizeBitsSHA512-1:0] == 0) && (txcount != 0)",
+      "cond": "digest_size_i == SHA2_384 or SHA2_512",
+      "signals": [
+        "txcnt_eq_blksz",
+        "digest_size_i",
+        "txcount"
+      ],
+      "refs": [
+        "file:241-242"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "digest_size_i is restricted to SHA2_256, SHA2_384, or SHA2_512; any other value keeps txcnt_eq_blksz permanently 0",
+      "cond": "when HMAC block-boundary logic relies on txcnt_eq_blksz",
+      "risk": "txcnt_eq_blksz never asserts, breaking block processing and potentially causing incorrect HMAC output",
+      "signals": [
+        "digest_size_i",
+        "txcnt_eq_blksz"
+      ],
+      "refs": [
+        "file:239-244"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "txcount bit width is at least BlockSizeBitsSHA512 bits (or at least BlockSizeBitsSHA256 if SHA2_256 is the only mode selected)",
+      "cond": "when using SHA2_384 or SHA2_512 mode",
+      "risk": "bit slice txcount[BlockSizeBitsSHA512-1:0] is out of bounds, leading to undefined synthesis behavior or false block-size matches",
+      "signals": [
+        "txcount",
+        "BlockSizeBitsSHA512"
+      ],
+      "refs": [
+        "file:241-242"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If digest_size_i can be set to SHA2_512 while txcount bit width is less than BlockSizeBitsSHA512, the bit selection txcount[BlockSizeBitsSHA512-1:0] is illegal",
+      "cond": "legal configuration allows SHA2_512 mode with a narrow txcount counter",
+      "risk": "synthesis may issue error or produce a truncated compare, yielding spurious block-boundary assertions",
+      "signals": [
+        "txcount",
+        "digest_size_i"
+      ],
+      "refs": [
+        "file:241-242"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "txcnt_eq_blksz is 0 when txcount == 0, even in a valid mode; it is unclear if a zero-length message should ever trigger a block-boundary flag",
+      "cond": "txcount == 0 and digest_size_i in {SHA2_256, SHA2_384, SHA2_512}",
+      "risk": "if HMAC expects a block-boundary flag at start of message, this may delay or skip padding",
+      "signals": [
+        "txcnt_eq_blksz",
+        "txcount"
+      ],
+      "refs": [
+        "file:240-242"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:236-245"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 236,
+  "line_end": 245,
+  "security_implications": ""
+}

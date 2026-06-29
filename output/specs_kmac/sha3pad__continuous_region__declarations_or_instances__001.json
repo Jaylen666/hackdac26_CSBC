@@ -1,68 +1,319 @@
 {
   "chunk_id": "sha3pad__continuous_region__declarations_or_instances__001",
-  "summary": "该片段为 sha3pad 的组合控制与局部状态基础信号做定义：用加固计数器统计每个 block 已向 keccak 发送的消息条目数，并派生出前缀索引、是否已发送完整 block、keccak 接收握手、是否处于 cSHAKE 模式以及输入是否为部分写等 FSM 依赖信号。",
-  "behavior": "片段声明并实例化了一个冗余加固的 `prim_count` 计数器 `u_sentmsg_count` 来维护 `sent_message`，用于记录当前 block 内已发送到 keccak round 的条目数；该计数器在 `clr_sentmsg` 时清零，在 `inc_sentmsg` 为 1 时按 1 递增，错误输出经 `err_o` 导出为 `msg_count_error_o`，注释说明其位宽被刻意做得足以覆盖整个 Keccak 存储，以支持可能的中途恢复场景，而不仅仅是通常的 block 大小检查用途【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:179-205】。`inc_sentmsg` 与 `keccak_ack` 都被定义为 `keccak_valid_o & keccak_ready_i`，因此该片段把“向 keccak 发送一项”与“keccak 接受该项”视为同一握手事件【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:209,247】。基于该计数值，`prefix_index` 在 `sent_message < block_addr_limit` 时等于 `sent_message`，否则回落到 0，用于对 prefix 做分段索引，避免超出 block 地址范围后继续增长索引【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:211-213】；`sent_blocksize` 在 `sent_message == block_addr_limit` 时置 1，向后续 FSM/控制逻辑表明 pad 逻辑已经推送了一个 block 大小的数据【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:238-242】。此外，片段还定义 `mode_eq_cshake` 作为 `mode_i == CShake` 的模式判定，供 FSM 决定是否进入 Prefix 相关路径【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:234-236】；定义 `msg_partial = (&msg_strb_i != 1'b1)`，把任一字节使能未全开都视为部分写，注释表明该信号应与 `msg_valid_i` 联合使用，且设计意图是假定部分写只允许发生在消息末尾，随后在处理锁存数据前不再有新的 `msg_valid_i`【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:249-257】。其余如 `fsm_keccak_valid`、`hold_msg`、`en_msgbuf`、`clr_msgbuf`、`process_latched` 在本片段仅被声明，具体驱动和行为需由其他代码决定【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:215-226,260-264】。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "mixed",
+    "driven": [
+      "inc_sentmsg",
+      "prefix_index",
+      "mode_eq_cshake",
+      "sent_blocksize",
+      "keccak_ack",
+      "msg_partial",
+      "sent_message",
+      "msg_count_error_o"
+    ],
+    "used": [
+      "keccak_valid_o",
+      "keccak_ready_i",
+      "block_addr_limit",
+      "mode_i",
+      "CShake",
+      "msg_strb_i",
+      "clr_sentmsg",
+      "inc_sentmsg",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [
+      "block_addr_limit",
+      "CShake",
+      "KeccakCountW",
+      "KeccakMsgAddrW"
+    ],
+    "tags": [
+      "counter",
+      "handshake",
+      "security",
+      "parameterization",
+      "block_tracking"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `keccak_valid_o` 与 `keccak_ready_i` 同时为 1 时，本片段一定将 `keccak_ack` 置为 1，并同时使 `inc_sentmsg` 为 1；否则两者都为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "inc_sentmsg is asserted when keccak_valid_o and keccak_ready_i are both high.",
+      "cond": "always",
+      "signals": [
+        "inc_sentmsg",
+        "keccak_valid_o",
+        "keccak_ready_i"
+      ],
+      "refs": [
+        "sha3pad.sv:209"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "keccak_ack is asserted when keccak_valid_o and keccak_ready_i are both high.",
+      "cond": "always",
+      "signals": [
         "keccak_ack",
-        "inc_sentmsg"
+        "keccak_valid_o",
+        "keccak_ready_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:209",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:247"
+      "refs": [
+        "sha3pad.sv:247"
       ]
     },
     {
-      "property": "当 `sent_message` 小于 `block_addr_limit` 时，`prefix_index` 等于 `sent_message`；当 `sent_message` 不小于 `block_addr_limit` 时，`prefix_index` 被强制为 0。",
-      "output_signals": [
-        "prefix_index"
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "u_sentmsg_count instantiates a hardened counter that drives sent_message from its cnt_o output. With incr_en_i=inc_sentmsg, clr_i=clr_sentmsg, step_i=1, commit_i=1, set_i=0, it increments sent_message by 1 on every positive clock edge where inc_sentmsg=1 and clears to 0 when clr_sentmsg=1. msg_count_error_o reflects counter internal error (redundancy mismatch).",
+      "cond": "every positive clock edge with inc_sentmsg or clr_sentmsg active",
+      "signals": [
+        "sent_message",
+        "inc_sentmsg",
+        "clr_sentmsg",
+        "msg_count_error_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:212-213"
+      "refs": [
+        "sha3pad.sv:191-206"
       ]
     },
     {
-      "property": "当且仅当 `sent_message == block_addr_limit` 时，`sent_blocksize` 为 1。",
-      "output_signals": [
-        "sent_blocksize"
+      "id": "G4",
+      "type": "assignment",
+      "claim": "prefix_index equals sent_message when sent_message is less than block_addr_limit; otherwise prefix_index is zero.",
+      "cond": "always",
+      "signals": [
+        "prefix_index",
+        "sent_message",
+        "block_addr_limit"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:240-242"
+      "refs": [
+        "sha3pad.sv:213"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "mode_eq_cshake is 1 when mode_i equals the CShake enumeration value, else 0.",
+      "cond": "always",
+      "signals": [
+        "mode_eq_cshake",
+        "mode_i",
+        "CShake"
+      ],
+      "refs": [
+        "sha3pad.sv:236"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "sent_blocksize is 1 when sent_message equals block_addr_limit; else 0.",
+      "cond": "always",
+      "signals": [
+        "sent_blocksize",
+        "sent_message",
+        "block_addr_limit"
+      ],
+      "refs": [
+        "sha3pad.sv:242"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "msg_partial is 1 when the bitwise AND reduction of msg_strb_i is not 1 (i.e., at least one byte strobe is not asserted).",
+      "cond": "always",
+      "signals": [
+        "msg_partial",
+        "msg_strb_i"
+      ],
+      "refs": [
+        "sha3pad.sv:257"
       ]
     }
   ],
-  "security_implications": "该片段涉及安全相关的计数完整性保护：`sent_message` 通过带冗余防护的 `prim_count` 实现，并将错误导出为 `msg_count_error_o`【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:189-205】。这有助于检测 block 发送计数被故障注入或状态损坏的情况，避免 pad/FSM 基于错误计数作出错误的数据发送或 block 完成判断。注释还表明该计数器被设计为可覆盖更大恢复场景，而非仅最小功能需求【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:179-185】。",
   "assumptions": [
     {
-      "constraint": "部分写 `msg_partial` 只会出现在消息末尾；一旦发生 `(msg_valid_i && msg_partial && msg_ready_o)`，在锁存内容被处理前不应再有新的 `msg_valid_i`。",
-      "bug_relevance": "这是注释明确说明的行为契约；若违反，内部 `msg_buf`/后续 pad 处理可能把中间 partial write 当作尾包处理，导致消息拼接、填充边界或吸收顺序错误。",
-      "related_signals": [
-        "msg_partial",
-        "msg_valid_i",
-        "msg_ready_o"
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The upstream controller must assert clr_sentmsg to reset the sent_message counter before it reaches the maximum value of KeccakCountW-1 or overflows, to prevent corruption of prefix_index and sent_blocksize logic.",
+      "cond": "when inc_sentmsg is asserted continuously across multiple keccak blocks",
+      "risk": "Counter overflow or wrap-around can cause false block boundaries (sent_blocksize re-asserted incorrectly) and incorrect prefix indexing (wrapping to zero), leading to misaligned data into Keccak, potentially breaking the sponge construction and undermining security guarantees.",
+      "signals": [
+        "sent_message",
+        "clr_sentmsg",
+        "KeccakCountW",
+        "block_addr_limit"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:249-257"
+      "refs": [
+        "sha3pad.sv:213",
+        "sha3pad.sv:242"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "msg_count_error_o from the redundant counter must be monitored by external logic to detect and react to counter integrity failures (SEC_CM: CTR.REDUN).",
+      "cond": "current counter operation",
+      "risk": "If ignored, a faulty counter can silently produce corrupt sent_message values, causing undetected block misalignment and potential security bypass or data leakage.",
+      "signals": [
+        "msg_count_error_o",
+        "sent_message"
+      ],
+      "refs": [
+        "sha3pad.sv:205"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "mode_i must be stable and valid (CShake or not) when mode_eq_cshake is used for FSM state decisions, and no glitches should occur that cause transient sampling of the wrong mode.",
+      "cond": "during pad FSM operation",
+      "risk": "A glitch on mode_i could cause the pad to operate in CSHAKE mode when not intended, adding a prefix that may expose internal state or mislead the digest computation.",
+      "signals": [
+        "mode_i",
+        "CShake"
+      ],
+      "refs": [
+        "sha3pad.sv:236"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "msg_strb_i must accurately reflect which bytes of msg_data_i are valid when msg_partial is evaluated (with msg_valid_i high).",
+      "cond": "when msg_valid_i is asserted",
+      "risk": "Incorrect msg_strb_i could cause msg_partial to be miscomputed, leading to improper latching of partial data, which may result in data corruption in the Keccak input buffer.",
+      "signals": [
+        "msg_strb_i",
+        "msg_partial"
+      ],
+      "refs": [
+        "sha3pad.sv:257"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "handshake",
+      "claim": "The prim_count commit_i tied to 1 assumes that the counter updates sent_message in the same cycle as inc_sentmsg is asserted, without pipeline delay, to maintain synchrony with the keccak handshake.",
+      "cond": "during active keccak_valid_o/ready_i handshake",
+      "risk": "If commit_i introduces a cycle of latency, sent_message used in same-cycle logic (prefix_index, sent_blocksize) may be stale, causing erroneous block boundary detection and prefix muxing.",
+      "signals": [
+        "commit_i",
+        "sent_message",
+        "inc_sentmsg"
+      ],
+      "refs": [
+        "sha3pad.sv:202"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "inc_sentmsg and keccak_ack are driven by identical combinational logic (keccak_valid_o & keccak_ready_i). The design intent for having two separate signals with the same function is not obvious from this chunk alone.",
+      "cond": "always",
+      "risk": "Potential redundancy with no functional impact; could be a leftover from separate usage domains, but no direct security or functional risk.",
+      "signals": [
+        "inc_sentmsg",
+        "keccak_ack"
+      ],
+      "refs": [
+        "sha3pad.sv:209",
+        "sha3pad.sv:247"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "If inc_sentmsg remains high after sent_blocksize asserts and clr_sentmsg is not applied promptly, sent_message will exceed block_addr_limit and possibly overflow (wrap to 0). When it overflows, sent_message becomes 0, which makes sent_blocksize deassert and prefix_index become 0. This could cause the pad logic to misinterpret a new block start and send wrong (zero) prefix data to Keccak, corrupting the ongoing sponge absorption.",
+      "cond": "inc_sentmsg high while clr_sentmsg delayed after a block boundary",
+      "risk": "Security-critical block boundary detection and prefix indexing breakdown; may lead to incorrect digest or information leakage via mis-framed prefix data.",
+      "signals": [
+        "sent_message",
+        "inc_sentmsg",
+        "clr_sentmsg",
+        "block_addr_limit",
+        "prefix_index",
+        "sent_blocksize"
+      ],
+      "refs": [
+        "sha3pad.sv:209",
+        "sha3pad.sv:213",
+        "sha3pad.sv:242"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "Signals hold_msg, fsm_keccak_valid, en_msgbuf, clr_msgbuf, process_latched are declared but not driven in this chunk; their driving logic resides in the FSM or other blocks. The interaction between these signals and the timed clearing/incrementing of sent_message needs verification across chunks.",
+      "cond": "unknown",
+      "risk": "Mis-coordination could lead to latch timing errors or incorrect message holding, resulting in partial block injection.",
+      "signals": [
+        "hold_msg",
+        "fsm_keccak_valid",
+        "en_msgbuf",
+        "clr_msgbuf",
+        "process_latched",
+        "sent_message"
+      ],
+      "refs": [
+        "sha3pad.sv:217",
+        "sha3pad.sv:222",
+        "sha3pad.sv:225-226",
+        "sha3pad.sv:264"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "msg_count_error_o from the hardened counter is connected as an output but not locally latched or used to gate further operation. It is unknown whether the FSM or top-level logic immediately reacts to this error before corrupted sent_message values affect downstream Keccak inputs.",
+      "cond": "when msg_count_error_o is asserted",
+      "risk": "A counter fault may propagate corrupted block count/alignment into Keccak before containment, undermining the redundancy security mechanism and possibly allowing a fault attack to succeed.",
+      "signals": [
+        "msg_count_error_o",
+        "sent_message"
+      ],
+      "refs": [
+        "sha3pad.sv:205"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The counter commit_i tied to 1 may sample inc_sentmsg in the same clock cycle without synchronization. If inc_sentmsg (generated from keccak_valid_o & keccak_ready_i) has combinational glitches or changes too close to the clock edge, the counter could falsely increment or miss an increment, violating the expected sent_message count.",
+      "cond": "when keccak_valid_o or keccak_ready_i are not stable around clock edge",
+      "risk": "Rare glitch-induced miscounts could disrupt block alignment; potentially exploitable for fault injection.",
+      "signals": [
+        "inc_sentmsg",
+        "keccak_valid_o",
+        "keccak_ready_i",
+        "commit_i"
+      ],
+      "refs": [
+        "sha3pad.sv:202",
+        "sha3pad.sv:209"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:179-205",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:209",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:211-213",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:234-242",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:247",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:249-257",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:260-264"
-  ],
-  "uncertain_points": [
-    "`block_addr_limit` 的精确定义及其与 `sent_message`/prefix slicing 的边界关系不在本片段中，因而无法仅凭此处确认 `sent_blocksize` 的比较是否对应“最后一个有效条目已发送”还是“已达到下一条起始边界”【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:213,242】。",
-    "`sent_message` 注释提到其位宽设计支持 SHA3 context switch/resume 时写完整 1600 bit，但本片段本身只展示计数器与比较逻辑，未显示恢复流程，因此该能力更多体现为设计意图而非此片段可单独验证的功能【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:179-185】。",
-    "`process_latched` 在注释中被描述为用于避免 `process_i` 在 cSHAKE 前缀处理期间过快到来而被 FSM 漏看，但本片段仅声明该信号，未展示其锁存和消费逻辑，因此无法确认实际实现是否完全符合该设计意图【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:260-264】。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:177-264"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 177,
-  "line_end": 264
+  "line_end": 264,
+  "security_implications": ""
 }

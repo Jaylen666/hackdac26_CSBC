@@ -17,7 +17,10 @@ from pathlib import Path
 from typing import Any
 
 from rtl_bug_agent.llm.client import OpenAICompatibleClient
+from rtl_bug_agent.phase2.formal_sketch import pick_property_draft, render_property_assertion
+from rtl_bug_agent.phase2.llm_view import finding_for_llm
 from rtl_bug_agent.phase2.signal_graph import SignalGraph
+from rtl_bug_agent.phase2.trace import TraceSink, append_trace
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase3/verify.md"
@@ -69,15 +72,12 @@ def verify_finding(
 
     # Trim source code to stay under the API's payload limit
     while True:
+        # Gate 1: the ONLY allowed projection of a finding into an LLM payload.
+        # trace_ref and formal internals can never reach the prompt from here.
+        finding_view = finding_for_llm(finding)
+        finding_view["contradiction"] = str(finding_view.get("contradiction", "") or "")[:400]
         payload = {
-            "finding": {
-                "title": finding.get("title", ""),
-                "severity": finding.get("severity", ""),
-                "verdict": finding.get("verdict", ""),
-                "channels": finding.get("channels", []),
-                "contradiction": finding.get("contradiction", "")[:400],
-                "involved_signals": finding.get("involved_signals", []),
-            },
+            "finding": finding_view,
             "rtl_source": source_sections,
         }
         size = len(json.dumps(payload, ensure_ascii=False))
@@ -115,6 +115,7 @@ def verify_top_findings(
     client: OpenAICompatibleClient,
     top_n: int = 10,
     official_claims: list[dict[str, Any]] | None = None,
+    trace_sink: "TraceSink | None" = None,
 ) -> list[dict[str, Any]]:
     """Verify the top-N Phase 2 findings (by score).
 
@@ -144,6 +145,7 @@ def verify_top_findings(
         )
         if verdict is None:
             results.append({**f, "phase3_verdict": "ERROR"})
+            append_trace(f, "phase3", sink=trace_sink, verdict="ERROR")
             continue
 
         v = verdict.get("verdict", "UNCERTAIN")
@@ -153,13 +155,52 @@ def verify_top_findings(
             false_alarms += 1
         print(f"{v} (confidence={verdict.get('confidence', '?')})")
 
-        results.append({**f, "phase3": verdict})
+        enriched = dict(f)
+        enriched["phase3"] = verdict
+        draft = _maybe_add_property_draft(enriched, graph)
+        if draft:
+            enriched["formal_draft"] = draft
+        results.append(enriched)
+        append_trace(
+            enriched,
+            "phase3",
+            sink=trace_sink,
+            verdict=v,
+            confidence=verdict.get("confidence"),
+        )
 
     print(
         f"  Phase3 done: {len(results)} verified "
         f"({confirmed} confirmed, {false_alarms} false alarms)"
     )
     return results
+
+
+def _maybe_add_property_draft(
+    finding: dict[str, Any],
+    graph: SignalGraph,
+) -> dict[str, Any] | None:
+    verdict = str((finding.get("phase3") or {}).get("verdict", "")).upper()
+    confidence = float((finding.get("phase3") or {}).get("confidence", 0.0) or 0.0)
+    if verdict != "CONFIRMED":
+        return None
+    if confidence < 0.75:
+        return None
+
+    draft = pick_property_draft(finding, graph, min_confidence=0.75)
+    if not draft:
+        return None
+
+    assertion = render_property_assertion(draft["sketch"])
+    if not assertion:
+        return None
+
+    return {
+        "spec_id": draft["spec_id"],
+        "module": draft["module"],
+        "assertion": assertion,
+        "sketch": draft["sketch"],
+    }
 
 
 # ---------------------------------------------------------------------------

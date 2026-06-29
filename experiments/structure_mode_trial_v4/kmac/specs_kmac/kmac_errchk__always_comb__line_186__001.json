@@ -1,0 +1,212 @@
+{
+  "chunk_id": "kmac_errchk__always_comb__line_186__001",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "always_comb",
+    "driven": [
+      "err_swsequence",
+      "sparse_fsm_error_o"
+    ],
+    "used": [
+      "sw_cmd_i",
+      "st"
+    ],
+    "modes": [
+      "st: StIdle, StMsgFeed, StProcessing, StAbsorbed, StSqueezing, StTerminalError",
+      "sw_cmd_i: CmdNone, CmdStart, CmdProcess, CmdManualRun, CmdDone"
+    ],
+    "tags": [
+      "error",
+      "sparse_fsm",
+      "fault"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When st is StTerminalError, sparse_fsm_error_o is set to 1 and err_swsequence is set to 0, regardless of sw_cmd_i.",
+      "cond": "st == StTerminalError",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:224-227"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "When st does not match any explicit case item, sparse_fsm_error_o is set to 1 and err_swsequence is set to 0.",
+      "cond": "st not in {StIdle, StMsgFeed, StProcessing, StAbsorbed, StSqueezing, StTerminalError}",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:229-232"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When st is StIdle, err_swsequence is asserted if sw_cmd_i is not CmdNone or CmdStart.",
+      "cond": "st == StIdle",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:191-196"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "When st is StMsgFeed, err_swsequence is asserted if sw_cmd_i is not CmdNone or CmdProcess.",
+      "cond": "st == StMsgFeed",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:198-203"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "mux_case",
+      "claim": "When st is StProcessing or StSqueezing, err_swsequence is asserted if sw_cmd_i is not equal to CmdNone.",
+      "cond": "st in {StProcessing, StSqueezing}",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:205-208",
+        "file:218-221"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "mux_case",
+      "claim": "When st is StAbsorbed, err_swsequence is asserted if sw_cmd_i is not CmdNone, CmdManualRun, or CmdDone.",
+      "cond": "st == StAbsorbed",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:211-216"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "When st is StIdle, StMsgFeed, StProcessing, StAbsorbed, or StSqueezing, sparse_fsm_error_o remains 0.",
+      "cond": "st in {StIdle, StMsgFeed, StProcessing, StAbsorbed, StSqueezing}",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "file:188",
+        "file:191-222"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "sw_cmd_i is a stable, valid encoded command value and st is a stable, valid state encoding (non-meta-stable, non-X) so that the unique case and inside operator behave deterministically.",
+      "cond": "always during normal operation",
+      "risk": "Meta-stability or X on st or sw_cmd_i can cause glitches on err_swsequence and sparse_fsm_error_o, leading to false error assertions or masked real errors.",
+      "signals": [
+        "sw_cmd_i",
+        "st"
+      ],
+      "refs": [
+        "file:190-233"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The logic receiving err_swsequence must use it to block the execution of the corresponding command when asserted.",
+      "cond": "err_swsequence == 1",
+      "risk": "If downstream ignores err_swsequence, a disallowed command will be executed, violating the state-dependent command protocol and potentially leading to data corruption or security breach.",
+      "signals": [
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:187-233"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "In StTerminalError state, err_swsequence is forced to 0, masking any disallowed command that might be asserted. The design relies solely on sparse_fsm_error_o to contain faults, but if the command interface remains active, an illegal command could be processed.",
+      "cond": "st == StTerminalError and sw_cmd_i is disallowed",
+      "risk": "A dangerous command could be accepted despite the terminal error if downstream logic does not adequately act on sparse_fsm_error_o.",
+      "signals": [
+        "st",
+        "err_swsequence",
+        "sparse_fsm_error_o",
+        "sw_cmd_i"
+      ],
+      "refs": [
+        "file:224-227"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "In the default case (unrecognized state), err_swsequence is forced to 0. An attacker or fault that forces an illegal state can then issue a dangerous command without being flagged as a sequence error.",
+      "cond": "st takes an illegal value",
+      "risk": "An illegal command could be executed because err_swsequence remains 0, bypassing command checking if the system only uses err_swsequence to gate commands.",
+      "signals": [
+        "st",
+        "err_swsequence",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "file:229-232"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "The effectiveness of sparse_fsm_error_o depends entirely on the system-level response; local RTL does not enforce that st stops updating or that commands are blocked when sparse_fsm_error_o is high.",
+      "cond": "sparse_fsm_error_o asserted",
+      "risk": "If st continues to change, err_swsequence could return to 0 prematurely or the design could exit the error state, undermining fault containment.",
+      "signals": [
+        "sparse_fsm_error_o",
+        "st",
+        "err_swsequence"
+      ],
+      "refs": [
+        "file:224-232"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:186-234"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
+  "line_start": 186,
+  "line_end": 234,
+  "security_implications": ""
+}

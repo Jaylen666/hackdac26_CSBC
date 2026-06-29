@@ -1,0 +1,121 @@
+{
+  "chunk_id": "aes_core__always_comb__key_sideload_get__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "key_sideload"
+    ],
+    "used": [
+      "keymgr_key_i",
+      "NumSharesKey",
+      "NumRegsKey"
+    ],
+    "modes": [],
+    "tags": [
+      "key",
+      "secret",
+      "sideload"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "key_sideload[s][i] is continuously driven as a 32-bit slice from keymgr_key_i.key[s], starting at bit i*32, with no combinatorial masking or modification.",
+      "cond": "always",
+      "signals": [
+        "key_sideload",
+        "keymgr_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:258-264"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "keymgr_key_i.key must have dimensions matching NumSharesKey and NumRegsKey, providing at least (NumRegsKey*32) bits per share, so that the slice [i*32+:32] is always within bounds.",
+      "cond": "whenever this combinational block is evaluated",
+      "risk": "If keymgr_key_i.key has insufficient width for the given NumRegsKey, the out-of-bounds bit-select will produce X or undefined values, corrupting key_sideload.",
+      "signals": [
+        "keymgr_key_i",
+        "NumSharesKey",
+        "NumRegsKey"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:259-262"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "keymgr_key_i must be a stable, glitch-free side-loaded value; the chunk assumes that any upstream key delivery already handles clearing, masking, or secure transport.",
+      "cond": "during active use of the key_sideload value downstream",
+      "risk": "A glitch, timing violation, or erroneous update on keymgr_key_i could expose an unmasked secret key value into key_sideload and downstream logic, breaking confidentiality.",
+      "signals": [
+        "keymgr_key_i",
+        "key_sideload"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:258-264"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "key_sideload is driven by direct combinatorial assignment of keymgr_key_i with no masking, clearing, or secret-sharing within this chunk. It is unclear whether downstream logic applies masking before cryptographic use, or if this direct path violates side-channel resistance requirements.",
+      "cond": "key_sideload is used by subsequent AES datapath",
+      "risk": "Raw secret key could be observable in unencrypted form inside the design, increasing side-channel leakage or direct extraction risk.",
+      "signals": [
+        "key_sideload",
+        "keymgr_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:258-264"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The stability, timing, and driving context of keymgr_key_i outside this chunk are not visible. It is unknown whether the input is registered, synchronized, or may change during an active encryption.",
+      "cond": "when aes_core uses key_sideload for round key expansion or cipher operations",
+      "risk": "If keymgr_key_i can change asynchronously, key_sideload will glitch and may cause incorrect cipher output or expose intermediate key values.",
+      "signals": [
+        "keymgr_key_i",
+        "key_sideload"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:258-264"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The parameter NumRegsKey directly controls the bit slice offset. If a legal parameterization sets NumRegsKey larger than the actual keymgr_key_i.key width, out-of-bounds access occurs.",
+      "cond": "when NumRegsKey is configured beyond the producer's key width",
+      "risk": "Incorrect key expansion, X propagation, or silent use of truncated/shifted key data.",
+      "signals": [
+        "NumRegsKey",
+        "key_sideload"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:259-262"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:258-264"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 258,
+  "line_end": 264,
+  "security_implications": ""
+}

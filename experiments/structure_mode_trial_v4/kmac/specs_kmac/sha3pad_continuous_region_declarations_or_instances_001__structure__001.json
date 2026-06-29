@@ -1,0 +1,123 @@
+{
+  "chunk_id": "sha3pad_continuous_region_declarations_or_instances_001__structure__001",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "mixed",
+    "driven": [
+      "sent_message",
+      "msg_count_error_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "clr_sentmsg",
+      "inc_sentmsg",
+      "KeccakCountW"
+    ],
+    "modes": [],
+    "tags": [
+      "counter",
+      "error",
+      "security",
+      "redundancy"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "The prim_count instance u_sentmsg_count is configured with step=1, incr_en_i=inc_sentmsg, clr_i=clr_sentmsg, set_i=0, decr_en_i=0, commit_i=1; therefore sent_message increments by 1 on a clock edge when inc_sentmsg is high and resets to 0 when clr_sentmsg is high.",
+      "cond": "always",
+      "signals": [
+        "sent_message",
+        "inc_sentmsg",
+        "clr_sentmsg"
+      ],
+      "refs": [
+        "sha3pad.sv:191-206"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "msg_count_error_o is driven by the err_o output of u_sentmsg_count, directly reflecting any internal redundancy error detected by the hardened counter.",
+      "cond": "always",
+      "signals": [
+        "msg_count_error_o"
+      ],
+      "refs": [
+        "sha3pad.sv:205"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "inc_sentmsg and clr_sentmsg must not be asserted simultaneously; otherwise the prim_count internal behavior is undefined and the counter value may become inconsistent.",
+      "cond": "when inc_sentmsg and clr_sentmsg are both true",
+      "risk": "The sent_message counter may be corrupted, leading to incorrect message counting.",
+      "signals": [
+        "inc_sentmsg",
+        "clr_sentmsg"
+      ],
+      "refs": [
+        "sha3pad.sv:187",
+        "sha3pad.sv:196",
+        "sha3pad.sv:199"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The cnt_after_commit_o output of prim_count is left unconnected. If the post-commit count value is intended for security or debug, it is being ignored.",
+      "cond": "unknown",
+      "risk": "Future logic requiring the committed count cannot access it, potentially hiding state.",
+      "signals": [
+        "cnt_after_commit_o"
+      ],
+      "refs": [
+        "sha3pad.sv:204"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The control signals inc_sentmsg and clr_sentmsg are generated outside this chunk; it must be verified that they are never active concurrently, as such a condition would corrupt the security-critical message counter.",
+      "cond": "whenever inc_sentmsg and clr_sentmsg are driven",
+      "risk": "A corrupted sent_message counter can defeat count-based security checks (e.g., replay protection).",
+      "signals": [
+        "inc_sentmsg",
+        "clr_sentmsg"
+      ],
+      "refs": [
+        "sha3pad.sv:187"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "msg_count_error_o directly exposes internal redundancy errors from the hardened counter, but this chunk performs no local response; the external consumer must handle the error appropriately (e.g., trigger an alert).",
+      "cond": "when u_sentmsg_count detects a redundancy fault",
+      "risk": "Silent corruption of the counter could go undetected, undermining the security guarantee of the CTR.REDUN countermeasure.",
+      "signals": [
+        "msg_count_error_o"
+      ],
+      "refs": [
+        "sha3pad.sv:205"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:186-207"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 186,
+  "line_end": 208,
+  "security_implications": ""
+}

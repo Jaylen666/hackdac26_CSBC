@@ -1,0 +1,194 @@
+{
+  "chunk_id": "aes_prng_clearing_continuous_region_declarations_or_instances_001__behavior__001",
+  "header": {
+    "module": "aes_prng_clearing",
+    "block_kind": "generate",
+    "driven": [
+      "seed",
+      "seed_valid",
+      "entropy_req_o",
+      "reseed_ack_o"
+    ],
+    "used": [
+      "buffer_q",
+      "entropy_i",
+      "buffer_valid_q",
+      "entropy_ack_i",
+      "SecSkipPRNGReseeding",
+      "reseed_req_i",
+      "seed_valid"
+    ],
+    "modes": [
+      "SecSkipPRNGReseeding"
+    ],
+    "tags": [
+      "entropy",
+      "handshake",
+      "parameterization",
+      "fault"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "When SecSkipPRNGReseeding is false, seed is assigned as the concatenation of buffer_q and entropy_i.",
+      "cond": "SecSkipPRNGReseeding == 1'b0",
+      "signals": [
+        "seed",
+        "buffer_q",
+        "entropy_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:90"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "When SecSkipPRNGReseeding is false, seed_valid is high iff buffer_valid_q, entropy_req_o, and entropy_ack_i are all high.",
+      "cond": "SecSkipPRNGReseeding == 1'b0",
+      "signals": [
+        "seed_valid",
+        "buffer_valid_q",
+        "entropy_req_o",
+        "entropy_ack_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:91"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "entropy_req_o is held low when SecSkipPRNGReseeding is true; otherwise it asserts when reseed_req_i is high and seed_valid is low.",
+      "cond": "always",
+      "signals": [
+        "entropy_req_o",
+        "SecSkipPRNGReseeding",
+        "reseed_req_i",
+        "seed_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:97"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "reseed_ack_o is driven by reseed_req_i when SecSkipPRNGReseeding is true, otherwise by seed_valid.",
+      "cond": "always",
+      "signals": [
+        "reseed_ack_o",
+        "SecSkipPRNGReseeding",
+        "reseed_req_i",
+        "seed_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:98"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "buffer_valid_q correctly indicates that buffer_q holds valid data for reseeding.",
+      "cond": "when SecSkipPRNGReseeding is false and reseed_req_i is asserted",
+      "risk": "Using stale or invalid buffer_q data could compromise the PRNG seed quality.",
+      "signals": [
+        "buffer_valid_q",
+        "buffer_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:90-91"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "entropy_ack_i is a valid acknowledgement from the entropy source, synchronous and glitch-free.",
+      "cond": "when seed_valid is being formed",
+      "risk": "seed_valid may glitch or assert with an incomplete handshake, causing premature or repeated seed updates.",
+      "signals": [
+        "entropy_ack_i",
+        "seed_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:91"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "SecSkipPRNGReseeding is a compile-time constant parameter, not toggling during operation.",
+      "cond": "always",
+      "risk": "If it changes dynamically, glitches may occur on entropy_req_o and reseed_ack_o.",
+      "signals": [
+        "SecSkipPRNGReseeding"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:97-98"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "There is a combinational feedback loop: seed_valid depends on entropy_req_o (buffer_valid_q & entropy_req_o & entropy_ack_i), and entropy_req_o depends on ~seed_valid (reseed_req_i & ~seed_valid). This does not include a register and may cause oscillation or undefined simulation behavior.",
+      "cond": "when SecSkipPRNGReseeding is false and buffer_valid_q is high",
+      "risk": "Seed_valid or entropy_req_o could glitch, leading to false positive seed_valid assertions or missed reseed handshakes, potentially injecting corrupted seed data into the LFSR.",
+      "signals": [
+        "seed_valid",
+        "entropy_req_o",
+        "buffer_valid_q",
+        "reseed_req_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:91",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:97"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The concatenation {buffer_q, entropy_i} may not match the expected LFSR seed width; if LFSR width is not exactly buffer_q width plus entropy_i width, truncation or zero-extension could occur.",
+      "cond": "when widths differ",
+      "risk": "The PRNG seed may be misaligned, reducing entropy quality or causing functional failure.",
+      "signals": [
+        "seed",
+        "buffer_q",
+        "entropy_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:90"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The reseed_ack_o pulse timing from seed_valid (which is combinational and may be only one cycle due to handshake) may not match the consumer's expected ack protocol.",
+      "cond": "when reseed_ack_o is driven by seed_valid",
+      "risk": "Ack could be missed or misinterpreted, causing the reseed requester to hang or retry incorrectly.",
+      "signals": [
+        "reseed_ack_o",
+        "seed_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:98"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:90-91",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:97-98"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv",
+  "line_start": 90,
+  "line_end": 99,
+  "security_implications": ""
+}

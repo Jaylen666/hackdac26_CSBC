@@ -1,0 +1,146 @@
+{
+  "chunk_id": "hmac_reg_top__always_comb__line_129__001",
+  "header": {
+    "module": "hmac_reg_top",
+    "block_kind": "always_comb",
+    "driven": [
+      "reg_steer"
+    ],
+    "used": [
+      "tl_i.a_address",
+      "AW",
+      "intg_err"
+    ],
+    "modes": [],
+    "tags": [
+      "parameterization",
+      "address_decoding",
+      "error_override"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When intg_err is deasserted, reg_steer is 0 if tl_i.a_address[AW-1:0] falls inside [4096:8191]; otherwise reg_steer is 1.",
+      "cond": "intg_err == 0",
+      "signals": [
+        "reg_steer",
+        "tl_i.a_address",
+        "AW"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:130-133"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "When intg_err is asserted, reg_steer is forced to 1 regardless of tl_i.a_address.",
+      "cond": "intg_err == 1",
+      "signals": [
+        "reg_steer",
+        "intg_err"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:136-138"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "The address range [4096:8191] corresponds to a non-register region (e.g., HMAC window) in the system memory map.",
+      "cond": "always",
+      "risk": "If the range is incorrect, reg_steer will misroute accesses, directing window reads to register space or vice versa, causing data corruption or security violations.",
+      "signals": [
+        "tl_i.a_address",
+        "AW"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:130-133"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "AW parameter is set to the full TL-UL address width so that the inside comparison evaluates all address bits correctly.",
+      "cond": "always",
+      "risk": "If AW is too small, address truncation will cause misclassification and incorrect steering.",
+      "signals": [
+        "AW"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:131"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "intg_err reflects a genuine integrity error and is not spuriously asserted.",
+      "cond": "when intg_err is asserted",
+      "risk": "Spurious assertion forces reg_steer=1, blocking window accesses, potentially causing denial-of-service or masking real errors.",
+      "signals": [
+        "intg_err"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:136-138"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "Hardcoded address range [4096:8191] may not match the actual HMAC window base/size defined elsewhere.",
+      "cond": "always",
+      "risk": "Mismatch leads to incorrect steering, possibly accessing wrong registers or FIFO, causing functional failure or leaking secret data.",
+      "signals": [
+        "tl_i.a_address",
+        "AW"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:130-133"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The use of reg_steer in downstream logic (e.g., read mux or FIFO access) is not defined in this chunk.",
+      "cond": "always",
+      "risk": "If downstream interpretation is inconsistent, data could be routed to the wrong destination, causing read corruption or exposure.",
+      "signals": [
+        "reg_steer"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:130,137"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "intg_err is combinational; a transition mid-transaction could change reg_steer after the address phase, causing a mismatch in steering.",
+      "cond": "intg_err toggles during an active TL-UL transaction",
+      "risk": "The TL-UL interface may sample reg_steer at different times, leading to a partially steered transaction, data corruption, or protocol violation.",
+      "signals": [
+        "intg_err",
+        "reg_steer",
+        "tl_i.a_address"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:136-138"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac_reg_top.sv:129-139"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 129,
+  "line_end": 139,
+  "security_implications": ""
+}

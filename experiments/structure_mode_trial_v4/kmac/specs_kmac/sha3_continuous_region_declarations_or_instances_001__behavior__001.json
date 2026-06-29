@@ -1,0 +1,139 @@
+{
+  "chunk_id": "sha3_continuous_region_declarations_or_instances_001__behavior__001",
+  "header": {
+    "module": "sha3",
+    "block_kind": "assign",
+    "driven": [
+      "run_req_o",
+      "keccak_run_req_d",
+      "keccak_run",
+      "keccak_triggered_d"
+    ],
+    "used": [
+      "sha3pad_keccak_run",
+      "sw_keccak_run",
+      "keccak_complete",
+      "keccak_run_req_q",
+      "run_ack_i",
+      "keccak_triggered_q"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "request_ack",
+      "state_holding"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "keccak_run_req_d is set to 1 if sha3pad_keccak_run or sw_keccak_run is high, cleared to 0 if keccak_complete is high, otherwise it holds keccak_run_req_q; run_req_o directly follows keccak_run_req_d.",
+      "cond": "always combinational",
+      "signals": [
+        "sha3pad_keccak_run",
+        "sw_keccak_run",
+        "keccak_complete",
+        "keccak_run_req_q",
+        "run_req_o"
+      ],
+      "refs": [
+        "172",
+        "173-175"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "keccak_run is asserted when run_req_o is high, run_ack_i is high, and keccak_triggered_q is low.",
+      "cond": "always combinational",
+      "signals": [
+        "run_req_o",
+        "run_ack_i",
+        "keccak_triggered_q",
+        "keccak_run"
+      ],
+      "refs": [
+        "178"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "keccak_triggered_d is set to 1 when keccak_run is high, cleared to 0 when keccak_complete is high, otherwise holds the current keccak_triggered_q.",
+      "cond": "always combinational",
+      "signals": [
+        "keccak_run",
+        "keccak_complete",
+        "keccak_triggered_q",
+        "keccak_triggered_d"
+      ],
+      "refs": [
+        "179-181"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The Keccak engine must assert keccak_complete after each keccak_run pulse to reset the triggered state and clear the request.",
+      "cond": "After keccak_run is pulsed",
+      "risk": "If keccak_complete never asserts, keccak_run_req_d and keccak_triggered_q stay high, stalling new operations and possibly locking the request line.",
+      "signals": [
+        "keccak_complete",
+        "keccak_run",
+        "keccak_run_req_d",
+        "keccak_triggered_q"
+      ],
+      "refs": [
+        "175",
+        "181"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "To avoid unintended retriggering after completion, run_ack_i must be deasserted before keccak_complete asserts if the request source does not intend a back-to-back operation.",
+      "cond": "When keccak_complete asserts while run_req_o is still active",
+      "risk": "If run_ack_i stays high, keccak_run fires again immediately, starting a new operation without an explicit new request pulse.",
+      "signals": [
+        "run_ack_i",
+        "keccak_complete",
+        "keccak_run",
+        "run_req_o",
+        "keccak_triggered_q"
+      ],
+      "refs": [
+        "178",
+        "179-181"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The combinational pulse keccak_run = run_req_o & run_ack_i & ~keccak_triggered_q may glitch if run_ack_i or run_req_o toggles within a clock cycle before keccak_triggered_q is updated.",
+      "cond": "During the clock cycle when run_ack_i first asserts while run_req_o is high and keccak_triggered_q is low",
+      "risk": "Glitches could be interpreted as multiple start pulses by the Keccak engine, leading to undefined behavior.",
+      "signals": [
+        "keccak_run",
+        "run_ack_i",
+        "run_req_o",
+        "keccak_triggered_q"
+      ],
+      "refs": [
+        "178"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "172-181"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
+  "line_start": 172,
+  "line_end": 181,
+  "security_implications": ""
+}

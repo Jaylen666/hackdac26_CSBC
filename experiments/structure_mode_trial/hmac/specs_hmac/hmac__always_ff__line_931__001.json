@@ -1,0 +1,127 @@
+{
+  "chunk_id": "hmac__always_ff__line_931__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "initiated"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "hash_start_or_continue",
+      "hash_process",
+      "reg_hash_stop"
+    ],
+    "modes": [],
+    "tags": [
+      "secret",
+      "key",
+      "digest",
+      "handshake",
+      "reset",
+      "sparse_fsm"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When reset (rst_ni low) is active, initiated is driven to 0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "initiated"
+      ],
+      "refs": [
+        "file:932"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not in reset and hash_start_or_continue is high, initiated is set to 1.",
+      "cond": "rst_ni && hash_start_or_continue",
+      "signals": [
+        "hash_start_or_continue",
+        "initiated"
+      ],
+      "refs": [
+        "file:933"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When not in reset, hash_start_or_continue is low, and either hash_process or reg_hash_stop is high, initiated is cleared to 0.",
+      "cond": "rst_ni && !hash_start_or_continue && (hash_process || reg_hash_stop)",
+      "signals": [
+        "hash_process",
+        "reg_hash_stop",
+        "initiated"
+      ],
+      "refs": [
+        "file:934"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The external logic is expected not to assert hash_start_or_continue simultaneously with hash_process or reg_hash_stop, because the register's priority gives start over stop, which could keep initiated high when a clear is intended.",
+      "cond": "During normal HMAC operation",
+      "risk": "A simultaneous start and stop/process pulse would leave initiated set, potentially allowing a new operation to proceed in parallel with an active process, corrupting key/digest state.",
+      "signals": [
+        "hash_start_or_continue",
+        "hash_process",
+        "reg_hash_stop",
+        "initiated"
+      ],
+      "refs": [
+        "file:933-934"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "It is unclear whether the priority (start over stop) is intentional when both hash_start_or_continue and hash_process/reg_hash_stop are true in the same cycle.",
+      "cond": "hash_start_or_continue && (hash_process || reg_hash_stop) true simultaneously",
+      "risk": "If this case is illegal but occurs due to a glitch or mis‑programming, the HMAC may enter an undefined state where initiated is 1 while processing/stopping, bypassing a clean abort or interfering with ongoing digest computation.",
+      "signals": [
+        "hash_start_or_continue",
+        "hash_process",
+        "reg_hash_stop",
+        "initiated"
+      ],
+      "refs": [
+        "file:933-934"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If hash_start_or_continue is pulsed while initiated is already 1, the pulse has no effect as the register remains set. It is not specified whether back‑to‑back starts are expected to be queued or whether the design relies on software to wait for initiated to clear first.",
+      "cond": "initiated already high when hash_start_or_continue rises",
+      "risk": "A second start request could be silently lost, causing a missed HMAC operation or a mismatch between expected sequence and actual state, potentially leading to stale keys being reused.",
+      "signals": [
+        "hash_start_or_continue",
+        "initiated"
+      ],
+      "refs": [
+        "file:933"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:931-935"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 931,
+  "line_end": 935,
+  "security_implications": ""
+}

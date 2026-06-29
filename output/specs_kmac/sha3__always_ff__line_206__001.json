@@ -1,49 +1,134 @@
 {
   "chunk_id": "sha3__always_ff__line_206__001",
-  "summary": "该寄存器块维护 sha3 处理阶段标志 processing：复位清零，收到 process_i 时置位，在 absorbed 被严格判真时清零。",
-  "behavior": "该 always_ff 块实现 processing 状态位的更新。复位有效时，processing 被清为 0；正常工作时，如果 process_i 为真则将 processing 置为 1。若未触发 process_i，但 absorbed 通过 prim_mubi_pkg::mubi4_test_true_strict() 的严格真值检测，则将 processing 清为 0。由于使用 if/else if 优先级链，process_i 对 absorbed 清零条件有更高优先级：当二者同周期同时出现时，processing 会被置为 1 而不是清零。除这些条件外，本块不对 processing 赋值，因此其值保持不变。这里 absorbed 不是直接按 1bit 判断，而是按 MuBi4 严格真值语义解释，说明只有编码为“严格真”时才结束 processing；其他编码（包括非严格真或非法值）都不会在本块中触发清零。",
+  "header": {
+    "module": "sha3",
+    "block_kind": "always_ff",
+    "driven": [
+      "processing"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "process_i",
+      "absorbed"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "handshake",
+      "mubi4"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位有效时，processing 保证为 0。",
-      "output_signals": [
-        "processing"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, processing is cleared to 1'b0.",
+      "cond": "negedge rst_ni",
+      "signals": [
+        "processing",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:206-208"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:207"
       ]
     },
     {
-      "property": "在未复位情况下，若 process_i 不成立且 absorbed 被 mubi4_test_true_strict() 判为严格真，则 processing 保证被清为 0；若 process_i 成立，则 processing 保证被置为 1，并覆盖同周期的 absorbed 清零条件。",
-      "output_signals": [
-        "processing"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When process_i is high (after reset, with priority over absorbed condition), processing is set to 1'b1.",
+      "cond": "process_i high and rst_ni high",
+      "signals": [
+        "processing",
+        "process_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:208-210"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:208"
       ]
-    }
-  ],
-  "security_implications": "该逻辑使用 MuBi4 严格真值检测来决定何时退出 processing，这有助于避免 absorbed 处于非严格真或异常编码时被误当作完成信号，从而降低控制流被单点故障或非法编码扰动的风险。与此同时，同周期 process_i 会优先重新进入 processing，可能影响上层对“完成即退出处理态”的期望，需要结合协议确认这是否为有意设计。",
-  "assumptions": [
+    },
     {
-      "constraint": "absorbed 应按 MuBi4 协议驱动，并且只有在确实完成吸收阶段时才输出会被 prim_mubi_pkg::mubi4_test_true_strict() 判定为严格真的编码。",
-      "bug_relevance": "若 violated，processing 可能过早清零或在应结束时持续保持为 1，导致处理阶段控制错误；这属于行为契约问题，因为本块直接依赖该完成指示决定状态退出。",
-      "related_signals": [
-        "absorbed",
-        "processing"
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When process_i is low and the mubi4 signal absorbed passes mubi4_test_true_strict, processing is cleared to 1'b0.",
+      "cond": "process_i low, rst_ni high, and mubi4_test_true_strict(absorbed) true",
+      "signals": [
+        "processing",
+        "absorbed"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:209-210"
       ]
     },
     {
-      "constraint": "若设计意图是不允许“完成吸收”和“重新发起处理”同周期并发，则外部应避免 process_i 与 absorbed 严格真同时出现；本块在该情况下会安全地优先置位 processing，但这可能与上层协议预期不一致。",
-      "bug_relevance": "若不满足则 processing 会保持/进入处理态而不是退出；这更像防御性优先级行为，不一定是 RTL bug，但若系统协议要求完成优先，则会造成阶段切换异常。",
-      "related_signals": [
-        "process_i",
-        "absorbed",
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When none of rst_ni, process_i, nor absorbed meet their conditions, processing retains its current value.",
+      "cond": "otherwise",
+      "signals": [
         "processing"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:206-212"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "absorbed must be driven to a valid mubi4 encoding (True or False) for the test to correctly indicate completion.",
+      "cond": "always",
+      "risk": "If absorbed is corrupted or invalid, processing will never be cleared, hanging the SHA-3 engine indefinitely.",
+      "signals": [
+        "absorbed"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:209"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "process_i is expected to be a pulse that is only asserted when processing is idle (processing == 0) to avoid immediate re‑triggering after absorption.",
+      "cond": "when the design intends a single processing phase per request",
+      "risk": "If process_i is held high, processing will be re‑asserted in the cycle after absorbed clears it, creating a continuous processing loop that may violate protocol timing.",
+      "signals": [
+        "process_i",
+        "processing"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:208-210"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "No fallback mechanism exists to clear processing if the absorbed signal is stuck in an invalid mubi4 state, causing a permanent deadlock.",
+      "cond": "absorbed never becomes a valid True value",
+      "risk": "The engine hangs, blocking all further SHA-3 operations and potentially denying service.",
+      "signals": [
+        "processing",
+        "absorbed"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:209-210"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If process_i remains asserted while processing is active, the block may re‑enter processing immediately after absorbed clears, resulting in back‑to‑back phases without an idle cycle.",
+      "cond": "process_i held high beyond a single cycle",
+      "risk": "Downstream logic expecting an idle gap between processing phases could misinterpret the continuous transaction, leading to data corruption or state mismatch.",
+      "signals": [
+        "process_i",
+        "processing"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:208-210"
       ]
     }
@@ -51,12 +136,8 @@
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:206-212"
   ],
-  "uncertain_points": [
-    "仅凭该片段无法确认 process_i 置位 processing 的语义是否表示开始一个新 permutation、继续已有处理，还是进入某个更广义的 processing 状态。",
-    "无法从该片段单独确认 absorbed 的来源及其 MuBi4 非严格真/非法编码出现时是否属于正常容错场景还是上游错误；这里只能确定本块不会因这些值清零 processing。",
-    "若 process_i 与 absorbed 严格真同周期同时出现，RTL 明确优先 process_i，但这是否完全符合设计注释或系统级状态机意图，需要结合上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
   "line_start": 206,
-  "line_end": 212
+  "line_end": 212,
+  "security_implications": ""
 }

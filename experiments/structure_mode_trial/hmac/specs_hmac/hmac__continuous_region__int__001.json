@@ -1,0 +1,241 @@
+{
+  "chunk_id": "hmac__continuous_region__int__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "mixed",
+    "driven": [
+      "fifo_wready",
+      "fifo_depth",
+      "fifo_full",
+      "fifo_rvalid",
+      "fifo_rdata",
+      "msg_fifo_req",
+      "msg_fifo_we",
+      "msg_fifo_wdata",
+      "msg_fifo_wmask",
+      "msg_write"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "fifo_wvalid",
+      "sha_en",
+      "fifo_wdata",
+      "fifo_rready",
+      "tl_win_h2d",
+      "tl_win_d2h",
+      "prim_mubi_pkg::MuBi4False",
+      "msg_fifo_gnt",
+      "msg_fifo_rdata",
+      "msg_fifo_rerror",
+      "hmac_fifo_wsel",
+      "msg_allowed",
+      "MsgFifoDepth"
+    ],
+    "modes": [
+      "MsgFifoDepth=32",
+      "sha_en",
+      "SramAw=9",
+      "SramDw=32",
+      "Outstanding=1",
+      "ByteAccess=1",
+      "ErrOnRead=1"
+    ],
+    "tags": [
+      "fifo",
+      "tlul",
+      "handshake",
+      "parameterization",
+      "secret"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "msg_write is asserted when msg_fifo_req, msg_fifo_we, and msg_allowed are high and hmac_fifo_wsel is low.",
+      "cond": "always",
+      "signals": [
+        "msg_write",
+        "msg_fifo_req",
+        "msg_fifo_we",
+        "hmac_fifo_wsel",
+        "msg_allowed"
+      ],
+      "refs": [
+        "hmac.sv:628"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The prim_fifo_sync wvalid_i input is driven by (fifo_wvalid & sha_en), so writes are only accepted when sha_en is high.",
+      "cond": "always",
+      "signals": [
+        "fifo_wvalid",
+        "sha_en",
+        "wvalid_i"
+      ],
+      "refs": [
+        "hmac.sv:579"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "The prim_fifo_sync clear input is tied low (1'b0) and NeverClears parameter is set to 1'b1, so the FIFO never clears its contents via the clear port.",
+      "cond": "always",
+      "signals": [
+        "clr_i",
+        "NeverClears"
+      ],
+      "refs": [
+        "hmac.sv:573",
+        "hmac.sv:577"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "The tlul_adapter_sram has rvalid_i tied low, readback_en_i set to MuBi4False, wr_collision_i tied low, write_pending_i tied low.",
+      "cond": "always",
+      "signals": [
+        "rvalid_i",
+        "readback_en_i",
+        "wr_collision_i",
+        "write_pending_i"
+      ],
+      "refs": [
+        "hmac.sv:616",
+        "hmac.sv:619",
+        "hmac.sv:621",
+        "hmac.sv:622"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When fifo_wvalid is asserted, sha_en must be high to allow the write to enter the FIFO.",
+      "cond": "fifo_wvalid is high",
+      "risk": "Data loss occurs if fifo_wvalid is asserted while sha_en is low.",
+      "signals": [
+        "fifo_wvalid",
+        "sha_en"
+      ],
+      "refs": [
+        "hmac.sv:579"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The tlul_adapter_sram expects msg_fifo_gnt to be asserted to complete a request.",
+      "cond": "msg_fifo_req is high",
+      "risk": "Request stalls or TL-UL protocol violation if gnt_i is not properly driven by the message FIFO controller.",
+      "signals": [
+        "msg_fifo_gnt",
+        "msg_fifo_req"
+      ],
+      "refs": [
+        "hmac.sv:607"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "msg_allowed must be correctly driven to permit the final write signal to the message FIFO; if deasserted, msg_write will be low regardless of request validity.",
+      "cond": "always",
+      "risk": "Unintended denial of write or silent drop of data that could affect HMAC operation.",
+      "signals": [
+        "msg_allowed",
+        "msg_write"
+      ],
+      "refs": [
+        "hmac.sv:628"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The TL-UL adapter integral integrity error output intg_error_o is left unconnected; integrity errors on the TL bus may go undetected.",
+      "cond": "TL protocol integrity violation occurs",
+      "risk": "Corrupt data accepted or used without system-level error handling, potentially breaking data integrity.",
+      "signals": [
+        "intg_error_o"
+      ],
+      "refs": [
+        "hmac.sv:613"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The prim_fifo_sync error output err_o is left unconnected, so FIFO errors such as overflow are not monitored.",
+      "cond": "FIFO overflow or underflow occurs",
+      "risk": "Data loss or silent FIFO corruption without any detection.",
+      "signals": [
+        "err_o"
+      ],
+      "refs": [
+        "hmac.sv:589"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The msg_write assignment depends on msg_allowed, whose generation and timing are not visible in this chunk; mis-generation could allow unintended writes or block legitimate ones.",
+      "cond": "unknown",
+      "risk": "Security-relevant message FIFO write gating could fail, leading to data injection or denial of service.",
+      "signals": [
+        "msg_allowed",
+        "msg_write"
+      ],
+      "refs": [
+        "hmac.sv:628"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The gating of fifo_wvalid with sha_en may cause partial write holes if sha_en deasserts during an active write burst.",
+      "cond": "sha_en toggles while fifo_wvalid is high",
+      "risk": "Partial data missing from the FIFO, leading to incorrect HMAC calculation.",
+      "signals": [
+        "fifo_wvalid",
+        "sha_en"
+      ],
+      "refs": [
+        "hmac.sv:579"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The declared width of wmask_ones is $clog2(MsgFifoDepth+1)-1 = 5 bits, but for a 32-bit data word (4 bytes) the maximum number of ones in the byte mask is 4, requiring only 3 bits; the parameter dependency suggests a possible mismatch.",
+      "cond": "unknown, but width is static",
+      "risk": "Downstream logic may miscompute byte-enable counts, leading to incorrect write handling or protocol violations.",
+      "signals": [
+        "wmask_ones"
+      ],
+      "refs": [
+        "hmac.sv:630"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:568-630"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 568,
+  "line_end": 630,
+  "security_implications": ""
+}

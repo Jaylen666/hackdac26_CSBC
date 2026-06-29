@@ -1,0 +1,62 @@
+{
+  "chunk_id": "keccak_round__continuous_region__declarations_or_instances__008",
+  "summary": "该片段通过形式假设和断言约束 keccak_round 的输入握手与状态编码，使 valid/run/clear 只能在 Idle 使用，并根据 EnMasking 限定允许出现的状态集合。",
+  "behavior": "这段代码本身不驱动功能输出，而是为模块行为施加环境约束和状态合法性检查。首先假设 valid_i 与 run_i 不会同时为 1，允许两者同时为 0（$onehot0({valid_i, run_i})）[593]。其次假设只要 valid_i 或 run_i 被置位，当前状态就必须是 KeccakStIdle，说明这两个启动/输入相关控制只应在 Idle 状态下出现[595-596]。同样，若 clear_i 被按 mubi4 严格真值判定为真，也假设当前状态必须为 KeccakStIdle，表示清除操作设计意图上仅在空闲态发起[598-601]。最后，状态空间是否允许某些阶段状态由参数 EnMasking 控制：当启用 masking 时，断言 keccak_st 绝不能等于 KeccakStActive，意味着未屏蔽实现中的统一 Active 状态在该配置下非法[603-605]；当未启用 masking 时，断言 keccak_st 不能落在 KeccakStPhase1、KeccakStPhase2Cycle1、KeccakStPhase2Cycle2、KeccakStPhase2Cycle3 这些分阶段状态中，意味着这些细分 phase 状态仅属于屏蔽实现[606-609]。",
+  "guarantees": [
+    {
+      "property": "在 EnMasking=1 的配置下，模块保证 keccak_st 不会处于 KeccakStActive。",
+      "output_signals": [
+        "keccak_st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:604-605"
+      ]
+    },
+    {
+      "property": "在 EnMasking=0 的配置下，模块保证 keccak_st 不会处于 KeccakStPhase1、KeccakStPhase2Cycle1、KeccakStPhase2Cycle2 或 KeccakStPhase2Cycle3。",
+      "output_signals": [
+        "keccak_st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:606-609"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接约束了清除控制和 masking 相关状态的合法使用范围。clear_i 仅允许在 Idle 断言[598-601]，有助于避免在计算中途触发清除导致敏感内部状态处于未定义或部分擦除状态。EnMasking 对合法状态集合的断言[603-609]则防止屏蔽/非屏蔽两种实现模式混用状态编码，降低因配置与状态机不一致而破坏掩码保护或计算完整性的风险。",
+  "assumptions": [
+    {
+      "constraint": "环境必须保证 valid_i 与 run_i 至多一个为 1；允许二者同时为 0。",
+      "bug_relevance": "如果违反该约束，同时发出两个控制请求，片段外功能逻辑可能面临冲突的启动/装载语义。该场景在设计上不应发生，但此处仅以假设约束环境而非提供回退行为。",
+      "related_signals": [
+        "valid_i",
+        "run_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:593"
+      ]
+    },
+    {
+      "constraint": "环境必须只在 keccak_st == KeccakStIdle 时断言 valid_i、run_i 或以严格 true 形式断言 clear_i。",
+      "bug_relevance": "若在非 Idle 状态下发起这些控制，可能导致输入装载、运行启动或清除与内部轮函数执行重叠，从而产生功能错误；其中 clear_i 的限制尤其关系到状态安全清除，但代码在此只体现为环境假设。",
+      "related_signals": [
+        "valid_i",
+        "run_i",
+        "clear_i",
+        "keccak_st"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:595-601"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:593-609"
+  ],
+  "uncertain_points": [
+    "这些 `ASSUME/ASSERT 宏主要用于形式验证或仿真检查，而非综合后的数据通路逻辑；因此它们描述的是被要求满足的行为契约和状态合法性，而不是直接实现的控制功能。",
+    "注释称 valid_i、run_i、clear_i 仅在 Idle 状态下断言[595,598]，但该片段没有展示若环境违反此约束时功能逻辑是否有防御性回退，需要结合其他代码确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
+  "line_start": 593,
+  "line_end": 611
+}

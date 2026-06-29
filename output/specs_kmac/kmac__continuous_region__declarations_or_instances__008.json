@@ -1,56 +1,232 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__008",
-  "summary": "该片段实例化了 fifo_empty 中断上报逻辑，并将多个错误源的 valid 信号合并为统一错误事件以驱动 err_code 寄存器写使能。",
-  "behavior": "片段通过 `prim_intr_hw` 实例为 `fifo_empty` 状态型中断提供标准中断处理：中断事件输入来自 `status_msgfifo_empty`，使能、测试注入、测试写使能和当前中断状态分别由 `reg2hw.intr_enable.fifo_empty.q`、`reg2hw.intr_test.fifo_empty.q`、`reg2hw.intr_test.fifo_empty.qe`、`reg2hw.intr_state.fifo_empty.q` 提供；该实例向寄存器侧输出 `hw2reg.intr_state.fifo_empty.de/d` 以更新中断状态，并驱动顶层中断输出 `intr_fifo_empty_o`。另外，`event_error` 由四个错误源的 `valid` 信号按位或形成，只要 `sha3_err.valid`、`app_err.valid`、`entropy_err.valid` 或 `errchecker_err.valid` 中任意一个为 1，就认为发生错误事件。发生该错误事件时，`hw2reg.err_code.de` 被置 1，从而使错误码寄存器具备被硬件写入的使能；但本片段未给出 `hw2reg.err_code.d` 的赋值，因此具体写入哪一种错误码需依赖其他代码确定。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "intr_fifo_empty_o",
+      "hw2reg.intr_state.fifo_empty.de",
+      "hw2reg.intr_state.fifo_empty.d",
+      "event_error",
+      "hw2reg.err_code.de"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "status_msgfifo_empty",
+      "reg2hw.intr_enable.fifo_empty.q",
+      "reg2hw.intr_test.fifo_empty.q",
+      "reg2hw.intr_test.fifo_empty.qe",
+      "reg2hw.intr_state.fifo_empty.q",
+      "sha3_err.valid",
+      "app_err.valid",
+      "entropy_err.valid",
+      "errchecker_err.valid"
+    ],
+    "modes": [
+      "Status"
+    ],
+    "tags": [
+      "fifo",
+      "interrupt",
+      "error",
+      "csr",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当任一错误源的 valid 置位时，`hw2reg.err_code.de` 一定为 1；仅当四个错误源的 valid 全为 0 时，`hw2reg.err_code.de` 为 0。",
-      "output_signals": [
-        "hw2reg.err_code.de"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "intr_fifo_empty_o is assigned the value of prim_intr_hw instance's .intr_o output.",
+      "cond": "always",
+      "signals": [
+        "intr_fifo_empty_o",
+        "intr_fifo_empty"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:680-686"
+      "refs": [
+        "kmac.sv:675"
       ]
     },
     {
-      "property": "`intr_fifo_empty_o` 由 `prim_intr_hw` 的 fifo_empty 中断实例统一生成，并受 `status_msgfifo_empty` 事件、对应 interrupt enable/test/state 寄存器接口控制。",
-      "output_signals": [
-        "intr_fifo_empty_o",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "hw2reg.intr_state.fifo_empty.de and .d are driven by prim_intr_hw instance's hw2reg_intr_state_de_o and hw2reg_intr_state_d_o outputs.",
+      "cond": "always",
+      "signals": [
         "hw2reg.intr_state.fifo_empty.de",
-        "hw2reg.intr_state.fifo_empty.d"
+        "hw2reg.intr_state.fifo_empty.d",
+        "intr_fifo_empty"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:662-676"
+      "refs": [
+        "kmac.sv:673-674"
       ]
-    }
-  ],
-  "security_implications": "该片段涉及错误与中断上报。任何一个内部错误源被标记为 valid 都会触发 `err_code` 寄存器的硬件写使能，有助于将安全/完整性相关异常暴露给软件；同时 fifo_empty 事件可通过标准中断路径通知外部。但由于此处只看到写使能而未看到错误码数据选择，若外部相关逻辑未正确提供 `err_code.d`，则可能出现错误被检测到但错误类型记录不完整的风险。",
-  "assumptions": [
+    },
     {
-      "constraint": "`hw2reg.err_code.d` 必须在 `event_error` 置位时由其他逻辑同步提供有效且与触发错误一致的错误码。",
-      "bug_relevance": "如果违反，该片段仍会使能错误码寄存器写入，但可能写入错误、陈旧或未定义的错误码，导致软件错误诊断失真；这更像行为契约，违反可能构成功能或安全问题。",
-      "related_signals": [
-        "hw2reg.err_code.de",
-        "hw2reg.err_code.d",
+      "id": "G3",
+      "type": "assignment",
+      "claim": "event_error is the logical OR of sha3_err.valid, app_err.valid, entropy_err.valid, and errchecker_err.valid.",
+      "cond": "always",
+      "signals": [
         "event_error",
         "sha3_err.valid",
         "app_err.valid",
         "entropy_err.valid",
         "errchecker_err.valid"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:680-686"
+      "refs": [
+        "kmac.sv:681-683"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "hw2reg.err_code.de is assigned the value of event_error.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.err_code.de",
+        "event_error"
+      ],
+      "refs": [
+        "kmac.sv:686"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "reg2hw intr_enable, test, state, and test_qe (fifo_empty) are correctly driven by the register infrastructure with valid values.",
+      "cond": "always when using the intr_fifo_empty block",
+      "risk": "Interrupts may be spuriously generated or not cleared, causing missed or false interrupt events.",
+      "signals": [
+        "reg2hw.intr_enable.fifo_empty.q",
+        "reg2hw.intr_test.fifo_empty.q",
+        "reg2hw.intr_test.fifo_empty.qe",
+        "reg2hw.intr_state.fifo_empty.q"
+      ],
+      "refs": [
+        "kmac.sv:669-672"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "status_msgfifo_empty is a glitch‑free, properly timed indicator of the FIFO empty condition.",
+      "cond": "when the FIFO empty status changes",
+      "risk": "Glitches on status_msgfifo_empty could cause false edge‑triggered interrupt events inside prim_intr_hw.",
+      "signals": [
+        "status_msgfifo_empty"
+      ],
+      "refs": [
+        "kmac.sv:668"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "sha3_err.valid, app_err.valid, entropy_err.valid, and errchecker_err.valid are clean, synchronous signals suitable for a combinational OR tree and subsequent use as a data‑enable.",
+      "cond": "when any error source becomes valid",
+      "risk": "Glitches on error valid signals can create spurious pulses on event_error, leading to unintended writes to the err_code register.",
+      "signals": [
+        "sha3_err.valid",
+        "app_err.valid",
+        "entropy_err.valid",
+        "errchecker_err.valid"
+      ],
+      "refs": [
+        "kmac.sv:681-683"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "When event_error is asserted, the hw2reg.err_code.d data input already carries a stable and correct error code that stays constant for the entire duration of the de pulse.",
+      "cond": "whenever hw2reg.err_code.de becomes 1",
+      "risk": "If the error code is not stable or correct when de is active, the register may capture an incorrect or transient error value.",
+      "signals": [
+        "event_error",
+        "hw2reg.err_code.de",
+        "hw2reg.err_code.d"
+      ],
+      "refs": [
+        "kmac.sv:686"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact interrupt behavior (edge‑triggered, level, test‑write, state‑clear) of prim_intr_hw with IntrT='Status' is not specified in this chunk; the implementation must be verified against the prim_intr_hw RTL.",
+      "cond": "when status_msgfifo_empty changes or interrupts are tested/cleared",
+      "risk": "Misunderstanding of the primitive could lead to incorrect interrupt handling, test failures, or simulation mismatches.",
+      "signals": [
+        "intr_fifo_empty_o",
+        "status_msgfifo_empty",
+        "reg2hw.intr_test.fifo_empty.qe",
+        "reg2hw.intr_state.fifo_empty.q"
+      ],
+      "refs": [
+        "kmac.sv:662-676"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The err_code data input (hw2reg.err_code.d) may not be valid at the time event_error asserts, risking capture of an incorrect error code.",
+      "cond": "when any error valid asserts",
+      "risk": "An incorrect error code could be latched, leading to wrong fault diagnosis or masking of the real error source.",
+      "signals": [
+        "event_error",
+        "hw2reg.err_code.de",
+        "hw2reg.err_code.d"
+      ],
+      "refs": [
+        "kmac.sv:681-683,686"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "If any error valid remains high for multiple cycles, event_error stays high continuously, causing hw2reg.err_code.de to be asserted for many cycles, which may violate the expected single‑pulse de behavior.",
+      "cond": "when sha3_err.valid, app_err.valid, entropy_err.valid, or errchecker_err.valid stays asserted",
+      "risk": "The err_code register could be written multiple times or continuously enabled, leading to overwrites or glitch‑sensitive capture.",
+      "signals": [
+        "event_error",
+        "hw2reg.err_code.de",
+        "sha3_err.valid",
+        "app_err.valid",
+        "entropy_err.valid",
+        "errchecker_err.valid"
+      ],
+      "refs": [
+        "kmac.sv:681-683,686"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The purpose and expected usage of the reg2hw.intr_test.fifo_empty.qe signal within the test mechanism is not clear from this chunk alone.",
+      "cond": "unknown",
+      "risk": "Incorrect handling could cause unintended interrupt test events or mask real interrupts during testing.",
+      "signals": [
+        "reg2hw.intr_test.fifo_empty.qe"
+      ],
+      "refs": [
+        "kmac.sv:671"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:662-686"
-  ],
-  "uncertain_points": [
-    "`prim_intr_hw` 的精确语义（例如 `IntrT(\"Status\")` 对 sticky/level/edge 行为的具体影响）依赖该子模块定义，本片段只能确定其接口连接关系，无法单独证明内部中断状态机细节。",
-    "注释“Assign error code to the register”与实际代码仅驱动 `hw2reg.err_code.de` 一致性不完全充分；本片段没有显示 `hw2reg.err_code.d` 的赋值，因此这里只能确认启用写入而不能确认错误码内容。"
+    "kmac.sv:662-686"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 662,
-  "line_end": 686
+  "line_end": 686,
+  "security_implications": ""
 }

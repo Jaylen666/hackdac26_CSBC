@@ -1,0 +1,135 @@
+{
+  "chunk_id": "aes_key_expand_continuous_region_aes_key_expand_001__behavior__002",
+  "header": {
+    "module": "aes_key_expand",
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "cfg_valid_i",
+      "op_i",
+      "en_i",
+      "prd_we_i",
+      "out_ack_i",
+      "clear_i",
+      "round_i",
+      "key_len_i",
+      "key_i",
+      "prd_i"
+    ],
+    "modes": [
+      "sp2v_e",
+      "ciph_op_e",
+      "key_len_e"
+    ],
+    "tags": [
+      "key",
+      "security",
+      "parameterization",
+      "handshake"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "key_i must be driven with NumShares shares as defined by the parameter, and WidthPRDKey must correctly reflect the width required for the current key length.",
+      "cond": "always",
+      "risk": "width mismatch leads to wrong key material, silent truncation, or misalignment of prd_i, compromising AES security.",
+      "signals": [
+        "key_i",
+        "NumShares",
+        "WidthPRDKey",
+        "key_len_i"
+      ],
+      "refs": [
+        "file:28-30"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "When out_req_o is asserted, the consumer must eventually assert out_ack_i to complete the transfer; the module will not drop the request prematurely.",
+      "cond": "out_req_o asserted",
+      "risk": "if out_ack_i never arrives, the module stalls permanently, hanging the AES cipher pipeline.",
+      "signals": [
+        "out_req_o",
+        "out_ack_i"
+      ],
+      "refs": [
+        "file:23-24"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "cfg_valid_i is asserted only after op_i, key_len_i, and en_i are stable and valid, and will not change during an active expansion cycle.",
+      "cond": "cfg_valid_i high",
+      "risk": "mid-expansion configuration change may compute intermediate keys with wrong parameters, corrupting the final key and breaking security.",
+      "signals": [
+        "cfg_valid_i",
+        "op_i",
+        "key_len_i",
+        "en_i"
+      ],
+      "refs": [
+        "file:19-21"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Internal signal 'en' of type sp2v_e is declared but not driven here; its semantics and assignment are outside this chunk, making it unclear if it acts as a global sharing enable.",
+      "cond": "unknown",
+      "risk": "If 'en' is incorrectly set to disable sharing, key expansion may produce unprotected keys, defeating DPA countermeasures.",
+      "signals": [
+        "en"
+      ],
+      "refs": [
+        "file:34"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Handshake signals out_req_o and out_ack_i are of type sp2v_e; the surrounding logic must implement the correct sparse handshake protocol to avoid deadlock or glitches.",
+      "cond": "out_req_o asserted",
+      "risk": "a deadlock freezes the AES pipeline; a glitch on the encoded handshake could cause data corruption or leakage of key material.",
+      "signals": [
+        "out_req_o",
+        "out_ack_i"
+      ],
+      "refs": [
+        "file:23-24"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "low",
+      "claim": "sp2v_e may have multiple legal encodings; it is unclear if all of them are valid for out_req_o and out_ack_i, and whether the module handles unexpected values gracefully.",
+      "cond": "out_req_o or out_ack_i takes an unexpected value",
+      "risk": "unexpected enum value could be misinterpreted, possibly leading to erroneous handshake behavior or control flow.",
+      "signals": [
+        "out_req_o",
+        "out_ack_i"
+      ],
+      "refs": [
+        "file:23-24"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:16-34"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv",
+  "line_start": 16,
+  "line_end": 34,
+  "security_implications": ""
+}

@@ -1,50 +1,111 @@
 {
   "chunk_id": "sha3pad__always_comb__line_718__001",
-  "summary": "根据低 7 字节有效掩码 msg_strb，组合生成 funcpad_data[0]：保留已有消息低字节，在更高字节插入 funcpad，并把 end_of_block 放在最高位；非法/非预期掩码时整个 funcpad_data 清零。",
-  "behavior": "该组合逻辑仅对 msg_strb 为连续低位 1 的 7 位模式进行处理，即从 0 个到 7 个低字节有效的情况（000_0000、000_0001、000_0011、000_0111、000_1111、001_1111、011_1111、111_1111）[sha3pad.sv:719-727]。对这些合法模式，funcpad_data[0] 被构造成一个 64 位字：最高位固定取 end_of_block，其余 63 位中，高位部分用 funcpad 重复/截宽填充，低位部分保留 msg_buf[0] 中已有效的低若干字节；保留的消息字节数由 msg_strb 中连续置位的低位个数决定，从 0 字节到 7 字节分别对应 msg_buf[0][7:0] 到 msg_buf[0][55:0] 的拼接 [sha3pad.sv:720-727]。若 msg_strb 不是这些枚举值之一，则 default 分支把整个 funcpad_data 数组清零，而不只是 funcpad_data[0] [sha3pad.sv:729]。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_comb",
+    "driven": [
+      "funcpad_data",
+      "funcpad_data[0]"
+    ],
+    "used": [
+      "msg_strb",
+      "end_of_block",
+      "funcpad",
+      "msg_buf"
+    ],
+    "modes": [
+      "msg_strb byte-strobe patterns 000_0000 through 111_1111"
+    ],
+    "tags": [
+      "integrity",
+      "handshake",
+      "fifo"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 msg_strb 为 7'b111_1111 时，funcpad_data[0] 的低 56 位等于 msg_buf[0][55:0]，位 63 等于 end_of_block，位 62:56 由 7 位 funcpad 填充。",
-      "output_signals": [
-        "funcpad_data"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When msg_strb matches one of 8 contiguous-byte-strobe patterns (7'b000_0000 to 7'b111_1111), funcpad_data[0] is assigned a 64-bit value formed by concatenating end_of_block, a zero-extended funcpad field, and a lower slice of msg_buf[0]. The funcpad extension width is (63 − 8×popcount(msg_strb)) bits and the msg_buf slice width is 8×popcount(msg_strb) bits, keeping the total width at 64 bits.",
+      "cond": "msg_strb ∈ {7'b000_0000, 7'b000_0001, 7'b000_0011, 7'b000_0111, 7'b000_1111, 7'b001_1111, 7'b011_1111, 7'b111_1111}",
+      "signals": [
+        "msg_strb",
+        "funcpad_data[0]",
+        "end_of_block",
+        "funcpad",
+        "msg_buf[0]"
       ],
-      "source_refs": [
-        "sha3pad.sv:727-727"
+      "refs": [
+        "sha3pad.sv:720-727"
       ]
     },
     {
-      "property": "当 msg_strb 不是 case 中列出的连续低位 1 模式时，funcpad_data 的所有元素都被驱动为 0。",
-      "output_signals": [
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "When msg_strb does not match any of the 8 enumerated contiguous-byte-strobe patterns, the entire funcpad_data array is unconditionally assigned to all zeros via the default branch.",
+      "cond": "msg_strb ∉ enumerated patterns",
+      "signals": [
+        "msg_strb",
         "funcpad_data"
       ],
-      "source_refs": [
-        "sha3pad.sv:719-729"
+      "refs": [
+        "sha3pad.sv:729"
       ]
     }
   ],
-  "security_implications": "该逻辑参与 SHA3/KMAC 填充字构造。对非预期 msg_strb 模式采用全零回退，能避免用不规则字节有效掩码生成不明确的填充值，但如果上游错误地产生此类掩码，填充数据会被清零，可能导致摘要计算结果偏离预期。这里涉及消息边界 end_of_block 和函数域填充 funcpad，因此属于完整性相关路径。",
   "assumptions": [
     {
-      "constraint": "msg_strb 应只取连续低位为 1 的合法字节使能模式，表示 msg_buf[0] 中有效字节从最低字节开始连续分布。",
-      "bug_relevance": "若不满足则该块进入默认分支并将 funcpad_data 全清零；这是防御性回退，但该场景设计上通常不应发生，否则会破坏正常的填充/摘要输入。",
-      "related_signals": [
-        "msg_strb",
-        "funcpad_data",
-        "msg_buf"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "msg_strb is expected to only present contiguous-byte-strobe patterns (ones from bit 0 upward) during functional operation and will never carry non-contiguous values such as 7'b000_0010 or 7'b101_0101.",
+      "cond": "normal functional operation",
+      "risk": "A non-contiguous or unexpected msg_strb value matches the default branch, which zeroes the entire funcpad_data array. This could discard valid padding state held in other array elements and corrupt the SHA3 padding sequence before absorption.",
+      "signals": [
+        "msg_strb"
       ],
-      "source_refs": [
-        "sha3pad.sv:719-729"
+      "refs": [
+        "sha3pad.sv:719-730"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "In the 8 enumerated msg_strb branches, only funcpad_data[0] is assigned, while the default branch assigns the entire funcpad_data array. If funcpad_data has more than one element (index > 0), those other elements are left undriven in the enumerated branches within the same always_comb block, inferring combinational latches in synthesis that may retain stale or X values from a previous cycle for those lanes.",
+      "cond": "msg_strb matches an enumerated pattern AND funcpad_data has multiple elements",
+      "risk": "Stale or uninitialized padding lane values from other funcpad_data elements could propagate into the SHA3 absorption datapath, causing incorrect hash computation or leaking residual state as padding material.",
+      "signals": [
+        "funcpad_data",
+        "funcpad_data[0]",
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:720-729"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The default branch aggressively zeroes the entire funcpad_data array on unexpected msg_strb values. It is unclear whether this is an intentional safety/security wipe-on-error behavior or an unintended side effect that silently discards data without raising an error indicator.",
+      "cond": "msg_strb takes an unexpected value at runtime",
+      "risk": "If unintended, it can corrupt a multi-block SHA3 padding sequence without detection. If intended as a security wipe, the lack of an accompanying alert or error signal may hide a protocol violation from the system.",
+      "signals": [
+        "msg_strb",
+        "funcpad_data"
+      ],
+      "refs": [
+        "sha3pad.sv:729"
       ]
     }
   ],
   "evidence_refs": [
     "sha3pad.sv:718-731"
   ],
-  "uncertain_points": [
-    "代码只根据 7 位 msg_strb 处理 0 到 7 个低字节有效的情况，未在该片段中说明为何是 7 位而不是 8 位；推测最高位单独由 end_of_block 占用，但需要结合周边代码确认。",
-    "default 分支写的是整个 funcpad_data = '{default:'0}，而各显式分支只赋值 funcpad_data[0]；这可能是有意把其余元素在非法输入时也清零，但是否要求在合法输入时由其他组合块驱动 funcpad_data 的其余元素，需要上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 718,
-  "line_end": 731
+  "line_end": 731,
+  "security_implications": ""
 }

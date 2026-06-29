@@ -1,40 +1,83 @@
 {
   "chunk_id": "uart_core__continuous_region__declarations_or_instances__003",
-  "summary": "实例化双触发器同步器将异步 rx 同步到 clk_i 域，并声明多数滤波器所需信号。",
-  "behavior": "通过 prim_flop_2sync 实例化一个 1 位宽、复位值为 1 的双触发器同步器，将异步输入 rx 同步至 clk_i 时钟域，输出 rx_sync；复位时 rx_sync 被异步置为 1。同时声明了 rx_sync_q1、rx_sync_q2、rx_in_mx、rx_in_maj 四根线，用于后续实现基于多数表决的噪声滤波，但滤波逻辑未在本区域内给出。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "instance",
+    "driven": [
+      "rx_sync"
+    ],
+    "used": [
+      "rx",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "synchronizer",
+      "reset",
+      "asynchronous"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 rx_sync 输出为高电平（1），且 rx_sync 是经过双触发器同步的稳定信号，不会直接传播亚稳态。",
-      "output_signals": [
-        "rx_sync"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "sync_rx instantiates a two-flop synchronizer that always drives rx_sync from rx, with a reset value of 1'b1, ensuring rx_sync is logic 1 during reset and follows rx after two clk_i cycles once reset is released.",
+      "cond": "always",
+      "signals": [
+        "rx",
+        "rx_sync",
+        "clk_i",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:233-241"
+      "refs": [
+        "233-241"
       ]
     }
   ],
-  "security_implications": "",
   "assumptions": [
     {
-      "constraint": "UART RX 线路在复位期间及复位后处于空闲状态（高电平），否则 rx_sync 初始值 1 可能导致起始位检测错误。",
-      "bug_relevance": "若复位时 RX 为低电平，同步器输出却是 1，会掩盖真实的信号跳变，导致接收器丢失起始位或产生虚假起始位。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The external UART receive line rx idles at logic 1 (high), consistent with standard UART idle, so the synchronizer's reset value 1'b1 does not cause a false start bit when reset is released.",
+      "cond": "when rst_ni is de-asserted and rx is low",
+      "risk": "If rx idles low, after reset release rx_sync will immediately sample low, potentially triggering a false start bit and beginning an erroneous reception.",
+      "signals": [
         "rx",
+        "rst_ni",
         "rx_sync"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:233-241"
+      "refs": [
+        "233-241",
+        "233-245"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The majority filter that produces rx_in_maj from rx_sync (using rx_sync_q1, rx_sync_q2, rx_in_mx) is not defined in this chunk; its actual implementation and filtering threshold must be verified to ensure it reliably rejects noise spikes on the UART receive line as intended by the comment.",
+      "cond": "when noise pulses appear on rx",
+      "risk": "Insufficient noise filtering could allow glitches on rx_sync to disturb the receiver state machine, inject spurious start/stop bits, or corrupt data, potentially affecting UART-driven control paths.",
+      "signals": [
+        "rx_sync",
+        "rx_sync_q1",
+        "rx_sync_q2",
+        "rx_in_mx",
+        "rx_in_maj"
+      ],
+      "refs": [
+        "243-245"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:233-245"
-  ],
-  "uncertain_points": [
-    "rx_sync_q1、rx_sync_q2、rx_in_mx、rx_in_maj 仅声明但未连接，其具体连接和多数滤波逻辑需在后续代码中确认。",
-    "复位值设为 1 是否严格匹配 UART 协议空闲电平（高），需要结合系统设计确认。"
+    "233-245"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 233,
-  "line_end": 245
+  "line_end": 245,
+  "security_implications": ""
 }

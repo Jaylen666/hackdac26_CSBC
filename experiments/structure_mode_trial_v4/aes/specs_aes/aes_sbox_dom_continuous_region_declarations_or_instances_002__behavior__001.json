@@ -1,0 +1,197 @@
+{
+  "chunk_id": "aes_sbox_dom_continuous_region_declarations_or_instances_002__behavior__001",
+  "header": {
+    "module": "aes_sbox_dom",
+    "block_kind": "assign",
+    "driven": [
+      "out_req_o",
+      "we[3:0]",
+      "in_prd",
+      "prd_o"
+    ],
+    "used": [
+      "en_i",
+      "count_q",
+      "prd_i",
+      "out_prd.prd_1",
+      "out_prd.prd_2",
+      "out_prd.prd_3"
+    ],
+    "modes": [],
+    "tags": [
+      "mask",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "out_req_o is asserted high when en_i is high and count_q equals 3'd4; otherwise it is low.",
+      "cond": "en_i & count_q == 3'd4",
+      "signals": [
+        "out_req_o",
+        "en_i",
+        "count_q"
+      ],
+      "refs": [
+        "1061"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "we[i] (for i from 0 to 3) is asserted high when en_i is high and count_q equals i; otherwise we[i] is low.",
+      "cond": "en_i & count_q == i (i in 0..3)",
+      "signals": [
+        "we[3:0]",
+        "en_i",
+        "count_q"
+      ],
+      "refs": [
+        "1064-1067"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "in_prd is assigned from prd_i bits: prd_1 <= prd_i[7:0], prd_2 <= prd_i[11:8], prd_3 <= prd_i[19:12], prd_4 <= prd_i[27:20].",
+      "cond": "always",
+      "signals": [
+        "in_prd",
+        "prd_i"
+      ],
+      "refs": [
+        "1071-1074"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "prd_o is a concatenation of out_prd.prd_3, out_prd.prd_2, and out_prd.prd_1 (msb to lsb); prd_4 is not included.",
+      "cond": "always",
+      "signals": [
+        "prd_o",
+        "out_prd.prd_3",
+        "out_prd.prd_2",
+        "out_prd.prd_1"
+      ],
+      "refs": [
+        "1075"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "count_q never exceeds 3'd4 during normal operation; otherwise out_req_o and we are never asserted.",
+      "cond": "when en_i is high and the S-Box pipeline is active",
+      "risk": "Pipeline stall: out_req_o is permanently low, no output request generated, and no new data is written, causing deadlock.",
+      "signals": [
+        "count_q",
+        "out_req_o",
+        "we[3:0]"
+      ],
+      "refs": [
+        "1061",
+        "1064-1067"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "prd_i is driven by a fresh, independent random source with sufficient entropy per cycle; its bits are not predictable or constant.",
+      "cond": "during every cycle when en_i is high",
+      "risk": "If prd_i is predictable or repeats, the masking scheme breaks and side-channel leakage is possible.",
+      "signals": [
+        "prd_i"
+      ],
+      "refs": [
+        "1071-1074"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The out_prd structure has fields prd_3, prd_2, prd_1 with matching bit widths to form prd_o as intended; the omission of prd_4 is an external topological decision.",
+      "cond": "whenever prd_o is consumed by downstream logic",
+      "risk": "Width mismatch leads to elaboration/synthesis errors; an unintended missing prd_4 may break mask propagation in the chain.",
+      "signals": [
+        "out_prd",
+        "prd_o"
+      ],
+      "refs": [
+        "1075"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "en_i is asserted only when valid input data is present and remains high for a complete 5‑cycle window (count_q 0‑4).",
+      "cond": "during normal pipeline flow",
+      "risk": "Premature deassertion of en_i can cause incomplete writes (we missing) or failure to assert out_req_o, breaking the handshake and stalling.",
+      "signals": [
+        "en_i"
+      ],
+      "refs": [
+        "1061-1067"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "prd_o intentionally omits out_prd.prd_4; it is unclear whether this is correct for the mask chain and whether the missing randomness leads to unmasked intermediate values.",
+      "cond": "always, when prd_o is used by the next stage",
+      "risk": "If the next stage expects prd_4, masking is incomplete and side‑channel leakage could occur.",
+      "signals": [
+        "prd_o",
+        "out_prd.prd_4"
+      ],
+      "refs": [
+        "1075"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "count_q generation in the parent FSM may produce values >4; currently no local protection and out_req_o/we would never assert, causing deadlock.",
+      "cond": "when the external FSM transitions to an illegal count_q",
+      "risk": "Permanent pipeline stall; no error detection, no watchdog, no recovery.",
+      "signals": [
+        "count_q",
+        "out_req_o",
+        "we"
+      ],
+      "refs": [
+        "1061",
+        "1064-1067"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "The extraction of prd_i[27:20] assumes prd_i is at least 28 bits wide; if the port width is narrower, the reference is out of bounds.",
+      "cond": "at compile/elaboration time if the actual width of prd_i is less than 28",
+      "risk": "Synthesis/simulation error or undefined behavior due to out-of-range bit select.",
+      "signals": [
+        "prd_i"
+      ],
+      "refs": [
+        "1071-1074"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "1061-1077"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_dom.sv",
+  "line_start": 1061,
+  "line_end": 1077,
+  "security_implications": ""
+}

@@ -1,0 +1,93 @@
+{
+  "chunk_id": "hmac_reg_top__always_comb__line_2009__001",
+  "header": {
+    "module": "hmac_reg_top",
+    "block_kind": "always_comb",
+    "driven": [
+      "wr_err"
+    ],
+    "used": [
+      "reg_we",
+      "addr_hit",
+      "HMAC_PERMIT",
+      "reg_be"
+    ],
+    "modes": [],
+    "tags": [
+      "csr",
+      "error",
+      "access_control"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "error_detection",
+      "claim": "wr_err is asserted when reg_we is 1 and for at least one bit addr_hit[i] (i in 0..58) the expression (|(HMAC_PERMIT[i] & ~reg_be)) is true; otherwise wr_err is low.",
+      "cond": "always_comb evaluation",
+      "signals": [
+        "wr_err",
+        "reg_we",
+        "addr_hit",
+        "HMAC_PERMIT",
+        "reg_be"
+      ],
+      "refs": [
+        "file:2009-2070"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "External register write control logic must suppress the write transaction and not update any register when wr_err is asserted.",
+      "cond": "reg_we is high and wr_err becomes high",
+      "risk": "If the write proceeds despite wr_err=1, a write to a prohibited byte lane in a security-sensitive register (e.g., key, digest, configuration lock) may succeed, breaking access control and potentially corrupting or exposing secrets.",
+      "signals": [
+        "wr_err",
+        "reg_we"
+      ],
+      "refs": [
+        "file:2010"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "addr_hit is a one-hot vector; exactly one addr_hit[i] is high for the currently addressed register.",
+      "cond": "during any register access with reg_we=1",
+      "risk": "Multiple simultaneous addr_hit assertions could cause wr_err to be spuriously asserted due to a permission mismatch on a non-accessed register, falsely aborting a valid write.",
+      "signals": [
+        "addr_hit"
+      ],
+      "refs": [
+        "file:2011-2069"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The error condition ORs across all addr_hit bits; it is unclear if this is the intended behavior or if the protection should only consider the actual one-hot register. If multiple addr_hit bits are asserted due to a decoder bug, the resulting spurious wr_err may not be handled correctly.",
+      "cond": "when addr_hit is not one-hot (e.g., decoder glitch or error)",
+      "risk": "A valid access could be mistakenly rejected, potentially causing a denial-of-service or an unexpected bus error within the HMAC IP.",
+      "signals": [
+        "addr_hit",
+        "wr_err"
+      ],
+      "refs": [
+        "file:2011-2069"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:2009-2070"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
+  "line_start": 2009,
+  "line_end": 2070,
+  "security_implications": ""
+}

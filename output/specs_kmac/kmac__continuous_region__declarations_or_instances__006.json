@@ -1,62 +1,247 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__006",
-  "summary": "该片段从寄存器接口提取命令/配置字段，并将吸收完成事件转换为 kmac_done 中断，同时用断言约束若干事件信号必须是单拍脉冲。",
-  "behavior": "片段首先将 `reg2hw.cmd.err_processed.q` 与其写使能 `qe` 相与，形成 `err_processed`，因此该信号只在软件对该命令字段发起一次有效写入时为真，而不是简单反映寄存器存储值 [kmac.sv:573-576]。随后直接从 shadowed 配置寄存器导出若干配置：`reg_kmac_en` 取自 `cfg_shadowed.kmac_en.q`，`reg_sha3_mode` 和 `reg_keccak_strength` 分别由寄存器字段强制转换为对应的 SHA3 模式和强度枚举，供后续逻辑使用 [kmac.sv:578-581]。在中断路径上，片段将多比特布尔 `app_absorbed` 通过 `mubi4_test_true_strict` 严格判真，得到单比特事件 `event_absorbed`；只有当 `app_absorbed` 处于严格真编码时才会触发该事件，其他编码不会被当作中断事件 [kmac.sv:587-589]。`event_absorbed` 被送入 `prim_intr_hw` 实例，结合 `intr_enable.kmac_done`、`intr_test.kmac_done`、`intr_state.kmac_done` 寄存器，实现 kmac_done 中断状态更新及外部中断输出 `intr_kmac_done_o`，并通过 `hw2reg.intr_state.kmac_done.{de,d}` 回写中断状态寄存器 [kmac.sv:591-602]。另外两个断言体现设计意图：`err_processed` 的上升沿后下一周期必须拉低，说明该命令事件应为单拍脉冲；同样，对 `sha3_absorbed` 的严格真检测上升沿后，下一周期必须回到严格假，说明吸收完成事件也应是脉冲而非持续电平 [kmac.sv:575-576,604-606]。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "err_processed",
+      "reg_kmac_en",
+      "reg_sha3_mode",
+      "reg_keccak_strength",
+      "event_absorbed",
+      "hw2reg.intr_state.kmac_done.de",
+      "hw2reg.intr_state.kmac_done.d",
+      "intr_kmac_done_o"
+    ],
+    "used": [
+      "reg2hw.cmd.err_processed.q",
+      "reg2hw.cmd.err_processed.qe",
+      "reg2hw.cfg_shadowed.kmac_en.q",
+      "reg2hw.cfg_shadowed.mode.q",
+      "reg2hw.cfg_shadowed.kstrength.q",
+      "app_absorbed",
+      "sha3_absorbed",
+      "reg2hw.intr_enable.kmac_done.q",
+      "reg2hw.intr_test.kmac_done.q",
+      "reg2hw.intr_test.kmac_done.qe",
+      "reg2hw.intr_state.kmac_done.q",
+      "clk_i",
+      "rst_ni",
+      "prim_mubi_pkg::mubi4_test_true_strict",
+      "prim_mubi_pkg::mubi4_test_false_strict"
+    ],
+    "modes": [
+      "kmac_en",
+      "sha3_mode (sha3_mode_e)",
+      "keccak_strength (keccak_strength_e)",
+      "app_absorbed (mubi4_t)"
+    ],
+    "tags": [
+      "interrupt",
+      "csr",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "只有当 `app_absorbed` 为 mubi4 严格真编码时，`event_absorbed` 才为 1；非严格真编码不会被转换为中断事件。",
-      "output_signals": [
-        "event_absorbed"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "err_processed is high exactly when both reg2hw.cmd.err_processed.q and reg2hw.cmd.err_processed.qe are high.",
+      "cond": "always",
+      "signals": [
+        "err_processed",
+        "reg2hw.cmd.err_processed.q",
+        "reg2hw.cmd.err_processed.qe"
       ],
-      "source_refs": [
-        "kmac.sv:587-589"
+      "refs": [
+        "kmac.sv:573"
       ]
     },
     {
-      "property": "`intr_kmac_done_o` 由 `prim_intr_hw` 基于 `event_absorbed` 与 kmac_done 的中断使能/测试/状态寄存器统一生成，并将状态更新通过 `hw2reg.intr_state.kmac_done.{de,d}` 对外提供。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "reg_kmac_en equals the shadowed register field kmac_en.q.",
+      "cond": "always",
+      "signals": [
+        "reg_kmac_en",
+        "reg2hw.cfg_shadowed.kmac_en.q"
+      ],
+      "refs": [
+        "kmac.sv:579"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "reg_sha3_mode is a type-cast copy of the shadowed register field mode.q, interpreted as sha3_mode_e.",
+      "cond": "always",
+      "signals": [
+        "reg_sha3_mode",
+        "reg2hw.cfg_shadowed.mode.q"
+      ],
+      "refs": [
+        "kmac.sv:580"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "reg_keccak_strength is a type-cast copy of the shadowed register field kstrength.q, interpreted as keccak_strength_e.",
+      "cond": "always",
+      "signals": [
+        "reg_keccak_strength",
+        "reg2hw.cfg_shadowed.kstrength.q"
+      ],
+      "refs": [
+        "kmac.sv:581"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "event_absorbed is high if and only if app_absorbed satisfies the mubi4 true strict encoding (mubi4_test_true_strict).",
+      "cond": "always",
+      "signals": [
+        "event_absorbed",
+        "app_absorbed"
+      ],
+      "refs": [
+        "kmac.sv:589"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "instance",
+      "claim": "The prim_intr_hw instance connects .intr_o to intr_kmac_done_o, .hw2reg_intr_state_de_o to hw2reg.intr_state.kmac_done.de, and .hw2reg_intr_state_d_o to hw2reg.intr_state.kmac_done.d; its event input is event_absorbed, and control/status signals come from reg2hw fields.",
+      "cond": "always (wiring)",
+      "signals": [
         "intr_kmac_done_o",
         "hw2reg.intr_state.kmac_done.de",
-        "hw2reg.intr_state.kmac_done.d"
+        "hw2reg.intr_state.kmac_done.d",
+        "event_absorbed",
+        "reg2hw.intr_enable.kmac_done.q",
+        "reg2hw.intr_test.kmac_done.q",
+        "reg2hw.intr_test.kmac_done.qe",
+        "reg2hw.intr_state.kmac_done.q"
       ],
-      "source_refs": [
+      "refs": [
         "kmac.sv:591-602"
       ]
     }
   ],
-  "security_implications": "该片段涉及安全相关的多比特布尔和中断生成。`app_absorbed` 先经 `mubi4_test_true_strict` 再生成中断，降低了非法/毛刺编码被误判为有效事件的风险 [kmac.sv:587-589]。同时，配置来自 shadowed 寄存器字段 [kmac.sv:579-581]，表明这些控制信号依赖受保护配置路径，但该片段本身未展示 shadowed 错误处理。",
   "assumptions": [
     {
-      "constraint": "`reg2hw.cmd.err_processed.qe` 只在一次有效软件命令写入时脉冲，且寄存器顶层应保证 `err_processed` 不会持续多个周期。",
-      "bug_relevance": "若不满足则 `err_processed` 可能被下游误当作持续命令而重复处理；代码含断言表明这种情况设计上不应发生，并依赖 reg_top 的锁存/脉冲语义。",
-      "related_signals": [
-        "reg2hw.cmd.err_processed.q",
+      "id": "A1",
+      "type": "handshake",
+      "claim": "reg2hw.cmd.err_processed.qe is a one-cycle strobe, ensuring err_processed is a one-cycle pulse when asserted.",
+      "cond": "when err_processed is intended to be used as a single-cycle event",
+      "risk": "If qe remains high for multiple cycles, err_processed stays high, potentially triggering multiple done events or violating downstream handshake expectations.",
+      "signals": [
         "reg2hw.cmd.err_processed.qe",
         "err_processed"
       ],
-      "source_refs": [
-        "kmac.sv:573-576"
+      "refs": [
+        "kmac.sv:573",
+        "kmac.sv:576"
       ]
     },
     {
-      "constraint": "`sha3_absorbed` 应只产生单拍的严格真脉冲，而不应保持为严格真多个周期。",
-      "bug_relevance": "若违反，可能导致吸收完成事件被重复计数或重复触发相关控制/中断路径；断言表明这属于合法行为契约而非正常输入变化。",
-      "related_signals": [
+      "id": "A2",
+      "type": "handshake",
+      "claim": "sha3_absorbed must be a one-cycle pulse when its mubi4 true strict condition arises; it must not remain in the true strict state continuously.",
+      "cond": "when sha3_absorbed is asserted",
+      "risk": "If sha3_absorbed stays true longer than a cycle, the assertion fails and downstream logic relying on a pulse may behave incorrectly (e.g., double processing).",
+      "signals": [
         "sha3_absorbed"
       ],
-      "source_refs": [
+      "refs": [
         "kmac.sv:604-606"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "app_absorbed is always a legal mubi4 encoding (true or false), so mubi4_test_true_strict produces a clean logic value without X.",
+      "cond": "during all clock cycles",
+      "risk": "If app_absorbed takes an illegal or metastable value, event_absorbed may become X, potentially causing unknown behavior in the interrupt controller (intr_kmac_done_o) or logic that reads it.",
+      "signals": [
+        "app_absorbed",
+        "event_absorbed"
+      ],
+      "refs": [
+        "kmac.sv:589"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "reg_sha3_mode and reg_keccak_strength are created by raw type casts from cfg_shadowed fields without detecting illegal values. An illegal write to those fields could drive invalid enum states into the SHA-3 datapath.",
+      "cond": "when software writes an out-of-bounds value to cfg_shadowed.mode or cfg_shadowed.kstrength",
+      "risk": "Invalid SHA-3 mode or strength could result in incorrect cryptographic operations, silent data corruption, or security bypass.",
+      "signals": [
+        "reg_sha3_mode",
+        "reg_keccak_strength",
+        "reg2hw.cfg_shadowed.mode.q",
+        "reg2hw.cfg_shadowed.kstrength.q"
+      ],
+      "refs": [
+        "kmac.sv:580-581"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "err_processed is expected to be a one-cycle pulse as asserted, but the downstream consumer (not shown in this chunk) must latch or process it correctly. Without understanding that latch, the assertion alone doesn't confirm functional correctness.",
+      "cond": "when err_processed is generated",
+      "risk": "If downstream logic expects level-sensitive handling or multiple cycles, the design may miss events or count them twice.",
+      "signals": [
+        "err_processed"
+      ],
+      "refs": [
+        "kmac.sv:573",
+        "kmac.sv:576"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "sha3_absorbed's pulse requirement is checked by an assertion, but the consuming logic (likely inside sha3) is not visible. If the consumer uses a level or needs stable assertion, a single-cycle pulse could be missed.",
+      "cond": "when sha3_absorbed is pulsed",
+      "risk": "Missed or duplicate absorb events, breaking the absorb protocol.",
+      "signals": [
+        "sha3_absorbed"
+      ],
+      "refs": [
+        "kmac.sv:604-606"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "event_absorbed is a combinational output of app_absorbed via mubi4_test_true_strict. If app_absorbed is not registered and can glitch, transient false events could appear on event_absorbed and trigger spurious interrupts.",
+      "cond": "when app_absorbed changes state asynchronously or has timing glitches",
+      "risk": "Spurious interrupts may mislead software, waste CPU time, or, in a secure context, serve as a side channel or denial-of-service vector if the interrupt path is not hardened.",
+      "signals": [
+        "app_absorbed",
+        "event_absorbed"
+      ],
+      "refs": [
+        "kmac.sv:589",
+        "kmac.sv:591"
       ]
     }
   ],
   "evidence_refs": [
     "kmac.sv:573-606"
   ],
-  "uncertain_points": [
-    "`intr_kmac_done_o` 的精确置位/保持/清除语义由 `prim_intr_hw` 模块决定；本片段只给出其实例连接，无法仅凭此处完全展开其内部行为 [kmac.sv:591-602]。",
-    "注释写的是“Hash process absorbed interrupt”，但中断实例名和寄存器字段名为 `kmac_done`，说明该中断实际由 `app_absorbed` 事件驱动；该命名是否等价于“完成”需要结合模块上下文确认 [kmac.sv:587-602]。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 573,
-  "line_end": 606
+  "line_end": 606,
+  "security_implications": ""
 }

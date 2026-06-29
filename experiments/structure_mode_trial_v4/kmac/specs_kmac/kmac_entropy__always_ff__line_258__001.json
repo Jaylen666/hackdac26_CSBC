@@ -1,0 +1,154 @@
+{
+  "chunk_id": "kmac_entropy__always_ff__line_258__001",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "timer_value"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "timer_update",
+      "timer_limit",
+      "timer_expired",
+      "timer_enable",
+      "timer_pulse",
+      "timer_value"
+    ],
+    "modes": [
+      "timer_update",
+      "timer_expired",
+      "timer_enable"
+    ],
+    "tags": [
+      "counter",
+      "entropy",
+      "timer",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When reset (rst_ni low), timer_value is cleared to zero.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:260"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When timer_update is asserted, timer_value is loaded with timer_limit.",
+      "cond": "timer_update",
+      "signals": [
+        "timer_update",
+        "timer_limit",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:262"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When timer_expired is asserted, timer_value is cleared to zero (despite comment stating 'keep the value').",
+      "cond": "timer_expired",
+      "signals": [
+        "timer_expired",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:264"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When timer_enable, timer_pulse, and |timer_value (non-zero) are all true, timer_value decrements by 1.",
+      "cond": "timer_enable && timer_pulse && |timer_value",
+      "signals": [
+        "timer_enable",
+        "timer_pulse",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:266"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When none of the explicit update conditions (reset, update, expired, countdown) are active, timer_value retains its previous value.",
+      "cond": "else (implicit, no active condition)",
+      "signals": [
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:258-268"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "timer_pulse must be a single-cycle pulse per intended timer tick when timer_enable is asserted.",
+      "cond": "timer_enable is high and not in reset",
+      "risk": "If timer_pulse is active for multiple cycles, timer_value may decrement multiple times in one tick, causing premature expiration.",
+      "signals": [
+        "timer_pulse",
+        "timer_enable"
+      ],
+      "refs": [
+        "kmac_entropy.sv:265-266"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment on timer_expired assignment says 'keep the value' but the actual RTL assigns zero. The intended behavior on expiration is ambiguous.",
+      "cond": "timer_expired asserted",
+      "risk": "If the intent was to preserve the value, the timer erroneously resets, potentially disrupting health-test timing or causing false clears.",
+      "signals": [
+        "timer_expired",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:264"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "A timer_limit of zero, when loaded via timer_update, makes timer_value zero, and the guard |timer_value prevents any subsequent decrements. This configuration leaves the timer permanently stalled with no expiration path.",
+      "cond": "timer_limit == 0 and timer_update occurs",
+      "risk": "The timer never expires, which could block downstream health checks or timeouts that depend on timer_expired.",
+      "signals": [
+        "timer_limit",
+        "timer_value"
+      ],
+      "refs": [
+        "kmac_entropy.sv:262,266"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_entropy.sv:258-268"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
+  "line_start": 258,
+  "line_end": 268,
+  "security_implications": ""
+}

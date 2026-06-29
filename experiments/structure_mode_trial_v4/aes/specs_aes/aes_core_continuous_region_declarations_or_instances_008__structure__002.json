@@ -1,0 +1,217 @@
+{
+  "chunk_id": "aes_core_continuous_region_declarations_or_instances_008__structure__002",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "instance",
+    "driven": [
+      "cipher_in_ready",
+      "cipher_out_valid",
+      "cipher_crypt_busy",
+      "cipher_dec_key_gen_busy",
+      "cipher_prng_reseed_busy",
+      "cipher_key_clear_busy",
+      "cipher_data_out_clear_busy",
+      "cipher_alert",
+      "state_mask",
+      "entropy_masking_req_o",
+      "state_done"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "cipher_in_valid",
+      "cipher_out_ready",
+      "ctrl_err_storage",
+      "cipher_op_buf",
+      "key_len_q",
+      "cipher_crypt",
+      "cipher_dec_key_gen",
+      "cipher_prng_reseed",
+      "cipher_key_clear",
+      "cipher_data_out_clear",
+      "alert_fatal_o",
+      "prd_clearing_state",
+      "prd_clearing_key",
+      "force_masks",
+      "entropy_masking_ack_i",
+      "entropy_masking_i",
+      "state_init",
+      "key_init_cipher"
+    ],
+    "modes": [
+      "AES192Enable",
+      "SecMasking",
+      "SecSBoxImpl",
+      "SecAllowForcingMasks",
+      "SecSkipPRNGReseeding",
+      "RndCnstMaskingLfsrSeed",
+      "RndCnstMaskingLfsrPerm"
+    ],
+    "tags": [
+      "mask",
+      "entropy",
+      "alert",
+      "reset",
+      "parameterization",
+      "error"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "u_aes_cipher_core.cfg_valid_i is driven by the logical negation of ctrl_err_storage, ensuring cfg_valid_i is low when an error is stored.",
+      "cond": "always",
+      "signals": [
+        "cfg_valid_i",
+        "ctrl_err_storage"
+      ],
+      "refs": [
+        "aes_core.sv:484"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "u_aes_cipher_core.alert_fatal_i is directly connected to the parent's alert_fatal_o output, forming a combinational feedback loop between the cipher core's alert input and output.",
+      "cond": "always",
+      "signals": [
+        "alert_fatal_i",
+        "alert_fatal_o"
+      ],
+      "refs": [
+        "aes_core.sv:497"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "lifecycle",
+      "claim": "ctrl_err_storage is asserted upon detection of a fatal error and remains stable until a safe reset, preventing cfg_valid_i from being re-enabled while the cipher core is in a potentially corrupted state.",
+      "cond": "after a fatal error is detected",
+      "risk": "premature deassertion of ctrl_err_storage could allow cfg_valid_i to go high, enabling configuration writes that may corrupt the cipher core's state or cause spurious operations.",
+      "signals": [
+        "ctrl_err_storage",
+        "cfg_valid_i"
+      ],
+      "refs": [
+        "aes_core.sv:484"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "The alert_fatal_o feedback to alert_fatal_i does not create a combinational loop that leads to oscillation or metastability; the design implicitly relies on alert_fatal_o being registered or properly conditioned inside aes_cipher_core.",
+      "cond": "when alert_fatal_o is asserted",
+      "risk": "a combinational loop could cause continuous toggling, masking the real alert condition, violating fault containment, or propagating X-unknown states to internal logic.",
+      "signals": [
+        "alert_fatal_i",
+        "alert_fatal_o"
+      ],
+      "refs": [
+        "aes_core.sv:497"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "The mask-related entropy inputs (entropy_masking_ack_i, entropy_masking_i) must be driven according to the cipher core's handshake and quality requirements whenever SecMasking is enabled, as the core relies on them for side-channel hardening.",
+      "cond": "SecMasking == 1",
+      "risk": "if masking is enabled but entropy inputs are insufficient or incorrectly timed, the masking mechanism may fail, potentially exposing secret data through power side-channels.",
+      "signals": [
+        "entropy_masking_ack_i",
+        "entropy_masking_i",
+        "SecMasking"
+      ],
+      "refs": [
+        "aes_core.sv:468",
+        "aes_core.sv:505-507"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "The prd_clearing_state_i and prd_clearing_key_i signals are driven by external logic following a defined clearing protocol; they are not glitched or asserted spuriously.",
+      "cond": "during clearing operations",
+      "risk": "spurious assertion could prematurely clear state or keys in the middle of an AES operation, causing data loss or security weakness; failure to assert could leave sensitive material uncleared.",
+      "signals": [
+        "prd_clearing_state_i",
+        "prd_clearing_key_i"
+      ],
+      "refs": [
+        "aes_core.sv:500-501"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The alert_fatal_i feedback loop (alert_fatal_o connected to alert_fatal_i) may circumvent fault containment if the cipher core's internal alert handling is not designed to break the feedback.",
+      "cond": "when the cipher core asserts alert_o (cipher_alert) due to an internal fatal error",
+      "risk": "the loop could prevent proper escalation, cause deadlock, or allow a local fault to persist without being latched and reported to the system.",
+      "signals": [
+        "alert_fatal_i",
+        "alert_fatal_o"
+      ],
+      "refs": [
+        "aes_core.sv:497"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Per the comment on line 484, cfg_valid_i is only used for gating assertions, not for functional configuration gating. If true, error-induced configuration writes might still be possible through other un-gated paths.",
+      "cond": "when ctrl_err_storage is high",
+      "risk": "functional misconfiguration could corrupt state or leak data even while assertions are silenced, reducing the security value of the error latch.",
+      "signals": [
+        "cfg_valid_i",
+        "ctrl_err_storage"
+      ],
+      "refs": [
+        "aes_core.sv:484"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The parameters RndCnstMaskingLfsrSeed and RndCnstMaskingLfsrPerm are passed to the cipher core, but the parent module may assign them as constants. If these seeds are fixed and known, the masking LFSR may be predictable, weakening side-channel protection.",
+      "cond": "if SecMasking is enabled and these parameters are not derived from a high-entropy source",
+      "risk": "predictable masking sequences could be exploited in side-channel attacks to recover secret keys.",
+      "signals": [
+        "RndCnstMaskingLfsrSeed",
+        "RndCnstMaskingLfsrPerm"
+      ],
+      "refs": [
+        "aes_core.sv:472-473"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The entropy handshake (entropy_masking_req_o, entropy_masking_ack_i) and the force_masks control are driven by parent logic whose timing and sequencing are not visible here. The correct operation of the cipher core's masking depends on this external logic meeting the core's protocol.",
+      "cond": "during any operation with masking enabled",
+      "risk": "misalignment or glitches in the handshake could corrupt internal masks or cause state machine deadlocks, degrading security.",
+      "signals": [
+        "entropy_masking_req_o",
+        "entropy_masking_ack_i",
+        "force_masks"
+      ],
+      "refs": [
+        "aes_core.sv:503-507"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_core.sv:466-512"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 466,
+  "line_end": 513,
+  "security_implications": ""
+}

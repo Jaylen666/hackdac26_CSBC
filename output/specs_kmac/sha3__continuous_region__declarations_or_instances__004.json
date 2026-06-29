@@ -1,66 +1,240 @@
 {
   "chunk_id": "sha3__continuous_region__declarations_or_instances__004",
-  "summary": "该片段把消息填充单元 sha3pad 与 Keccak 轮函数核心连接起来，并用断言/假设约束 run、状态有效性和控制传播错误检测。",
-  "behavior": "片段实例化了 sha3pad 和 keccak_round 两个子模块，并完成两者之间的主数据通路连接。sha3pad 接收外部消息接口 msg_valid_i/msg_data_i/msg_strb_i、编码后的 ns_data_i、配置 mode_i/strength_i，以及控制信号 keccak_start、keccak_process、keccak_done；它向外提供 msg_ready_o，并向 Keccak 核心输出吸收阶段使用的 keccak_valid/keccak_addr/keccak_data，同时接收 keccak_ready 和 keccak_complete 作为握手/完成反馈，还输出 sha3pad_keccak_run、absorbed、sha3pad_state_error 与 msg_count_error。keccak_round 则接收该消息写入通路 keccak_valid/addr/data 与 ready 反馈，并接收随机数相关输入、运行控制 keccak_run、生命周期升级信号 lc_escalate_en_i，以及 clear_i=keccak_done；其输出包括 keccak_complete、内部状态 state，以及若干错误指示 keccak_round_state_error、round_count_error、keccak_storage_rst_error。注释和断言进一步表达了设计意图：Keccak 核心只有在 run 请求已被确认时才能处于活动状态；mux_sel 和顶层 FSM 状态 st 必须落在枚举的合法取值内；当 state_valid_o 为 0 时，state_o 必须为全零，且在启用 masking 时要求两个 share 都为零、未启用时要求 share 0 为零。另有环境假设要求软件 run_i 只会在错误已置位或状态机处于 StSqueeze_sparse 时出现。最后，若顶层检测到 error_o.valid，则要求原始控制输入 {start_i, process_i, run_i, done_i} 与实际下传到子模块的控制 {keccak_start, keccak_process, sw_keccak_run, keccak_done} 不相等，即错误条件对应于控制信号被拦截或未正确传播的情形。该片段本身主要体现模块互连和接口契约，sha3pad_keccak_run、absorbed、错误汇总方式以及 keccak_run 与 sw_keccak_run 的完整来源需依赖片段外上下文确认。",
+  "header": {
+    "module": "sha3",
+    "block_kind": "mixed",
+    "driven": [
+      "keccak_valid",
+      "keccak_addr",
+      "keccak_data",
+      "keccak_ready",
+      "keccak_complete",
+      "state",
+      "sha3pad_keccak_run",
+      "absorbed",
+      "sha3pad_state_error",
+      "msg_count_error",
+      "keccak_round_state_error",
+      "round_count_error",
+      "keccak_storage_rst_error"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "msg_valid_i",
+      "msg_data_i",
+      "msg_strb_i",
+      "ns_data_i",
+      "mode_i",
+      "strength_i",
+      "lc_escalate_en_i",
+      "keccak_start",
+      "keccak_process",
+      "keccak_done",
+      "rand_valid_i",
+      "rand_early_i",
+      "rand_data_i",
+      "rand_aux_i",
+      "run_i",
+      "error_o",
+      "st",
+      "state_valid_o",
+      "state_o",
+      "start_i",
+      "process_i",
+      "done_i",
+      "mux_sel"
+    ],
+    "modes": [
+      "StIdle_sparse",
+      "StAbsorb_sparse",
+      "StSqueeze_sparse",
+      "StManualRun_sparse",
+      "StFlush_sparse",
+      "StTerminalError_sparse",
+      "KeccakStActive",
+      "KeccakStPhase1",
+      "KeccakStPhase2Cycle1",
+      "KeccakStPhase2Cycle2",
+      "KeccakStPhase2Cycle3",
+      "MuxGuard",
+      "MuxRelease",
+      "EnMasking"
+    ],
+    "tags": [
+      "masking",
+      "error",
+      "fault",
+      "integrity",
+      "sparse_fsm",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 state_valid_o 为 0 时，state_o 保持全零；启用 masking 时两个 share 都为零，未启用 masking 时至少 state_o[0] 为零。",
-      "output_signals": [
-        "state_valid_o",
-        "state_o"
+      "id": "G1",
+      "type": "instance_connection",
+      "claim": "u_keccak's ready signal (keccak_ready) is wired directly to u_pad's keccak_ready_i, enforcing that sha3pad only drives keccak_valid when the keccak round is ready.",
+      "cond": "always",
+      "signals": [
+        "keccak_ready",
+        "keccak_valid"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:513-517"
+      "refs": [
+        "sha3.sv:431-434"
       ]
     },
     {
-      "property": "如果 keccak_round 内部处于活动相关状态，则 run_req_o 与 run_ack_i 必须同时为真。",
-      "output_signals": [
-        "run_req_o"
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "u_keccak's complete_o (keccak_complete) is connected to u_pad's keccak_complete_i, notifying the padding unit when a Keccak round finishes.",
+      "cond": "always",
+      "signals": [
+        "keccak_complete"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:498-505"
+      "refs": [
+        "sha3.sv:480,437"
       ]
     },
     {
-      "property": "当 error_o.valid 为真时，顶层输入控制向量与实际传递给子模块的控制向量必不相等，表示错误伴随控制传播不一致。",
-      "output_signals": [
-        "error_o.valid",
-        "keccak_start",
-        "keccak_process",
+      "id": "G3",
+      "type": "instance_connection",
+      "claim": "keccak_done is connected to u_keccak's clear_i, so the keccak round internal storage is cleared upon operation completion.",
+      "cond": "always",
+      "signals": [
         "keccak_done"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:527-530"
+      "refs": [
+        "sha3.sv:491"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "instance_connection",
+      "claim": "u_keccak's state_o is wired directly to the module's state signal, making the internal Keccak state observable externally.",
+      "cond": "always",
+      "signals": [
+        "state"
+      ],
+      "refs": [
+        "sha3.sv:482"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "instance_connection",
+      "claim": "lc_escalate_en_i is connected to both u_pad and u_keccak, ensuring life cycle escalation affects both submodules.",
+      "cond": "always",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "sha3.sv:444,485"
       ]
     }
   ],
-  "security_implications": "该片段涉及多项安全相关约束。首先，state_valid_o 无效时强制 state_o 为零，可避免无效周期泄露残留哈希状态，尤其在 EnMasking 打开时要求两个 share 都清零，直接关系到掩码状态的保密性。其次，lc_escalate_en_i 被同时送入 sha3pad 和 keccak_round，表明生命周期升级可影响消息填充和轮函数核心。最后，控制传播错误会触发 error_o.valid，设计意图上用于检测非法或异常控制序列未正确下传的情况。",
   "assumptions": [
     {
-      "constraint": "软件触发的 run_i 只能在 error_o.valid 已经置位，或顶层状态 st 处于 StSqueeze_sparse 时出现。",
-      "bug_relevance": "若不满足，该片段之外的控制逻辑可能在非挤压阶段发起软件运行，造成与设计契约不符的状态推进；这是行为契约，违反后可能导致功能错误而非仅仅进入安全回退。",
-      "related_signals": [
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "When run_i is asserted, either error_o.valid is already true or the sha3 FSM is in StSqueeze_sparse.",
+      "cond": "run_i asserted",
+      "risk": "If run_i is asserted in a non-squeeze state without an error, the keccak run handshake may be initiated in an incorrect context, leading to state corruption or incorrect output.",
+      "signals": [
         "run_i",
         "error_o.valid",
         "st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:524-525"
+      "refs": [
+        "sha3.sv:525-525"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Commented-out assertion StateValidPeriod_A (line 520) indicates an incomplete specification of when state_valid_o should be true relative to completion/done handshake.",
+      "cond": "unknown window",
+      "risk": "state_valid_o may be asserted outside the intended period, allowing stale or invalid state to be read as a valid digest.",
+      "signals": [
+        "state_valid_o"
+      ],
+      "refs": [
+        "sha3.sv:520"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "Assertion KeccakIdleWhenNoRunHs_A relies on internal handshake signals run_req_o/run_ack_i inside u_keccak; their correctness cannot be checked at sha3 top level.",
+      "cond": "always",
+      "risk": "A hidden handshake failure in keccak_round could go undetected by this assertion, masking a keccak activation hazard.",
+      "signals": [
+        "run_req_o",
+        "run_ack_i"
+      ],
+      "refs": [
+        "sha3.sv:498-505"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "MuxSelKnown_A checks mux_sel, but mux_sel is not connected in this region; the definition and safe values of mux_sel depend on another chunk.",
+      "cond": "unknown",
+      "risk": "If mux_sel takes an illegal value, bus contention or data leakage could occur.",
+      "signals": [
+        "mux_sel"
+      ],
+      "refs": [
+        "sha3.sv:508"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The chunk collects multiple submodule error signals (sha3pad_state_error, keccak_round_state_error, etc.) but the logic that combines them into error_o.valid is not shown here.",
+      "cond": "any submodule error",
+      "risk": "A fault in a submodule may not propagate to error_o, leading to silent data corruption or security violation.",
+      "signals": [
+        "error_o.valid",
+        "sha3pad_state_error",
+        "keccak_round_state_error",
+        "round_count_error",
+        "keccak_storage_rst_error",
+        "msg_count_error"
+      ],
+      "refs": [
+        "sha3.sv:525,528-530,453,487-489"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "StateZeroInvalid_A only checks zeroing of state_o when !state_valid_o, but does not verify that masked shares of msg_data_i or keccak_data are properly zeroed/cleared.",
+      "cond": "EnMasking enabled",
+      "risk": "Partial unmasking or share imbalance could leak intermediate state or secrets through uncleared shares.",
+      "signals": [
+        "state_o",
+        "state_valid_o",
+        "EnMasking"
+      ],
+      "refs": [
+        "sha3.sv:513-517"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:415-455",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:457-492",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:498-530"
-  ],
-  "uncertain_points": [
-    "keccak_run 与 sha3pad_keccak_run、sw_keccak_run 之间的组合关系未在本片段中出现，无法仅凭此处确定实际 run 控制如何生成。",
-    "error_o.valid 的生成逻辑不在本片段内，因此只能确认其被用于控制传播错误检测和 run_i 假设，无法确认完整错误优先级或错误汇总来源。",
-    "注释“state_valid_o asserts only in between the completion and done”在本片段中只有注释、没有对应有效断言，因此这是设计意图而非已由该片段强制保证的 RTL/属性行为。"
+    "sha3.sv:415-532"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
   "line_start": 415,
-  "line_end": 532
+  "line_end": 532,
+  "security_implications": ""
 }

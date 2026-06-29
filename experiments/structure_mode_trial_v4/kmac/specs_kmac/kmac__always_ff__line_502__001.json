@@ -1,0 +1,196 @@
+{
+  "chunk_id": "kmac__always_ff__line_502__001",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "sw_key_data_reg[1]"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "engine_stable",
+      "MaxKeyLen",
+      "reg2hw.key_share1[j].qe",
+      "reg2hw.key_share1[j].q"
+    ],
+    "modes": [
+      "engine_stable"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "csr",
+      "reset",
+      "parameterization",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On asynchronous reset (negedge rst_ni), sw_key_data_reg[1] is driven to all zeros.",
+      "cond": "rst_ni is low",
+      "signals": [
+        "rst_ni",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "503-504"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When engine_stable is high and reg2hw.key_share1[j].qe is true, the 32-bit word at sw_key_data_reg[1][32*j+:32] is assigned the value reg2hw.key_share1[j].q; otherwise no update occurs for that word.",
+      "cond": "engine_stable && reg2hw.key_share1[j].qe",
+      "signals": [
+        "engine_stable",
+        "reg2hw.key_share1[j].qe",
+        "reg2hw.key_share1[j].q",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "505-509"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and engine_stable is low, sw_key_data_reg[1] retains its previous value (no update).",
+      "cond": "!rst_ni==1 and engine_stable==0",
+      "signals": [
+        "rst_ni",
+        "engine_stable",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "502-511"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Parameter MaxKeyLen is expected to be a multiple of 32 to ensure the loop covers the entire key length without truncation.",
+      "cond": "always (parameter configuration)",
+      "risk": "If MaxKeyLen is not a multiple of 32, trailing key bits are not loaded into sw_key_data_reg[1], potentially leaving residue or incomplete key material.",
+      "signals": [
+        "MaxKeyLen"
+      ],
+      "refs": [
+        "506"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The reg2hw.key_share1 array must have at least MaxKeyLen/32 entries, matching the loop bound.",
+      "cond": "always",
+      "risk": "Out-of-bounds access could cause simulation/synthesis mismatch or silent data corruption.",
+      "signals": [
+        "reg2hw.key_share1"
+      ],
+      "refs": [
+        "506-508"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "The engine_stable signal is asserted only when the engine is in a state ready to accept a new key load and will not use the key until the load is complete.",
+      "cond": "engine_stable == 1",
+      "risk": "If engine_stable is asserted prematurely or deasserted during partial update, the key register may contain a mixture of old and new key words, leading to incorrect or weak key material.",
+      "signals": [
+        "engine_stable"
+      ],
+      "refs": [
+        "505"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "The reg2hw.key_share1[j].qe signal is a pulse or single-cycle strobe that is deasserted after the corresponding q word is loaded; it must not remain high across multiple clock edges without intention to reload the same word.",
+      "cond": "after qe is sampled high and the word is transferred",
+      "risk": "Persistent qe could cause unintended successive overwrites of the same key word, possibly with new values if q changes, resulting in unwanted key modifications.",
+      "signals": [
+        "reg2hw.key_share1[j].qe",
+        "reg2hw.key_share1[j].q"
+      ],
+      "refs": [
+        "507-508"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The block allows partial updates of sw_key_data_reg[1] (only words with qe high). It is unclear whether the design intends to enforce atomic full-key updates; a partial update could leave a mixture of old and new key words, potentially weakening the key or allowing side-channel leakage.",
+      "cond": "engine_stable high and only a subset of qe bits are set",
+      "risk": "If the key is used immediately after such a partial load, the resulting key may be insecure.",
+      "signals": [
+        "reg2hw.key_share1[j].qe",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "505-509"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "MaxKeyLen not being a multiple of 32 would cause the loop bound MaxKeyLen/32 to truncate, omitting the last partial word from being loaded. It is unclear if MaxKeyLen is constrained to multiples of 32 elsewhere.",
+      "cond": "Parameter MaxKeyLen set to a non-multiple of 32",
+      "risk": "Missing bits can cause incomplete key material, leading to incorrect operation or residue of previous key.",
+      "signals": [
+        "MaxKeyLen"
+      ],
+      "refs": [
+        "506"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "sw_key_data_reg[1] is only one share of the key. The other share (e.g., key_share0) is loaded separately. There is no indication of coordination between shares; loading them independently could break the secrecy property if one share is updated while the other is not.",
+      "cond": "during key loading",
+      "risk": "Mismatched shares may leak secret information or render the key invalid.",
+      "signals": [
+        "sw_key_data_reg[1]",
+        "key_share0"
+      ],
+      "refs": [
+        "504",
+        "508"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The block provides only reset clearing of sw_key_data_reg[1]; there is no fault detection or error-triggered clearing (e.g., on parity error or tamper alert). The key may persist in the register after a fault or deactivation.",
+      "cond": "post-reset operation, no explicit key clearing condition besides reset",
+      "risk": "Key material may remain accessible to downstream logic longer than intended, increasing exposure window.",
+      "signals": [
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "503-511"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "502-512"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 502,
+  "line_end": 512,
+  "security_implications": ""
+}

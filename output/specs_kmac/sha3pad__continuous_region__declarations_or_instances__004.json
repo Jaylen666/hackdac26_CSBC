@@ -1,63 +1,167 @@
 {
   "chunk_id": "sha3pad__continuous_region__declarations_or_instances__004",
-  "summary": "该片段生成一个仅包含末位标记的全零消息字，并将发送地址限制在块地址上界内，越界时输出 0。",
-  "behavior": "片段先声明了按 share 划分的 `zero_with_endbit` 向量数组，用于构造除一个结束标志位外其余全零的数据字。若启用 masking，则 share 0 被整体置零，而 share 1 仅在最高位 `MsgWidth-1` 放入 `end_of_block`，其余位清零；若未启用 masking，则 share 0 的最高位为 `end_of_block`、其余位清零。由此可见，结束标志只被编码到一个 share 中，且位置固定在消息字最高位，而不是最低位或任意位置。另一个组合赋值将 `keccak_addr_o` 设为 `sent_message`，但仅当 `sent_message < block_addr_limit` 时有效；一旦达到或超过该上界，地址输出回退为全零，形成越界保护或安全回退行为。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "mixed",
+    "driven": [
+      "zero_with_endbit",
+      "keccak_addr_o"
+    ],
+    "used": [
+      "end_of_block",
+      "sent_message",
+      "block_addr_limit",
+      "MsgWidth",
+      "Share",
+      "EnMasking"
+    ],
+    "modes": [
+      "EnMasking"
+    ],
+    "tags": [
+      "masking",
+      "padding",
+      "address_mux",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `sent_message < block_addr_limit` 时，`keccak_addr_o` 一定等于 `sent_message`；否则 `keccak_addr_o` 一定为全零。",
-      "output_signals": [
-        "keccak_addr_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When EnMasking is true, zero_with_endbit[0] is driven to all zeros.",
+      "cond": "EnMasking == 1",
+      "signals": [
+        "zero_with_endbit[0]",
+        "EnMasking"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:588-588"
+      "refs": [
+        "sha3pad.sv:577"
       ]
     },
     {
-      "property": "`zero_with_endbit` 始终为除最高位可能承载 `end_of_block` 外其余位全零的向量；在 masking 模式下该结束位仅出现在 share 1，在非 masking 模式下仅出现在 share 0。",
-      "output_signals": [
-        "zero_with_endbit"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When EnMasking is true, zero_with_endbit[1][MsgWidth-1] is driven to end_of_block, and zero_with_endbit[1][MsgWidth-2:0] to zero.",
+      "cond": "EnMasking == 1",
+      "signals": [
+        "zero_with_endbit[1]",
+        "end_of_block",
+        "EnMasking"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:576-583"
+      "refs": [
+        "sha3pad.sv:578-579"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When EnMasking is false, zero_with_endbit[0][MsgWidth-1] is driven to end_of_block, and zero_with_endbit[0][MsgWidth-2:0] to zero.",
+      "cond": "EnMasking == 0",
+      "signals": [
+        "zero_with_endbit[0]",
+        "end_of_block",
+        "EnMasking"
+      ],
+      "refs": [
+        "sha3pad.sv:581-582"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When EnMasking is false, zero_with_endbit[1] is not assigned by this block and remains undriven.",
+      "cond": "EnMasking == 0",
+      "signals": [
+        "zero_with_endbit[1]"
+      ],
+      "refs": [
+        "sha3pad.sv:576-583"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "mux_case",
+      "claim": "keccak_addr_o is assigned sent_message if sent_message < block_addr_limit, otherwise it is assigned '0.",
+      "cond": "always",
+      "signals": [
+        "keccak_addr_o",
+        "sent_message",
+        "block_addr_limit"
+      ],
+      "refs": [
+        "sha3pad.sv:588"
       ]
     }
   ],
-  "security_implications": "该片段与掩码安全和边界安全都有关。`zero_with_endbit` 在 masking 模式下将有效结束位放在单独的 share 中，避免直接在 share 0 中暴露该标记编码方式；同时 `keccak_addr_o` 在地址达到或超过 `block_addr_limit` 时强制为 0，提供了对越界地址传播的保守回退，降低非法访问或错误块寻址扩散到下游 Keccak 接口的风险。",
   "assumptions": [
     {
-      "constraint": "在启用 masking 的合法配置下，`Share` 至少应包含索引 0 和 1，使得对 `zero_with_endbit[1]` 的赋值有效。",
-      "bug_relevance": "如果 `EnMasking` 为真但不存在 share 1，则该实现无法按预期承载结束位，可能导致综合/elaboration 失败或掩码语义错误。这属于行为契约，违反后功能无法正确实现。",
-      "related_signals": [
-        "EnMasking",
-        "Share",
-        "zero_with_endbit"
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "end_of_block is correctly asserted at the appropriate cycle to indicate the end of the message block for zero padding.",
+      "cond": "always when zero_with_endbit is sampled",
+      "risk": "Incorrect padding leading to hash mismatch or state corruption.",
+      "signals": [
+        "end_of_block"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:576-579"
+      "refs": [
+        "sha3pad.sv:578",
+        "sha3pad.sv:581"
       ]
     },
     {
-      "constraint": "`sent_message >= block_addr_limit` 的场景设计上不应被当作有效 Keccak 地址请求使用，因为本片段会将地址安全回退为 0。",
-      "bug_relevance": "若外部仍把该场景视为合法访问，可能错误地访问地址 0 对应位置而非预期的越界位置；不过这里硬件已提供全零回退，因此更像防御性设计下的不应发生输入场景。",
-      "related_signals": [
+      "id": "A2",
+      "type": "handshake",
+      "claim": "Downstream logic using keccak_addr_o must gate or safely handle writes when keccak_addr_o is driven to '0 due to sent_message >= block_addr_limit.",
+      "cond": "sent_message >= block_addr_limit",
+      "risk": "Inadvertent overwrite of data at address 0 if writes are not qualified.",
+      "signals": [
+        "keccak_addr_o",
         "sent_message",
-        "block_addr_limit",
-        "keccak_addr_o"
+        "block_addr_limit"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:588-588"
+      "refs": [
+        "sha3pad.sv:588"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "When sent_message >= block_addr_limit, keccak_addr_o defaults to '0. It is unclear whether this wrap-around is intentional or a design gap that could overwrite the first block.",
+      "cond": "sent_message >= block_addr_limit",
+      "risk": "Data corruption or loss of previously written block at address 0.",
+      "signals": [
+        "keccak_addr_o",
+        "sent_message",
+        "block_addr_limit"
+      ],
+      "refs": [
+        "sha3pad.sv:588"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "When EnMasking is false, zero_with_endbit[1] is undriven. It is unknown whether any downstream consumer reads this share.",
+      "cond": "EnMasking == 0",
+      "risk": "X propagation to outputs or state if the undriven share is used.",
+      "signals": [
+        "zero_with_endbit[1]"
+      ],
+      "refs": [
+        "sha3pad.sv:576-583"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:574-588"
-  ],
-  "uncertain_points": [
-    "`zero_with_endbit` 在后续具体如何参与填充/拼接未在本片段中出现，因此这里只能确认其编码形式，不能单独断言它一定直接作为输出消息字发送。",
-    "将 `end_of_block` 放在 `MsgWidth-1` 位是否对应协议上的“end bit”还是内部位序约定，需结合模块其他片段确认；注释未在此处说明位序语义。",
-    "`keccak_addr_o` 在越界时回退到 0 是纯安全回退还是协议上刻意复用地址 0，单靠本片段无法区分。"
+    "sha3pad.sv:574-588"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 574,
-  "line_end": 588
+  "line_end": 588,
+  "security_implications": ""
 }

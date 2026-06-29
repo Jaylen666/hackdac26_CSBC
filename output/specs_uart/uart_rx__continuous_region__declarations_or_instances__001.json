@@ -1,38 +1,168 @@
 {
   "chunk_id": "uart_rx__continuous_region__declarations_or_instances__001",
-  "summary": "组合逻辑根据移位寄存器内容生成接收数据、帧错误和奇偶校验错误，并直接传递接收有效标志。",
-  "behavior": "该组合块将接收完成标志 rx_valid_q 直接驱动为模块输出 rx_valid。接收数据 rx_data 从移位寄存器 sreg_q 中提取：若使能奇偶校验（parity_enable=1），取 sreg_q[8:1]作为数据字节（bit9 为校验位）；否则取 sreg_q[9:2]（无校验时数据位移至 bit9..2）。帧错误 frame_err 在 rx_valid_q 有效且停止位 sreg_q[10] 为低时置 1。奇偶校验错误 rx_parity_err 在 parity_enable 和 rx_valid_q 均有效时，计算 {sreg_q[9:1], parity_odd} 的缩减异或：结果为 1 表示校验错误（覆盖偶校验 parity_odd=0 和奇校验 parity_odd=1 两种情况）。所有错误信号（frame_err、rx_parity_err）在 rx_valid_q 无效时被门控为 0，确保仅在接收有效时才会指示错误。",
+  "header": {
+    "module": "uart_rx",
+    "block_kind": "assign",
+    "driven": [
+      "rx_valid",
+      "rx_data",
+      "frame_err",
+      "rx_parity_err"
+    ],
+    "used": [
+      "rx_valid_q",
+      "sreg_q",
+      "parity_enable",
+      "parity_odd"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "handshake",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "rx_valid 信号是 rx_valid_q 的无延迟组合拷贝，其电平始终与 rx_valid_q 一致。",
-      "output_signals": [
-        "rx_valid"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "rx_valid is continuously assigned to the value of rx_valid_q",
+      "cond": "always",
+      "signals": [
+        "rx_valid",
+        "rx_valid_q"
       ],
-      "source_refs": [
-        "uart_rx.sv:98"
+      "refs": [
+        "file:98"
       ]
     },
     {
-      "property": "当 rx_valid_q 为低时，frame_err 和 rx_parity_err 必定为低；因此仅当 rx_valid 为高时这些错误标志才可能有效。",
-      "output_signals": [
-        "frame_err",
-        "rx_parity_err"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "rx_data selects sreg_q[8:1] when parity_enable is true, otherwise sreg_q[9:2]",
+      "cond": "always",
+      "signals": [
+        "rx_data",
+        "parity_enable",
+        "sreg_q"
       ],
-      "source_refs": [
-        "uart_rx.sv:101-103"
+      "refs": [
+        "file:99"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "frame_err is asserted when rx_valid_q is high and sreg_q[10] is low (invalid stop bit)",
+      "cond": "always",
+      "signals": [
+        "frame_err",
+        "rx_valid_q",
+        "sreg_q"
+      ],
+      "refs": [
+        "file:101"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "rx_parity_err is asserted when parity_enable is true, rx_valid_q is true, and the XOR reduction of {sreg_q[9:1], parity_odd} evaluates to 1 (parity mismatch)",
+      "cond": "always",
+      "signals": [
+        "rx_parity_err",
+        "parity_enable",
+        "rx_valid_q",
+        "sreg_q",
+        "parity_odd"
+      ],
+      "refs": [
+        "file:102-103"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "uart_rx.sv:98-103"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "rx_valid_q is asserted only when sreg_q holds a fully assembled, stable frame",
+      "cond": "whenever rx_valid_q is used",
+      "risk": "rx_data, frame_err, and rx_parity_err may reflect invalid or transitioning shift register data",
+      "signals": [
+        "rx_valid_q",
+        "sreg_q"
+      ],
+      "refs": [
+        "file:98-103"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "parity_enable and parity_odd are correctly configured before rx_valid_q is asserted to ensure correct parity error detection",
+      "cond": "when parity_enable is true",
+      "risk": "rx_parity_err may be incorrectly asserted or missed, leading to undetected parity errors",
+      "signals": [
+        "parity_enable",
+        "parity_odd"
+      ],
+      "refs": [
+        "file:102-103"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "sreg_q bit positions are defined such that sreg_q[10] is the stop bit, sreg_q[9] is the parity bit, and sreg_q[8:1] are the data bits (MSB-first)",
+      "cond": "when processing a frame",
+      "risk": "incorrect bit extraction leads to wrong data and error signals",
+      "signals": [
+        "sreg_q"
+      ],
+      "refs": [
+        "file:101-103"
+      ]
+    }
   ],
   "uncertain_points": [
-    "sreg_q 的完整位映射（例如起始位位置、总位宽）未在片段中定义，仅从索引 1..10 推断停止位在 bit10，数据/校验位在 bit1..9。",
-    "parity_odd 的确切语义（0=偶校验期望，1=奇校验期望）由行为推导，未在注释中明确。"
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "rx_parity_err is not suppressed when frame_err is asserted, so a parity error flag may be set for a frame that already has a framing error",
+      "cond": "when parity_enable=1 and frame_err=1",
+      "risk": "downstream error handling may incorrectly process a parity error on an invalid frame, possibly causing double error counts or erroneous decisions",
+      "signals": [
+        "rx_parity_err",
+        "frame_err",
+        "rx_valid_q"
+      ],
+      "refs": [
+        "file:101-103"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "parity_enable being toggled while a frame is being received could cause rx_data to be extracted from the wrong shift register bit positions if the loading logic does not account for the change",
+      "cond": "unknown, depends on how parity_enable is controlled relative to frame reception",
+      "risk": "rx_data may be shifted, producing incorrect bytes",
+      "signals": [
+        "parity_enable",
+        "rx_data",
+        "sreg_q"
+      ],
+      "refs": [
+        "file:99"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:98-103"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv",
   "line_start": 98,
-  "line_end": 105
+  "line_end": 105,
+  "security_implications": ""
 }

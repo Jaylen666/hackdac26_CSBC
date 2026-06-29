@@ -1,0 +1,193 @@
+{
+  "chunk_id": "aes_cipher_core__always_comb__key_full_mux__001",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "key_full_d"
+    ],
+    "used": [
+      "key_full_sel",
+      "key_init_i",
+      "prd_clearing_key_i",
+      "key_expand_out",
+      "key_dec_q",
+      "CiphOpFwdOnly"
+    ],
+    "modes": [
+      "KEY_FULL_ENC_INIT",
+      "KEY_FULL_DEC_INIT",
+      "KEY_FULL_ROUND",
+      "KEY_FULL_CLEAR",
+      "CiphOpFwdOnly"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "mask",
+      "fault"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When key_full_sel == KEY_FULL_ENC_INIT, key_full_d = key_init_i.",
+      "cond": "key_full_sel == KEY_FULL_ENC_INIT",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "key_init_i"
+      ],
+      "refs": [
+        "440"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When key_full_sel == KEY_FULL_DEC_INIT, key_full_d = !CiphOpFwdOnly ? key_dec_q : prd_clearing_key_i.",
+      "cond": "key_full_sel == KEY_FULL_DEC_INIT",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "key_dec_q",
+        "prd_clearing_key_i",
+        "CiphOpFwdOnly"
+      ],
+      "refs": [
+        "441"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When key_full_sel == KEY_FULL_ROUND, key_full_d = key_expand_out.",
+      "cond": "key_full_sel == KEY_FULL_ROUND",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "key_expand_out"
+      ],
+      "refs": [
+        "442"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "When key_full_sel == KEY_FULL_CLEAR, key_full_d = key_expand_out.",
+      "cond": "key_full_sel == KEY_FULL_CLEAR",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "key_expand_out"
+      ],
+      "refs": [
+        "443"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "For any other value of key_full_sel (default case), key_full_d = prd_clearing_key_i.",
+      "cond": "key_full_sel equals none of the defined enumeration values",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "prd_clearing_key_i"
+      ],
+      "refs": [
+        "444"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "key_init_i, key_dec_q, key_expand_out, and prd_clearing_key_i are driven with valid values whenever key_full_sel selects them.",
+      "cond": "during any key_full_sel transition",
+      "risk": "If any selected input is invalid (X/Z), key_full_d becomes X/Z, corrupting the key register.",
+      "signals": [
+        "key_init_i",
+        "key_dec_q",
+        "key_expand_out",
+        "prd_clearing_key_i",
+        "key_full_sel"
+      ],
+      "refs": [
+        "440-444"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "key_full_sel is always driven to exactly one of the enumerated values (KEY_FULL_ENC_INIT, KEY_FULL_DEC_INIT, KEY_FULL_ROUND, KEY_FULL_CLEAR) and is stable when sampled.",
+      "cond": "when the mux is evaluated",
+      "risk": "If key_full_sel takes an undefined or glitching value, the default case drives prd_clearing_key_i, potentially clearing the key unexpectedly or introducing a random value.",
+      "signals": [
+        "key_full_sel"
+      ],
+      "refs": [
+        "439",
+        "444"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "CiphOpFwdOnly remains constant throughout operation.",
+      "cond": "always",
+      "risk": "If CiphOpFwdOnly toggles, the KEY_FULL_DEC_INIT mux could switch between key_dec_q (secret) and prd_clearing_key_i (random), loading the wrong key.",
+      "signals": [
+        "CiphOpFwdOnly"
+      ],
+      "refs": [
+        "441"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "KEY_FULL_CLEAR assigns key_full_d = key_expand_out, which appears to be a round key, not a cleared value. It is unclear whether this is intended or if it should use a clearing constant such as prd_clearing_key_i.",
+      "cond": "key_full_sel == KEY_FULL_CLEAR",
+      "risk": "If key_expand_out is a valid round key during the clear operation, the key_full register is loaded with a round key instead of being cleared, potentially retaining secret key material.",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "key_expand_out",
+        "KEY_FULL_CLEAR"
+      ],
+      "refs": [
+        "443"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The default case drives prd_clearing_key_i, which clears the key_full register. It is not confirmed whether this is an intentional safety fallback for invalid key_full_sel values or an oversight that could cause unintended clearing.",
+      "cond": "key_full_sel takes an undefined or erroneous value",
+      "risk": "If the default case is reached due to a fault, the key register is cleared with pseudo-random data, possibly disrupting normal operation; if intended, it is a containment mechanism that should be documented.",
+      "signals": [
+        "key_full_sel",
+        "key_full_d",
+        "prd_clearing_key_i"
+      ],
+      "refs": [
+        "444"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-446"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
+  "line_start": 438,
+  "line_end": 446,
+  "security_implications": ""
+}

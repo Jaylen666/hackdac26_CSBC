@@ -1,0 +1,258 @@
+{
+  "chunk_id": "uart_rx__always_comb__line_53__001",
+  "header": {
+    "module": "uart_rx",
+    "block_kind": "always_comb",
+    "driven": [
+      "sreg_d",
+      "bit_cnt_d",
+      "baud_div_d",
+      "tick_baud_d",
+      "idle_d"
+    ],
+    "used": [
+      "rx_enable",
+      "tick_baud_x16",
+      "idle_q",
+      "rx",
+      "tick_baud_q",
+      "bit_cnt_q",
+      "sreg_q",
+      "baud_div_q",
+      "parity_enable"
+    ],
+    "modes": [
+      "rx_enable",
+      "parity_enable",
+      "idle (idle_q)",
+      "receiving (!idle_q)"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "counter",
+      "shift_register",
+      "handshake",
+      "error_detection",
+      "glitch",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When rx_enable is 0, sreg_d, bit_cnt_d, baud_div_d, tick_baud_d are forced to 0 and idle_d is forced to 1, holding the receiver in idle/reset state.",
+      "cond": "!rx_enable",
+      "signals": [
+        "rx_enable",
+        "sreg_d",
+        "bit_cnt_d",
+        "baud_div_d",
+        "tick_baud_d",
+        "idle_d"
+      ],
+      "refs": [
+        "uart_rx.sv:54-59"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When rx_enable is high and tick_baud_x16 is asserted, the baud divider increments and tick_baud_d receives the overflow carry (i.e., baud tick is generated when baud_div_q overflows).",
+      "cond": "rx_enable && tick_baud_x16",
+      "signals": [
+        "rx_enable",
+        "tick_baud_x16",
+        "baud_div_q",
+        "baud_div_d",
+        "tick_baud_d"
+      ],
+      "refs": [
+        "uart_rx.sv:66-68"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "On detecting a falling edge (idle_q high and rx low) while rx_enable is high, the receiver starts a new frame: baud_div_d set to 8 (mid-bit timing), tick_baud_d cleared, bit_cnt_d loaded with the total bit count (11 if parity_enable else 10), sreg_d zeroed, and idle_d deasserted.",
+      "cond": "rx_enable && idle_q && !rx",
+      "signals": [
+        "idle_q",
+        "rx",
+        "parity_enable",
+        "baud_div_d",
+        "tick_baud_d",
+        "bit_cnt_d",
+        "sreg_d",
+        "idle_d"
+      ],
+      "refs": [
+        "uart_rx.sv:70-76"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "During reception, at the first baud tick, if rx is high (invalid start bit), the receiver aborts: idle_d set to 1, bit_cnt_d cleared to 0, while sreg_d and baud_div_d hold their previous values (from sreg_q / baud_div_q).",
+      "cond": "rx_enable && !idle_q && tick_baud_q && (bit_cnt_q == (parity_enable ? 4'd11 : 4'd10)) && rx",
+      "signals": [
+        "idle_q",
+        "tick_baud_q",
+        "bit_cnt_q",
+        "rx",
+        "parity_enable",
+        "idle_d",
+        "bit_cnt_d",
+        "sreg_d",
+        "baud_div_d"
+      ],
+      "refs": [
+        "uart_rx.sv:77-82",
+        "uart_rx.sv:61-65"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "At any other baud tick during reception, it shifts in rx at the MSB (sreg_d = {rx, sreg_q[10:1]}), decrements bit_cnt, and if bit_cnt_q equals 1 before decrement, sets idle_d to 1 (frame complete).",
+      "cond": "rx_enable && !idle_q && tick_baud_q && not the start-bit-glitch condition",
+      "signals": [
+        "tick_baud_q",
+        "rx",
+        "sreg_q",
+        "sreg_d",
+        "bit_cnt_q",
+        "bit_cnt_d",
+        "idle_d"
+      ],
+      "refs": [
+        "uart_rx.sv:83-86"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "When rx_enable is high and no special event (tick_baud_x16, start edge, baud tick) is active, all state outputs retain their registered values (sreg_d=sreg_q, bit_cnt_d=bit_cnt_q, baud_div_d=baud_div_q, idle_d=idle_q) and tick_baud_d is forced to 0.",
+      "cond": "rx_enable and no active condition",
+      "signals": [
+        "sreg_d",
+        "sreg_q",
+        "bit_cnt_d",
+        "bit_cnt_q",
+        "baud_div_d",
+        "baud_div_q",
+        "idle_d",
+        "idle_q",
+        "tick_baud_d"
+      ],
+      "refs": [
+        "uart_rx.sv:61-65"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "tick_baud_x16 must be a correctly timed, one-cycle-wide pulse occurring at 16 times the baud rate and synchronous to the clock.",
+      "cond": "always when rx_enable and using baud generation",
+      "risk": "If tick_baud_x16 has wrong frequency or duty cycle, baud_div may overflow incorrectly, causing misaligned sampling and corrupted reception.",
+      "signals": [
+        "tick_baud_x16",
+        "baud_div_d",
+        "tick_baud_d"
+      ],
+      "refs": [
+        "uart_rx.sv:66-68"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "rx must be stable at the sampling instants (mid-bit times) and free of glitches except for the start-bit glitch which is partially handled at the first bit time only.",
+      "cond": "during active frame reception",
+      "risk": "Glitches on data bits will be captured directly into sreg without error detection, leading to silent corruption of the received byte.",
+      "signals": [
+        "rx",
+        "sreg_d",
+        "bit_cnt_q",
+        "tick_baud_q"
+      ],
+      "refs": [
+        "uart_rx.sv:78-88"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "External logic must not rely on data integrity if rx_enable is deasserted during a reception; the receiver immediately resets all state without any buffering or error flag.",
+      "cond": "rx_enable transitions from 1 to 0 during a frame",
+      "risk": "Partial frame data is lost without notification, potentially causing higher-level protocol errors.",
+      "signals": [
+        "rx_enable",
+        "sreg_d",
+        "bit_cnt_d",
+        "idle_d"
+      ],
+      "refs": [
+        "uart_rx.sv:54-59"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Glitch abort sets idle_d=1 but leaves sreg_d holding the previous shift data (uncleared). If idle_d is used elsewhere as a 'frame complete' signal, a false valid frame could be latched.",
+      "cond": "When a start-bit glitch occurs and then idle_d rises",
+      "risk": "An external data-capture block may sample sreg at the wrong time and accept stale or random data as a valid frame.",
+      "signals": [
+        "idle_d",
+        "sreg_d"
+      ],
+      "refs": [
+        "uart_rx.sv:77-82"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "No stop-bit verification: after the last data bit is shifted in, idle_d is asserted regardless of whether the stop bit (rx) is high or low, missing a framing error.",
+      "cond": "When bit_cnt_q == 1 and the last bit is sampled (stop bit position)",
+      "risk": "A framing error (missing stop bit) goes undetected and a corrupted frame may be passed as valid, violating data integrity.",
+      "signals": [
+        "rx",
+        "bit_cnt_q",
+        "idle_d"
+      ],
+      "refs": [
+        "uart_rx.sv:83-86"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Parity checking is not performed inside this chunk; parity_enable only affects the bit counter. It is unclear where (or if) parity validation occurs.",
+      "cond": "When parity_enable is active",
+      "risk": "Parity errors may go undetected if the separate parity checker is missing or not properly connected.",
+      "signals": [
+        "parity_enable",
+        "sreg_d"
+      ],
+      "refs": [
+        "uart_rx.sv:74",
+        "uart_rx.sv:78"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_rx.sv:53-90"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv",
+  "line_start": 53,
+  "line_end": 90,
+  "security_implications": ""
+}

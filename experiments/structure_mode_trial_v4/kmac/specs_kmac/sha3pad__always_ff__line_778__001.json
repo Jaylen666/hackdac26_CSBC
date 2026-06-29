@@ -1,0 +1,145 @@
+{
+  "chunk_id": "sha3pad__always_ff__line_778__001",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_ff",
+    "driven": [
+      "start_valid"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "start_i",
+      "done_i"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "handshake",
+      "mubi"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When asynchronous reset is active (rst_ni low), start_valid is set to 1.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:779-780"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When start_i is asserted (high) and not in reset, start_valid is cleared to 0, taking priority over done_i.",
+      "cond": "start_i == 1'b1",
+      "signals": [
+        "start_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:781-782"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When done_i is a mubi4-encoded true value (tested by mubi4_test_true_strict) and neither reset nor start_i active, start_valid is set to 1.",
+      "cond": "prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+      "signals": [
+        "done_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:783-784"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When none of the reset, start_i, or done_i conditions are true, start_valid retains its previous value (implicit hold).",
+      "cond": "else (no active condition)",
+      "signals": [
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:785 (implied)"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "done_i must always be driven with a legal mubi4 encoded value (either True or False); the producer must ensure both differential wires are correct.",
+      "cond": "always",
+      "risk": "If done_i is corrupted or not a proper mubi4 value, mubi4_test_true_strict could return false when true, leaving start_valid stuck at 0, or true spuriously, causing premature re-arming and possibly launching an unintended operation.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "sha3pad.sv:783"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "rst_ni must be properly synchronized and glitch-free so that the reset assertion is clean and release meets timing.",
+      "cond": "at reset transition",
+      "risk": "Glitches on rst_ni could cause start_valid to be spuriously set to 1, triggering a false start of a security-sensitive operation (e.g., Keccak round).",
+      "signals": [
+        "rst_ni",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:779-780"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "done_i may be asynchronous to clk_i; direct sampling in this synchronous always_ff could lead to metastability and glitches on start_valid.",
+      "cond": "if done_i originates from a different clock domain",
+      "risk": "A metastable done_i sample could cause start_valid to be set to 1 erroneously, injecting a false start into the Keccak padder, potentially corrupting the padding block or state.",
+      "signals": [
+        "done_i",
+        "start_valid",
+        "clk_i"
+      ],
+      "refs": [
+        "sha3pad.sv:783-784"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "start_i must be driven as a pulse that is deasserted before done_i to allow start_valid to return to 1; if held high it overrides done_i and prevents re-arming.",
+      "cond": "unknown driver behaviour",
+      "risk": "If start_i remains high indefinitely, start_valid will stay low, stalling the padder indefinitely even after a completed operation.",
+      "signals": [
+        "start_i",
+        "done_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:781-784"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:778-786"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 778,
+  "line_end": 786,
+  "security_implications": ""
+}

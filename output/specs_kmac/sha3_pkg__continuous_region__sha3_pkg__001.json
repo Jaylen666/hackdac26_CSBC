@@ -1,73 +1,196 @@
 {
   "chunk_id": "sha3_pkg__continuous_region__sha3_pkg__001",
-  "summary": "该片段定义了 KMAC/SHA3 相关的静态配置常量、模式枚举和由参数推导出的尺寸，用于约束 Keccak 状态宽度、消息数据宽度、N/S 前缀存储大小以及不同安全强度下的 rate/capacity 映射。",
-  "behavior": "这段 package 代码本身不实现动态数据通路逻辑，而是提供后续模块共同依赖的编译期常量和类型定义。它将 Keccak 状态宽度固定为 1600 位，并在注释中明确指出 sha3pad 依赖这一取值，不应随意修改；同时定义 Function Name 和 Customization String 的最大宽度，并据此计算 left_encode 长度字段的最大字节数、N/S 拼接寄存器所需空间以及按 32-bit 字对齐后的寄存器大小，最后再加 2 字节得到 cSHAKE/SHAKE 前缀区大小 [sha3_pkg.sv:13, 17-18, 25-31, 33-40]。片段还把 KMAC 数据通路宽度参数化为 MsgWidth，并派生字节使能宽度 MsgStrbW；注释说明 KMAC 设计默认假定 MsgWidth=64，且 keccak_round、sha3pad 和 kmac core 中存在与该宽度相关的结构性约束，因此虽然语法上可配置，设计意图上并非任意宽度都可直接工作 [sha3_pkg.sv:42-53]。此外，代码定义了 SHA3/SHAKE/cSHAKE 的模式枚举以及 5 种安全强度枚举，后者决定 Keccak 的 rate 和 capacity；对应地，KeccakRate 数组按 MsgWidth 把各强度的吸收块大小换算为“每块多少个 MsgWidth 字”，KeccakBitCapacity 数组给出各强度的 capacity 比特数，MaxBlockSize 取最大 rate（L128），而 KeccakEntries、KeccakMsgAddrW 和 KeccakCountW 则给出 1600-bit 状态在当前 MsgWidth 下可分成多少个消息字及其寻址/计数位宽 [sha3_pkg.sv:55-71, 73-106]。",
-  "guarantees": [
+  "header": {
+    "module": "sha3_pkg",
+    "block_kind": "declaration",
+    "driven": [
+      "StateW",
+      "FnWidth",
+      "CsWidth",
+      "MaxFnEncodeSize",
+      "MaxCsEncodeSize",
+      "NSRegisterSizePre",
+      "NSRegisterSize",
+      "PrefixSize",
+      "PrefixIndexW",
+      "MsgWidth",
+      "MsgStrbW",
+      "sha3_mode_e",
+      "keccak_strength_e",
+      "KeccakRate",
+      "KeccakBitCapacity",
+      "MaxBlockSize",
+      "KeccakEntries",
+      "KeccakMsgAddrW",
+      "KeccakCountW"
+    ],
+    "used": [
+      "clog2",
+      "MsgWidth",
+      "FnWidth",
+      "CsWidth",
+      "StateW"
+    ],
+    "modes": [
+      "sha3_mode_e",
+      "keccak_strength_e"
+    ],
+    "tags": [
+      "parameterization",
+      "integrity",
+      "fault",
+      "access_control"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
     {
-      "property": "所有使用该 package 的逻辑都可依赖：Keccak 状态宽度被定义为 1600 位，状态可被划分为 KeccakEntries=1600/MsgWidth 个 MsgWidth 宽的数据单元。",
-      "output_signals": [
-        "StateW",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Parameter MsgWidth must be kept at 64; the entire KMAC datapath, sha3pad, and keccak_round are not designed for any other value.",
+      "cond": "At synthesis or instantiation time, the user or top-level must not override MsgWidth.",
+      "risk": "If MsgWidth is changed, KeccakRate depth calculations, handshake widths, and byte strobe sizing break, leading to complete functional failure of the KMAC/Keccak pipeline.",
+      "signals": [
+        "MsgWidth",
+        "KeccakRate",
+        "MsgStrbW",
         "KeccakEntries"
       ],
-      "source_refs": [
-        "sha3_pkg.sv:13",
-        "sha3_pkg.sv:103-105"
+      "refs": [
+        "sha3_pkg.sv:43-53"
       ]
     },
     {
-      "property": "对每个 keccak_strength_e 枚举值，KeccakRate 和 KeccakBitCapacity 提供固定的一一对应映射，其中 MaxBlockSize 等于最大 rate，即 L128 项。",
-      "output_signals": [
-        "KeccakRate",
-        "KeccakBitCapacity",
-        "MaxBlockSize"
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "If both function name N and customization string S are empty, external logic (SW) must drive sha3_mode_e to Shake (2'b10) instead of CShake, even when performing cSHAKE operations.",
+      "cond": "When N and S are null (zero length) and the cryptographic function is cSHAKE.",
+      "risk": "Using CShake mode with empty N and S would trigger incorrect padding according to the bytepad rule (comment indicates Shake padding is required), potentially producing an invalid or non‑standard output.",
+      "signals": [
+        "sha3_mode_e"
       ],
-      "source_refs": [
-        "sha3_pkg.sv:77-83",
-        "sha3_pkg.sv:85-101"
+      "refs": [
+        "sha3_pkg.sv:64-66"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "External logic must ensure that the encoded lengths of function name N and customization string S do not exceed the parameterised widths (FnWidth bits for N, CsWidth bits for S).",
+      "cond": "Whenever N and S are provided to the KMAC core.",
+      "risk": "Violation could cause truncation of the length information, incorrect prefix encoding, and subsequent hash computation mismatch or data loss.",
+      "signals": [
+        "FnWidth",
+        "CsWidth"
+      ],
+      "refs": [
+        "sha3_pkg.sv:16-18"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "Any module instantiating symbols from this package must not drive the enumerations sha3_mode_e and keccak_strength_e with unused or illegal values.",
+      "cond": "Runtime assignment of the enum signals in downstream logic.",
+      "risk": "Undefined behavior: unused sha3_mode_e (2'b01) or keccak_strength_e (>3'b100) can select incorrect padding, wrong capacity, or cause out-of-bounds array accesses, jeopardizing cryptographic strength or causing silent data corruption.",
+      "signals": [
+        "sha3_mode_e",
+        "keccak_strength_e"
+      ],
+      "refs": [
+        "sha3_pkg.sv:65-71",
+        "sha3_pkg.sv:77-83"
       ]
     }
   ],
-  "security_implications": "该片段定义了 SHA3/SHAKE/cSHAKE 模式和不同安全强度对应的 rate/capacity 基础参数，这些静态常量直接影响哈希/扩展输出函数的域分离和安全强度配置 [sha3_pkg.sv:55-83, 85-99]。如果这些参数被不一致地修改，可能导致填充规则、前缀构造或吸收块大小与设计其他部分不匹配，从而破坏预期的算法行为或安全边界；尤其注释已指出 MsgWidth 和 StateW 的某些可配置性在系统层面实际上受限 [sha3_pkg.sv:10-12, 42-51]。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "设计行为契约上应保持 StateW=1600；虽然参数语法上可改，但注释明确指出 sha3pad 逻辑假定状态宽度为 1600。",
-      "bug_relevance": "如果违反该约束，sha3pad 与其他 Keccak 相关逻辑可能对状态大小的解释不一致，导致填充、分块或轮函数接口失配，构成功能错误。",
-      "related_signals": [
-        "StateW"
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "sha3_mode_e uses a 2‑bit logic type but leaves encoding 2'b01 undefined. Downstream RTL may not have a default case or error handling for this illegal mode, potentially leading to undefined padding or bypassing of the N/S encoding logic.",
+      "cond": "If any source (e.g., a misconfigured CSR or a fault) drives 2'b01 into a module using sha3_mode_e.",
+      "risk": "An attacker or software error could silently switch the Keccak mode into an unsupported state, resulting in incorrect hash outputs, loss of integrity, or security‑relevant misbehavior.",
+      "signals": [
+        "sha3_mode_e"
       ],
-      "source_refs": [
-        "sha3_pkg.sv:9-13"
+      "refs": [
+        "sha3_pkg.sv:67-71"
       ]
     },
     {
-      "constraint": "设计意图上 MsgWidth 应保持为 64，且至少应满足能整除 1600 并与 keccak_round、sha3pad、kmac core 中的固定宽度结构一致。",
-      "bug_relevance": "如果违反该约束，KeccakRate、KeccakEntries 等派生常量虽仍会被计算，但相关模块中的固定 mux、输出长度拼接和状态切分逻辑可能不再正确，导致功能错误；这是合法配置前提，而非该片段内的防御性回退场景。",
-      "related_signals": [
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "keccak_strength_e is a 3‑bit enumeration with only five valid encodings (0–4). Values 5,6,7 are not defined; if driven, they will index beyond the KeccakRate and KeccakBitCapacity arrays (size 5), causing out‑of‑bounds access.",
+      "cond": "When keccak_strength_e takes a value >= 5 at run time.",
+      "risk": "Out‑of‑bounds array indexing can produce an arbitrary or zero capacity/rate selection, breaking Keccak’s security guarantees (collision resistance, preimage resistance) and potentially exposing digest data.",
+      "signals": [
+        "keccak_strength_e",
+        "KeccakRate",
+        "KeccakBitCapacity"
+      ],
+      "refs": [
+        "sha3_pkg.sv:77-83",
+        "sha3_pkg.sv:85-91",
+        "sha3_pkg.sv:93-99"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "Parameter MsgWidth is defined as a simple parameter (not localparam) despite extensive warnings that the entire design is hardwired to 64. A top‑level override would silently corrupt KeccakRate[], MsgStrbW, KeccakEntries, and all derived address/count widths.",
+      "cond": "If a higher‑level integrator or configuration layer redefines MsgWidth to a value not equal to 64.",
+      "risk": "Integer division truncation (e.g., 1344/32 gives a wrong depth) breaks the Keccak absorbing/squeezing schedule and invalidates all cryptographic operations.",
+      "signals": [
         "MsgWidth",
         "KeccakRate",
-        "KeccakEntries"
+        "KeccakEntries",
+        "KeccakMsgAddrW",
+        "KeccakCountW",
+        "MsgStrbW"
       ],
-      "source_refs": [
-        "sha3_pkg.sv:42-53",
-        "sha3_pkg.sv:85-106"
+      "refs": [
+        "sha3_pkg.sv:43-54",
+        "sha3_pkg.sv:85-91",
+        "sha3_pkg.sv:103-106"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "FnWidth is restricted to 32 bits, whereas the SHA‑3 specification allows function name N up to 2^256 bits. The rationale for this severe restriction is not documented, and it may limit future extensions or interoperability with standards requiring wider function names.",
+      "cond": "When the system needs to use a function name longer than 32 bits.",
+      "risk": "No immediate functional risk for current configurations, but design inflexibility could lead to non‑compliance or incorrect N truncation if wider names are ever required by external components.",
+      "signals": [
+        "FnWidth"
+      ],
+      "refs": [
+        "sha3_pkg.sv:16-18"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The comment states that when N and S are empty, SW shall choose SHAKE mode even for cSHAKE. However, the package itself provides no hardware enforcement or masking logic; the downstream kmac core or controller must handle this mode‑selection rule.",
+      "cond": "If the controlling FSM or software driver fails to implement this rule correctly.",
+      "risk": "An incorrect mode input would propagate to the sh3 pad module and produce a non‑conformant bytepad, breaking cSHAKE compliance even when N and S are empty.",
+      "signals": [
+        "sha3_mode_e"
+      ],
+      "refs": [
+        "sha3_pkg.sv:64-66"
       ]
     }
   ],
   "evidence_refs": [
-    "sha3_pkg.sv:9-13",
-    "sha3_pkg.sv:15-18",
-    "sha3_pkg.sv:20-31",
-    "sha3_pkg.sv:33-40",
-    "sha3_pkg.sv:42-53",
-    "sha3_pkg.sv:55-71",
-    "sha3_pkg.sv:73-106"
-  ],
-  "uncertain_points": [
-    "注释中给出的模式与 little-endian 填充值表（Sha3=2'b10，Shake=4'b1111，CShake=2'b00）与实际 sha3_mode_e 枚举编码（Sha3=2'b00，Shake=2'b10，CShake=2'b11）并不是同一层语义；前者看起来像填充/domain separation 位串，后者是内部模式选择编码，但仅凭该片段无法完全确认两者的对应关系 [sha3_pkg.sv:59-71]。",
-    "FnWidth/CsWidth 的注释称 N 和 S 应小于 2**256 bits 且按 8 bit 整除，但该片段仅给出默认参数 32 和 256，并未在代码中强制检查这些约束是否始终满足 [sha3_pkg.sv:15-18]。",
-    "PrefixIndexW 被定义为 $clog2(PrefixSize/64)，这隐含以前缀按 64-bit 单元索引；若 PrefixSize 不是 64 的整数倍，其覆盖范围是否完全符合使用方预期，需要结合其他代码确认 [sha3_pkg.sv:37-40]。"
+    "sha3_pkg.sv:7-106"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv",
   "line_start": 7,
-  "line_end": 106
+  "line_end": 106,
+  "security_implications": ""
 }

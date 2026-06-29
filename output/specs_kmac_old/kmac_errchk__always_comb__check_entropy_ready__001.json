@@ -1,0 +1,61 @@
+{
+  "chunk_id": "kmac_errchk__always_comb__check_entropy_ready__001",
+  "summary": "在 KMAC 使能时，片段对一次从消息输入阶段返回空闲态的状态跳转做熵就绪检查，并在配置未就绪时拉高错误指示。",
+  "behavior": "该组合逻辑默认将 err_entropy_ready 清零。只有当当前状态为 StIdle、前一/下一相关状态指示为 StMsgFeed，且 kmac_en_i 为真时，才执行检查；在这一特定条件下，如果 cfg_entropy_ready 为假，则将 err_entropy_ready 置 1，否则保持为 0。代码体现的实际行为是：仅在从 StMsgFeed 切换到 StIdle 的这一状态组合上报告“entropy ready”错误，其他状态或 KMAC 未使能时都不会报该错误。",
+  "guarantees": [
+    {
+      "property": "当 st 不等于 StIdle，或 st_d 不等于 StMsgFeed，或 kmac_en_i 为 0 时，err_entropy_ready 一定为 0。",
+      "output_signals": [
+        "err_entropy_ready"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:286-292"
+      ]
+    },
+    {
+      "property": "当 st==StIdle、st_d==StMsgFeed、kmac_en_i==1 且 cfg_entropy_ready==0 时，err_entropy_ready 一定为 1。",
+      "output_signals": [
+        "err_entropy_ready"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:288-290"
+      ]
+    }
+  ],
+  "security_implications": "该检查与熵源可用性相关，属于安全敏感路径：它试图在 KMAC 使能且特定状态收尾时检测熵配置未就绪的情况，并通过 err_entropy_ready 发出错误指示，帮助避免在缺少预期熵准备条件下继续相关操作。但仅从本片段看，错误仅在特定状态组合上被报告，是否已完整覆盖所有应检查的时刻需要结合更大范围状态机确认。",
+  "assumptions": [
+    {
+      "constraint": "st 与 st_d 的语义必须支持用组合条件“st==StIdle 且 st_d==StMsgFeed”来唯一表示本模块想检查的那次状态转换或边界时刻。",
+      "bug_relevance": "如果 st_d 不是该转换的可靠指示，或其命名/用途与这里假设不一致，则可能在错误时刻误报或漏报 err_entropy_ready，导致熵未就绪错误检测失效。",
+      "related_signals": [
+        "st",
+        "st_d"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:288-289"
+      ]
+    },
+    {
+      "constraint": "在需要通过此逻辑判定熵是否就绪的合法操作路径上，cfg_entropy_ready 应准确反映熵准备状态。",
+      "bug_relevance": "如果 cfg_entropy_ready 错误地为 1，则会漏报应有的熵未就绪错误；如果错误地为 0，则会产生误报并可能干扰正常 KMAC 操作。这属于行为契约，违反时可能构成功能或安全问题。",
+      "related_signals": [
+        "cfg_entropy_ready",
+        "err_entropy_ready",
+        "kmac_en_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:288-290"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:285-293"
+  ],
+  "uncertain_points": [
+    "仅凭该片段无法确认 st_d 表示前一拍状态、下一状态，还是其他派生状态；因此“从 StMsgFeed 到 StIdle 的转换”是基于命名和条件组合的推断，需结合上下文确认。",
+    "无法仅从该片段判断为何只在 st==StIdle 且 st_d==StMsgFeed 的条件下检查 cfg_entropy_ready；若设计意图是覆盖更广泛的熵就绪检查，则这里可能只是其中一个检查点。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
+  "line_start": 285,
+  "line_end": 293
+}

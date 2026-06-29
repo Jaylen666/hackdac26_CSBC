@@ -1,50 +1,139 @@
 {
   "chunk_id": "kmac__always_ff__line_502__001",
-  "summary": "该时序块在复位时清零软件密钥寄存器 share1，并只在引擎稳定时按 32 位分段接受来自 key_share1 寄存器接口的写入。",
-  "behavior": "该寄存器过程维护 `sw_key_data_reg[1]`。复位有效时，`sw_key_data_reg[1]` 被整体清零 [kmac.sv:503-504]。非复位状态下，只有当 `engine_stable` 为真时才允许更新该寄存器；此时遍历 `j=0` 到 `MaxKeyLen/32-1` 的每个 32 位字槽，对每个槽位若 `reg2hw.key_share1[j].qe` 置位，则将对应的 `reg2hw.key_share1[j].q` 写入 `sw_key_data_reg[1][32*j+:32]`，未被使能的槽位保持原值 [kmac.sv:505-510]。当 `engine_stable` 为假时，整个 `sw_key_data_reg[1]` 保持不变 [kmac.sv:505-510]。这体现出软件提供的 key share1 被分字锁存，并且更新被 `engine_stable` 条件门控。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "sw_key_data_reg[1]"
+    ],
+    "used": [
+      "reg2hw.key_share1[j].qe",
+      "reg2hw.key_share1[j].q",
+      "engine_stable",
+      "clk_i",
+      "rst_ni",
+      "MaxKeyLen"
+    ],
+    "modes": [],
+    "tags": [
+      "key",
+      "secret",
+      "handshake",
+      "reset",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位期间 `sw_key_data_reg[1]` 被强制清零。",
-      "output_signals": [
-        "sw_key_data_reg"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, sw_key_data_reg[1] is cleared to zero on the next clock edge.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "sw_key_data_reg[1]"
       ],
-      "source_refs": [
-        "kmac.sv:503-504"
+      "refs": [
+        "502-504"
       ]
     },
     {
-      "property": "当 `engine_stable` 为假时，该块不会修改 `sw_key_data_reg[1]`；当 `engine_stable` 为真时，仅 `qe` 置位的 32 位分段会被新值覆盖，其余分段保持原值。",
-      "output_signals": [
-        "sw_key_data_reg"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When engine_stable is high, for each 32-bit word index j from 0 to MaxKeyLen/32-1, if reg2hw.key_share1[j].qe is true, the corresponding slice sw_key_data_reg[1][32*j+:32] is updated with reg2hw.key_share1[j].q.",
+      "cond": "engine_stable and reg2hw.key_share1[j].qe",
+      "signals": [
+        "engine_stable",
+        "reg2hw.key_share1[j].qe",
+        "reg2hw.key_share1[j].q",
+        "sw_key_data_reg[1]"
       ],
-      "source_refs": [
-        "kmac.sv:505-510"
+      "refs": [
+        "505-510"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When engine_stable is false (and not reset), or when a specific word's qe is false while engine_stable is true, the corresponding bits of sw_key_data_reg[1] retain their previous value.",
+      "cond": "!rst_ni (engine_stable false or qe false)",
+      "signals": [
+        "engine_stable",
+        "reg2hw.key_share1[j].qe",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "502-512"
       ]
     }
   ],
-  "security_implications": "该片段直接保存软件写入的密钥 share1，属于敏感状态更新路径。`engine_stable` 门控限制了密钥在某些不稳定状态下被改写的可能性，但该片段本身未执行清零以外的擦除、完整性检查或访问权限判断；这些安全属性需要依赖外围寄存器接口和状态控制逻辑共同保证 [kmac.sv:505-510]。",
   "assumptions": [
     {
-      "constraint": "`engine_stable` 应仅在允许软件安全地更新密钥 share1 的状态下置位；若设计意图是不允许运行中改钥，则相关控制逻辑必须保证这一点。",
-      "bug_relevance": "若违反该行为契约，软件可能在不应修改密钥的时机部分覆盖 `sw_key_data_reg[1]`，导致正在使用或后续使用的密钥内容不一致，进而造成功能错误或安全风险。",
-      "related_signals": [
-        "engine_stable",
-        "sw_key_data_reg",
-        "reg2hw.key_share1"
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "engine_stable must be asserted only when it is safe to modify the secret key share1 register, i.e., the key is not actively used in a hashing/KMAC operation or any security-critical computation.",
+      "cond": "engine_stable == 1",
+      "risk": "If engine_stable is erroneously asserted during a sensitive operation, the key share may be corrupted mid-computation, potentially causing secret leakage or incorrect MAC/digest.",
+      "signals": [
+        "engine_stable"
       ],
-      "source_refs": [
-        "kmac.sv:505-510"
+      "refs": [
+        "505,511"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "MaxKeyLen must be a positive integer multiple of 32 that matches the bit-width of sw_key_data_reg[1] and the dimension of key_share1 arrays to avoid out-of-bounds indexing.",
+      "cond": "parameter instantiation",
+      "risk": "If MaxKeyLen is set larger than the declared register width or not a multiple of 32, word slicing will access illegal bits or miss key bits, leading to secret corruption or synthesis/simulation mismatch.",
+      "signals": [
+        "MaxKeyLen",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "506-509"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "Individual qe handshake bits may be asserted across multiple clock cycles while engine_stable remains high, leading to partial update of sw_key_data_reg[1] (some words new, some old).",
+      "cond": "engine_stable high and qe not all active in same cycle",
+      "risk": "A subsequent hash operation started after engine_stable deasserts could use an incomplete key share, breaking secret sharing integrity and potentially leaking information through incorrect MAC outputs.",
+      "signals": [
+        "engine_stable",
+        "reg2hw.key_share1[j].qe",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "505-510"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "MaxKeyLen parameter is used directly in the loop bound; if its value exceeds the actual width of sw_key_data_reg[1], word-write accesses will be out of bounds.",
+      "cond": "MaxKeyLen > actual register width",
+      "risk": "Out-of-bounds write may corrupt adjacent storage or be silently truncated in synthesis, altering the effective key and compromising security.",
+      "signals": [
+        "MaxKeyLen",
+        "sw_key_data_reg[1]"
+      ],
+      "refs": [
+        "506-509"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac.sv:502-512"
-  ],
-  "uncertain_points": [
-    "`engine_stable` 的精确定义和允许写钥的状态范围不在该片段中，无法仅凭此处判断这是纯防御性门控还是严格的功能契约。",
-    "`reg2hw.key_share1[j].qe` 的脉冲语义和 `q` 数据稳定性依赖寄存器接口实现；该片段假定其在被采样时提供有效的 32 位写入数据。"
+    "502-512"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 502,
-  "line_end": 512
+  "line_end": 512,
+  "security_implications": ""
 }

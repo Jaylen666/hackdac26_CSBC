@@ -1,29 +1,96 @@
 {
   "chunk_id": "kmac_entropy__continuous_region__declarations_or_instances__004",
-  "summary": "This fragment defines a combinational timer pulse from the prescaler reaching zero while enabled, and declares internal bookkeeping signals for hash-progress and threshold-hit tracking.",
-  "behavior": "The only implemented behavior in this fragment is the combinational assignment `timer_pulse = (timer_enable && prescaler_cnt == '0)`, so `timer_pulse` is asserted exactly when the timer is enabled and the prescaler count is zero [kmac_entropy.sv:295-295]. The remaining lines do not implement behavior directly; they declare internal signals `threshold_hit`, `threshold_hit_q`, `threshold_hit_clr`, `hash_progress_d`, and `hash_progress_q` for later logic. The comment on `threshold_hit_q`/`threshold_hit_clr` indicates a design intent that threshold-hit status is latched and clearable, but that latch/clear behavior is not shown in this snippet [kmac_entropy.sv:298-302].",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "mixed",
+    "driven": [
+      "timer_pulse"
+    ],
+    "used": [
+      "timer_enable",
+      "prescaler_cnt"
+    ],
+    "modes": [],
+    "tags": [
+      "entropy",
+      "timer",
+      "pulse"
+    ]
+  },
   "guarantees": [
     {
-      "property": "When `timer_enable` is low, `timer_pulse` is guaranteed low; when `timer_enable` is high, `timer_pulse` is high if and only if `prescaler_cnt` equals zero.",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "timer_pulse is asserted when timer_enable is high and prescaler_cnt equals zero",
+      "cond": "always",
+      "signals": [
+        "timer_enable",
+        "prescaler_cnt",
         "timer_pulse"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:295-295"
+      "refs": [
+        "kmac_entropy.sv:295"
       ]
     }
   ],
-  "security_implications": "This snippet is part of entropy/timer control plumbing. The visible logic does not itself enforce a security policy, but `timer_pulse` likely gates periodic entropy-related actions elsewhere, so incorrect enable or prescaler handling could indirectly affect entropy refresh cadence. The threshold-hit and hash-progress signals suggest later logic may track operational progress or limits, but no security-relevant enforcement is visible here.",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "timer_enable and prescaler_cnt must be stable and glitch-free while timer_pulse is used downstream",
+      "cond": "when timer_pulse is sampled or triggers logic",
+      "risk": "spurious timer_pulse pulses could cause false entropy sampling or hash progress increment",
+      "signals": [
+        "timer_enable",
+        "prescaler_cnt",
+        "timer_pulse"
+      ],
+      "refs": [
+        "kmac_entropy.sv:295"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "timer_pulse is a combinational output; if not synchronized or registered before use, glitches on timer_enable or prescaler_cnt could trigger multiple downstream events",
+      "cond": "when timer_enable or prescaler_cnt are not glitch-free",
+      "risk": "multiple false timer pulses could corrupt entropy accumulation or threshold detection",
+      "signals": [
+        "timer_pulse",
+        "timer_enable",
+        "prescaler_cnt"
+      ],
+      "refs": [
+        "kmac_entropy.sv:295"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Signals threshold_hit, threshold_hit_q, threshold_hit_clr, hash_progress_d, hash_progress_q are declared but not assigned here; driving logic elsewhere must be verified for correct hit latching and hash progress counting",
+      "cond": "unknown",
+      "risk": "incorrect latching or clearing could cause missed or stuck entropy thresholds, affecting mask generation",
+      "signals": [
+        "threshold_hit",
+        "threshold_hit_q",
+        "threshold_hit_clr",
+        "hash_progress_d",
+        "hash_progress_q"
+      ],
+      "refs": [
+        "kmac_entropy.sv:299-302"
+      ]
+    }
+  ],
   "evidence_refs": [
     "kmac_entropy.sv:295-302"
   ],
-  "uncertain_points": [
-    "The exact role of `timer_pulse` is not shown here; this snippet only defines its assertion condition, not what downstream logic does with it.",
-    "The comment `latched hit` implies `threshold_hit_q` captures and holds a threshold event until `threshold_hit_clr`, but the actual latch/reset implementation is outside this fragment.",
-    "The purpose and update conditions of `hash_progress_d` and `hash_progress_q` are not visible in this snippet."
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 295,
-  "line_end": 302
+  "line_end": 302,
+  "security_implications": ""
 }

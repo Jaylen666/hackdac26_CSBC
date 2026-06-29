@@ -7,6 +7,7 @@ from typing import Any
 
 from rtl_bug_agent.llm.client import OpenAICompatibleClient
 from rtl_bug_agent.schema import RtlChunk
+from rtl_bug_agent.phase2.formal_sketch import attach_formal_sketches
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -16,14 +17,16 @@ DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/chunk_spec_agu_structured_slim_
 def generate_chunk_spec(
     chunk: RtlChunk,
     client: OpenAICompatibleClient,
-    prompt_path: str | Path = DEFAULT_PROMPT,
-    max_tokens: int = 6000,
+    prompt_path: str | Path | None = DEFAULT_PROMPT,
+    max_tokens: int = 10000,
 ) -> dict[str, Any]:
-    prompt = Path(prompt_path).read_text(encoding="utf-8")
+    prompt_file = Path(prompt_path) if prompt_path is not None else DEFAULT_PROMPT
+    prompt = prompt_file.read_text(encoding="utf-8")
     user_payload = {
         "chunk": {
             "chunk_id": chunk.chunk_id,
             "kind": chunk.kind,
+            "semantic_class": getattr(chunk, "semantic_class", "behavior"),
             "source_file": chunk.source_file,
             "module": chunk.module,
             "line_start": chunk.line_start,
@@ -31,6 +34,9 @@ def generate_chunk_spec(
             "title": chunk.title,
             "context_summary": chunk.context_summary,
             "dependencies": chunk.dependencies,
+            "guard_context": getattr(chunk, "guard_context", []),
+            "structure_refs": getattr(chunk, "structure_refs", []),
+            "compile_time_context": getattr(chunk, "compile_time_context", []),
         },
         "code_with_line_numbers": _with_line_numbers(chunk),
     }
@@ -51,7 +57,7 @@ def generate_chunk_spec(
     spec.setdefault("uncertain_points", [])
     spec.setdefault("evidence_refs", [])
     spec.setdefault("security_implications", "")
-    return spec
+    return attach_formal_sketches(spec)
 
 
 def _with_line_numbers(chunk: RtlChunk) -> str:

@@ -1,0 +1,128 @@
+{
+  "chunk_id": "aes_core__always_comb__key_reg_put__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "hw2reg.key_share0[0..NumRegsKey-1].d",
+      "hw2reg.key_share1[0..NumRegsKey-1].d"
+    ],
+    "used": [
+      "key_init_q[0][0..NumRegsKey-1]",
+      "key_init_q[1][0..NumRegsKey-1]",
+      "NumRegsKey"
+    ],
+    "modes": [
+      "NumRegsKey parameter"
+    ],
+    "tags": [
+      "key",
+      "parameterization",
+      "multi-share"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each i from 0 to NumRegsKey-1, hw2reg.key_share0[i].d is continuously assigned to key_init_q[0][i] and hw2reg.key_share1[i].d to key_init_q[1][i].",
+      "cond": "always",
+      "signals": [
+        "hw2reg.key_share0[i].d",
+        "hw2reg.key_share1[i].d",
+        "key_init_q[0][i]",
+        "key_init_q[1][i]"
+      ],
+      "refs": [
+        "aes_core.sv:880-885"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "key_init_q[0] and key_init_q[1] must provide correct key share values for every index 0..NumRegsKey-1, and these values must be stable while the driven hw2reg.d signals are sampled by downstream registers.",
+      "cond": "whenever the key registers are loaded",
+      "risk": "Unstable or invalid key_init_q would cause corrupted key shares to be latched, potentially leading to wrong ciphertext, denial of service, or side-channel leakage through glitches.",
+      "signals": [
+        "key_init_q[0][i]",
+        "key_init_q[1][i]",
+        "hw2reg.key_share0[i].d",
+        "hw2reg.key_share1[i].d"
+      ],
+      "refs": [
+        "aes_core.sv:880-885"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The dimensions of key_init_q[0] and key_init_q[1] must be at least NumRegsKey. The parameter NumRegsKey correctly reflects the number of key words.",
+      "cond": "always, because the loop uses NumRegsKey unconditionally",
+      "risk": "If NumRegsKey exceeds the array bounds, out-of-range indexing occurs, inserting undefined/X values into key_share0/1.d, corrupting the cipher key and possibly exposing secret state.",
+      "signals": [
+        "key_init_q",
+        "NumRegsKey"
+      ],
+      "refs": [
+        "aes_core.sv:881"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The combinational assignment lacks any gating or isolation; it is unknown whether the surrounding logic ensures that key_init_q is stable and valid only during key load and not during active encryption cycles.",
+      "cond": "when key_init_q changes at any time (due to external logic or faults)",
+      "risk": "An unintended change could inject a wrong key on a later clock edge, silently breaking security.",
+      "signals": [
+        "key_init_q",
+        "hw2reg.key_share0.d",
+        "hw2reg.key_share1.d"
+      ],
+      "refs": [
+        "aes_core.sv:880-885"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "NumRegsKey is a parameter that determines the loop bound. There is no generate check or assert to ensure that NumRegsKey does not exceed the actual size of key_init_q[0] and key_init_q[1].",
+      "cond": "if NumRegsKey is misconfigured to a larger value",
+      "risk": "Out-of-bounds indexing would read X or unknown bits for the excess elements, feeding garbage into the key shares and potentially enabling differential fault attacks.",
+      "signals": [
+        "NumRegsKey",
+        "key_init_q"
+      ],
+      "refs": [
+        "aes_core.sv:881"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "The key is split into two shares (key_share0, key_share1) without any local comment explaining the security mechanism (e.g., dual-rail, masking). The correctness of this split and whether it matches the rest of the design is not evident from this chunk.",
+      "cond": "always",
+      "risk": "If the sharing scheme is incorrectly implemented (e.g., wrong order, missing inversion), the split may not protect against SCA as intended.",
+      "signals": [
+        "key_share0",
+        "key_share1"
+      ],
+      "refs": [
+        "aes_core.sv:882-883"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_core.sv:880-885"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 880,
+  "line_end": 885,
+  "security_implications": ""
+}

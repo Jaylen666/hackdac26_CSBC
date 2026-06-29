@@ -1,0 +1,263 @@
+{
+  "chunk_id": "hmac_core__continuous_region__hmac_core__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "mixed",
+    "driven": [
+      "sha_hash_start_o",
+      "sha_hash_continue_o",
+      "sha_hash_process_o",
+      "hash_done_o",
+      "pad_index_512",
+      "pad_index_256"
+    ],
+    "used": [
+      "hmac_en_i",
+      "hash_start",
+      "hash_continue",
+      "hash_process",
+      "reg_hash_process_i",
+      "reg_hash_start_i",
+      "reg_hash_continue_i",
+      "sha_hash_done_i",
+      "hmac_hash_done",
+      "txcount"
+    ],
+    "modes": [
+      "hmac_en_i (bypass vs HMAC)"
+    ],
+    "tags": [
+      "parameterization",
+      "handshake",
+      "hash",
+      "mode_control"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "sha_hash_start_o is muxed: if hmac_en_i is true it equals internal hash_start, otherwise it equals reg_hash_start_i.",
+      "cond": "always",
+      "signals": [
+        "sha_hash_start_o",
+        "hmac_en_i",
+        "hash_start",
+        "reg_hash_start_i"
+      ],
+      "refs": [
+        "file:120-120"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "sha_hash_continue_o is muxed: if hmac_en_i is true it equals internal hash_continue, otherwise it equals reg_hash_continue_i.",
+      "cond": "always",
+      "signals": [
+        "sha_hash_continue_o",
+        "hmac_en_i",
+        "hash_continue",
+        "reg_hash_continue_i"
+      ],
+      "refs": [
+        "file:121-121"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "sha_hash_process_o is muxed: if hmac_en_i is true it equals (reg_hash_process_i OR hash_process), otherwise it equals reg_hash_process_i.",
+      "cond": "always",
+      "signals": [
+        "sha_hash_process_o",
+        "hmac_en_i",
+        "reg_hash_process_i",
+        "hash_process"
+      ],
+      "refs": [
+        "file:123-123"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "hash_done_o is muxed: if hmac_en_i is true it equals internal hmac_hash_done, otherwise it equals sha_hash_done_i.",
+      "cond": "always",
+      "signals": [
+        "hash_done_o",
+        "hmac_en_i",
+        "hmac_hash_done",
+        "sha_hash_done_i"
+      ],
+      "refs": [
+        "file:124-124"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "pad_index_512 is assigned as a bit-slice of txcount, from BlockSizeBitsSHA512-1 down to HashWordBitsSHA256.",
+      "cond": "always",
+      "signals": [
+        "pad_index_512",
+        "txcount"
+      ],
+      "refs": [
+        "file:126-126"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "pad_index_256 is assigned as a bit-slice of txcount, from BlockSizeBitsSHA256-1 down to HashWordBitsSHA256.",
+      "cond": "always",
+      "signals": [
+        "pad_index_256",
+        "txcount"
+      ],
+      "refs": [
+        "file:127-127"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "hmac_en_i remains stable during a complete HMAC or bypass operation; it does not change while a hash/hmac sequence is in progress.",
+      "cond": "during any active processing (hash start to done)",
+      "risk": "if hmac_en_i toggles, the muxed outputs could glitch or switch sources mid-operation, corrupting the SHA engine state or delivering wrong hash status.",
+      "signals": [
+        "hmac_en_i",
+        "sha_hash_start_o",
+        "sha_hash_continue_o",
+        "sha_hash_process_o",
+        "hash_done_o"
+      ],
+      "refs": [
+        "file:120-124"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "When hmac_en_i is true, the internal signals hash_start, hash_continue, and hmac_hash_done correctly follow the SHA engine handshake and timing requirements.",
+      "cond": "hmac_en_i == 1",
+      "risk": "Incorrect pulse timing or order could cause the SHA block to miss commands or report spurious done, breaking HMAC sequencing.",
+      "signals": [
+        "hash_start",
+        "hash_continue",
+        "hmac_hash_done",
+        "sha_hash_start_o",
+        "sha_hash_continue_o",
+        "hash_done_o"
+      ],
+      "refs": [
+        "file:120,121,124"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "txcount is never larger than the block size for the active digest mode when pad_index is used; the count tracks valid message length within the block.",
+      "cond": "when the state machine uses pad_index to address memory",
+      "risk": "An out‑of‑bounds txcount would make pad_index select invalid bit ranges, leading to incorrect pad placement or word alignment, potentially corrupting the hash computation.",
+      "signals": [
+        "txcount",
+        "pad_index_512",
+        "pad_index_256"
+      ],
+      "refs": [
+        "file:126-127"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "Software ensures that reg_hash_process_i is asserted only when safe to mix with hash_process under HMAC mode (i.e., it either aligns with the expected processing steps or is used only in bypass mode).",
+      "cond": "hmac_en_i == 1",
+      "risk": "A software-triggered hash_process while the internal state machine is also active could cause a double‑process or unexpected state transition, corrupting the HMAC result.",
+      "signals": [
+        "reg_hash_process_i",
+        "hash_process",
+        "sha_hash_process_o"
+      ],
+      "refs": [
+        "file:123-123"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "sha_hash_process_o ORs reg_hash_process_i with hash_process in HMAC mode. It is unclear whether concurrent assertion (software + internal) is a legal usage or can lead to a double‑process hazard.",
+      "cond": "hmac_en_i == 1 and reg_hash_process_i and hash_process simultaneously high",
+      "risk": "May cause the SHA engine to process the same block twice or enter an unexpected state, yielding an incorrect HMAC tag or enabling a side‑channel.",
+      "signals": [
+        "sha_hash_process_o",
+        "reg_hash_process_i",
+        "hash_process"
+      ],
+      "refs": [
+        "file:123-123"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "pad_index_512 and pad_index_256 are driven by txcount, but txcount is updated in other sequential logic. Its rollover or overflow outside the block‑size range is not locally prevented.",
+      "cond": "if txcount exceeds BlockSizeSHA512 or BlockSizeSHA256 respectively",
+      "risk": "pad_index would carry incorrect high bits, potentially addressing out‑of‑range pad arrays or misaligning word writes, leading to HMAC data corruption.",
+      "signals": [
+        "txcount",
+        "pad_index_512",
+        "pad_index_256"
+      ],
+      "refs": [
+        "file:126-127"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "The secret_key_i input port is declared but never used in this chunk. Its handling appears elsewhere; missing usage here could indicate a disconnection risk at the top level.",
+      "cond": "entire chunk",
+      "risk": "If secret_key_i is not properly routed to the pad generation or inner/outer hash logic, HMAC keys could be silently ignored or replaced by default values.",
+      "signals": [
+        "secret_key_i"
+      ],
+      "refs": [
+        "file:11-11, file:7-127"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "When hmac_en_i is 0, all hash control outputs bypass to the register inputs, putting the SHA engine under direct software control. The interaction between this bypass and any internal state machine is not visible in this chunk.",
+      "cond": "hmac_en_i == 0",
+      "risk": "If the internal HMAC state machine is not quiesced, spurious starts/continues could conflict with software control, causing unpredictable SHA operation.",
+      "signals": [
+        "hmac_en_i",
+        "sha_hash_start_o",
+        "sha_hash_continue_o",
+        "sha_hash_process_o"
+      ],
+      "refs": [
+        "file:120-124"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:120-127"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 7,
+  "line_end": 127,
+  "security_implications": ""
+}

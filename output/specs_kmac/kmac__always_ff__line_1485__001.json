@@ -1,50 +1,122 @@
 {
   "chunk_id": "kmac__always_ff__line_1485__001",
-  "summary": "该寄存器块对 alerts[1] 进行锁存：复位时清零，之后一旦检测到 alerts[1] 为高就将 alerts_q[1] 置位并保持，不提供清除路径。",
-  "behavior": "该 always_ff 块只控制 alerts_q[1]。异步低有效复位时，alerts_q[1] 被清为 0（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1487-1488）。复位释放后，若 alerts[1] 为 1，则 alerts_q[1] 被置为 1（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1489-1491）。当 alerts[1] 为 0 时没有赋值分支，因此寄存器保持原值；结合注释“fatal alerts cannot be cleared”，实际效果是一旦 alerts_q[1] 被置位，就只能通过复位清除，形成对本地升级相关告警的打拍/锁存以打断组合路径（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1486,1490-1491）。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "alerts_q[1]"
+    ],
+    "used": [
+      "rst_ni",
+      "alerts[1]",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "fatal",
+      "alert",
+      "sticky",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在 rst_ni 为低时，alerts_q[1] 一定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On reset (rst_ni low), alerts_q[1] is cleared to 0.",
+      "cond": "always while rst_ni is low",
+      "signals": [
+        "rst_ni",
         "alerts_q[1]"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1487-1488"
+      "refs": [
+        "1487-1488"
       ]
     },
     {
-      "property": "复位后只要 alerts[1] 曾被采样为 1，alerts_q[1] 就会保持为 1，直到下一次复位；该块内不存在运行时清除路径。",
-      "output_signals": [
-        "alerts_q[1]"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1489-1492"
-      ]
-    }
-  ],
-  "security_implications": "该片段涉及 fatal alert 的锁存。其安全意义在于：一旦检测到 alerts[1]，告警状态不会被普通运行条件清除，只能通过复位清除，这有助于防止致命错误/攻击迹象被瞬时掩盖；同时通过寄存器打断组合路径，降低本地升级告警路径上的组合传播风险（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1486,1490-1491）。",
-  "assumptions": [
-    {
-      "constraint": "若设计意图要求“fatal alert 一旦产生绝不丢失”，则 alerts[1] 需要在某个采样边沿附近稳定并持续足够长，至少能被该寄存器块采到一次；否则短脉冲可能不会反映到 alerts_q[1]。",
-      "bug_relevance": "若违反该约束，fatal alert 可能未被锁存，导致本地升级/后续告警处理遗漏。这属于行为契约；若上游产生过窄脉冲，则可能构成功能或安全问题。",
-      "related_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and alerts[1] is high, alerts_q[1] is set to 1 on the next positive edge of clk_i.",
+      "cond": "rst_ni high and alerts[1] high",
+      "signals": [
+        "rst_ni",
         "alerts[1]",
         "alerts_q[1]",
         "clk_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1489-1491"
+      "refs": [
+        "1489-1491"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and alerts[1] is low, alerts_q[1] retains its previous value (sticky behavior).",
+      "cond": "rst_ni high, alerts[1] low",
+      "signals": [
+        "rst_ni",
+        "alerts[1]",
+        "alerts_q[1]",
+        "clk_i"
+      ],
+      "refs": [
+        "1485-1493"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "alerts[1] must remain high for at least one clock cycle after reset deassertion in order to be captured.",
+      "cond": "when a fatal alert occurs near reset release",
+      "risk": "If alerts[1] deasserts before the first rising clk_i after reset release, the fatal alert is not latched.",
+      "signals": [
+        "alerts[1]",
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "1485-1493"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "No other process drives alerts_q[1] while rst_ni is high; only this block may set or clear it.",
+      "cond": "always during normal operation",
+      "risk": "A concurrent write could clear or corrupt the sticky fatal alert register, violating the intended latching behavior.",
+      "signals": [
+        "alerts_q[1]"
+      ],
+      "refs": [
+        "1485-1493"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If a fatal alert occurs during reset and deasserts before the first clock edge after reset release, the sticky bit may remain 0, missing a fatal event.",
+      "cond": "reset active and alert pulse duration shorter than the time to first post-reset clock edge",
+      "risk": "A fatal condition that should permanently set the alert register could be silently ignored, leading to a false sense of safety.",
+      "signals": [
+        "alerts[1]",
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "1485-1493"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1485-1493"
-  ],
-  "uncertain_points": [
-    "注释表明这是“for local escalation”且用于“break up the combinatorial path”，但仅凭本片段无法确认 alerts_q[1] 在后续逻辑中如何参与本地升级路径。",
-    "本片段只展示 alerts_q[1] 的处理，无法确认 alerts_q 的其他位（如 alerts_q[0]）是否采用相同或不同的清除/锁存策略。"
+    "1485-1493"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1485,
-  "line_end": 1493
+  "line_end": 1493,
+  "security_implications": ""
 }

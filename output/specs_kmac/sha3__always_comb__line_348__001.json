@@ -1,37 +1,105 @@
 {
   "chunk_id": "sha3__always_comb__line_348__001",
-  "summary": "该组合逻辑按当前 SHA3 状态检查软件控制信号是否合法，并在非法状态/命令组合下输出 ErrSha3SwControl 错误。",
-  "behavior": "该块默认将 error_o 清零为无效、ErrNone、info 为 0，然后根据当前状态 st 对 start_i、process_i、run_i、done_i 的组合进行合法性检查 [sha3.sv:349-351]。在 StIdle_sparse 状态下，只允许 start_i；若 process_i、run_i 或 done_i 被 mubi4_test_true_loose(done_i) 判为真，则置 error_o.valid=1、error_o.code=ErrSha3SwControl，并将 {done_i, run_i, process_i, start_i} 打包进 info 字段 [sha3.sv:352-360]。在 StAbsorb_sparse 状态下，若 start_i、run_i、done_i 为真，或 process_i 与 processing 同时为真，则报同样的控制错误；这表示吸收阶段不接受重新 start/run/done，且在 processing 已经进行时再次 process_i 也被视为非法 [sha3.sv:363-371]。在 StSqueeze_sparse 状态下，start_i 或 process_i 任一为真即报错，而 run_i 和 done_i 在该片段中不会触发错误 [sha3.sv:374-381]。在 StManualRun_sparse 和 StFlush_sparse 状态下，start_i、process_i、run_i 或 done_i 任一被判真都会报错 [sha3.sv:384-403]。default 分支不额外赋值，因此未列出的状态保持默认无错误输出 [sha3.sv:406-407]。",
+  "header": {
+    "module": "sha3",
+    "block_kind": "always_comb",
+    "driven": [
+      "error_o"
+    ],
+    "used": [
+      "st",
+      "process_i",
+      "run_i",
+      "done_i",
+      "start_i",
+      "processing"
+    ],
+    "modes": [
+      "StIdle_sparse",
+      "StAbsorb_sparse",
+      "StSqueeze_sparse",
+      "StManualRun_sparse",
+      "StFlush_sparse",
+      "ErrSha3SwControl"
+    ],
+    "tags": [
+      "error",
+      "sparse_fsm",
+      "handshake",
+      "csr"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 st 处于 StIdle_sparse 且 process_i、run_i 或 done_i 被判真时，error_o 一定被置为有效且 code 为 ErrSha3SwControl。",
-      "output_signals": [
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "At the start of the always_comb block, error_o is assigned {valid:1'b0, code:ErrNone, info:'0}. This value persists whenever none of the state case branches triggers an error, including when st is not one of the enumerated sparse states.",
+      "cond": "always, until overridden in a state branch",
+      "signals": [
         "error_o"
       ],
-      "source_refs": [
-        "sha3.sv:352-360"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:349"
       ]
     },
     {
-      "property": "当该块判定存在非法软件控制组合时，error_o.info 一定编码为 {done_i, run_i, process_i, start_i}。",
-      "output_signals": [
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "When st is StIdle_sparse, if process_i is high, run_i is high, or done_i passes mubi4_test_true_loose, then error_o is assigned valid=1'b1, code=ErrSha3SwControl, info=24'({done_i, run_i, process_i, start_i}).",
+      "cond": "st == StIdle_sparse AND (process_i || run_i || mubi4_test_true_loose(done_i))",
+      "signals": [
+        "st",
+        "process_i",
+        "run_i",
+        "done_i",
+        "start_i",
         "error_o"
       ],
-      "source_refs": [
-        "sha3.sv:355-359",
-        "sha3.sv:366-370",
-        "sha3.sv:376-380",
-        "sha3.sv:387-391",
-        "sha3.sv:398-402"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:352-361"
       ]
-    }
-  ],
-  "security_implications": "这是一个与控制面安全/健壮性相关的检查逻辑：它按状态限制软件可发出的控制命令，检测到非法命令序列时统一上报 ErrSha3SwControl，而不是默默接受。这有助于阻止错误的软件驱动、异常控制流或潜在恶意命令在错误阶段驱动 SHA3/KMAC 数据路径。done_i 采用 mubi4_test_true_loose 判真，说明该输入可能带有多比特完整性语义，但“loose”判定是否足够严格需要结合上游协议确认。",
-  "assumptions": [
+    },
     {
-      "constraint": "软件/上游控制逻辑应仅在与当前 st 匹配的阶段拉起 start_i、process_i、run_i、done_i；本块将其他组合视为非法控制并上报错误，而非执行请求。",
-      "bug_relevance": "若不满足则会触发 ErrSha3SwControl，导致期望的启动、处理或完成操作不被接受；这通常属于不应发生的非法控制场景，硬件已有安全回退行为（报错）。",
-      "related_signals": [
+      "id": "G3",
+      "type": "error_detection",
+      "claim": "When st is StAbsorb_sparse, if start_i is high, run_i is high, done_i passes mubi4_test_true_loose, or (process_i is high AND processing is high), then error_o is assigned valid=1'b1, code=ErrSha3SwControl, info=24'({done_i, run_i, process_i, start_i}).",
+      "cond": "st == StAbsorb_sparse AND (start_i || run_i || mubi4_test_true_loose(done_i) || (process_i && processing))",
+      "signals": [
+        "st",
+        "start_i",
+        "run_i",
+        "done_i",
+        "process_i",
+        "processing",
+        "error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:363-372"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "error_detection",
+      "claim": "When st is StSqueeze_sparse, if start_i or process_i is high, then error_o is assigned valid=1'b1, code=ErrSha3SwControl, info=24'({done_i, run_i, process_i, start_i}).",
+      "cond": "st == StSqueeze_sparse AND (start_i || process_i)",
+      "signals": [
+        "st",
+        "start_i",
+        "process_i",
+        "done_i",
+        "run_i",
+        "error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:374-382"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "error_detection",
+      "claim": "When st is StManualRun_sparse, if start_i, process_i, run_i, or done_i (true_loose) is high, then error_o is assigned valid=1'b1, code=ErrSha3SwControl, info=24'({done_i, run_i, process_i, start_i}).",
+      "cond": "st == StManualRun_sparse AND (start_i || process_i || run_i || mubi4_test_true_loose(done_i))",
+      "signals": [
         "st",
         "start_i",
         "process_i",
@@ -39,34 +107,88 @@
         "done_i",
         "error_o"
       ],
-      "source_refs": [
-        "sha3.sv:351-403"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:384-393"
       ]
     },
     {
-      "constraint": "done_i 的多比特编码应与 prim_mubi_pkg::mubi4_test_true_loose 的判真规则一致；否则该块对 done_i 是否为“真”的判定可能与上游预期不一致。",
-      "bug_relevance": "若违反该约束，可能在本应合法时误报控制错误，或在应报错时未报错，进而影响状态相关的软件控制保护。",
-      "related_signals": [
+      "id": "G6",
+      "type": "error_detection",
+      "claim": "When st is StFlush_sparse, if start_i, process_i, run_i, or done_i (true_loose) is high, then error_o is assigned valid=1'b1, code=ErrSha3SwControl, info=24'({done_i, run_i, process_i, start_i}).",
+      "cond": "st == StFlush_sparse AND (start_i || process_i || run_i || mubi4_test_true_loose(done_i))",
+      "signals": [
+        "st",
+        "start_i",
+        "process_i",
+        "run_i",
+        "done_i",
+        "error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:395-404"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The signal 'processing' accurately and synchronously indicates whether the SHA3 core is currently executing an internal operation (e.g., absorbing a block) and is consistent with the state 'st'.",
+      "cond": "When st is StAbsorb_sparse, the error detection depends on processing to differentiate legal new process commands from illegal overlapping ones.",
+      "risk": "If 'processing' is not correctly aligned with the SHA3 engine's actual busy status, a process_i command could be falsely flagged as an error, or a truly illegal overlapping process_i could be missed, leading to data corruption.",
+      "signals": [
+        "processing",
+        "st"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:364-365"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The default case in the 'unique case (st)' leaves error_o at its default (valid=0) when st is not one of the five enumerated sparse states. An invalid, uninitialized, or transient value of st could allow illegal control inputs (start_i, process_i, run_i, done_i) to be accepted without error reporting.",
+      "cond": "st takes a value not matching any of the defined sparse state encodings",
+      "risk": "Security checks on control commands could be bypassed if the state machine lands in an unknown state, leading to uncontrolled operation or data leakage.",
+      "signals": [
+        "st",
+        "error_o",
+        "start_i",
+        "process_i",
+        "run_i",
         "done_i"
       ],
-      "source_refs": [
-        "sha3.sv:353-354",
-        "sha3.sv:364-365",
-        "sha3.sv:385-386",
-        "sha3.sv:396-397"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:406-408",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:349"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "In StAbsorb_sparse, the error condition for process_i requires 'processing' to be high simultaneously. It is unclear whether a process_i assertion while processing is low is a legal 'start of absorb step' command or an illegal activation that should also be flagged.",
+      "cond": "st == StAbsorb_sparse AND process_i == 1 AND processing == 0",
+      "risk": "If the specification intends to reject any process_i in this state, the omission creates a window where a spurious command can be accepted, potentially corrupting the absorb sequence.",
+      "signals": [
+        "st",
+        "process_i",
+        "processing",
+        "error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:364-365"
       ]
     }
   ],
   "evidence_refs": [
-    "sha3.sv:349-409"
-  ],
-  "uncertain_points": [
-    "在 StIdle_sparse 下代码只把 process_i、run_i、done_i 视为非法，未将 start_i 视为错误，因此推断 start_i 在 Idle 合法；但该片段本身不显示 start_i 的完整处理效果，需结合其他状态转移逻辑确认。",
-    "在 StSqueeze_sparse 中 run_i 和 done_i 不触发错误，说明它们可能在该状态合法或被忽略；仅凭本片段无法区分这两种设计意图 [sha3.sv:374-381]。",
-    "error_o.info 被写成 24'({done_i, run_i, process_i, start_i})；从片段可见它包含这四个控制量，但其精确位宽布局、是否零扩展以及每个信号的具体宽度需要结合相关类型定义确认 [sha3.sv:358-359,369-370,379-380,390-391,401-402]。",
-    "StAbsorb_sparse 中仅当 process_i && processing 为真时报错，表明 process_i 在 processing 为假时可能被允许；但 processing 的语义及该条件是否表示“重复 process”需要依赖上下文确认 [sha3.sv:364-365]。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:348-409"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
   "line_start": 348,
-  "line_end": 409
+  "line_end": 409,
+  "security_implications": ""
 }

@@ -1,37 +1,122 @@
 {
   "chunk_id": "kmac_entropy__always_ff__line_249__001",
-  "summary": "该寄存器块在复位时清零等待定时器预分频寄存器，并仅在 timer_update 有效时装载新的预分频值。",
-  "behavior": "该过程维护寄存器 wait_timer_prescaler_d。异步低有效复位时，该寄存器被清零；正常工作时，只有在 timer_update 为真时才把 wait_timer_prescaler_i 装载到 wait_timer_prescaler_d，否则寄存器保持原值不变。这表明该预分频值的更新受 timer_update 显式门控，而非每拍持续跟随输入。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "wait_timer_prescaler_d"
+    ],
+    "used": [
+      "rst_ni",
+      "timer_update",
+      "wait_timer_prescaler_i"
+    ],
+    "modes": [],
+    "tags": [
+      "timer",
+      "reset",
+      "entropy"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 rst_ni 被拉低时，wait_timer_prescaler_d 被清零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (reset), wait_timer_prescaler_d is asynchronously cleared to 0.",
+      "cond": "negedge rst_ni",
+      "signals": [
+        "rst_ni",
         "wait_timer_prescaler_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:249-252"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:250-251"
       ]
     },
     {
-      "property": "在非复位状态下，若 timer_update 为 1，则 wait_timer_prescaler_d 装载 wait_timer_prescaler_i；若 timer_update 为 0，则该寄存器保持先前值。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On a rising clk_i edge when timer_update is high and rst_ni is high, wait_timer_prescaler_d loads the value of wait_timer_prescaler_i.",
+      "cond": "posedge clk_i and timer_update and rst_ni",
+      "signals": [
+        "clk_i",
+        "timer_update",
+        "wait_timer_prescaler_i",
         "wait_timer_prescaler_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:252-254"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:252-253"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and timer_update is low, wait_timer_prescaler_d retains its current value across clock edges.",
+      "cond": "posedge clk_i, rst_ni high, timer_update low",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "timer_update",
+        "wait_timer_prescaler_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:249-255"
       ]
     }
   ],
-  "security_implications": "该片段位于 kmac_entropy 模块内并控制等待定时器预分频寄存器，可能间接影响熵相关等待时间或节流行为。就本片段本身而言，它只实现受控寄存器装载与复位清零，未直接体现密钥、擦除、权限检查或错误告警等安全策略。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "timer_update is asserted only when wait_timer_prescaler_i holds a stable, valid prescaler value intended for the entropy wait timer.",
+      "cond": "always",
+      "risk": "If timer_update is asserted with an invalid or unintended prescaler, the entropy waiting period may be shortened or extended beyond design expectations, potentially compromising entropy quality.",
+      "signals": [
+        "timer_update",
+        "wait_timer_prescaler_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:252-253"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The timing relationship between timer_update (loading new prescaler) and the timer's use of wait_timer_prescaler_d is not shown; if the prescaler updates while the timer is counting down, the remaining interval may be incorrectly based on the old or new value.",
+      "cond": "when a timer update occurs during an active counting interval",
+      "risk": "Unexpected wait timer behavior could lead to premature or delayed entropy sampling, violating accumulation requirements.",
+      "signals": [
+        "timer_update",
+        "wait_timer_prescaler_d",
+        "wait_timer_prescaler_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:249-255"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The prescaler register accepts any value from wait_timer_prescaler_i without range checking; loading 0 or a very large value could cause the entropy wait timer to malfunction (immediate expiration or stall).",
+      "cond": "when timer_update is asserted with an extreme prescaler value",
+      "risk": "Insufficient entropy accumulation leading to weak randomness or denial-of-service.",
+      "signals": [
+        "wait_timer_prescaler_i",
+        "wait_timer_prescaler_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:252-253"
+      ]
+    }
+  ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:249-255"
   ],
-  "uncertain_points": [
-    "仅从该片段无法确认 wait_timer_prescaler_d 与 wait_timer_prescaler_i 的命名中 d/i 是否分别表示寄存后的当前值与组合下一值，或是否存在更大状态机/计数器语义，需要结合周边代码确认。",
-    "仅从该片段无法判断 timer_update 的产生条件是否保证 wait_timer_prescaler_i 在更新时有效稳定；若该前提不满足，可能装载非期望值，但这需要上游逻辑上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 249,
-  "line_end": 255
+  "line_end": 255,
+  "security_implications": ""
 }

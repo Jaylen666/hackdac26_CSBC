@@ -1,53 +1,230 @@
 {
   "chunk_id": "kmac_entropy__continuous_region__declarations_or_instances__005",
-  "summary": "该片段用输入活动边沿驱动一个加固计数器统计已完成的 keyblock/hash 进度，并在达到阈值、显式清零或请求刷新熵时清零该计数器。",
-  "behavior": "片段先将 `hash_progress_d` 直接组合地等于 `in_keyblock_i`，并用 `hash_progress_q && !hash_progress_d` 生成 `hash_cnt_en`，因此计数使能对应于 `in_keyblock_i` 从高到低的边沿检测，其中 `hash_progress_q` 应是该信号的已寄存版本 [308, 313-314]。计数器清零条件 `hash_cnt_clr` 是 `hash_cnt_clr_i`、`threshold_hit` 和 `entropy_refresh_req_i` 的或，因此无论是外部清零、计数达到阈值，还是请求刷新熵，都会触发计数器复位 [310-311]。`u_hash_count` 实例化了带 `SEC_CM CTR.REDUN` 注释的 hardened `prim_count` 计数器，宽度为 `HashCntW`，只允许递增、不允许递减，步长固定为 1，`set_i` 固定为 0，`commit_i` 固定为 1，计数值输出到 `hash_cnt_o`，内部错误输出到 `hash_count_error` [318-334]。`threshold_hit` 在阈值非零时，当 `hash_cnt_o` 大于等于 `hash_threshold_i` 置位；若 `hash_threshold_i` 为 0，则即使计数值非零也不会命中阈值 [337]。从组合关系上看，阈值命中会反过来并入清零条件，因此计数器在达到配置阈值后会被自动清零，而不是继续累计 [311, 337]。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "mixed",
+    "driven": [
+      "hash_progress_d",
+      "hash_cnt_clr",
+      "hash_cnt_en",
+      "hash_cnt_o",
+      "hash_count_error",
+      "threshold_hit"
+    ],
+    "used": [
+      "in_keyblock_i",
+      "hash_cnt_clr_i",
+      "threshold_hit",
+      "entropy_refresh_req_i",
+      "hash_progress_q",
+      "hash_threshold_i",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "counter",
+      "entropy",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `hash_threshold_i` 为 0 时，`threshold_hit` 一定为 0，不会因计数值增长而触发阈值命中。",
-      "output_signals": [
-        "threshold_hit"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "hash_progress_d directly follows in_keyblock_i.",
+      "cond": "always",
+      "signals": [
+        "hash_progress_d",
+        "in_keyblock_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:337-337"
+      "refs": [
+        "kmac_entropy.sv:308"
       ]
     },
     {
-      "property": "计数器 `hash_cnt_o` 仅由清零或按 1 递增驱动；本片段不会请求减计数或装载任意值。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "hash_cnt_clr is asserted when hash_cnt_clr_i, threshold_hit, or entropy_refresh_req_i is high.",
+      "cond": "always",
+      "signals": [
+        "hash_cnt_clr",
+        "hash_cnt_clr_i",
+        "threshold_hit",
+        "entropy_refresh_req_i"
+      ],
+      "refs": [
+        "kmac_entropy.sv:311"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "hash_cnt_en is high when hash_progress_q = 1 and in_keyblock_i = 0 (i.e., falling edge of hash progress).",
+      "cond": "always",
+      "signals": [
+        "hash_cnt_en",
+        "hash_progress_q",
+        "hash_progress_d",
+        "in_keyblock_i"
+      ],
+      "refs": [
+        "kmac_entropy.sv:314"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assign",
+      "claim": "u_hash_count hardened counter increments by 1 when hash_cnt_en = 1, clears when hash_cnt_clr = 1, never sets or decrements, outputs hash_cnt_o and a fault flag hash_count_error.",
+      "cond": "always",
+      "signals": [
+        "hash_cnt_o",
+        "hash_count_error",
+        "hash_cnt_clr",
+        "hash_cnt_en"
+      ],
+      "refs": [
+        "kmac_entropy.sv:320-335"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "threshold_hit is asserted iff hash_threshold_i is non-zero and hash_cnt_o >= hash_threshold_i.",
+      "cond": "always",
+      "signals": [
+        "threshold_hit",
+        "hash_threshold_i",
         "hash_cnt_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:325-333"
+      "refs": [
+        "kmac_entropy.sv:337"
       ]
     }
   ],
-  "security_implications": "该片段涉及熵刷新相关门限计数，并使用标注为 `SEC_CM CTR.REDUN` 的 hardened counter [318-320]，表明这里有抗故障/冗余计数的安全意图。达到阈值后自动清零并可由 `entropy_refresh_req_i` 强制清零，有助于限制在一定 hash/keyblock 数量后重新获取熵；同时 `hash_count_error` 暴露了计数器内部错误指示，但本片段未展示该错误后续如何处理。",
   "assumptions": [
     {
-      "constraint": "`hash_progress_q` 应确实是对 `in_keyblock_i` 的前一周期或已同步版本采样，这样 `hash_cnt_en = hash_progress_q && !hash_progress_d` 才能正确表示一次高到低边沿事件。",
-      "bug_relevance": "若不满足，该片段可能漏记或重复计数 hash/keyblock 完成事件，进而导致阈值刷新时机错误；这属于行为契约，违反可能直接造成功能错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "handshake",
+      "claim": "hash_progress_q is correctly updated by the sequential logic and transitions from 1→0 at the exact moment a hash operation completes, guaranteeing a single increment per operation.",
+      "cond": "when hash_progress_q and in_keyblock_i are used",
+      "risk": "multiple increments, missed increments, or spurious clears corrupt the hash count, causing premature or missed threshold_hit assertions and compromising entropy health monitoring.",
+      "signals": [
         "hash_progress_q",
-        "hash_progress_d",
         "in_keyblock_i",
         "hash_cnt_en"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:308-314"
+      "refs": [
+        "kmac_entropy.sv:314"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "hash_threshold_i is a non-negative integer ≤ 2^HashCntW - 1, and when zero threshold_hit is intentionally disabled.",
+      "cond": "continuous",
+      "risk": "if threshold exceeds maximum counter value, threshold_hit may never assert; if zero, the detection is intentionally blanked, possibly hiding entropy degradation.",
+      "signals": [
+        "hash_threshold_i",
+        "threshold_hit"
+      ],
+      "refs": [
+        "kmac_entropy.sv:337"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "The hardened counter prim_count is assumed to operate without internal faults because its error output hash_count_error is unmonitored.",
+      "cond": "always",
+      "risk": "undetected counter faults lead to silent corruption of hash_cnt_o and threshold_hit, breaking entropy health integrity.",
+      "signals": [
+        "hash_count_error"
+      ],
+      "refs": [
+        "kmac_entropy.sv:316,334"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "hash_cnt_clr_i and entropy_refresh_req_i are only asserted when the counter should be explicitly cleared (e.g., after a threshold event or entropy refresh) and not during normal counting intervals.",
+      "cond": "when clear sources are active",
+      "risk": "arbitrary clearing resets the accumulated count, preventing threshold_hit from ever asserting and masking entropy health issues.",
+      "signals": [
+        "hash_cnt_clr_i",
+        "entropy_refresh_req_i",
+        "threshold_hit"
+      ],
+      "refs": [
+        "kmac_entropy.sv:311"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "hash_count_error from the hardened counter is declared but never used; no alarm or recovery action is taken if the counter detects an internal fault.",
+      "cond": "counter fault occurs",
+      "risk": "corrupted hash count propagates to threshold_hit, leading to false or missed entropy health detections, violating counter redundancy assumptions.",
+      "signals": [
+        "hash_count_error"
+      ],
+      "refs": [
+        "kmac_entropy.sv:316,334"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "cnt_after_commit_o of the SEC_CM CTR.REDUN hardened counter is unconnected; the redundant/committed output may be required for integrity verification but is ignored.",
+      "cond": "always",
+      "risk": "loss of duplicate copy checking enables fault injection attacks on the counter to remain undetected, defeating the redundancy countermeasure.",
+      "signals": [
+        "cnt_after_commit_o"
+      ],
+      "refs": [
+        "kmac_entropy.sv:333"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "hash_cnt_en detects a falling edge of hash progress, but the interaction with simultaneous hash_cnt_clr is undefined: an increment may be lost if clear coincides with incr enable.",
+      "cond": "hash_cnt_clr = 1 while hash_cnt_en = 1",
+      "risk": "missed increment leads to delayed or missed threshold_hit, impairing entropy accumulation monitoring.",
+      "signals": [
+        "hash_cnt_en",
+        "hash_cnt_clr"
+      ],
+      "refs": [
+        "kmac_entropy.sv:314,311"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "HashCntW is unconstrained locally; a parameter value of 0 or an overly large width may cause synthesis/simulation mismatch or counter overflow behaviors not accounted for.",
+      "cond": "when HashCntW takes extreme values",
+      "risk": "counter mis‑sizing could cause wrap-around or resource waste, affecting threshold detection reliability.",
+      "signals": [
+        "HashCntW"
+      ],
+      "refs": [
+        "kmac_entropy.sv:321"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:308-314",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:318-337"
-  ],
-  "uncertain_points": [
-    "`hash_count_error` 在本片段中仅由 `prim_count` 输出，未展示是否会触发告警、错误状态或被忽略，因此其系统级影响无法从该片段单独确认。",
-    "`hash_cnt_en` 基于 `in_keyblock_i` 的下降沿计数，设计意图看起来是在一个 keyblock/hash 处理完成时加 1，但仅凭本片段无法完全确认 `in_keyblock_i` 的高低电平语义。",
-    "由于 `threshold_hit` 由当前 `hash_cnt_o` 比较得到且又参与 `hash_cnt_clr`，达到阈值后清零是明确的；但阈值命中与清零在系统层面是否需要持续一个完整周期、以及其他逻辑读取到的是命中前还是清零后的计数，需要结合 `prim_count` 和周边时序进一步确认。"
+    "kmac_entropy.sv:308-337"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 308,
-  "line_end": 337
+  "line_end": 337,
+  "security_implications": ""
 }

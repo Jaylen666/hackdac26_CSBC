@@ -1,0 +1,165 @@
+{
+  "chunk_id": "aes_control__generate_for__gen_conv_key_init_wqe_shares__001",
+  "header": {
+    "module": "aes_control",
+    "block_kind": "generate_for",
+    "driven": [
+      "int_key_init_qe",
+      "log_key_init_we",
+      "key_init_we_o"
+    ],
+    "used": [
+      "key_init_qe_i",
+      "int_key_init_we",
+      "sp2v_e"
+    ],
+    "modes": [],
+    "tags": [
+      "key"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For every share s in [0,NumSharesKey-1] and key register i in [0,NumRegsKey-1], int_key_init_qe[s][i] is combinationally driven by key_init_qe_i[s][i].",
+      "cond": "always, for all generated indices",
+      "signals": [
+        "int_key_init_qe",
+        "key_init_qe_i"
+      ],
+      "refs": [
+        "aes_control.sv:213"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "For every s,i,j, log_key_init_we[s][i][j] is driven by int_key_init_we[j][s][i], reordering the dimensions such that the outer j index of int_key_init_we becomes the innermost dimension of log_key_init_we.",
+      "cond": "always, for all generated indices",
+      "signals": [
+        "log_key_init_we",
+        "int_key_init_we"
+      ],
+      "refs": [
+        "aes_control.sv:214-216"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "For every s,i, key_init_we_o[s][i] is assigned the type cast to sp2v_e of the packed vector log_key_init_we[s][i], where the bit ordering matches the j loop (j=0 -> LSB).",
+      "cond": "always, for all generated indices",
+      "signals": [
+        "key_init_we_o",
+        "log_key_init_we",
+        "sp2v_e"
+      ],
+      "refs": [
+        "aes_control.sv:217"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The generate parameters NumSharesKey and NumRegsKey must exactly match the dimensions of the input array key_init_qe_i (and similarly int_key_init_we) so that no out-of-range or partial assignments occur.",
+      "cond": "compilation time",
+      "risk": "A mismatch can cause unconnected bits or wrong mapping in key initialization data, potentially loading corrupted key material.",
+      "signals": [
+        "NumSharesKey",
+        "NumRegsKey",
+        "key_init_qe_i",
+        "int_key_init_we"
+      ],
+      "refs": [
+        "aes_control.sv:211-212"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The parameter Sp2VWidth must equal the bit width of the enumerated type sp2v_e; otherwise the type cast on key_init_we_o may truncate, pad, or misalign the write enable bits.",
+      "cond": "compilation time",
+      "risk": "Key initialization write enables could be misinterpreted, causing illegal writes, partial key updates, or X-propagation into key registers.",
+      "signals": [
+        "Sp2VWidth",
+        "sp2v_e",
+        "key_init_we_o"
+      ],
+      "refs": [
+        "aes_control.sv:214,217"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "int_key_init_we and key_init_qe_i must be asserted only during the designed key initialization phase and must be stable when valid; they must not glitch or change spuriously.",
+      "cond": "during key init operations",
+      "risk": "Spurious assertions could trigger unintended key loading, potentially overwriting key registers with invalid or attacker-controlled data.",
+      "signals": [
+        "int_key_init_we",
+        "key_init_qe_i"
+      ],
+      "refs": [
+        "aes_control.sv:213-217"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "The reordering from int_key_init_we[j][s][i] to log_key_init_we[s][i][j] is intentional and the upstream module configuring int_key_init_we must drive the bits with matching meaning (e.g., bit 0 of int_key_init_we corresponds to the LSB of the casted output).",
+      "cond": "always",
+      "risk": "A dimension mismatch between producer and this chunk would scramble the mapping of write enable bits across shares and registers, silently breaking key init.",
+      "signals": [
+        "int_key_init_we",
+        "log_key_init_we"
+      ],
+      "refs": [
+        "aes_control.sv:215"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If a legal configuration used in synthesis/elaboration sets Sp2VWidth != $bits(sp2v_e), the bit cast of log_key_init_we[s][i] to sp2v_e could result in width mismatch, truncation, or zero-extension that corrupts key_init_we_o.",
+      "cond": "when Sp2VWidth != $bits(sp2v_e) (compile-time)",
+      "risk": "Key init write enables may drive wrong bits into the key update logic, potentially enabling writes to wrong shares or key words.",
+      "signals": [
+        "Sp2VWidth",
+        "sp2v_e",
+        "key_init_we_o"
+      ],
+      "refs": [
+        "aes_control.sv:217"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The consumer of key_init_we_o and the producer of int_key_init_we must agree on the dimension reordering (j ↔ (s,i) reorder) and the packed bit interpretation of sp2v_e; a Phase3 review should verify the full chain from producer to AES datapath.",
+      "cond": "during key init",
+      "risk": "If misaligned, the wrong key shares or partial enables could be applied, leading to functional key load failure without explicit error detection.",
+      "signals": [
+        "int_key_init_we",
+        "key_init_we_o",
+        "sp2v_e"
+      ],
+      "refs": [
+        "aes_control.sv:215-217"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_control.sv:211-219"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv",
+  "line_start": 211,
+  "line_end": 219,
+  "security_implications": ""
+}

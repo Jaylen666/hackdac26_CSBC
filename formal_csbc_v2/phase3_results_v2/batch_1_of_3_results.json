@@ -1,0 +1,407 @@
+{
+  "batch": 1,
+  "source_batch": "/home/smy/rtl_bug_agent/formal_csbc_v2/phase3_batches/batch_1_of_3.json",
+  "prompt": "/home/smy/rtl_bug_agent/config/prompts/phase3/verify_agent.md",
+  "rtl_root": "/home/smy/opentitan/hw/ip/keymgr/rtl/",
+  "count": 19,
+  "results": [
+    {
+      "finding_id": "F-0001",
+      "item": {
+        "title": "ECC 保护位的生成逻辑缺失：key_state_ecc_words_d 被错误地直连到 key_state_d，而没有经过 SECDED 编码模块。",
+        "severity": "HIGH",
+        "involved_signals": [
+          "key_state_d"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The claimed missing ECC encoder is not present in the RTL. `key_state_ecc_words_d` is just the 64-bit data slice staging signal, and the actual SECDED encoding is performed in the sequential block before `key_state_ecc_q` is written.",
+      "root_cause": "False alarm: [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:303) stages raw 64-bit words, and [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:314) call `prim_secded_pkg::prim_secded_inv_72_64_enc(...)` for every word before storing ECC bits.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": true,
+      "reasoning": "The exact contradiction does not hold: the encoder is in the non-reset branch of the `always_ff` block at `keymgr_ctrl.sv:304-314`, and `ecc_errs` are computed by decoding `{key_state_ecc_q, key_state_q}` at `keymgr_ctrl.sv:320-331`. However, tracing the full path uncovered a real adjacent defect: `key_state_q` is reset at `keymgr_ctrl.sv:306` but is never assigned in the non-reset branch anywhere in the module, while combinational update logic still derives `key_state_d` from `key_state_q` at `keymgr_ctrl.sv:364-417`. As written, ECC bits are re-encoded, but the underlying key-state data register never loads new data.",
+      "additional_findings": [
+        "Adjacent real defect: `key_state_q` is never updated after reset in [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304), so internal key-state data remains zero while `key_state_ecc_q` is refreshed from `key_state_d`. This can raise spurious ECC faults and breaks state progression."
+      ],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0002",
+      "item": {
+        "title": "Assumption 指出 key_chk 缺少赋值逻辑，但 Guarantee 显示 key_chk 在 generate 块中被赋值。",
+        "severity": "HIGH",
+        "involved_signals": [
+          "key_chk"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 1.0,
+      "summary": "`key_chk` is explicitly driven for every key share in the visible RTL; there is no missing assignment and no multi-driver condition.",
+      "root_cause": "False alarm: [keymgr_input_checks.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:85) declares `key_chk`, [keymgr_input_checks.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:87) through [keymgr_input_checks.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:97) assign each bit in `gen_key_chk`, and [keymgr_input_checks.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:99) reduces it into `key_vld_o`.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The signal path is complete in one module. `KeyShares` is derived at `keymgr_input_checks.sv:83`, `key_chk` is sized accordingly at `keymgr_input_checks.sv:85`, each element is assigned `valid_chk(key_padded[i])` at `keymgr_input_checks.sv:96`, and `key_vld_o` is `&key_chk` at `keymgr_input_checks.sv:99`. No hidden or external driver is required.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0030",
+      "item": {
+        "title": "max_key_versions 中可能未使用的索引被清零的行为没有文档化，可能存在安全未定义或未验证的风险。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "max_key_versions"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.93,
+      "summary": "Zeroing the non-functional `Disable` slot is intentional defensive initialization, not a demonstrated security bug.",
+      "root_cause": "False alarm: `KeyMgrStages` is 3 and `keymgr_stage_e` has a fourth enumerator `Disable` at [keymgr_pkg.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:90), so [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:496) through [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:502) intentionally clear index 3 and only program Creator/OwnerInt/Owner.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The selected value is consumed at `keymgr.sv:504-505`. In invalid and disabled states, operations are already rejected as invalid by the control FSM (`keymgr_ctrl.sv:667-679`) and by the design documentation, which lists no legal operations in Invalid/Disabled (`theory_of_operation.md:287-296`). Clearing the spare/Disable slot prevents X-propagation rather than creating undefined behavior.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0031",
+      "item": {
+        "title": "若故意无效常量（share0=0, share1=all-1）碰巧为合法 ECC 码字，则 ecc_errs 不会报错。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "key_state_d"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.96,
+      "summary": "The invalid-root-key path is not accepted as a normal operational state. The controller immediately leaves `StCtrlRootKey` for wipe/invalid handling when the OTP root key is not valid, so downstream logic is not supposed to treat that constant as a usable internal key.",
+      "root_cause": "False alarm: [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:381) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:399) load the deliberate invalid constant only in the `!root_key_valid_q` case, and [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:553) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:558) immediately drive the FSM toward wipe instead of a usable initialized state.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The theory-of-operation explicitly says that if the OTP root key is not valid when initialization reaches the load point, keymgr wipes secrets and transitions invalid (`theory_of_operation.md:73-74` and `theory_of_operation.md:244-248`). The reported ECC corner case therefore does not expose a supported 'use invalid root key as valid data' path. In the current RTL snapshot, the adjacent `key_state_q` non-update defect described under F-0001 would in practice dominate this path anyway.",
+      "additional_findings": [
+        "The stronger real issue on this signal path is not 'legal accidental ECC codeword' but that `key_state_q` never captures post-reset updates in [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304)."
+      ],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0032",
+      "item": {
+        "title": "The assignment key_state_ecc_words_d = key_state_d may bypass intended ECC encoding.",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "key_state_d"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The direct assignment does not bypass encoding. It feeds plain 64-bit words into the explicit SECDED encoder in the following sequential block.",
+      "root_cause": "False alarm: [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:303) is only a width-compatible reshape, and the actual ECC generation happens at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:312) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:314).",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": true,
+      "reasoning": "Reading the entire ECC path shows the intended sequence: `key_state_d` is built combinationally (`keymgr_ctrl.sv:364-417`), reinterpreted as 64-bit words (`keymgr_ctrl.sv:303`), encoded with `prim_secded_inv_72_64_enc` on every word (`keymgr_ctrl.sv:304-314`), then checked through `prim_secded_inv_72_64_dec` (`keymgr_ctrl.sv:320-331`). The bypass claim is therefore incorrect.",
+      "additional_findings": [
+        "Same adjacent defect as F-0001: `key_state_q` is never updated outside reset in [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304), so the data register and ECC register can diverge badly."
+      ],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0033",
+      "item": {
+        "title": "若设计允许 key_chk 宽度为零，则 key_vld_o 永久有效。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "key_chk"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "`key_chk` cannot be zero-width in this design. Its width is 2 when masking is enabled and 1 when masking is disabled.",
+      "root_cause": "False alarm: [keymgr_pkg.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:19) fixes `Shares = 2`, and [keymgr_input_checks.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:83) sets `KeyShares = KmacEnMasking ? Shares : 1`, so [keymgr_input_checks.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:85) can never declare a zero-bit `key_chk`.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "There is no parameter combination in the reviewed RTL that reduces `KeyShares` below 1. The reduction at `keymgr_input_checks.sv:99` therefore never operates on an empty vector. The suggested bug depends on a configuration that this IP does not expose.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0034",
+      "item": {
+        "title": "The truncation to KeyWidth bits may discard high-order bits of the key shares.",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "KeyWidth"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.97,
+      "summary": "The truncation is intentional for 256-bit key-manager state and non-OTBN software/hardware outputs. The only 384-bit consumer is OTBN sideload, and that path preserves the full digest width.",
+      "root_cause": "False alarm: the module specification fixes normal key-manager outputs to 256 bits (`theory_of_operation.md:10-11`), `keymgr.sv:273-275` truncates KMAC digests only for the internal key-manager control path, and `keymgr_sideload_key_ctrl.sv:161-174` keeps the full `AppDigestW` data for the OTBN sideload path.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The interface documentation explicitly states that OTBN hardware generation is 384 bits while all other operations are 256 bits (`registers.md:218`). That matches the RTL split: `keymgr.sv:273-275` and `keymgr_sideload_key_ctrl.sv:69-72` truncate to `KeyWidth` only where the destination type is `hw_key_req_t`, while `u_otbn_key` in `keymgr_sideload_key_ctrl.sv:161-174` consumes the full `data_i` width. The reported truncation is therefore design intent, not a bug.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0036",
+      "item": {
+        "title": "硬件实现中 data_rand 来源于 LFSR，而消费者假设其为来自 TRNG 的强随机数据。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "data_rand"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.9,
+      "summary": "The RTL and module documentation both intentionally use a locally advanced LFSR, periodically reseeded from EDN, as the randomization source. There is no evidence that this path was specified to be direct TRNG output.",
+      "root_cause": "False alarm: [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:177) through [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:185) document LFSR-based entropy use, [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:240) through [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:241) derive `data_rand` from that LFSR, and [keymgr_reseed_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:63) through [keymgr_reseed_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:78) reseed the LFSR from EDN.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The design intent section explicitly says a 64-bit LFSR is used as entropy in multiple places (`theory_of_operation.md:177-185`). This is not a hidden substitution: the top-level ties `u_lfsr.entropy_i` low but injects fresh seed material through `seed_en_i/seed_i` from `keymgr_reseed_ctrl`, which fetches data from EDN (`keymgr_reseed_ctrl.sv:45-61,63-78`). The finding overstates the issue by assuming a direct TRNG contract that is not present in the reviewed module-local docs.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0037",
+      "item": {
+        "title": "CdiWidth 可能大于 cnt 位宽，导致 cdi_cnt 越界位选。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "cnt"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "In this RTL, `CdiWidth` is 1 and `CntWidth` is 3, so the slice `cnt[CdiWidth-1:0]` is well-formed.",
+      "root_cause": "False alarm: [keymgr_pkg.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:11) through [keymgr_pkg.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:12) set `CDIs = 2` and `CdiWidth = vbits(CDIs) = 1`, while [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:75) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:78) make `CntWidth = 3` for the instantiated parameters.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The claim depends on an unsupported parameterization. With `LfsrWidth = 64`, `EntropyWidth = 32`, and `KeyWidth = 256`, `EntropyRounds = 8` and `EntropyRndWidth = 3`, so `CntWidth` resolves to 3 in `keymgr_ctrl.sv:78`. The slice assignment at `keymgr_ctrl.sv:361` is therefore safe.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0038",
+      "item": {
+        "title": "async_fault 被错误地参与 op_fault_err 的计算，导致异步错误阻止 sw_binding_unlock_o。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "async_fault"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.98,
+      "summary": "The comment distinguishes asynchronous recoverable errors from asynchronous fatal faults. Blocking `sw_binding_unlock_o` on fatal faults is consistent with the documented behavior.",
+      "root_cause": "False alarm: [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:211) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:215) say async errors should not affect operation results, but `op_fault_err` intentionally includes `async_fault`, and `sw_binding_unlock_o` at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:202) is only released when no errors or faults occurred.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The docs say fatal errors transition keymgr to Invalid (`theory_of_operation.md:241-258`) and that an unsuccessful advance does not unlock software binding (`theory_of_operation.md:471-474`). `async_fault` is produced only from fatal conditions in `keymgr_err.sv:116-128`, not from recoverable async errors. Including those faults in `op_fault_err` is therefore intentional and consistent with the documented unlock policy.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0039",
+      "item": {
+        "title": "state_q 非法编码时立即通过 working_state_o 输出 StInvalid，可能泄露错误状态。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "state_q"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.96,
+      "summary": "Exposing `StInvalid` is intentional. `working_state` is always software-visible, and Invalid is a defined externally visible working state in the module spec.",
+      "root_cause": "False alarm: [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:333) through [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:334) make the working-state register permanently visible, [keymgr_pkg.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:128) through [keymgr_pkg.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:137) define `StInvalid` as a public working-state enum, and [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:703) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:736) deliberately map invalid/default states to `StInvalid`.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": true,
+      "reasoning": "The theory-of-operation explicitly documents Invalid as a normal externally visible key-manager state entered on lifecycle deactivation or fault (`theory_of_operation.md:116-145`). The RTL behavior matches that contract. There is no evidence in the reviewed docs of an intended 'silent recovery' mode that would make this a leak or protocol violation.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0040",
+      "item": {
+        "title": "keymgr_ctrl 可能在 op_done_o 为高时同时置位 op_update_o，导致 keymgr_err 错误清除 sync_fault_q。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "op_done_i / op_update_i"
+        ]
+      },
+      "verdict": "CONFIRMED",
+      "confidence": 0.9,
+      "summary": "The top-level control path can assert `op_done_o` from `invalid_op` while the operation FSM simultaneously asserts `op_update_o` for a late intermediate advance completion. In `keymgr_err`, `op_done_i` takes priority over `op_update_i`, so pending synchronous fault state is cleared instead of latched.",
+      "root_cause": "Confirmed defect: `keymgr_err.sv:95-103` clears `sync_fault_q` when `op_done_i` is high before considering the `op_update_i` latch path. `keymgr_ctrl.sv:448-449` defines `op_done_o = op_req ? op_ack : (init_o | invalid_op)`, while `keymgr_op_state_ctrl.sv:78-80` can pulse `op_update_o` on a non-final advance KMAC completion. Because the main control FSM can de-couple `op_req` from the still-busy operation FSM during wipe/invalid transitions (`keymgr_ctrl.sv:642-679`), both outputs can be high in the same cycle.",
+      "trigger_condition": "Start an advance operation, let the control FSM move into wipe/invalid sequencing while the operation FSM is still in `StAdv`, then present a late intermediate `kmac_done_i` and an `op_start_i` that makes `invalid_op` high in `StCtrlInvalid`. In that cycle, `op_update_o` comes from the op-state FSM and `op_done_o` comes from `invalid_op`.",
+      "security_impact": "A real synchronous fault on an in-flight advance CDI can be dropped instead of being retained through the end of the operation, weakening fault recording and potentially altering the control FSM's fault-response bookkeeping.",
+      "software_visible": true,
+      "reasoning": "The operation FSM pulses `op_update_o` in `StAdv` whenever `kmac_done_i && cnt_i < CDIs-1` (`keymgr_op_state_ctrl.sv:72-80`). Separately, the main FSM can stop driving `op_req` directly from the original request and move through wipe/invalid states (`keymgr_ctrl.sv:642-679`). Once `op_req` is low, `op_done_o` no longer tracks `op_ack`; it becomes `init_o | invalid_op` (`keymgr_ctrl.sv:448-449`). That makes a simultaneous `op_done_o/op_update_o` combination reachable if the op-state FSM is still completing an older advance beat while the main FSM reports a new invalid operation. The formal result that `!(op_done_o && op_update_o)` fails is therefore aligned with the RTL. Finally, `keymgr_err.sv:95-103` shows the bug consequence: the `op_done_i` clear branch preempts the `op_update_i` capture branch for `sync_fault_q`.",
+      "additional_findings": [],
+      "formal_alignment": "Aligned with formal FAIL: the counterexample condition is reachable from the RTL structure, and the clear-before-latch priority in `keymgr_err` makes the loss of synchronous fault state real."
+    },
+    {
+      "finding_id": "F-0041",
+      "item": {
+        "title": "LFSR 重新播种控制器将 entropy_i 硬连线到 0，而 keymgr_kmac_if 的 decoy 输出路径要求该信号提供随机掩码。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "entropy_i"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.97,
+      "summary": "The `entropy_i` seen by `keymgr_kmac_if` is not tied to zero. It is driven by `data_rand`, which comes from the live LFSR state, and that LFSR is reseeded from EDN.",
+      "root_cause": "False alarm: `u_lfsr.entropy_i` is tied low at [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:228), but `keymgr_kmac_if.entropy_i` is driven by `data_rand` at [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:560) through [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:583), and `data_rand` is derived from the current LFSR state at [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:240) through [keymgr.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:241).",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding conflates the LFSR's nonlinear state-advance input with the exported mask source. `keymgr_kmac_if` forms `decoy_entropy` from its own `entropy_i[1]` at `keymgr_kmac_if.sv:316-320`, and top-level keymgr wires that port to `data_rand`, not to zero. `data_rand` changes with the LFSR and can be reseeded through EDN (`keymgr_reseed_ctrl.sv:63-78`).",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0042",
+      "item": {
+        "title": "enables_sub = enables_d - 1 可能让 one-hot 检查漏报多比特置位错误。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "enables_sub"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The RTL implements the standard `x & (x - 1)` multi-bit detection idiom. It flags exactly the condition the finding claims it can miss.",
+      "root_cause": "False alarm: [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:356) through [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:377) compute `enables_sub = enables_d - 1'b1` and latch `one_hot_err_d = |(enables_d & enables_sub) | one_hot_err_q`; for a one-hot or zero-hot vector, `x & (x - 1)` is zero, and for a multi-bit vector it is non-zero.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "This is the documented command-consistency countermeasure (`theory_of_operation.md:480-483` and `interfaces.md:64-66`). The batch's formal property is checking the opposite of the intended behavior: it expects `enables_d & enables_sub` itself to be onehot-or-zero, but the RTL intentionally wants that term to become non-zero when `enables_d` is not onehot.",
+      "additional_findings": [],
+      "formal_alignment": "Not aligned: the formal FAIL comes from an incorrect property, not from a design defect."
+    },
+    {
+      "finding_id": "F-0043",
+      "item": {
+        "title": "cmd_consty_err_q 被实现为非 sticky 的跟随逻辑。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "cmd_consty_err_q"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.98,
+      "summary": "`cmd_consty_err_q` is sticky until reset because its D input ORs in the previous Q value.",
+      "root_cause": "False alarm: [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370) through [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:371) define `cmd_consty_err_d = (...) | cmd_consty_err_q`, and [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:379) through [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:388) register that self-fed signal.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "Although the flop updates every cycle, the data path is not a simple follower: once `cmd_consty_err_q` becomes 1, the OR feedback keeps `cmd_consty_err_d` at 1 until reset. The same sticky pattern is used for `one_hot_err_q` and `kmac_done_err_q` in the same block. The finding ignores that self-feedback term.",
+      "additional_findings": [],
+      "formal_alignment": "Not aligned: the reported formal FAIL does not match the actual self-holding RTL behavior."
+    },
+    {
+      "finding_id": "F-0044",
+      "item": {
+        "title": "cnt_err 信号在设计意图中被列为未处理，但 keymgr_err 模块却将其作为 async_fault_d 的输入源。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "cnt_err"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.98,
+      "summary": "The apparent contradiction comes from reading only a partial chunk. In the full RTL, `cnt_err` is intentionally treated as an asynchronous fatal fault as part of the counter-redundancy countermeasure.",
+      "root_cause": "False alarm: the control counter exports `cnt_err` at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:420) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:435), passes it into `keymgr_err` at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:835) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:870), and `keymgr_err.sv:126-149` maps it to `AsyncFaultCntErr` / `FaultCtrlCnt`.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": true,
+      "reasoning": "The module-local security-countermeasure list explicitly calls out redundant counters for keymgr control, kmac-if, and reseed (`interfaces.md:62-67`). Treating a redundancy mismatch as a fatal fault is consistent with that design intent. The 'unprocessed' claim is an artifact of an incomplete region, not an RTL bug.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0045",
+      "item": {
+        "title": "continuous region 不应包含驱动 kmac_data_o 的逻辑，但实际有连续赋值。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "kmac_data_o"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The visible continuous assignments are the intended output drivers for this module's own interface. There is no multi-driver conflict.",
+      "root_cause": "False alarm: [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:330) through [keymgr_kmac_if.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:345) fully define `kmac_data_o` inside `keymgr_kmac_if`, which is the module that owns that output port.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "`kmac_data_o` is an output of `keymgr_kmac_if` (`keymgr_kmac_if.sv:33-35`) and an inter-module request interface at top level (`interfaces.md:19`). Driving `valid/last/strb` with continuous assignments and `data` from one `always_comb` block is normal RTL structure for this interface. There is no second writer in the module.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0046",
+      "item": {
+        "title": "keymgr_kmac_if 的递减计数器 cnt 与 keymgr_op_state_ctrl 假设的递增 cnt_i 冲突。",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "cnt"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 1.0,
+      "summary": "The finding conflates two different counters. `keymgr_op_state_ctrl.cnt_i` is driven by the incrementing control counter in `keymgr_ctrl`, not by the decrementing beat counter inside `keymgr_kmac_if`.",
+      "root_cause": "False alarm: `keymgr_ctrl` instantiates an incrementing `u_cnt` at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:420) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:435), slices it into `cdi_cnt` at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:361), and passes that to `keymgr_op_state_ctrl.cnt_i` at [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:757) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:773). The decrementing counter in `keymgr_kmac_if.sv:143-159` is unrelated beat sequencing logic.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "`keymgr_op_state_ctrl` uses `cnt_i` only to count completed CDI-level advance rounds (`keymgr_op_state_ctrl.sv:72-80`). `keymgr_kmac_if` uses a separate downcounter for 64-bit KMAC transfer beats and explicitly compensates with `Last*Round - cnt` indexing (`keymgr_kmac_if.sv:322-329`). The two counters serve different abstractions and do not conflict.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    },
+    {
+      "finding_id": "F-0047",
+      "item": {
+        "title": "The combinational generation of gen_req can glitch a supposedly synchronous gen_req_i input.",
+        "severity": "MEDIUM",
+        "involved_signals": [
+          "gen_req_i"
+        ]
+      },
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.94,
+      "summary": "`gen_req_i` is an internal same-clock combinational control signal between two sub-blocks of `keymgr_ctrl`; there is no separate asynchronous interface contract being violated here.",
+      "root_cause": "False alarm: [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:184) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:188) define `gen_req`, and [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:757) through [keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:773) wire it directly into `keymgr_op_state_ctrl`, which uses the same `clk_i`.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The assumption quoted in the batch treats `gen_req_i` like an external CDC-clean interface, but the full RTL shows it is just local combinational decode from `op_req`, `gen_sw_op`, and `gen_hw_op` inside the same module. The consuming FSM samples it synchronously with the same clock (`keymgr_op_state_ctrl.sv:14-20,50-69`). No module-local spec requires a separately registered handshake on this internal path.",
+      "additional_findings": [],
+      "formal_alignment": "N/A"
+    }
+  ],
+  "summary": {
+    "verdict_counts": {
+      "CONFIRMED": 1,
+      "FALSE_ALARM": 18,
+      "NEEDS_MORE_CONTEXT": 0,
+      "UNCERTAIN": 0
+    },
+    "notable_additional_findings": [
+      "A high-severity adjacent RTL defect exists in `keymgr_ctrl`: `key_state_q` is reset but never updated after reset ([keymgr_ctrl.sv](/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:304)). This is outside the exact text of most batch findings, but it materially affects the ECC/key-state path and likely explains several spurious ECC-related hypotheses."
+    ],
+    "overall_assessment": "Most batch items are partial-chunk misunderstandings or malformed formal properties. The one confirmed issue is a real control/error-handling interaction around simultaneous `op_done_o` and `op_update_o`. Separately, the reviewed RTL contains a stronger unreported defect on the `key_state_q` update path."
+  }
+}

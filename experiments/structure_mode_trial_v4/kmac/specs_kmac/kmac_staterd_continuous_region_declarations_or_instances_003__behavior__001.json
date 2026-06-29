@@ -1,0 +1,117 @@
+{
+  "chunk_id": "kmac_staterd_continuous_region_declarations_or_instances_003__behavior__001",
+  "header": {
+    "module": "kmac_staterd",
+    "block_kind": "assign",
+    "driven": [
+      "addr_sel",
+      "tlram_rdata_endian"
+    ],
+    "used": [
+      "tlram_addr",
+      "muxed_state",
+      "Share"
+    ],
+    "modes": [
+      "StateAddrW",
+      "SelAddrW",
+      "Share"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "digest",
+      "mask",
+      "access_control"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "addr_sel is continuously assigned the bit-slice tlram_addr[StateAddrW +: SelAddrW].",
+      "cond": "always",
+      "signals": [
+        "tlram_addr",
+        "addr_sel"
+      ],
+      "refs": [
+        "122"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "tlram_rdata_endian is assigned muxed_state[addr_sel] when int'(addr_sel) < Share, and 0 otherwise.",
+      "cond": "always",
+      "signals": [
+        "addr_sel",
+        "Share",
+        "muxed_state",
+        "tlram_rdata_endian"
+      ],
+      "refs": [
+        "124"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "tlram_addr is a trusted, authorized address for reading muxed_state, and the caller is permitted to observe the state word.",
+      "cond": "whenever a state read occurs via tlram_rdata_endian",
+      "risk": "Unauthorized agent could extract secret state words if tlram_addr is user-controlled without higher-level access control.",
+      "signals": [
+        "tlram_addr",
+        "muxed_state",
+        "tlram_rdata_endian"
+      ],
+      "refs": [
+        "122",
+        "124"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "Parameter Share exactly equals the number of entries (shares) in muxed_state, so that the bound check addr_sel < Share is correct.",
+      "cond": "always",
+      "risk": "If Share is too large, out-of-bounds reads may return undefined data; if too small, valid state words become inaccessible, potentially breaking KMAC functionality.",
+      "signals": [
+        "Share",
+        "muxed_state",
+        "addr_sel"
+      ],
+      "refs": [
+        "124"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The comparison int'(addr_sel) < Share treats addr_sel as signed integer, but muxed_state indexing uses unsigned interpretation; an addr_sel with MSB=1 could pass the bound check while accessing a different (potentially out-of-bounds) unsigned index, bypassing the intended array bound protection.",
+      "cond": "when addr_sel[SelAddrW-1] is 1 and int'(addr_sel) < Share but the unsigned value exceeds the maximum legitimate index.",
+      "risk": "A malicious or erroneous addr_sel may cause out-of-bounds read of muxed_state, leaking secret state or inducing X-propagation.",
+      "signals": [
+        "addr_sel",
+        "Share",
+        "muxed_state"
+      ],
+      "refs": [
+        "124"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "122",
+    "124"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv",
+  "line_start": 122,
+  "line_end": 126,
+  "security_implications": ""
+}

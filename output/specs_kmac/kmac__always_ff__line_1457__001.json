@@ -1,36 +1,112 @@
 {
   "chunk_id": "kmac__always_ff__line_1457__001",
-  "summary": "该寄存器在复位时清零，并在出现 fatal alert 后锁存故障状态。",
-  "behavior": "该时序块实现一个粘滞的 fatal fault 状态位。复位有效时，status_alert_fatal_fault 被清为 0；退出复位后，如果 alert_fatal 为 1，则将 status_alert_fatal_fault 置为 1。代码中没有在非复位且 alert_fatal 为 0 时清零或回写 0 的分支，因此一旦被置位，该状态会保持为 1，直到下一次复位为止。这表明该信号用于记录是否曾经发生过 fatal alert 事件。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "status_alert_fatal_fault"
+    ],
+    "used": [
+      "alert_fatal"
+    ],
+    "modes": [],
+    "tags": [
+      "alert",
+      "fault",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位时 status_alert_fatal_fault 一定被清零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On async reset (rst_ni low), status_alert_fatal_fault is cleared to 0.",
+      "cond": "negedge rst_ni",
+      "signals": [
+        "rst_ni",
         "status_alert_fatal_fault"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1459"
       ]
     },
     {
-      "property": "只要 alert_fatal 在非复位状态下出现，status_alert_fatal_fault 将被置为 1，并在后续保持置位直到复位。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When alert_fatal is high and reset is inactive, status_alert_fatal_fault is set to 1.",
+      "cond": "alert_fatal && rst_ni",
+      "signals": [
+        "alert_fatal",
         "status_alert_fatal_fault"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1460-1462"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1460-1461"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When reset is inactive and alert_fatal is not high, status_alert_fatal_fault retains its previous value (sticky behavior).",
+      "cond": "rst_ni && !alert_fatal",
+      "signals": [
+        "status_alert_fatal_fault"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1463"
       ]
     }
   ],
-  "security_implications": "该逻辑记录 fatal alert 的发生历史，属于安全/可靠性相关状态锁存。其粘滞特性有助于上层软件或监控逻辑在瞬时告警消失后仍能观察到严重故障事件；同时这也意味着一旦触发，状态只能通过复位清除。",
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "alert_fatal must be a correctly synchronized, glitch-free signal representing a fatal fault condition.",
+      "cond": "always when clocking",
+      "risk": "A spurious or glitched alert_fatal will cause an irreversible sticky fault indication, potentially triggering inappropriate error handling or unnecessary reset.",
+      "signals": [
+        "alert_fatal",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1460"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The async reset rst_ni must be asserted and deasserted in compliance with timing requirements to avoid metastability in the status register.",
+      "cond": "during reset sequence",
+      "risk": "Metastability could lead to functional corruption of the fault indicator.",
+      "signals": [
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1458"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "status_alert_fatal_fault is sticky and only cleared by reset. If this signal is exposed as a CSR to software, there may be an expectation of software clearing (e.g., write-1-to-clear) that is not implemented here.",
+      "cond": "when software reads status_alert_fatal_fault",
+      "risk": "If clearing is expected but missing, the fault indication becomes permanent until system reset, potentially causing repeated error responses or blocking normal operation. If clearing is intentionally reset-only, the design intent needs confirmation.",
+      "signals": [
+        "status_alert_fatal_fault"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1463"
+      ]
+    }
+  ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1463"
   ],
-  "uncertain_points": [
-    "从该片段只能确认 status_alert_fatal_fault 会在 alert_fatal 出现后锁存为 1，无法仅凭本片段判断 alert_fatal 的触发条件、是否为单周期脉冲，或该状态位是否会被软件读取并映射到某个状态寄存器。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1457,
-  "line_end": 1463
+  "line_end": 1463,
+  "security_implications": ""
 }

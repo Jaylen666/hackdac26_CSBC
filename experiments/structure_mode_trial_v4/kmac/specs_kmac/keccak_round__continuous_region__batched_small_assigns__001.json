@@ -1,0 +1,221 @@
+{
+  "chunk_id": "keccak_round__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "keccak_round",
+    "block_kind": "mixed",
+    "driven": [
+      "rnd_eq_end",
+      "dom_out_low_d",
+      "dom_in_rand_ext_q",
+      "unused_dom_in_rand_ext",
+      "state_o",
+      "keccak_st"
+    ],
+    "used": [
+      "round",
+      "MaxRound",
+      "dom_in_low_d",
+      "dom_in_rand_ext_d",
+      "storage",
+      "keccak_st_d",
+      "EnMasking",
+      "ForceRandExt",
+      "KeccakStIdle"
+    ],
+    "modes": [
+      "EnMasking",
+      "ForceRandExt",
+      "KeccakStIdle"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "masking",
+      "parameterization",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "rnd_eq_end asserts when round equals MaxRound-1, stays low otherwise.",
+      "cond": "always",
+      "signals": [
+        "rnd_eq_end",
+        "round",
+        "MaxRound"
+      ],
+      "refs": [
+        "keccak_round.sv:178"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "dom_out_low_d is the logical negation of dom_in_low_d.",
+      "cond": "always",
+      "signals": [
+        "dom_out_low_d",
+        "dom_in_low_d"
+      ],
+      "refs": [
+        "keccak_round.sv:182"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When EnMasking and ForceRandExt are both true, dom_in_rand_ext_q is forced to 1'b1.",
+      "cond": "EnMasking && ForceRandExt",
+      "signals": [
+        "dom_in_rand_ext_q",
+        "EnMasking",
+        "ForceRandExt"
+      ],
+      "refs": [
+        "keccak_round.sv:190"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When EnMasking and ForceRandExt are both true, unused_dom_in_rand_ext is tied to dom_in_rand_ext_d to suppress lint warnings.",
+      "cond": "EnMasking && ForceRandExt",
+      "signals": [
+        "unused_dom_in_rand_ext",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "keccak_round.sv:193"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "generate_param",
+      "claim": "When EnMasking is false, state_o is driven by storage.",
+      "cond": "!EnMasking",
+      "signals": [
+        "state_o",
+        "storage",
+        "EnMasking"
+      ],
+      "refs": [
+        "keccak_round.sv:197"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "The PRIM_FLOP_SPARSE_FSM macro creates a state register for keccak_st that updates with keccak_st_d on clock edge and resets to KeccakStIdle.",
+      "cond": "always (on clock edge/reset)",
+      "signals": [
+        "keccak_st",
+        "keccak_st_d",
+        "KeccakStIdle"
+      ],
+      "refs": [
+        "keccak_round.sv:180"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The round counter increments correctly and reaches MaxRound-1 exactly once per Keccak round sequence.",
+      "cond": "when rnd_eq_end is used to signal round completion",
+      "risk": "If round does not reach MaxRound-1 or increments incorrectly, rnd_eq_end may fire prematurely or miss, causing downstream round-aligned logic to misbehave.",
+      "signals": [
+        "round",
+        "rnd_eq_end"
+      ],
+      "refs": [
+        "keccak_round.sv:178"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "When EnMasking is false, the storage signal holds the correct current state value to be output.",
+      "cond": "!EnMasking",
+      "risk": "If storage does not hold a valid state, state_o may propagate incorrect or garbage data.",
+      "signals": [
+        "storage",
+        "state_o"
+      ],
+      "refs": [
+        "keccak_round.sv:197"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "The enclosing module provides a valid clock and reset to the u_state_regs instance (PRIM_FLOP_SPARSE_FSM).",
+      "cond": "always",
+      "risk": "Without proper clock/reset, keccak_st may not initialize or transition correctly, breaking the state machine.",
+      "signals": [
+        "clk",
+        "rst_n"
+      ],
+      "refs": [
+        "keccak_round.sv:180"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The gen_reg_dom_in_rand_ext block (active when EnMasking && !ForceRandExt) is not shown in this chunk. Its implementation needs review.",
+      "cond": "EnMasking && !ForceRandExt",
+      "risk": "Missing or incorrect masking randomness handling in that block could degrade side-channel resistance.",
+      "signals": [
+        "dom_in_rand_ext_q",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "keccak_round.sv:186-187"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Forcing dom_in_rand_ext_q to 1'b1 when ForceRandExt is active may weaken masking by injecting a constant instead of external randomness.",
+      "cond": "EnMasking && ForceRandExt",
+      "risk": "A constant masking input could bias the masking scheme, reducing its effectiveness against side-channel attacks.",
+      "signals": [
+        "dom_in_rand_ext_q",
+        "ForceRandExt"
+      ],
+      "refs": [
+        "keccak_round.sv:190"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "When EnMasking is true, the driver for state_o is not present in this chunk. Need to verify that state_o is always fully driven.",
+      "cond": "EnMasking",
+      "risk": "If no other driver exists, state_o could be undriven or retain a stale value, causing incorrect output.",
+      "signals": [
+        "state_o"
+      ],
+      "refs": [
+        "keccak_round.sv:197"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "keccak_round.sv:177-180",
+    "keccak_round.sv:182",
+    "keccak_round.sv:184-194",
+    "keccak_round.sv:197"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
+  "line_start": 177,
+  "line_end": 477,
+  "security_implications": ""
+}

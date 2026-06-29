@@ -1,53 +1,157 @@
 {
   "chunk_id": "kmac_app__always_comb__line_745__001",
-  "summary": "在等待应用摘要结果时，该组合逻辑仅在吸收完成且未进入生命周期升级时对外声明摘要有效，并从 Keccak 状态低位切片生成应用摘要。",
-  "behavior": "该组合块默认将 `app_digest_done` 置 0，并将整个 `app_digest` 清零 [kmac_app.sv:746-747]。只有当状态为 `StAppWait`、`absorbed_i` 通过 `mubi4_test_true_strict` 判定为严格真、且 `lc_escalate_en_i` 通过 `lc_tx_test_false_strict` 判定为严格假时，才输出有效摘要 [kmac_app.sv:748-749]。在该条件下，`app_digest_done` 被置 1，且对每个 `Share` 条目，将 `keccak_state_i[i]` 的低 `AppDigestW` 位复制到 `app_digest[i]` [kmac_app.sv:751,754-756]。注释说明摘要“总是有 2 个 entry，若未启用 masking，第二个绑为 0” [kmac_app.sv:753]；但本片段实际行为是仅对 `i < Share` 的条目赋值，其余是否存在或是否为 0 取决于 `app_digest` 的整体定义与默认清零，因此该固定为 0 的性质在本片段内只可部分支持。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "app_digest_done",
+      "app_digest"
+    ],
+    "used": [
+      "st",
+      "absorbed_i",
+      "lc_escalate_en_i",
+      "keccak_state_i",
+      "Share",
+      "AppDigestW"
+    ],
+    "modes": [
+      "StAppWait",
+      "Share",
+      "AppDigestW"
+    ],
+    "tags": [
+      "secret",
+      "digest",
+      "handshake",
+      "masking",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `st == StAppWait`、`absorbed_i` 为严格真且 `lc_escalate_en_i` 为严格假时，`app_digest_done` 一定为 1，且 `app_digest[i]` 对所有 `i < Share` 等于 `keccak_state_i[i][AppDigestW-1:0]`。",
-      "output_signals": [
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When condition is false, app_digest_done is 0 and app_digest is assigned all zero.",
+      "cond": "any other state besides (st==StAppWait and absorbed_i is mubi4 True and lc_escalate_en_i is lc_tx False)",
+      "signals": [
         "app_digest_done",
         "app_digest"
       ],
-      "source_refs": [
-        "kmac_app.sv:748-757"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:746-747"
       ]
     },
     {
-      "property": "当上述使能条件不满足时，`app_digest_done` 一定为 0，且 `app_digest` 保持全 0。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When st==StAppWait, absorbed_i is mubi4 True Strict, and lc_escalate_en_i is lc_tx False Strict, app_digest_done is assigned 1 and for each share i, app_digest[i] gets the lower AppDigestW bits of keccak_state_i[i].",
+      "cond": "(st == StAppWait) & mubi4_test_true_strict(absorbed_i) & lc_tx_test_false_strict(lc_escalate_en_i)",
+      "signals": [
         "app_digest_done",
-        "app_digest"
+        "app_digest",
+        "keccak_state_i",
+        "AppDigestW",
+        "Share"
       ],
-      "source_refs": [
-        "kmac_app.sv:746-749"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:748-757"
       ]
     }
   ],
-  "security_implications": "该逻辑在生命周期升级信号 `lc_escalate_en_i` 不为严格假时抑制摘要输出，并将摘要清零 [kmac_app.sv:748-749]，这有助于在升级/告警类安全状态下避免向外部继续暴露 KMAC/Keccak 结果。同时使用严格多比特布尔检查 `absorbed_i` 和生命周期信号，降低无效编码被误当作合法使能的风险。",
   "assumptions": [
     {
-      "constraint": "`absorbed_i` 只有在 SHA3/KMAC 吸收和摘要计算确实完成时才应被驱动为 `mubi4_test_true_strict` 可接受的严格真编码。",
-      "bug_relevance": "这是行为契约；若过早或错误地宣告严格真，`app_digest_done` 会提前拉高并输出当时 `keccak_state_i` 的低位切片，可能导致错误摘要被上游采信。",
-      "related_signals": [
-        "absorbed_i",
-        "app_digest_done",
-        "app_digest",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "absorbed_i must be a valid mubi4_t True encoding when the absorbing phase completes, otherwise app_digest_done will never assert.",
+      "cond": "when the design expects a digest output",
+      "risk": "Digest output stalled indefinitely, keymgr may deadlock.",
+      "signals": [
+        "absorbed_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:748"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "lc_escalate_en_i must be a valid lc_tx_t encoding (True or False). If it is invalid, lc_tx_test_false_strict will return 0, preventing digest output forever.",
+      "cond": "always",
+      "risk": "System hang if lifecycle signal is not driven to a valid encoding.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:749"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "keccak_state_i shares must hold valid, stable digest data when condition is true.",
+      "cond": "when st==StAppWait and absorbed_i==True",
+      "risk": "Incorrect digest output to KeyMgr.",
+      "signals": [
         "keccak_state_i"
       ],
-      "source_refs": [
-        "kmac_app.sv:748-756"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:756"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Comment says second digest entry is tied to 0 when masking is disabled, but this chunk directly copies keccak_state_i[i] for all shares. If masking is disabled, keccak_state_i[1] must be forced to 0 elsewhere; otherwise secret data may leak via app_digest[1].",
+      "cond": "when EnMasking parameter is false",
+      "risk": "Uninitialized or secret data from keccak state leaked on second share output.",
+      "signals": [
+        "keccak_state_i[1]",
+        "app_digest[1]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:753,756"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If AppDigestW parameter exceeds the width of keccak_state_i entries, partial select [AppDigestW-1:0] would be out of range, causing synthesis/simulation error.",
+      "cond": "AppDigestW > width of keccak_state_i[i]",
+      "risk": "Simulation/synthesis fails, or silent wrap-around in some tools.",
+      "signals": [
+        "AppDigestW",
+        "keccak_state_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:756"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "app_digest_done is a combinational pulse that deasserts when condition becomes false, and app_digest resets to zero. If the consumer does not capture on the exact cycle when done=1, it may miss the digest.",
+      "cond": "when condition transitions from true to false",
+      "risk": "Consumer could miss the done pulse, leading to loss of digest transfer.",
+      "signals": [
+        "app_digest_done",
+        "app_digest"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:748-758"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_app.sv:746-757"
-  ],
-  "uncertain_points": [
-    "注释称“digest has always 2 entries. If !EnMasking, second is tied to 0” [kmac_app.sv:753]，但本片段仅按 `i < Share` 赋值，无法单独证明 `Share` 是否恒为 2，或未使用的第二个 entry 是否在所有配置下都存在且由此块保证为 0。",
-    "本片段只返回 `keccak_state_i` 的低 `AppDigestW` 位 [kmac_app.sv:756]；该切片是否覆盖完整应用摘要、以及高位状态是否应被忽略，需要结合 `keccak_state_i` 和 `AppDigestW` 的定义确认。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:745-759"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 745,
-  "line_end": 759
+  "line_end": 759,
+  "security_implications": ""
 }

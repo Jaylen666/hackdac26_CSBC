@@ -1,0 +1,2696 @@
+{
+  "_stats": {
+    "call_count": 205,
+    "error_count": 0,
+    "total_input_tokens": 480507,
+    "total_output_tokens": 643349,
+    "total_tokens": 1123856,
+    "total_wall_seconds": 1227.6,
+    "total_wall_minutes": 20.5
+  },
+  "_ag_pairing_mode": "semantic",
+  "_semantic_batch_mode": "guarded",
+  "findings": [
+    {
+      "finding_id": "F-0001",
+      "title": "[B-AG+U-UP] max_key_versions 数组的大小未受 StageWidth 或 KeyMgrStages 约束，导致 generate for 循环可能访问越界索引或未驱动元素，引发硬件行为不确定。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.675,
+      "contradiction": "The assumption describes a scenario where data_en_i and data_valid_i are de-asserted before a key transfer completes. In a typical hardware interface protocol, such premature de-assertion is an illegal/contract-violating input; the design likely assumes these signals remain asserted for the entire transfer. The guarantees provided cover normal operational behavior and do not address error handling for illegal inputs. The absence of explicit error detection for this scenario is a defensive design",
+      "involved_signals": [
+        "max_key_versions",
+        "otp_key_i.owner_seed",
+        "root_key_i",
+        "u_sideload_ctrl",
+        "aes_key_o",
+        "clr_key_i",
+        "otp_key_i.creator_seed",
+        "cur_max_key_version",
+        "hw_key_sel_i",
+        "wipe_key_i",
+        "hw_key_sel_buf",
+        "data_valid",
+        "wipe_key",
+        "hw2reg.sw_share0_output[i].de",
+        "hw2reg.sw_share1_output[i].de",
+        "unused_key_vld"
+      ],
+      "involved_specs": [
+        "keymgr__generate_for__gen_key_version_fill__001",
+        "keymgr__continuous_region__declarations_or_instances__006",
+        "keymgr__continuous_region__declarations_or_instances__009",
+        "keymgr__continuous_region__declarations_or_instances__004",
+        "keymgr__continuous_region__declarations_or_instances__003",
+        "keymgr_ctrl__always_comb__line_363__001",
+        "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+        "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_ctrl__001",
+        "keymgr__generate_for__gen_sw_assigns__001",
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__001",
+        "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+        "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+        "keymgr__continuous_region__declarations_or_instances__005",
+        "keymgr_sideload_key_ctrl__always_comb__line_91__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__generate_for__gen_key_version_fill__001",
+          "field": "assumption",
+          "excerpt": "KeyMgrStages and StageWidth are defined such that indices i in the range [KeyMgrStages, 2**StageWidth-1] are within the declared bounds of the max_key_versions array.\nrisk: If the array size does not "
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "max_key_versions for Creator, OwnerInt, and Owner are directly driven by their corresponding reg2hw shadowed CSRs."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "cur_max_key_version is the max_key_versions entry selected by stage_sel."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "ASSERT_INIT StageMatch_A ensures KeyMgrStages equals Disable at elaboration."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "When UseOtpSeedsInsteadOfFlash is true, otp_key_i.owner_seed is valid and stable before it is used as owner_seed for Owner adv_matrix."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "unused_creator_seed is assigned a reduced XOR of flash_i.seeds[CreatorSeedIdx] and otp_key_i.creator_seed_valid when UseOtpSeedsInsteadOfFlash is true, otherwise a reduced XOR of otp_key_i.creator_see"
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "When UseOtpSeedsInsteadOfFlash is true, creator_seed is continuously assigned from otp_key_i.creator_seed; otherwise from flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "assumption",
+          "excerpt": "KeyUpdateRoot branch hardcodes share indices 0 and 1 regardless of parameter Shares; if Shares ≠ 2, the update either skips higher shares or causes out-of-bounds indexing."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "若参数Shares被配置为0，key_q寄存器在复位后不被清除，可能残留旧密钥值，造成密钥信息泄露。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.6,
+      "contradiction": "当en_i为低时，key_o未屏蔽且key_q可能暴露，导致密钥数据在模块未使能时仍可被下游逻辑读取，构成密钥泄露风险。",
+      "involved_signals": [
+        "key_i"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key__always_ff__line_42__001",
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+        "keymgr_sideload_key__continuous_region__keymgr_sideload_key__001",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001",
+        "keymgr_input_checks__continuous_region__declarations_or_instances__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_42__001",
+          "field": "assumption",
+          "excerpt": "If Shares is set to 0, the clear/load loops do not execute, leaving key_q unchanged after reset or never updated. This may breach the assumption that key_q is always cleared."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "kmac_key_o selects key_i when key_i.valid is true, otherwise selects kmac_sideload_key."
+        },
+        {
+          "spec": "keymgr_sideload_key__continuous_region__keymgr_sideload_key__001",
+          "field": "assumption",
+          "excerpt": "key_o is not masked or zeroized when en_i is low; key_q might be exposed to output consumers even when valid_o is deasserted."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "kmac_key_o selects key_i when key_i.valid is true, otherwise selects kmac_sideload_key."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "key_o.valid is continuously assigned to op_req."
+        },
+        {
+          "spec": "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "unused_key_vld is always equal to key_i.valid."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "When a wipe is requested while in StSideloadIdle, the sideload key control logic keeps keys_en asserted during the same cycle as the state transitions to StSideloadWipe. This allows external logic sha",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.6,
+      "contradiction": "When a wipe is requested while in StSideloadIdle, the sideload key control logic keeps keys_en asserted during the same cycle as the state transitions to StSideloadWipe. This allows external logic sharing the keys_en signal to access the key data simultaneously with the wipe initiation, potentially leaking sensitive data. No guarantee or logic is present to deassert keys_en during this transition.",
+      "involved_signals": [
+        "keys_en"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key_ctrl__always_comb__line_91__001",
+        "keymgr_ctrl__always_comb__line_468__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key_ctrl__always_comb__line_91__001",
+          "field": "assumption",
+          "excerpt": "When wipe_key_i is asserted while in StSideloadIdle, keys_en remains asserted for that same cycle while the state transitions to StSideloadWipe. An external entity using keys_en could access the key s"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlWipe, asserts wipe_req; holds op_req = op_busy to complete ongoing operation; flags any new op_start_i as invalid_op; when op_start_i is low, transitions to StCtrlInvalid and sets prng_en_dis"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlDisabled, sets op_req = op_start_i and asserts disabled flag; transitions to StCtrlWipe if either !en_i or inv_state is true."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlRootKey, asserts init_o and initialized; transitions to StCtrlInit if en_i and root_key_valid_q are both true, otherwise transitions to StCtrlWipe."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "The width of key_chk is not shown in the chunk. If the design allows key_chk to be zero‑width, the AND‑reduction would r",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.6,
+      "contradiction": "Assumption highlights that if key_chk width is zero, the AND‑reduction (likely driving key_vld_o) would be 1'b1, permanently asserting validity. The provided guarantee describes per‑bit assignment but does not enforce a non‑zero width. Without knowing whether a zero‑width configuration is legal, it remains uncertain whether this is a gap or a defensive requirement, so the verdict is UNCERTAIN.",
+      "involved_signals": [
+        "key_chk"
+      ],
+      "involved_specs": [
+        "keymgr_input_checks__continuous_region__batched_small_assigns__001",
+        "keymgr_input_checks__generate_for__gen_key_chk__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_input_checks__continuous_region__batched_small_assigns__001",
+          "field": "assumption",
+          "excerpt": "The width of key_chk is not shown in the chunk. If the design allows key_chk to be zero‑width, the AND‑reduction would return 1’b1, making key_vld_o permanently valid without any real check."
+        },
+        {
+          "spec": "keymgr_input_checks__generate_for__gen_key_chk__001",
+          "field": "guarantee",
+          "excerpt": "For each share i, key_chk[i] is assigned the result of the valid_chk function applied to key_padded[i]."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "keymgr_ctrl 模块在 update_sel 为 KeyUpdateRandom、KeyUpdateRoot、KeyUpdateKmac 时未显式保证 wipe_key_o 保持为 0，存在合法操作遗漏驱动零值的缺口，可能导致非擦除序列中意外擦除所有软件密钥。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.6,
+      "contradiction": "keymgr_ctrl 模块在 update_sel 为 KeyUpdateRandom、KeyUpdateRoot、KeyUpdateKmac 时未显式保证 wipe_key_o 保持为 0，存在合法操作遗漏驱动零值的缺口，可能导致非擦除序列中意外擦除所有软件密钥。",
+      "involved_signals": [
+        "wipe_key"
+      ],
+      "involved_specs": [
+        "keymgr__generate_for__gen_sw_assigns__001",
+        "keymgr_ctrl__always_comb__line_363__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__generate_for__gen_sw_assigns__001",
+          "field": "assumption",
+          "excerpt": "wipe_key must be asserted only during designated secure wipe sequences and deasserted in normal operation.\nrisk: Stuck-at-1 wipe_key permanently randomizes all sw key outputs, denying any key delivery"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "guarantee",
+          "excerpt": "For KeyUpdateWipe, wipe_key_o asserted, and each share j of each CDI i loaded with {EntropyRounds{entropy_i[j]}}."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "guarantee",
+          "excerpt": "When update_sel is not KeyUpdateRandom, KeyUpdateRoot, KeyUpdateKmac, or KeyUpdateWipe (default branch), key_state_d holds key_state_q, data_valid_o=0, wipe_key_o=0."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "[B-AG+U-UP] 设计中使用 AsyncFaultKmacCmd 等常量作为 async_fault_d/o 的位索引，但未验证这些索引在向量位宽内，可能导致越界赋值，产生错误故障报告，从而绕过安全检测。",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "The default error state is entered only when the FSM encounters an illegal/error condition (e.g., parity error, invalid encoding). Locking state_d and asserting op_fsm_err_o is a deliberate safety response, not a normal legal state. The guarantee shows that op_fsm_err_i is fed into async_fault_d, which is part of the system's escalation logic. In such designs, the escalation path eventually triggers a reset or secure shutdown that clears the FSM, thereby resolving the deadlock. This is a standar",
+      "involved_signals": [
+        "async_fault",
+        "async_err_o",
+        "sync_err_d",
+        "async_fault_o",
+        "sync_fault",
+        "op_ack",
+        "sync_fault_d",
+        "RndCnstRevisionSeedDefault",
+        "RndCnstCreatorIdentitySeedDefault",
+        "RndCnstOwnerIntIdentitySeedDefault",
+        "RndCnstOwnerIdentitySeedDefault",
+        "RndCnstSoftOutputSeedDefault",
+        "RndCnstHardOutputSeedDefault",
+        "RndCnstNoneSeedDefault",
+        "RndCnstAesSeedDefault",
+        "RndCnstKmacSeedDefault",
+        "RndCnstOtbnSeedDefault",
+        "RndCnstCdiDefault"
+      ],
+      "involved_specs": [
+        "keymgr_err__continuous_region__declarations_or_instances__003",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr_err__always_ff__line_108__001",
+        "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+        "keymgr_err__continuous_region__declarations_or_instances__001",
+        "keymgr__continuous_region__keymgr__001",
+        "keymgr_err__continuous_region__batched_small_assigns__001",
+        "keymgr_err__always_ff__line_77__001",
+        "keymgr_err__always_ff__line_95__001",
+        "keymgr_err__continuous_region__keymgr_err__001",
+        "keymgr_ctrl__always_comb__line_739__001",
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_kmac_if__continuous_region__batched_small_assigns__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "assumption",
+          "excerpt": "The constant indices (e.g., AsyncFaultKmacCmd) align with the bit positions of async_fault_d/async_fault_o vectors; no out-of-bounds access occurs.\nrisk: If a configuration mismatch occurs, wrong sign"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "op_fault_err is the bitwise OR reduction of the concatenation {sync_fault, async_fault}."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_108__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low (reset), async_fault_q is cleared to zero."
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "assumption",
+          "excerpt": "ECC fault (FaultKeyEcc) is driven directly from async_fault_o without any qualification; a transient ECC error could permanently set the fault output if async_fault_q is not cleared."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_108__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low (reset), async_fault_q is cleared to zero."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_108__001",
+          "field": "guarantee",
+          "excerpt": "On every positive edge of clk_i when rst_ni is high, async_fault_q takes the value of async_fault_o."
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "assumption",
+          "excerpt": "The security countermeasure 'CTRL.FSM.CONSISTENCY' maps only to a simple OR of state_change_err_i and op_state_cmd_err_i into one fault bit. It is unclear if separate reporting or latching is required"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "op_fault_err is the bitwise OR reduction of the concatenation {sync_fault, async_fault}."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "[B-AG+U-UP] 缺少对参数 HealthStateWidth 与实际 Life Cycle 健康状态向量宽度的匹配检查。错误的参数将导致 AdvDataWidth 计算偏差，可能引起 KDF 输入打包错误，造成数据损坏或安全降级。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.375,
+      "contradiction": "The assumption requires a specific relation between two parameters (MaxWidth >= KeyWidth). The guarantee only describes a data truncation operation that depends on KeyWidth, without ensuring or checking that MaxWidth meets the requirement. The provided information does not confirm whether this relation is guaranteed.",
+      "involved_signals": [
+        "AdvDataWidth",
+        "KeyWidth",
+        "lfsr",
+        "LfsrWidth",
+        "rom_digest_i",
+        "MaxWidth",
+        "valid_chk",
+        "HealthStateWidth",
+        "DevIdWidth"
+      ],
+      "involved_specs": [
+        "keymgr_pkg__continuous_region__keymgr_pkg__001",
+        "keymgr__continuous_region__keymgr__001",
+        "keymgr_input_checks__generate_for__gen_key_chk__001",
+        "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+        "keymgr__generate_for__gen_truncate_data__001",
+        "keymgr_pkg__function_task__valid_data_chk__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_pkg__continuous_region__keymgr_pkg__001",
+          "field": "assumption",
+          "excerpt": "HealthStateWidth (128) must equal the actual Life Cycle health state vector width."
+        },
+        {
+          "spec": "keymgr__continuous_region__keymgr__001",
+          "field": "guarantee",
+          "excerpt": "Compile-time assertion checks that AdvDataWidth, IdDataWidth, and GenDataWidth are each <= KDFMaxWidth."
+        },
+        {
+          "spec": "keymgr_pkg__continuous_region__keymgr_pkg__001",
+          "field": "assumption",
+          "excerpt": "DevIdWidth (256) must equal the actual device ID width."
+        },
+        {
+          "spec": "keymgr__continuous_region__keymgr__001",
+          "field": "guarantee",
+          "excerpt": "Compile-time assertion checks that AdvDataWidth, IdDataWidth, and GenDataWidth are each <= KDFMaxWidth."
+        },
+        {
+          "spec": "keymgr_input_checks__generate_for__gen_key_chk__001",
+          "field": "assumption",
+          "excerpt": "If MaxWidth is configured smaller than KeyWidth, prim_msb_extend will truncate high-order bits; the key_chk result is then based on a truncated key."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+          "field": "guarantee",
+          "excerpt": "For each share i from 0 to Shares-1, data_truncated[i] is assigned the lower KeyWidth bits of data_i[i]."
+        },
+        {
+          "spec": "keymgr__generate_for__gen_truncate_data__001",
+          "field": "guarantee",
+          "excerpt": "For each share index i from 0 to Shares-1, kmac_data_truncated[i] is continuously assigned the lower KeyWidth bits of kmac_data[i]."
+        },
+        {
+          "spec": "keymgr__generate_for__gen_truncate_data__001",
+          "field": "assumption",
+          "excerpt": "Parameter KeyWidth is greater than 0.\nrisk: A slice [KeyWidth-1:0] with KeyWidth = 0 is illegal, causing a compilation/synthesis error."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "当参数 NonInitClr=0 时，非初始化状态（init_q=0）下的清除输入 clr_i 被忽略，不能阻止后续配置。这与注释中“clear should block future configuration”的要求矛盾，可能导致安全配置清除失败。",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.325,
+      "contradiction": "The constraint highlights that the condition for asserting init_o is not defined in the visible chunk. The provided guarantees only cover init_q generation and out_clr, none specify when init_o is asserted. Without the relevant state machine guarantee (e.g., from keymgr_ctrl), it is impossible to verify whether unintended root key updates could occur. Information is insufficient.",
+      "involved_signals": [
+        "init_o"
+      ],
+      "involved_specs": [
+        "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
+        "keymgr_cfg_en__always_ff__line_51__001",
+        "keymgr_cfg_en__always_ff__line_40__001",
+        "keymgr_ctrl__always_comb__line_468__001",
+        "keymgr_ctrl__continuous_region__int__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
+          "field": "assumption",
+          "excerpt": "When NonInitClr=0, the clear input clr_i only affects out_o when init_q=1; during non-init (init_q=0) clear is ignored. The comment at lines 34-35 states clear should block future configuration, but t"
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_51__001",
+          "field": "guarantee",
+          "excerpt": "When none of vld_dis, vld_set, or out_clr are asserted and no reset, out_q retains its previous value."
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_40__001",
+          "field": "assumption",
+          "excerpt": "The usage of init_q outside this module is not visible; it likely gates other logic. Need to verify that the clearing condition (en_i deassertion) does not violate assumptions of downstream consumers."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlRootKey, asserts init_o and initialized; transitions to StCtrlInit if en_i and root_key_valid_q are both true, otherwise transitions to StCtrlWipe."
+        },
+        {
+          "spec": "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
+          "field": "guarantee",
+          "excerpt": "vld_clr is assigned to init_q && clr_i."
+        },
+        {
+          "spec": "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
+          "field": "guarantee",
+          "excerpt": "vld_dis is assigned to init_q && !en_i."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "assumption",
+          "excerpt": "signal init_o is used in the update_sel mux to drive KeyUpdateRoot but is not defined in this chunk. The condition under which init_o is asserted must be verified to avoid unintended root key updates."
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_40__001",
+          "field": "guarantee",
+          "excerpt": "In all other cases (no reset, not init_q&&!en_i, not init_i&&en_i), init_q retains its previous value."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "The hardware guarantees that entropy_i is tied to logic 0, but the side-load key logic assumes entropy_i provides true randomness for clearing key material. This leads to a deterministic clear value t",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.325,
+      "contradiction": "The hardware guarantees that entropy_i is tied to logic 0, but the side-load key logic assumes entropy_i provides true randomness for clearing key material. This leads to a deterministic clear value that may leak key information, violating the security property.",
+      "involved_signals": [
+        "entropy_i"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key__always_ff__line_42__001",
+        "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+        "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_ctrl__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_42__001",
+          "field": "assumption",
+          "excerpt": "entropy_i must provide independent, high-quality random bits per share when it is used to overwrite key_q, to ensure effective clearing.\nrisk: Predictable entropy would result in a deterministic clear"
+        },
+        {
+          "spec": "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "The LFSR's entropy_i input is permanently tied to '0; no external entropy is used."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_ctrl__001",
+          "field": "assumption",
+          "excerpt": "entropy_i must be driven with true randomness during normal operation.\nrisk: predictable or weak entropy compromises key generation and sideloaded key material."
+        },
+        {
+          "spec": "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "The LFSR's entropy_i input is permanently tied to '0; no external entropy is used."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "prng_en_dis_inv_q is a multi-bit signal, but only its LSB is used to enable the PRNG; the design intent may require mask",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.325,
+      "contradiction": "The assumption flags a potential design issue, but it is not a definitive requirement. The guarantees show that prng_en_o is driven by the LSB of prng_en_dis_inv_q (via OR with other signals) and that prng_en_dis_inv_q is a 2-bit vector. This is a design choice, not a contradiction. There is no evidence that the LSB-only usage is unintended or incorrect, so the verdict is UNCERTAIN.",
+      "involved_signals": [
+        "prng_en_o"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__declarations_or_instances__001",
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr_ctrl__always_ff__line_247__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "prng_en_dis_inv_q is a multi-bit signal, but only its LSB is used to enable the PRNG; the design intent may require masking with all bits or a specific combination, risking PRNG enable when it should "
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "prng_en_o is assigned the value of clr, enabling PRNG when clearing."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "prng_en_dis_inv_d is set to 2'b11 when prng_en_dis_inv_set is true, else when prng_reseed_done_i is true it shifts in a 0 MSB and retains the previous MSB as LSB (i.e. {1'b0, prng_en_dis_inv_q[1]}), o"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_247__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, prng_en_dis_inv_q is asynchronously set to '0; otherwise, on each rising edge of clk_i, prng_en_dis_inv_q updates to prng_en_dis_inv_d."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "[U-UP] The keymgr_lc_en_usage_e enum is defined locally but the comment states it should be sourced from another module. If the life cycle module encoding di",
+      "severity": "MEDIUM",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.324,
+      "contradiction": "The keymgr_lc_en_usage_e enum is defined locally but the comment states it should be sourced from another module. If the life cycle module encoding differs, the enable bits will be misinterpreted.",
+      "involved_signals": [
+        "keymgr_lc_en_usage_e"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "若将参数AdvDataWidth、IdDataWidth或GenDataWidth配置为非32的倍数，除法AdvDataWidth/32等将发生截断，得到的LfsrCopies值低于实际数据宽度所需的副本数，导致硬件生成的数据宽度错误或功能异常。需要增加参数合法性检查（例如强制为32的倍数）或改用上取整计算以覆盖所有合法输入。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The clear operation uses only a single entropy bit per share, replicated EntropyCopies times. Is one bit per share sufficient to securely erase the full share width?",
+      "involved_signals": [
+        "AdvLfsrCopies, IdLfsrCopies, GenLfsrCopies",
+        "entropy_i",
+        "EntropyCopies",
+        "key_q",
+        "Width",
+        "RandWidth"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__002",
+        "keymgr__continuous_region__keymgr__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "AdvLfsrCopies, IdLfsrCopies, GenLfsrCopies are computed as integer divisions AdvDataWidth/32, IdDataWidth/32, GenDataWidth/32. If the data widths are not multiples of 32, the integer division truncate"
+        },
+        {
+          "spec": "keymgr__continuous_region__keymgr__001",
+          "field": "guarantee",
+          "excerpt": "Compile-time assertion checks that AdvDataWidth, IdDataWidth, and GenDataWidth are each <= KDFMaxWidth."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "在KeyUpdateKmac命令执行时，cdi_sel_o可能被赋予超过CDIs-1的值，导致后续使用该信号进行数组索引时发生越界访问，可能破坏存储器内容或产生仿真不定态X，影响密钥完整性。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The assumption questions whether downstream consumers can detect the deliberately loaded invalid constant when root_key_valid_q is false. The guarantees reveal an invalid_stage_sel_o signal and a StCtrlInvalid state, which suggest the existence of an error-detection path. However, it is not conclusively shown that every downstream logic uses this signal to treat the constant as an error. Therefore, the assumption cannot be confirmed or refuted with the provided guarantees, leading to an uncertai",
+      "involved_signals": [
+        "cdi_sel",
+        "key_state_d"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__always_comb__line_363__001",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001",
+        "keymgr__continuous_region__declarations_or_instances__002",
+        "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+        "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+        "keymgr_ctrl__continuous_region__int__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "assumption",
+          "excerpt": "For KeyUpdateKmac, cdi_sel_o must be in range [0, CDIs-1] to avoid out-of-bounds array access.\nrisk: Out-of-bounds write can corrupt memory or produce simulation X, affecting key integrity."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "cdi_sel_o is assigned to cdi_cnt when advance_sel is true, else to op_cdi_sel_i."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "RndCnstCdi is a constant that provides sufficient entropy for random binding in the fallback cdi_sel case."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "cdi_sel_o is assigned to cdi_cnt when advance_sel is true, else to op_cdi_sel_i."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "For each share i, key_o.key[i] is driven: (1) if invalid_stage_sel_o and state_q == StCtrlInvalid, then key_state_q[cdi_sel_o][i] (unmasked). (2) else if invalid_stage_sel_o, then {EntropyRounds{entro"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "guarantee",
+          "excerpt": "For KeyUpdateKmac, data_valid_o driven by gen_op; key_state_d[cdi_sel_o] assigned kmac_data_i if adv_op or dis_op, else holds key_state_q[cdi_sel_o]."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "When cdi_sel is not 0 or 1, sw_binding is assigned RndCnstCdi. It is unclear whether RndCnstCdi provides sufficient random entropy for secure binding in this fallback scenario."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "cdi_sel_o is assigned to cdi_cnt when advance_sel is true, else to op_cdi_sel_i."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "No check ensures that SyncFaultLastIdx + AsyncFaultLastIdx equals the width of keymgr_reg2hw_fault_status_reg_t. A mismatch would cause incorrect fault reporting and may mask critical security faults.",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The assumption raises a concern about SameErrCnt_A's dependency on non-local parameters, which is a potential design robustness issue. The provided guarantee addresses a different assertion (FaultCntMatch_A) and does not confirm whether SameErrCnt_A is properly guarded. There is insufficient information to determine if this scenario is a legitimate gap or already safe.",
+      "involved_signals": [
+        "AsyncFaultLastIdx"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+        "keymgr__continuous_region__declarations_or_instances__009"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+          "field": "assumption",
+          "excerpt": "The total number of synchronous and asynchronous fault status bits (SyncFaultLastIdx + AsyncFaultLastIdx) must equal the width of keymgr_reg2hw_fault_status_reg_t."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "ASSERT_INIT FaultCntMatch_A ensures FaultLastPos equals AsyncFaultLastIdx + SyncFaultLastIdx at elaboration."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+          "field": "assumption",
+          "excerpt": "The assertion SameErrCnt_A relies on parameters SyncFaultLastIdx and AsyncFaultLastIdx that are not locally defined; a mismatch could go undetected if these parameters are updated independently."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__009",
+          "field": "guarantee",
+          "excerpt": "ASSERT_INIT FaultCntMatch_A ensures FaultLastPos equals AsyncFaultLastIdx + SyncFaultLastIdx at elaboration."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "CdiWidth is a parameter that may be set larger than the actual width of cnt, causing an out-of-range bit-select on cdi_c",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "If CDIs is parameterized to 0, the comparisons cnt_i == CDIs-1 and cnt_i < CDIs-1 will be evaluated with wrapped unsigned values (CDIs-1 becomes a large value), never becoming true, which can permanently stall the FSM in StAdv. There is no guarantee or parameter assertion that CDIs > 0.",
+      "involved_signals": [
+        "cnt"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_kmac_if__always_comb__line_172__001",
+        "keymgr_kmac_if__continuous_region__int__001",
+        "keymgr_ctrl__always_comb__line_363__001::assumption::0",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001",
+        "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__003"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "CdiWidth is a parameter that may be set larger than the actual width of cnt, causing an out-of-range bit-select on cdi_cnt."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state is StAdv and kmac_done_i is high and cnt_i is less than CDIs-1, op_update_o is asserted and state_d set to StAdvAck."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "assumption",
+          "excerpt": "cnt_i is incremented monotonically and never exceeds CDIs-1 during StAdv state, and kmac_done_i is pulsed only when cnt_i is within [0, CDIs-1].\nrisk: If cnt_i exceeds CDIs-1 or kmac_done_i occurs wit"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "cdi_cnt is assigned cnt[CdiWidth-1:0] when op_req is true, otherwise '0."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_172__001",
+          "field": "guarantee",
+          "excerpt": "In StTx, valid=1, strb={IfBytes{1'b1}}; when kmac_data_i.ready is asserted, cnt_en=1 and if cnt == CntWidth'(1) then state_d = StTxLast."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "A prim_count instance u_cnt is connected with incr_en_i = 0, decr_en_i = cnt_en, commit_i = 1, step_i = 1, and driven by clr_i, set_i, set_cnt_i. It outputs cnt and a redundancy check cnt_err."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "assumption",
+          "excerpt": "The parameter CDIs is used in comparisons (CDIs-1). If CDIs is set to 0, the condition cnt_i == CDIs-1 becomes cnt_i == -1 (wrapped) and cnt_i < CDIs-1 becomes cnt_i < -1, which may never be true, cau"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "cdi_cnt is assigned cnt[CdiWidth-1:0] when op_req is true, otherwise '0."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "模块在计算 adv_sel 等信号时直接使用 LastAdvRound 和 cnt 进行减法，未对输入范围进行检查或提供溢出保护。若外部逻辑违反了假设（如参数超出计数器宽度），可能导致 adv_sel 等信号计算错误，进而引发 FSM 排序错误。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "模块在计算 adv_sel 等信号时直接使用 LastAdvRound 和 cnt 进行减法，未对输入范围进行检查或提供溢出保护。若外部逻辑违反了假设（如参数超出计数器宽度），可能导致 adv_sel 等信号计算错误，进而引发 FSM 排序错误。",
+      "involved_signals": [
+        "LastAdvRound"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__always_comb__line_172__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__003"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_172__001",
+          "field": "assumption",
+          "excerpt": "Parameters LastAdvRound, LastIdRound, LastGenRound are non-negative and within the counter width, and the external counter logic correctly initializes/updates cnt to match these values."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "adv_sel equals LastAdvRound minus cnt."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "id_sel equals LastIdRound minus cnt."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "gen_sel equals LastGenRound minus cnt."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0017",
+      "title": "硬件 guarantee 未描述 OwnerSeedIdx 的使用逻辑。Assumption 要求当 UseOtpSeedsInsteadOfFlash 为 false 时 flash_i.seeds[OwnerSeedIdx] 提供有效种子，但现有 guarantee 仅覆盖 CreatorSeedIdx，未定义 owner seed 的赋值或有效性检查。这可能导致 owner key 派生依赖",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "硬件 guarantee 未描述 OwnerSeedIdx 的使用逻辑。Assumption 要求当 UseOtpSeedsInsteadOfFlash 为 false 时 flash_i.seeds[OwnerSeedIdx] 提供有效种子，但现有 guarantee 仅覆盖 CreatorSeedIdx，未定义 owner seed 的赋值或有效性检查。这可能导致 owner key 派生依赖于未验证的垃圾种子，造成安全缺陷。",
+      "involved_signals": [
+        "OwnerSeedIdx",
+        "UseOtpSeedsInsteadOfFlash"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__004",
+        "keymgr__continuous_region__declarations_or_instances__003"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "When UseOtpSeedsInsteadOfFlash is false, flash_i.seeds[flash_ctrl_pkg::OwnerSeedIdx] provides a correct and valid seed."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "When UseOtpSeedsInsteadOfFlash is true, creator_seed is continuously assigned from otp_key_i.creator_seed; otherwise from flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "unused_creator_seed is assigned a reduced XOR of flash_i.seeds[CreatorSeedIdx] and otp_key_i.creator_seed_valid when UseOtpSeedsInsteadOfFlash is true, otherwise a reduced XOR of otp_key_i.creator_see"
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "The selection of owner_seed source relies on UseOtpSeedsInsteadOfFlash, but this block does not verify that the chosen seed (otp_key_i.owner_seed or flash_i.seeds) is available and non-trash at the mo"
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "When UseOtpSeedsInsteadOfFlash is true, creator_seed is continuously assigned from otp_key_i.creator_seed; otherwise from flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "unused_creator_seed is assigned a reduced XOR of flash_i.seeds[CreatorSeedIdx] and otp_key_i.creator_seed_valid when UseOtpSeedsInsteadOfFlash is true, otherwise a reduced XOR of otp_key_i.creator_see"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0018",
+      "title": "perm_data函数和常数RndCnstRandPerm的非平凡置换属性未被任何保证覆盖，可能导致实现中使用弱置换或常数，产生可预测的诱饵值，降低侧信道掩码有效性，造成信息泄露。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "perm_data函数和常数RndCnstRandPerm的非平凡置换属性未被任何保证覆盖，可能导致实现中使用弱置换或常数，产生可预测的诱饵值，降低侧信道掩码有效性，造成信息泄露。",
+      "involved_signals": [
+        "RndCnstRandPerm"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+        "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "assumption",
+          "excerpt": "perm_data function and constant RndCnstRandPerm must implement a non‑trivial permutation of entropy_i[1] sufficient for side‑channel decoy masking."
+        },
+        {
+          "spec": "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "data_rand[0] is lfsr[31:0] and data_rand[1] is perm_data(lfsr[63:32], RndCnstRandPerm)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0019",
+      "title": "缺失对 advance_sel、disable_sel 和 gen_op 信号在 adv_en_o 或 gen_en_o 有效时的合法性检查逻辑，无法在收到非法操作编码时可靠地触发错误响应，可能导致非授权密钥状态转换。",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "Assumption 规定输入非 one-hot 是不应发生的非法场景（外部协议需保证 one-hot）。在非法场景下，guarantees 仍定义了确定的行为：start/valid_op 通过 OR 有效，id_en_o/gen_en_o 按组合逻辑输出，op_state_cmd_err 可能被触发以指示错误。这些行为提供了一种安全的错误响应，而不是未定义状态或硬件崩溃，因此属于防御性设计，与 assumption 无矛盾。",
+      "involved_signals": [
+        "gen_en",
+        "adv_en_i",
+        "id_en_i"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+        "keymgr__continuous_region__declarations_or_instances__006",
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_kmac_if__continuous_region__int__001",
+        "keymgr_kmac_if__always_comb__line_330__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+        "keymgr_data_en_state__always_comb__line_78__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+          "field": "assumption",
+          "excerpt": "advance_sel, disable_sel, and gen_op must be valid and correctly reflect the requested operation when adv_en_o or gen_en_o are high."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "id_en_o is asserted when both gen_en and id_req_i are high; otherwise it is deasserted."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "valid_op is asserted if any of adv_en, id_en, or gen_en is high."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state is StWait, gen_en is asserted (1)."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "start is the logical OR of adv_en_i, id_en_i, and gen_en_i."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_330__001",
+          "field": "guarantee",
+          "excerpt": "If no error condition is true, valid is true, both adv_en_i and id_en_i are false, and gen_en_i is true, kmac_data_o.data is assigned gen_data[gen_sel]."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "The inputs adv_en_i, id_en_i, gen_en_i must be one-hot (exactly one bit high) when a command is active, to satisfy the downstream one-hot check. Risk: If the enables are not one-hot, the consistency c"
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "id_en_o is asserted when both gen_en and id_req_i are high; otherwise it is deasserted."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0020",
+      "title": "请求信号生成逻辑未保证译码信号互斥，存在多请求同时有效的风险，会导致下游状态机按优先级处理，违背预期的互斥操作序列。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "Assumption 表达了对两个错误请求信号（硬件/软件）的目的地、处理及优先级的验证需求，但未给出明确的设计约束或合法/非法场景界定。相关 guarantee 显示了它们分别连接到不同的 alert sender 实例（u_fault_alert 和 u_op_err_alert），输出到 alert_tx_o[0] 和 [1]，并提供了复位行为。这些 guarantee 回答了连接方式的问题，但未涉及两者间的优先级处理逻辑。因为没有具体的矛盾或明确的覆盖缺口被识别，且 assumption 本身是质询性质，无法判断是否存在实际 bug，故判定为 UNCERTAIN。",
+      "involved_signals": [
+        "adv_req_i, dis_req_i, id_req_i, gen_req_i",
+        "op_err_req_d"
+      ],
+      "involved_specs": [
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr__continuous_region__declarations_or_instances__007",
+        "keymgr__continuous_region__declarations_or_instances__008",
+        "keymgr__always_ff__line_725__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "assumption",
+          "excerpt": "The request inputs adv_req_i, dis_req_i, id_req_i, gen_req_i are mutually exclusive; at most one category is asserted at a time."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "adv_req, dis_req, id_req, gen_req are formed by ANDing op_req with the corresponding operation decode: adv_req = op_req & adv_op, dis_req = op_req & dis_op, id_req = op_req & gen_id_op, gen_req = op_r"
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__007",
+          "field": "assumption",
+          "excerpt": "The destination of fault_err_req_d and op_err_req_d is not shown; they are likely connected to different alert sender instances, but the comment hints at two types of alerts (hardware vs. software-gen"
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__008",
+          "field": "guarantee",
+          "excerpt": "u_op_err_alert instance wires op_err_req_q to its alert_req_i, drives op_err_ack from alert_ack_o, and outputs alert_tx_o[0] from alert_tx_o."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__008",
+          "field": "guarantee",
+          "excerpt": "u_fault_alert instance wires fault_err_req_q to its alert_req_i, drives fault_err_ack from alert_ack_o, and outputs alert_tx_o[1] from alert_tx_o."
+        },
+        {
+          "spec": "keymgr__always_ff__line_725__001",
+          "field": "guarantee",
+          "excerpt": "On negedge rst_ni, fault_err_req_q and op_err_req_q are each synchronously cleared to zero ('0)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0021",
+      "title": "The keymgr_cfg_en module lacks documented, guaranteed behavior for simultaneous set and clear conditions. Without explicit priority or glitch prevention, cfg_regwen could enter an indeterminate or inc",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "edn_done is generated as a combinational AND without synchronization, risking glitches that could be interpreted as multiple pulses, causing unintended counter operations or reseed completion reports. This undermines the assumption of a clean, synchronized single-cycle pulse.",
+      "involved_signals": [
+        "op_done",
+        "op_done_i",
+        "edn_done",
+        "op_update_o"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__002",
+        "keymgr_ctrl__always_comb__line_739__001",
+        "keymgr_err__always_ff__line_77__001",
+        "keymgr_err__always_ff__line_95__001",
+        "keymgr_err__continuous_region__declarations_or_instances__003",
+        "keymgr_reseed_ctrl__always_ff__line_48__001",
+        "keymgr_reseed_ctrl__continuous_region__keymgr_reseed_ctrl__001",
+        "keymgr_reseed_ctrl__continuous_region__declarations_or_instances__001",
+        "keymgr_reseed_ctrl__always_ff__line_85__001",
+        "keymgr_op_state_ctrl__always_comb__line_50__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "The keymgr_cfg_en module resolves simultaneous set and clear without indeterminate state.\nrisk: cfg_regwen may glitch or enter forbidden state, incorrectly enabling or disabling write protection."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_739__001",
+          "field": "guarantee",
+          "excerpt": "status_o is combinatorially assigned: OpDoneFail when op_done_o && (error_o || fault_o); OpDoneSuccess when op_done_o && !(error_o || fault_o); OpWip else if op_start_i; OpIdle otherwise."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_77__001",
+          "field": "guarantee",
+          "excerpt": "sync_err_q is cleared to 0 when op_done_i is high (and rst_ni high)."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_95__001",
+          "field": "guarantee",
+          "excerpt": "If both op_done_i and op_update_i are asserted, op_done_i takes precedence and clears sync_fault_q."
+        },
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "error_o[ErrInvalidIn] is gated by op_done_i: it equals sync_err_o[SyncErrInvalidIn] when op_done_i is high, else 0."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "cfg_regwen's set_i = op_start & op_done and clr_i = op_start could both be true in the same cycle if op_done asserts while op_start remains high. This creates a potential race condition inside keymgr_"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_739__001",
+          "field": "guarantee",
+          "excerpt": "status_o is combinatorially assigned: OpDoneFail when op_done_o && (error_o || fault_o); OpDoneSuccess when op_done_o && !(error_o || fault_o); OpWip else if op_start_i; OpIdle otherwise."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_95__001",
+          "field": "guarantee",
+          "excerpt": "If both op_done_i and op_update_i are asserted, op_done_i takes precedence and clears sync_fault_q."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0022",
+      "title": "在en_i无效或clr_i有效时，valid_q被清零，但sideload_key模块中的实际密钥数据（key_data）并未被清除。这将导致valid输出为0，但密钥数据仍然有效，可能被下游逻辑使用或造成信息泄露。",
+      "severity": "MEDIUM",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The assumption highlights a missing global escalation FSM linked to en_i. The only provided guarantee addresses a narrow aspect (init_q clearing) and does not constitute a global escalation countermeasure. Since the full scope of required behavior for en_i is not defined in the available guarantees, and the assumption itself merely notes an absence (not a clear requirement), there is not enough evidence to classify this as a contradiction or a coverage gap. Thus the situation is uncertain.",
+      "involved_signals": [
+        "en_i"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key__always_ff__line_32__001",
+        "keymgr_sideload_key__continuous_region__keymgr_sideload_key__001",
+        "keymgr_kmac_if__always_comb__line_296__001",
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+        "keymgr_cfg_en__always_ff__line_40__001",
+        "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
+        "keymgr_ctrl__always_comb__line_468__001",
+        "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+        "keymgr_ctrl__continuous_region__keymgr_ctrl__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_32__001",
+          "field": "assumption",
+          "excerpt": "valid_q is cleared by !en_i or clr_i, but the actual sideload key data may not be cleared simultaneously; a mismatch can occur where valid=0 while key data remains stale."
+        },
+        {
+          "spec": "keymgr_sideload_key__continuous_region__keymgr_sideload_key__001",
+          "field": "guarantee",
+          "excerpt": "valid_o is assigned as the logical AND of valid_q and en_i."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_296__001",
+          "field": "guarantee",
+          "excerpt": "When clr_err=0 and valid=0, inputs_invalid_d retains the value of inputs_invalid_q (no change)."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "prng_en_o is assigned the value of clr, enabling PRNG when clearing."
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_40__001",
+          "field": "assumption",
+          "excerpt": "The intended behavior of init_q (sticky flag, pulse, or level-sensitive status) is unclear. The clearing on !en_i suggests en_i serves as an active-low clear, but the overall protocol is ambiguous."
+        },
+        {
+          "spec": "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001",
+          "field": "guarantee",
+          "excerpt": "vld_dis is assigned to init_q && !en_i."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "All combinational outputs are assigned inactive default values (0, Disable, etc.) before state-specific logic, preventing latches and ensuring defined safe behavior if a state branch misses an assignm"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "guarantee",
+          "excerpt": "When op_req is asserted, op_done_o equals op_ack; otherwise op_done_o equals the logical OR of init_o and invalid_op."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0023",
+      "title": "cmd_chk 在除 StIdle/StClean 外的所有状态均被断言，但未确保此时 enables_q 与 enables_d 稳定，可能导致 transient mismatch 产生 spurious 一致性错误。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "enables_sub = enables_d - 1 实现了一个标准的一热检查，当 enables_d 有多个位为1时会检测到，但当 enables_d=0 时不会报错。假设要求 enables_sub 是一个正确的掩码，以避免漏报（假阴性）和虚警（假阳性）。如果 enables_d 可以为零，存在漏报。目前没有提供信息说明 enables_d=0 是合法还是非法状态，因此无法确定假设是否被完全满足。判定为 UNCERTAIN。",
+      "involved_signals": [
+        "enables_d",
+        "enables_sub"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+        "keymgr_kmac_if__always_comb__line_172__001",
+        "keymgr_kmac_if__always_ff__line_363__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "cmd_chk must be asserted only when enables_q and enables_d are stable and represent the intended command‑consistency state.\nrisk: spurious consistency error latch due to transient mismatch between ena"
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_172__001",
+          "field": "guarantee",
+          "excerpt": "cmd_chk defaults to 1 and is driven to 0 only in StIdle and StClean."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_ff__line_363__001",
+          "field": "assumption",
+          "excerpt": "enables_d must be valid and stable when cnt_set is asserted to ensure correct sampled value.\nrisk: If enables_d changes during the cycle cnt_set is high, the captured enables_q could be a glitch or in"
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "enables_sub is the arithmetic result of enables_d minus 1."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "enables_d is the concatenation of adv_en_i, id_en_i, gen_en_i."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+          "field": "guarantee",
+          "excerpt": "cmd_consty_err_d is a latched consistency error: it asserts when cmd_chk is high and enables_q differs from enables_d, and holds once asserted by OR‑ing the previous cmd_consty_err_q."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+          "field": "guarantee",
+          "excerpt": "one_hot_err_d is a latched one‑hot error: it asserts when any bit of enables_d is set that also has the corresponding enables_sub bit set, and holds once asserted by OR‑ing the previous one_hot_err_q."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "enables_sub must be a correct mask indicating which bits of enables_d are required to be mutually exclusive (one‑hot).\nrisk: failure to detect one‑hot violations (false negatives) or false one‑hot err"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0024",
+      "title": "cnt_en 由 edn_done 置位后，缺少非复位的清零机制，导致无法进行多次 reseed 操作，违反重复种子的设计要求。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "cnt_en 由 edn_done 置位后，缺少非复位的清零机制，导致无法进行多次 reseed 操作，违反重复种子的设计要求。",
+      "involved_signals": [
+        "cnt_en"
+      ],
+      "involved_specs": [
+        "keymgr_reseed_ctrl__always_ff__line_85__001",
+        "keymgr_reseed_ctrl__always_ff__line_48__001",
+        "keymgr_ctrl__always_ff__line_263__001",
+        "keymgr_kmac_if__always_ff__line_363__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_reseed_ctrl__always_ff__line_85__001",
+          "field": "assumption",
+          "excerpt": "Once cnt_en becomes 1, there is no mechanism in this always_ff block to clear it back to 0, except a full reset. This may prevent multiple re-seed operations or override external clear attempts."
+        },
+        {
+          "spec": "keymgr_reseed_ctrl__always_ff__line_48__001",
+          "field": "guarantee",
+          "excerpt": "On asynchronous reset (rst_ni low), edn_req is cleared to '0."
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_263__001",
+          "field": "guarantee",
+          "excerpt": "On reset (rst_ni low), state_intg_err_q is cleared to 0."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_ff__line_363__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low (reset), enables_q is cleared to all zeros."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "keymgr_ctrl 的 disabled 信号准确性未被任何保证涵盖，可能导致密钥更新动作错误（如未正确禁用 Kmac 而继续操作），引发密钥损坏或秘密泄露风险。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "硬件缺少非法 op_i 时设置 dis_op=1 的逻辑（或相关逻辑未被任何 guarantee 覆盖），当软件误发未定义的操作码时，dis_op 可能保持无效值，导致禁用操作不被执行，破坏键管理流程的安全性。",
+      "involved_signals": [
+        "disabled",
+        "dis_op"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_err__continuous_region__keymgr_err__001",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr_ctrl__always_comb__line_468__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+          "field": "assumption",
+          "excerpt": "invalid, disabled, op_fault_err, and op_err statuses accurately reflect the current operational and fault state of the key manager."
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "guarantee",
+          "excerpt": "When err_vld is high, sync_err_d[SyncErrInvalidOp] is set to the OR of invalid_op_i, disabled_i, invalid_i, and the reduction-OR of fault_o."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "op_err is the bitwise OR reduction of the sync_err vector."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "op_fault_err is the bitwise OR reduction of the concatenation {sync_fault, async_fault}."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlInvalid, flags any op_start_i as invalid_op and asserts invalid signal; does not change state."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "assumption",
+          "excerpt": "When en_i=1 and op_start_i=1, op_i must be one of OpAdvance, OpGenId, OpGenSwOut, or OpGenHwOut; any other value will cause dis_op=1 and disable_sel activation."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlInit, sets op_req = op_start_i, selects stage_sel_o as Creator if advance_sel else Disable; invalid_op flags op_start_i without advance_sel or disable_sel; transitions to StCtrlWipe if !en_i "
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "The key manager lacks proper seed assignment for certain legal destination values (such as Creator or OwnerInt), causing the fallback to an insecure none_seed and potentially weakening cryptographic k",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The assumption concerns an illegal dest_sel value. The guarantee defines a decoder that only activates for recognized hardware key slots; for any other value, the design naturally falls back to a safe default (e.g., none_seed). This is a defensive design pattern: the hardware gracefully handles out-of-spec inputs with a benign output, which does not contradict any requirement. The absence of an explicit error check is a separate design choice, not a violation of the given guarantee.",
+      "involved_signals": [
+        "dest_sel"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__005",
+        "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "dest_sel may take values such as Creator, OwnerInt, or other legal destinations not explicitly listed; for those, dest_seed defaults to none_seed, which may be insecure if later used as a key seed."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+          "field": "guarantee",
+          "excerpt": "slot_sel is a combinational decoder: slot_sel[AesIdx] = (dest_sel_i == Aes) & mubi4_test_true_strict(hw_key_sel[AesIdx]), similarly for KmacIdx and OtbnIdx."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__005",
+          "field": "assumption",
+          "excerpt": "dest_sel is cast from a shadowed register without an explicit validity check; an illegal value passes through to the mux fallback, potentially using none_seed without error detection."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+          "field": "guarantee",
+          "excerpt": "slot_sel is a combinational decoder: slot_sel[AesIdx] = (dest_sel_i == Aes) & mubi4_test_true_strict(hw_key_sel[AesIdx]), similarly for KmacIdx and OtbnIdx."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "assumption 期望 EDN 接口信号 edn_o/edn_i 遵循 EDN 请求/确认协议，但相关 guarantee 仅关注内部连接细节，未对协议正确性给出保证，导致在集成时若外部 EDN 模块违反协议，reseed_ctrl 可能获取错误种子或静默跳过重播，造成 LFSR 重播失败。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "assumption 期望 EDN 接口信号 edn_o/edn_i 遵循 EDN 请求/确认协议，但相关 guarantee 仅关注内部连接细节，未对协议正确性给出保证，导致在集成时若外部 EDN 模块违反协议，reseed_ctrl 可能获取错误种子或静默跳过重播，造成 LFSR 重播失败。",
+      "involved_signals": [
+        "edn_i"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+        "keymgr_reseed_ctrl__continuous_region__declarations_or_instances__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+          "field": "assumption",
+          "excerpt": "edn_o and edn_i obey the EDN request/ack protocol expected by reseed_ctrl.\nrisk: Protocol violation may cause seed_en/seed to be incorrect or silently skipped, leading to LFSR reseed failure."
+        },
+        {
+          "spec": "keymgr_reseed_ctrl__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "u_edn_req instance of prim_edn_req is parameterized with OutWidth = LfsrWidth, req_chk_i = 1'b1, and connects edn_req to req_i, edn_ack from ack_o, seed_o from data_o, and leaves fips_o and err_o unco"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "The RTL specification lacks a guarantee that once done_o is asserted and start is deasserted, the FSM leaves StClean and returns to StIdle. Without this, the block could remain stuck in StClean with d",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "The RTL specification lacks a guarantee that once done_o is asserted and start is deasserted, the FSM leaves StClean and returns to StIdle. Without this, the block could remain stuck in StClean with done_o=1, preventing new transactions.",
+      "involved_signals": [
+        "done_o"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__always_comb__line_172__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__002"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_172__001",
+          "field": "assumption",
+          "excerpt": "After done_o is asserted, the control side will deassert start to acknowledge the operation and allow transition from StClean back to StIdle.\nrisk: FSM remains in StClean with done_o=1, blocking new t"
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "When start and done_o are both true, data_o outputs the concatenation of kmac_data_i.digest_share1 and kmac_data_i.digest_share0."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "id_matrix 的声明维度假定足够覆盖索引 up to 2**StageWidth-1，但没有 guarantee 确认该维度满足要求。如果实际声明的尺寸不足，生成循环将产生越界赋值，导致仿真错误或综合后硬件行为未定义，可能引发安全数据损坏。",
+      "severity": "MEDIUM",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.3,
+      "contradiction": "id_matrix 的声明维度假定足够覆盖索引 up to 2**StageWidth-1，但没有 guarantee 确认该维度满足要求。如果实际声明的尺寸不足，生成循环将产生越界赋值，导致仿真错误或综合后硬件行为未定义，可能引发安全数据损坏。",
+      "involved_signals": [
+        "id_matrix"
+      ],
+      "involved_specs": [
+        "keymgr__generate_for__gen_id_matrix_fill__001",
+        "keymgr__continuous_region__declarations_or_instances__005"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__generate_for__gen_id_matrix_fill__001",
+          "field": "assumption",
+          "excerpt": "id_matrix is declared with a dimension that covers indices up to at least 2**StageWidth - 1.\nrisk: If id_matrix is smaller, the generate loop assigns out-of-bounds, causing simulation error or potenti"
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__005",
+          "field": "guarantee",
+          "excerpt": "id_matrix[Creator], id_matrix[OwnerInt], id_matrix[Owner] are directly assigned to creator_identity_seed, owner_int_identity_seed, owner_identity_seed, respectively."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "[B-AG+U-UP] The mapping of AesIdx, KmacIdx, OtbnIdx to actual sideload key instances is determined at a higher integration level. In",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "The assumption describes behavior for unrecognized clr_key_i values, but it is unclear whether such values are legal input patterns. The provided guarantee only addresses slot_clr connectivity and does not cover the decoder logic that produces clr_all_keys. Without a specification of the allowed input encodings we cannot classify the scenario as clearly legal or illegal, so the status of the behavior (intentional safety mechanism or bug) remains uncertain.",
+      "involved_signals": [
+        "AesIdx",
+        "clr_key_i",
+        "data_valid",
+        "slot_clr",
+        "valid_tracking_q",
+        "LastIdx"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__001",
+        "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+        "keymgr__generate_for__gen_sw_assigns__001",
+        "keymgr_ctrl__always_comb__line_363__001",
+        "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+        "keymgr_sideload_key_ctrl__generate_for__gen_tracking_valid__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "The mapping of AesIdx, KmacIdx, OtbnIdx to actual sideload key instances is determined at a higher integration level. Incorrect mapping could cause clearing of wrong keys or leaving sensitive keys unc"
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+          "field": "guarantee",
+          "excerpt": "slot_sel is a combinational decoder: slot_sel[AesIdx] = (dest_sel_i == Aes) & mubi4_test_true_strict(hw_key_sel[AesIdx]), similarly for KmacIdx and OtbnIdx."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "When clr_key_i is not a recognized sideload clear target (outside {SideLoadClrIdle, SideLoadClrAes, SideLoadClrKmac, SideLoadClrOtbn}), clr_all_keys is asserted, clearing all keys. It is unclear if th"
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+          "field": "guarantee",
+          "excerpt": "Each keymgr_sideload_key instance's clr_i input is directly connected to the corresponding bit of slot_clr, allowing external per-slot clear control."
+        },
+        {
+          "spec": "keymgr__generate_for__gen_sw_assigns__001",
+          "field": "assumption",
+          "excerpt": "data_valid must be asserted only when kmac_data contains a valid key that should be latched by software, and must be correctly aligned with hw_key_sel and data_sw_en according to the de contract.\nrisk"
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_363__001",
+          "field": "guarantee",
+          "excerpt": "For KeyUpdateKmac, data_valid_o driven by gen_op; key_state_d[cdi_sel_o] assigned kmac_data_i if adv_op or dis_op, else holds key_state_q[cdi_sel_o]."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__keymgr_sideload_key_aes_key__001",
+          "field": "guarantee",
+          "excerpt": "Each keymgr_sideload_key instance (u_aes_key, u_otbn_key, u_kmac_key) has its set_i input gated by data_valid_i AND the respective slot_sel bit, so data is loaded only when data_valid_i is high and th"
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "The module asserts that data_valid_i high implies key_i.valid high in the same cycle."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "[B-AG+U-UP] Truncation uses the lower KeyWidth bits of kmac_data; if the KMAC digest has non-uniform randomness, lower bits may be p",
+      "severity": "LOW",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "Assumption expresses uncertainty about whether the module functions correctly when MaxAdvDataWidth is overridden to a smaller width, due to missing local checks. The guarantees show that adv_data is zero-padded to KDFMaxWidth and that kmac_data_o.data uses adv_data[adv_sel], but the range of adv_sel and potential side effects of reduced input width are not fully specified. Without additional context (e.g., expected adv_sel maximum, impact on other logic), it cannot be determined whether a functi",
+      "involved_signals": [
+        "kmac_data",
+        "kmac_data_i.digest_share0",
+        "kmac_data_i",
+        "adv_data_i",
+        "perm_data",
+        "kmac_data_o.data",
+        "kmac_data_o",
+        "kmac_error_o",
+        "kmac_done_err_d",
+        "kmac_data_i.ready",
+        "kmac_data_i.done",
+        "kmac_en_masking_i",
+        "unused_kmac_en_masking",
+        "KmacEnMasking",
+        "kmac_data_truncated",
+        "RndCnstRandPerm",
+        "decoy_entropy",
+        "decoy_data"
+      ],
+      "involved_specs": [
+        "keymgr__generate_for__gen_truncate_data__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+        "keymgr_kmac_if__always_comb__line_330__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__006",
+        "keymgr_kmac_if__continuous_region__keymgr_kmac_if__001",
+        "keymgr_kmac_if__continuous_region__int__001",
+        "keymgr_pkg__function_task__perm_data__001",
+        "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+        "keymgr_kmac_if__always_comb__line_172__001",
+        "keymgr_kmac_if__always_ff__line_379__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr_err__continuous_region__declarations_or_instances__001",
+        "keymgr__continuous_region__keymgr__001",
+        "keymgr__continuous_region__declarations_or_instances__009",
+        "keymgr_err__continuous_region__declarations_or_instances__003"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__generate_for__gen_truncate_data__001",
+          "field": "assumption",
+          "excerpt": "Truncation uses the lower KeyWidth bits of kmac_data; if the KMAC digest has non-uniform randomness, lower bits may be predictable. Verify that taking LSBs is consistent with the security specificatio"
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "kmac_data_o.strb is continuously assigned to the internal signal strb."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "kmac_data_o.last is continuously assigned to the internal signal last."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "kmac_data_o.valid is continuously assigned to the internal signal valid."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "The parameter DecoyOutputCopies must equal the bit-width of each digest share (digest_share1 and digest_share0) to ensure correct output width. risk: A mismatch would cause truncation or width extensi"
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_330__001",
+          "field": "guarantee",
+          "excerpt": "When any of cmd_error_o, inputs_invalid_o, or fsm_error_o is asserted (non-zero), kmac_data_o.data is forced to decoy_data, overriding all other conditions."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_330__001",
+          "field": "guarantee",
+          "excerpt": "In the absence of any active error, valid, and enable condition, kmac_data_o.data remains as decoy_data (the default assignment)."
+        },
+        {
+          "spec": "keymgr__generate_for__gen_truncate_data__001",
+          "field": "guarantee",
+          "excerpt": "For each share index i from 0 to Shares-1, kmac_data_truncated[i] is continuously assigned the lower KeyWidth bits of kmac_data[i]."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "[B-AG+U-UP] The enum values OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut are used as bit indices. If any value equals or exceeds the w",
+      "severity": "LOW",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "The assumption questions the visibility of the signal width and the effect of reset. The guarantees explicitly show that prng_en_dis_inv_q is a 2-bit vector (by referencing q[1] and q[0]), and that its LSB controls prng_en_o. This answers the width concern, but the underlying security implication of a zero reset remains a design choice. No contradiction or gap exists; the verdict is UNCERTAIN because the assumption is a speculative design concern, not a verified bug.",
+      "involved_signals": [
+        "inputs_invalid_d",
+        "adv_sel",
+        "adv_en, id_en, gen_en",
+        "valid",
+        "adv_dvalid[Owner]",
+        "adv_dvalid",
+        "hw2reg.debug.invalid_creator_seed.de",
+        "gen_en",
+        "invalid_op",
+        "valid_chk",
+        "invalid",
+        "prng_en_dis_inv_d",
+        "prng_en_dis_inv_q",
+        "rom_digest_vld_o",
+        "NumRomDigestInputs",
+        "valids"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__always_comb__line_296__001",
+        "keymgr_kmac_if__always_comb__line_330__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+        "keymgr__continuous_region__declarations_or_instances__006",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+        "keymgr_kmac_if__continuous_region__int__001",
+        "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+        "keymgr__continuous_region__declarations_or_instances__004",
+        "keymgr__generate_for__gen_adv_matrix_fill__001",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001",
+        "keymgr_ctrl__always_comb__line_468__001",
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_sideload_key__always_ff__line_32__001",
+        "keymgr_err__continuous_region__keymgr_err__001",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr__continuous_region__declarations_or_instances__002",
+        "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+        "keymgr_input_checks__generate_for__gen_key_chk__001",
+        "keymgr_ctrl__always_ff__line_247__001",
+        "keymgr_ctrl__continuous_region__declarations_or_instances__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_296__001",
+          "field": "assumption",
+          "excerpt": "The enum values OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut are used as bit indices. If any value equals or exceeds the width of inputs_invalid_d/inputs_invalid_q/inputs_invalid_i, the assignment will "
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_330__001",
+          "field": "guarantee",
+          "excerpt": "When any of cmd_error_o, inputs_invalid_o, or fsm_error_o is asserted (non-zero), kmac_data_o.data is forced to decoy_data, overriding all other conditions."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "inputs_invalid_o is the bitwise OR reduction of all bits in inputs_invalid_d."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_330__001",
+          "field": "assumption",
+          "excerpt": "The select indices adv_sel, id_sel, gen_sel are used to index arrays without local range protection; upstream logic must guarantee they remain within bounds."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "adv_sel equals LastAdvRound minus cnt."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "The enable signals adv_en, id_en, gen_en are glitch-free and correctly reflect the intended operations."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "enables_d is the concatenation of adv_en_i, id_en_i, gen_en_i."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "start is the logical OR of adv_en_i, id_en_i, and gen_en_i."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "[B-AG+U-UP] adv_matrix[OwnerInt] data uses creator_seed, but its valid signal (adv_dvalid[OwnerInt]) is owner_seed_vld, not a validi",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "假设声称adv_dvalid[OwnerInt]被绑定到owner_seed_vld，而adv_matrix[OwnerInt]的数据使用creator_seed，存在可能的有效信号不匹配。相关保证指出：owner_seed_vld是owner_seed_padded的有效性检查结果，与creator_seed无关；adv_dvalid对于某些索引范围被硬编码为1。但未明确OwnerInt是否属于该硬编码范围，无法确定adv_dvalid[OwnerInt]的真实驱动源。因此无法判断该场景是合法输入、非法输入，也无法判定保证是否已覆盖或存在矛盾。需更多设计信息。",
+      "involved_signals": [
+        "owner_seed_vld",
+        "creator_seed_vld_o",
+        "unused_creator_seed",
+        "unused_owner_seed"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__004",
+        "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+        "keymgr__generate_for__gen_adv_matrix_fill__001",
+        "keymgr_input_checks__continuous_region__keymgr_input_checks__001",
+        "keymgr__continuous_region__declarations_or_instances__006"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__004",
+          "field": "assumption",
+          "excerpt": "adv_matrix[OwnerInt] data uses creator_seed, but its valid signal (adv_dvalid[OwnerInt]) is owner_seed_vld, not a validity related to creator_seed. This mismatch may cause the state machine to be gate"
+        },
+        {
+          "spec": "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "creator_seed_vld_o, owner_seed_vld_o, devid_vld_o, health_state_vld_o are assigned the return value of valid_chk on their corresponding padded inputs."
+        },
+        {
+          "spec": "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+          "field": "guarantee",
+          "excerpt": "creator_seed_i, owner_seed_i, devid_i, and health_state_i are each extended to MaxWidth bits via MSB extension, producing padded versions."
+        },
+        {
+          "spec": "keymgr__generate_for__gen_adv_matrix_fill__001",
+          "field": "guarantee",
+          "excerpt": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_dvalid[i] is assigned 1'b1."
+        },
+        {
+          "spec": "keymgr_input_checks__continuous_region__keymgr_input_checks__001",
+          "field": "assumption",
+          "excerpt": "No logic is present in this chunk to drive the *_vld_o outputs; they must be assigned elsewhere, leaving their validity conditions unclear."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "adv_dvalid[Creator] is always assigned creator_seed_vld & devid_vld & health_state_vld & rom_digest_vld."
+        },
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "guarantee",
+          "excerpt": "The write-enables for the debug invalid_* status registers are conditionally asserted based on operation type, stage, and validity signals, e.g., invalid_creator_seed.de = adv_en & (stage_sel == Creat"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "[B-AG+U-UP] err_vld is glitch-free and synchronous to the same clock domain as the error inputs",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.237,
+      "contradiction": "The hard-coded sparse state encodings (StSideloadReset=10'b0011111011, StSideloadIdle=10'b0101000101, StSideloadWipe=10'b1110110010, StSideloadStop=10'b1000001010) lack a documented minimum Hamming distance requirement; it is unclear if they provide sufficient fault protection.",
+      "involved_signals": [
+        "sideload_sel_err_i",
+        "hw_sel_i",
+        "StSideloadReset",
+        "StSideloadIdle",
+        "StSideloadWipe",
+        "StSideloadStop"
+      ],
+      "involved_specs": [
+        "keymgr_err__continuous_region__declarations_or_instances__001",
+        "keymgr_err__continuous_region__keymgr_err__001",
+        "keymgr_data_en_state__always_comb__line_78__001",
+        "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_err__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "err_vld is glitch-free and synchronous to the same clock domain as the error inputs"
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "guarantee",
+          "excerpt": "err_vld is the logical OR of op_update_i and op_done_i."
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "guarantee",
+          "excerpt": "When err_vld is high, sync_err_d[SyncErrInvalidIn] equals kmac_input_invalid_i."
+        },
+        {
+          "spec": "keymgr_err__continuous_region__keymgr_err__001",
+          "field": "guarantee",
+          "excerpt": "When err_vld is high, sync_err_d[SyncErrInvalidOp] is set to the OR of invalid_op_i, disabled_i, invalid_i, and the reduction-OR of fault_o."
+        },
+        {
+          "spec": "keymgr_data_en_state__always_comb__line_78__001",
+          "field": "assumption",
+          "excerpt": "The strict/loose mubi4 tests (true_strict for entry, false_loose/true_loose for abort) create a dynamic window where hw_sel_i may be sampled differently. The safety of this asymmetric checking depends"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "guarantee",
+          "excerpt": "The prim_mubi4_sender instance u_hw_sel receives mubi_i = prim_mubi_pkg::mubi4_bool_to_mubi(gen_out_hw_sel) and drives hw_sel_o from its mubi_o output."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0035",
+      "title": "[B-AG+U-UP] The correctness of the FSM's state progression from StTx to StTxLast depends on the external counter (cnt) exactly match",
+      "severity": "LOW",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.188,
+      "contradiction": "The assumption describes a dependency on external counter cnt exactly matching the expected sequence; any mismatch is an illegal usage scenario that could cause state transition errors. The guarantees provide defensive behavior: if an illegal state occurs (potentially due to cnt error), fsm_err_o asserts or working_state_o falls back to StInvalid. These do not guarantee cnt correctness but detect and contain the error. No contradiction or missing coverage exists; the design is defensive against ",
+      "involved_signals": [
+        "state_d",
+        "adv_en_i",
+        "key_state_d",
+        "key_state_q / key_state_ecc_q",
+        "inv_state",
+        "key_state_ecc_words_d",
+        "op_start_i",
+        "state_e",
+        "state_q",
+        "vld_state_change_q",
+        "hw2reg.debug.invalid_creator_seed",
+        "hw2reg.debug.invalid_owner_seed",
+        "hw2reg.debug.invalid_dev_id",
+        "hw2reg.debug.invalid_health_state",
+        "hw2reg.debug.invalid_key_version",
+        "hw2reg.debug.invalid_key",
+        "hw2reg.debug.invalid_digest",
+        "lc_keymgr_div_i",
+        "health_state_i",
+        "alert_state_o",
+        "u_state_regs"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__always_comb__line_172__001",
+        "keymgr_sideload_key_ctrl__always_comb__line_91__001",
+        "keymgr_ctrl__always_comb__line_703__001",
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_kmac_if__continuous_region__int__001",
+        "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+        "keymgr__continuous_region__declarations_or_instances__006",
+        "keymgr_ctrl__always_comb__line_468__001",
+        "keymgr_data_en_state__always_comb__line_78__001",
+        "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+        "keymgr_ctrl__continuous_region__batched_small_assigns__001",
+        "keymgr_ctrl__always_comb__line_363__001",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001",
+        "keymgr_ctrl__always_ff__line_304__001",
+        "keymgr_sideload_key__always_ff__line_42__001",
+        "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001::assumption::1",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001::uncertain::1",
+        "keymgr_cfg_en__always_ff__line_40__001",
+        "keymgr_ctrl__always_ff__line_695__001",
+        "keymgr_data_en_state__continuous_region__int__001",
+        "keymgr_ctrl__continuous_region__declarations_or_instances__001",
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_kmac_if__continuous_region__batched_small_assigns__001",
+        "keymgr_sideload_key_ctrl__continuous_region__int__001",
+        "keymgr_ctrl__always_ff__line_822__001",
+        "keymgr_ctrl__continuous_region__keymgr_err_err__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_172__001",
+          "field": "assumption",
+          "excerpt": "The correctness of the FSM's state progression from StTx to StTxLast depends on the external counter (cnt) exactly matching the expected sequence derived from rounds. Any width mismatch, initializatio"
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__always_comb__line_91__001",
+          "field": "guarantee",
+          "excerpt": "fsm_err_o is driven to 1 when state_q does not match any of the four defined states, indicating an illegal state."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "When state_q is StCtrlInvalid or any value not explicitly listed, working_state_o is driven to StInvalid."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state is StWait, gen_en is asserted (1)."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_comb__line_172__001",
+          "field": "assumption",
+          "excerpt": "adv_en_i, id_en_i, gen_en_i remain stable from the time start is asserted until done_o is acknowledged, ensuring consistent mask and rounds selection across the transaction."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "start is the logical OR of adv_en_i, id_en_i, and gen_en_i."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "id_en_o is asserted when both gen_en and id_req_i are high; otherwise it is deasserted."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__004",
+          "field": "guarantee",
+          "excerpt": "enables_d is the concatenation of adv_en_i, id_en_i, gen_en_i."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0036",
+      "title": "The decoy value is only a replication of two single entropy bits, which may not provide sufficient switching factor to m",
+      "severity": "LOW",
+      "verdict": "CONTRADICTION",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "The assumption highlights a potential weakness in randomness quality, but it is conditional on the design intent to provide independent random bits to counter attacks. None of the provided guarantees state that such independence is intended or required, and neither do they demonstrate a fault. Therefore, it cannot be determined whether this constitutes a protocol mismatch (CONTRADICTION/GAP) or an accepted design trade‑off.",
+      "involved_signals": [
+        "data_i",
+        "data",
+        "data_rand"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+        "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+        "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+        "keymgr_pkg__function_task__perm_data__001",
+        "keymgr__generate_for__gen_adv_matrix_fill__001",
+        "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+        "keymgr__generate_for__gen_id_matrix_fill__001",
+        "keymgr__generate_for__gen_sw_assigns__001",
+        "keymgr__continuous_region__declarations_or_instances__005"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "The decoy value is only a replication of two single entropy bits, which may not provide sufficient switching factor to mask the output data bus transitions."
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+          "field": "guarantee",
+          "excerpt": "For each share i from 0 to Shares-1, data_truncated[i] is assigned the lower KeyWidth bits of data_i[i]."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "field": "guarantee",
+          "excerpt": "decoy_entropy is the result of applying the perm_data function to entropy_i[1] with permutation constant RndCnstRandPerm."
+        },
+        {
+          "spec": "keymgr_pkg__function_task__perm_data__001",
+          "field": "guarantee",
+          "excerpt": "For each integer k from 0 to 31, output bit perm_data[k] is assigned the value of data[perm_sel[k]]."
+        },
+        {
+          "spec": "keymgr_pkg__function_task__perm_data__001",
+          "field": "assumption",
+          "excerpt": "The perm_sel array must contain valid indices into data, i.e., for all k in 0..31, perm_sel[k] must be in range 0 to RandWidth-1. risk: If any perm_sel[k] is out-of-range, data[perm_sel[k]] yields X, "
+        },
+        {
+          "spec": "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+          "field": "guarantee",
+          "excerpt": "For each share i from 0 to Shares-1, data_truncated[i] is assigned the lower KeyWidth bits of data_i[i]."
+        },
+        {
+          "spec": "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+          "field": "guarantee",
+          "excerpt": "Otherwise, data_o outputs a decoy value consisting of DecoyOutputCopies copies of entropy_i[1] concatenated with DecoyOutputCopies copies of entropy_i[0]."
+        },
+        {
+          "spec": "keymgr__generate_for__gen_adv_matrix_fill__001",
+          "field": "assumption",
+          "excerpt": "The padding data is a single random bit data_rand[0] replicated AdvLfsrCopies times. This may not provide sufficient entropy for masking, especially if the bit is predictable or has low toggle rate."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0037",
+      "title": "In StCtrlDataDis, adv_en_i is not monitored; if adv is asserted while waiting for op_done_i, the FSM stays in Dis. It is",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "该假设描述的是数据使能状态机在StCtrlDataDis状态下忽略adv_en_i的行为。所提供的保证仅定义了op状态控制器中adv_en_o的输出条件，与数据使能状态机的状态转移逻辑无关，也未说明adv_en_o与adv_en_i的关系。由于假设场景的合法性（adv_en_i是否应被允许在此状态下干预）未明确，且保证不构成矛盾或覆盖缺失，无法判定是否存在缺陷。",
+      "involved_signals": [
+        "adv_en_i"
+      ],
+      "involved_specs": [
+        "keymgr_data_en_state__always_comb__line_78__001",
+        "keymgr_op_state_ctrl__always_comb__line_50__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_data_en_state__always_comb__line_78__001",
+          "field": "assumption",
+          "excerpt": "In StCtrlDataDis, adv_en_i is not monitored; if adv is asserted while waiting for op_done_i, the FSM stays in Dis. It is unclear whether adv should be able to expedite exit or if this is an intentiona"
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state is StAdv, adv_en_o is asserted (1)."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "In all states except StAdv, adv_en_o is deasserted (0) because only StAdv overrides the default."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state is StAdvAck, state_d is set to StAdv and adv_en_o is deasserted (default low)."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "assumption",
+          "excerpt": "After StAdvAck, state_d = StAdv re-asserts adv_en_o in the next cycle for only one cycle low. It is unclear whether kmac interface requires adv_en_o low for a minimum duration or until kmac_done_i dea"
+        },
+        {
+          "spec": "keymgr_data_en_state__always_comb__line_78__001",
+          "field": "guarantee",
+          "excerpt": "From StCtrlDataIdle, if adv_en_i is asserted, state_d becomes StCtrlDataDis immediately, overriding all other triggers."
+        },
+        {
+          "spec": "keymgr_data_en_state__always_comb__line_78__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlDataHwEn, if op_done_i, next state is StCtrlDataWait; else if adv_en_i or hw_sel_i becomes false_loose, next state is StCtrlDataDis; otherwise state_d remains StCtrlDataHwEn."
+        },
+        {
+          "spec": "keymgr_data_en_state__always_comb__line_78__001",
+          "field": "guarantee",
+          "excerpt": "In StCtrlDataSwEn, if op_done_i, next state is StCtrlDataWait; else if adv_en_i or hw_sel_i becomes true_loose, next state is StCtrlDataDis; otherwise stays StCtrlDataSwEn."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0038",
+      "title": "Outputs op_ack_o, op_busy_o, op_update_o, adv_en_o, and op_fsm_err_o are declared but not driven in this chunk.",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "The assumption describes a scenario where op_err remains asserted, potentially causing the FSM to stall permanently. An active op_err indicates an error condition, which is an illegal/undesired state that is expected to be resolved by software intervention. The relevant guarantee (sw_binding_unlock_o requires op_err=0) explicitly blocks progress in the presence of op_err, providing a safe fallback that prevents erroneous operation. No guarantee forces advancement under op_err=1, which is consist",
+      "involved_signals": [
+        "op_ack",
+        "gen_req_i, id_req_i",
+        "op_done_i"
+      ],
+      "involved_specs": [
+        "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_err__always_ff__line_95__001",
+        "keymgr_ctrl__always_comb__line_739__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "field": "assumption",
+          "excerpt": "Outputs op_ack_o, op_busy_o, op_update_o, adv_en_o, and op_fsm_err_o are declared but not driven in this chunk."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "sw_binding_unlock_o is asserted when adv_req=1, op_ack=1, and both op_err and op_fault_err are 0."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "guarantee",
+          "excerpt": "When op_req is asserted, op_done_o equals op_ack; otherwise op_done_o equals the logical OR of init_o and invalid_op."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "guarantee",
+          "excerpt": "adv_state is asserted when op_ack and adv_req are both high and op_err is low."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "assumption",
+          "excerpt": "adv_state is blocked while op_err is high; if op_err remains asserted after a transaction, the FSM may never advance."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state is StWait and kmac_done_i is high, op_ack_o is asserted and state_d set to StIdle."
+        },
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "guarantee",
+          "excerpt": "When state_q does not match any defined state (StIdle, StAdv, StAdvAck, StWait), op_ack_o is asserted, op_fsm_err_o is asserted, and state_d remains unchanged."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "sw_binding_unlock_o is asserted when adv_req=1, op_ack=1, and both op_err and op_fault_err are 0."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0039",
+      "title": "The asynchronous reset input rst_ni must meet standard recovery/removal timing with respect to the clk_i positive edge t",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "Hardware gap: out_q defaults to 1 on reset, and no surrounding guarantee (such as out_clr being forced high or en_i forced low) ensures that the configuration output is safely disabled during/after reset. This may enable the key manager configuration before software or lifecycle controller has initialized it, creating a security vulnerability.",
+      "involved_signals": [
+        "rst_ni"
+      ],
+      "involved_specs": [
+        "keymgr_kmac_if__always_ff__line_379__001",
+        "keymgr_kmac_if__always_ff__line_161__001",
+        "keymgr_err__always_ff__line_95__001",
+        "keymgr_cfg_en__always_ff__line_51__001",
+        "keymgr_ctrl__always_ff__line_263__001",
+        "keymgr_cfg_en__always_ff__line_40__001",
+        "keymgr_sideload_key__always_ff__line_42__001",
+        "keymgr_ctrl__always_ff__line_247__001",
+        "keymgr_kmac_if__always_ff__line_363__001",
+        "keymgr_reseed_ctrl__always_ff__line_48__001",
+        "keymgr_err__always_ff__line_108__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_kmac_if__always_ff__line_379__001",
+          "field": "assumption",
+          "excerpt": "The asynchronous reset input rst_ni must meet standard recovery/removal timing with respect to the clk_i positive edge to avoid metastable error register values."
+        },
+        {
+          "spec": "keymgr_kmac_if__always_ff__line_161__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, inputs_invalid_q is immediately set to 0. When rst_ni is high, on the rising edge of clk_i, inputs_invalid_q is updated to inputs_invalid_d."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_95__001",
+          "field": "guarantee",
+          "excerpt": "When asynchronous reset rst_ni is low, sync_fault_q is cleared to '0."
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_51__001",
+          "field": "assumption",
+          "excerpt": "out_q defaults to 1 on reset. If the intended safe state is disabled (0), this default actively enables the configuration, possibly before software or lifecycle has properly initialized the key manage"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_263__001",
+          "field": "guarantee",
+          "excerpt": "On reset (rst_ni low), state_intg_err_q is cleared to 0."
+        },
+        {
+          "spec": "keymgr_cfg_en__always_ff__line_40__001",
+          "field": "guarantee",
+          "excerpt": "When rst_ni is low, init_q is cleared to 0."
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_42__001",
+          "field": "guarantee",
+          "excerpt": "Upon negedge rst_ni, key_q is reset to all zeros."
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_247__001",
+          "field": "assumption",
+          "excerpt": "rst_ni must be asserted (low) for at least one clock cycle before deassertion to guarantee prng_en_dis_inv_q is initialized to '0.\nrisk: If reset is not properly applied, the initial value of prng_en_"
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0040",
+      "title": "During StCtrlWipe, working_state_o is set to last_working_st. It is unclear whether last_working_st is always a safe wor",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "The provided guarantees only specify how last_working_st is updated (on posedge clk when update_en high) and reset (to StReset), but they do not constrain working_state_o to be safe. Without guarantees on working_state_o, we cannot confirm that last_working_st is always a safe working state during StCtrlWipe.",
+      "involved_signals": [
+        "last_working_st"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__always_comb__line_703__001",
+        "keymgr_ctrl__always_ff__line_695__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "assumption",
+          "excerpt": "During StCtrlWipe, working_state_o is set to last_working_st. It is unclear whether last_working_st is always a safe working state that cannot cause illegal key operations when the controller is in wi"
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_695__001",
+          "field": "guarantee",
+          "excerpt": "On posedge clk_i when rst_ni is high and update_en is high, last_working_st is updated with the value of working_state_o."
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_695__001",
+          "field": "guarantee",
+          "excerpt": "On negedge of rst_ni, last_working_st is forced to StReset."
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_695__001",
+          "field": "assumption",
+          "excerpt": "The timing relationship between update_en and working_state_o is not constrained locally; update_en might be asserted while working_state_o is still transitioning."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "When state_q is StCtrlWipe, working_state_o is driven to the value of last_working_st, and update_en is simultaneously forced to 0."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "update_en is always 1 except when state_q is StCtrlWipe, where it is forced to 0."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "When state_q is StCtrlInvalid or any value not explicitly listed, working_state_o is driven to StInvalid."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0041",
+      "title": "The function does not handle X or Z states in value. If the input signal is undriven or metastable, the function's outpu",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.162,
+      "contradiction": "Assumption 描述了输入存在 X/Z 时函数行为不确定（输出X），但没有明确这是合法状态还是非法状态。Guarantee 使用归约逻辑，在输入有 X/Z 时同样会输出 X，无防御措施。设计可能期望集成层面保证无 X/Z，但未提供明确契约。无法确定是否构成真正的覆盖缺口或协议矛盾，因此判为 UNCERTAIN。",
+      "involved_signals": [
+        "value"
+      ],
+      "involved_specs": [
+        "keymgr_pkg__function_task__valid_data_chk__001",
+        "keymgr_input_checks__function_task__valid_chk__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_pkg__function_task__valid_data_chk__001",
+          "field": "assumption",
+          "excerpt": "The function does not handle X or Z states in value. If the input signal is undriven or metastable, the function's output could be X, potentially propagating uncertainty to key validity decisions."
+        },
+        {
+          "spec": "keymgr_input_checks__function_task__valid_chk__001",
+          "field": "guarantee",
+          "excerpt": "The function valid_chk always returns the bitwise reduction-OR of value AND (NOT reduction-AND of value), i.e., true if value has at least one 1 and at least one 0, false otherwise."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0042",
+      "title": "[B-AG+U-UP] stage_sel is used as an array index without bounds checking, and no default or assertion verifies it stays within {Creat",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG",
+        "U-UP"
+      ],
+      "cross_channel_hits": 2,
+      "is_self_ref": false,
+      "score": 0.15,
+      "contradiction": "dis_op is defined as true for any op_i not in {OpAdvance,OpGenId,OpGenSwOut,OpGenHwOut}. If the op_i bus can take legal but unlisted values (or undefined glitches), a spurious disable operation may be triggered.",
+      "involved_signals": [
+        "stage_sel",
+        "advance_sel",
+        "stage_sel_o",
+        "op_i",
+        "dis_op",
+        "disable_sel"
+      ],
+      "involved_specs": [
+        "keymgr__continuous_region__declarations_or_instances__006",
+        "keymgr_ctrl__always_comb__key_output_ctrl__001",
+        "keymgr_ctrl__always_comb__line_468__001",
+        "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+        "keymgr_ctrl__continuous_region__int__001",
+        "keymgr_ctrl__continuous_region__keymgr_err_err__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr__continuous_region__declarations_or_instances__006",
+          "field": "assumption",
+          "excerpt": "stage_sel is used as an array index without bounds checking, and no default or assertion verifies it stays within {Creator, OwnerInt, Owner}."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "invalid_stage_sel_o is 1 when stage_sel_o is not inside {Creator, OwnerInt, Owner}, else 0."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_468__001",
+          "field": "assumption",
+          "excerpt": "advance_sel, disable_sel, adv_state, and dis_state are decoded exclusively such that in any state where multiple could be true, priority implicit in the code (disable over advance) does not violate sy"
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001",
+          "field": "guarantee",
+          "excerpt": "op_state_cmd_err is asserted when adv_en_o is high but neither advance_sel nor disable_sel is set, or when gen_en_o is high but gen_op is low."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "advance_sel is asserted when op_start_i=1, adv_op=1, and en_i=1."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+          "field": "assumption",
+          "excerpt": "When en_i is low, stage_sel_o must be Disable."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__key_output_ctrl__001",
+          "field": "guarantee",
+          "excerpt": "invalid_stage_sel_o is 1 when stage_sel_o is not inside {Creator, OwnerInt, Owner}, else 0."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__int__001",
+          "field": "guarantee",
+          "excerpt": "disable_sel is asserted when (op_start_i & dis_op) or !en_i."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0043",
+      "title": "[U-UP] The comment mentions a 'clear' operation to delete a selected key, but no input or logic for clear is present in the block. It is unclear how key clea",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "The comment mentions a 'clear' operation to delete a selected key, but no input or logic for clear is present in the block. It is unclear how key clearing is handled.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0044",
+      "title": "[U-UP] ecc_errs reduces 2-bit decoder error output (correctable/uncorrectable) to a single bit via reduction OR. The design intent for handling different err",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "ecc_errs reduces 2-bit decoder error output (correctable/uncorrectable) to a single bit via reduction OR. The design intent for handling different error types is unclear.",
+      "involved_signals": [
+        "ecc_errs",
+        "errs"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0045",
+      "title": "[U-UP] The definition of rand_perm_t type is not visible; its width determines whether perm_sel has exactly 32 elements and if element values are constrained",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "The definition of rand_perm_t type is not visible; its width determines whether perm_sel has exactly 32 elements and if element values are constrained.",
+      "involved_signals": [
+        "perm_sel",
+        "rand_perm_t"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0046",
+      "title": "[U-UP] prim_edn_req instance outputs err_o and fips_o are unconnected; any EDN error (e.g., reset, timing, integrity failure) or FIPS violation is silently d",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "prim_edn_req instance outputs err_o and fips_o are unconnected; any EDN error (e.g., reset, timing, integrity failure) or FIPS violation is silently discarded",
+      "involved_signals": [
+        "err_o",
+        "fips_o"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0047",
+      "title": "[U-UP] prim_mubi4_sync is instantiated with AsyncOn=0, and the comment says clock/reset are only for SVAs; the intent appears to be reusing mubi4 assertion i",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.114,
+      "contradiction": "prim_mubi4_sync is instantiated with AsyncOn=0, and the comment says clock/reset are only for SVAs; the intent appears to be reusing mubi4 assertion infrastructure without actual CDC, but the exact functional benefit is unclear.",
+      "involved_signals": [
+        "u_mubi_buf"
+      ],
+      "involved_specs": [],
+      "evidence": []
+    },
+    {
+      "finding_id": "F-0048",
+      "title": "External logic must ensure clr_i is not asserted while set_i is asserted to load a key, because clr_i has higher priorit",
+      "severity": "LOW",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.112,
+      "contradiction": "When set_i=1 and set_en_i=0, the design clears key_q to entropy instead of holding the current key or ignoring the request. This behavior is not specified in any guarantee and may cause unintended key erasure if a spurious set_i occurs while set_en_i is deasserted, breaking the intended gating and potentially compromising security.",
+      "involved_signals": [
+        "clr_i",
+        "set_i"
+      ],
+      "involved_specs": [
+        "keymgr_sideload_key__always_ff__line_42__001",
+        "keymgr_sideload_key__always_ff__line_32__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_42__001",
+          "field": "assumption",
+          "excerpt": "External logic must ensure clr_i is not asserted while set_i is asserted to load a key, because clr_i has higher priority and will clear instead."
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_32__001",
+          "field": "guarantee",
+          "excerpt": "When set_i is high and en_i is high and clr_i is low (and not in reset), valid_q is set to 1."
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_32__001",
+          "field": "guarantee",
+          "excerpt": "When en_i is low or clr_i is high (and not in reset), valid_q is forced to 0."
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_42__001",
+          "field": "assumption",
+          "excerpt": "When set_i=1 and set_en_i=0, the design clears key_q to entropy instead of holding. Is this an intentional feature, or should set_i be gated entirely by set_en_i?"
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_32__001",
+          "field": "guarantee",
+          "excerpt": "When set_i is high and en_i is high and clr_i is low (and not in reset), valid_q is set to 1."
+        },
+        {
+          "spec": "keymgr_sideload_key__always_ff__line_32__001",
+          "field": "guarantee",
+          "excerpt": "When en_i is high, clr_i is low, set_i is low, and no reset, valid_q retains its previous value."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0049",
+      "title": "gen_out_hw_sel must be a valid 1-bit logic value (0 or 1) when it is sampled. If gen_out_hw_sel is X or Z, mubi4_bool_to",
+      "severity": "LOW",
+      "verdict": "DEFENSIVE",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.112,
+      "contradiction": "The assumption constrains gen_out_hw_sel to be a valid 0/1 value, i.e., it prohibits X or Z as illegal inputs. Guarantee 4 shows that if hw_sel_i (derived from gen_out_hw_sel via mubi4_bool_to_mubi) becomes invalid due to an X/Z on gen_out_hw_sel, the state machine transitions to a safe 'disallowed' state (StCtrlDataDis). This is a defensive fallback handling for an input that violates the assumption, not a protocol contradiction.",
+      "involved_signals": [
+        "gen_out_hw_sel"
+      ],
+      "involved_specs": [
+        "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001::assumption::2",
+        "keymgr_data_en_state__always_comb__line_78__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001::assumption::2",
+          "field": "assumption",
+          "excerpt": "gen_out_hw_sel must be a valid 1-bit logic value (0 or 1) when it is sampled. If gen_out_hw_sel is X or Z, mubi4_bool_to_mubi may produce an invalid multi-bit encoding, breaking integrity."
+        },
+        {
+          "spec": "keymgr_data_en_state__always_comb__line_78__001",
+          "field": "guarantee",
+          "excerpt": "From StCtrlDataIdle with adv_en_i deasserted, if (id_en_i || gen_en_i) but hw_sel_i is neither strictly true nor strictly false, state_d goes to StCtrlDataDis (invalid hw_sel_i)."
+        }
+      ]
+    },
+    {
+      "finding_id": "F-0050",
+      "title": "When cnt_i equals CDIs-1, the FSM asserts op_ack_o directly without asserting op_update_o. It is ambiguous whether the f",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.075,
+      "contradiction": "The state cnt_i == CDIs-1 is a normal legal condition (counter reached its maximum). The guarantees show that op_update is used to increment u_cnt and that op_ack clears it. None of the guarantees impose a requirement that the final CDI must also assert op_update; the counter may already hold the correct value after the previous step, and op_ack safely clears it. Therefore, the described behavior does not violate any of the guarantees, and the uncertainty is resolved—no hardware error is indicat",
+      "involved_signals": [
+        "op_update_i",
+        "update_en"
+      ],
+      "involved_specs": [
+        "keymgr_op_state_ctrl__always_comb__line_50__001",
+        "keymgr_err__always_ff__line_95__001",
+        "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+        "keymgr_ctrl__always_ff__line_695__001",
+        "keymgr_ctrl__always_comb__line_703__001"
+      ],
+      "evidence": [
+        {
+          "spec": "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "field": "assumption",
+          "excerpt": "When cnt_i equals CDIs-1, the FSM asserts op_ack_o directly without asserting op_update_o. It is ambiguous whether the final CDI also requires an update before acknowledgment."
+        },
+        {
+          "spec": "keymgr_err__always_ff__line_95__001",
+          "field": "guarantee",
+          "excerpt": "When op_update_i is asserted, op_done_i is not asserted, and rst_ni is high, sync_fault_q is updated to sync_fault_d."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "guarantee",
+          "excerpt": "When op_req is asserted, op_done_o equals op_ack; otherwise op_done_o equals the logical OR of init_o and invalid_op."
+        },
+        {
+          "spec": "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "field": "guarantee",
+          "excerpt": "The prim_count instance u_cnt has clr_i wired to (op_ack | random_ack) and incr_en_i wired to (op_update | random_req), with decr_en_i tied to 0 and set_i/set_cnt_i tied to 0."
+        },
+        {
+          "spec": "keymgr_ctrl__always_ff__line_695__001",
+          "field": "assumption",
+          "excerpt": "When update_en is asserted, working_state_o must be stable and represent the intended working state."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "update_en is always 1 except when state_q is StCtrlWipe, where it is forced to 0."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "When state_q is StCtrlDisabled, working_state_o is driven to StDisabled."
+        },
+        {
+          "spec": "keymgr_ctrl__always_comb__line_703__001",
+          "field": "guarantee",
+          "excerpt": "When state_q is StCtrlOwnerIntKey, working_state_o is driven to StOwnerIntKey."
+        }
+      ]
+    }
+  ]
+}

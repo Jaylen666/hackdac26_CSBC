@@ -1,77 +1,293 @@
 {
   "chunk_id": "sha3__always_comb__line_236__001",
-  "summary": "该组合逻辑实现 SHA3 控制状态机的下一状态与控制输出生成，并在生命周期升级请求时无条件转入终止错误态。",
-  "behavior": "该块先将下一状态默认保持为当前状态，并把控制输出默认清零/置为安全值：`keccak_start`、`keccak_process`、`sw_keccak_run` 置 0，`keccak_done` 置 `MuBi4False`，`squeezing` 和 `state_valid` 置 0，`mux_sel` 置 `MuxGuard`，`sha3_state_error` 置 0（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:237-250）。随后按当前状态 `st` 做状态机分支。在 `StIdle_sparse`，只有 `start_i` 为真时才转到 `StAbsorb_sparse` 并拉高 `keccak_start`，否则留在 Idle（:253-260）。在 `StAbsorb_sparse`，若 `process_i` 为真且当前不在 `processing`，则保持在 Absorb 并发出一次 `keccak_process`；否则若 `absorbed` 通过 `mubi4_test_true_strict` 检测为真，则转到 `StSqueeze_sparse`；其他情况继续停留在 Absorb（:263-272）。在 `StSqueeze_sparse`，持续声明 `state_valid=1`、`mux_sel=MuxRelease` 以向寄存器接口暴露状态，同时置 `squeezing=1`；若 `run_i` 为真则转入 `StManualRun_sparse` 并拉高 `sw_keccak_run`，否则若 `done_i` 通过严格 MuBi 检测为真则转入 `StFlush_sparse`，并把 `keccak_done` 直接传递为 `done_i`，否则继续停留在 Squeeze（:275-291）。在 `StManualRun_sparse`，等待 `keccak_complete` 后返回 `StSqueeze_sparse`，否则保持在 ManualRun（:294-299）。在 `StFlush_sparse`，无条件回到 `StIdle_sparse`（:302-304）。`StTerminalError_sparse` 是终止态，保持自环并置 `sha3_state_error=1`；任何未枚举状态也会转入该终止错误态并置错误标志（:306-315）。最后，若生命周期控制器 `lc_escalate_en_i` 通过宽松检测为真，则无条件覆盖前述状态转移结果，把 `st_d` 强制改为 `StTerminalError_sparse`；该覆盖只修改下一状态，不在本块中同步强制拉高 `sha3_state_error`，因此错误指示依赖后续进入终止态后的状态译码（:318-323）。",
+  "header": {
+    "module": "sha3",
+    "block_kind": "always_comb",
+    "driven": [
+      "st_d",
+      "keccak_start",
+      "keccak_process",
+      "sw_keccak_run",
+      "keccak_done",
+      "squeezing",
+      "state_valid",
+      "mux_sel",
+      "sha3_state_error"
+    ],
+    "used": [
+      "st",
+      "start_i",
+      "process_i",
+      "processing",
+      "absorbed",
+      "run_i",
+      "done_i",
+      "keccak_complete",
+      "lc_escalate_en_i"
+    ],
+    "modes": [
+      "StIdle_sparse",
+      "StAbsorb_sparse",
+      "StSqueeze_sparse",
+      "StManualRun_sparse",
+      "StFlush_sparse",
+      "StTerminalError_sparse",
+      "default"
+    ],
+    "tags": [
+      "secret",
+      "digest",
+      "error",
+      "alert",
+      "access_control",
+      "lifecycle",
+      "sparse_fsm",
+      "handshake",
+      "csr"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当当前状态为 `StSqueeze_sparse` 时，该块保证 `state_valid` 为 1、`mux_sel` 为 `MuxRelease`、`squeezing` 为 1，从而内部状态对寄存器接口可见。",
-      "output_signals": [
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "All outputs are initialized to safe defaults: keccak_start, keccak_process, sw_keccak_run, squeezing, state_valid, sha3_state_error = 0; keccak_done = MuBi4False; mux_sel = MuxGuard.",
+      "cond": "always",
+      "signals": [
+        "keccak_start",
+        "keccak_process",
+        "sw_keccak_run",
+        "keccak_done",
+        "squeezing",
         "state_valid",
         "mux_sel",
-        "squeezing"
+        "sha3_state_error"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:240-250"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "In StIdle_sparse, if start_i is true, next state is StAbsorb_sparse and keccak_start asserted; otherwise stay in Idle.",
+      "cond": "st == StIdle_sparse",
+      "signals": [
+        "st",
+        "start_i",
+        "st_d",
+        "keccak_start"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:253-261"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "In StAbsorb_sparse, if process_i and !processing, keccak_process asserted and state stays; else if absorbed mubi is strictly true, transition to StSqueeze_sparse; else stay in Absorb.",
+      "cond": "st == StAbsorb_sparse",
+      "signals": [
+        "st",
+        "process_i",
+        "processing",
+        "keccak_process",
+        "absorbed",
+        "st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:263-272"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "In StSqueeze_sparse, state_valid=1, mux_sel=MuxRelease, squeezing=1; if run_i, transition to StManualRun_sparse and sw_keccak_run asserted; else if done_i mubi is strictly true, transition to StFlush_sparse and keccak_done driven to done_i; else stay in Squeeze.",
+      "cond": "st == StSqueeze_sparse",
+      "signals": [
+        "st",
+        "state_valid",
+        "mux_sel",
+        "squeezing",
+        "run_i",
+        "sw_keccak_run",
+        "done_i",
+        "st_d",
+        "keccak_done"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:275-291"
       ]
     },
     {
-      "property": "当当前状态为 `StTerminalError_sparse`，或 `st` 落入 default 分支时，该块保证 `sha3_state_error` 为 1；此外 default 分支保证下一状态转入 `StTerminalError_sparse`。",
-      "output_signals": [
-        "sha3_state_error",
+      "id": "G5",
+      "type": "mux_case",
+      "claim": "In StManualRun_sparse, if keccak_complete, transition to StSqueeze_sparse; else stay in ManualRun.",
+      "cond": "st == StManualRun_sparse",
+      "signals": [
+        "st",
+        "keccak_complete",
         "st_d"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:294-300"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "mux_case",
+      "claim": "In StFlush_sparse, next state is unconditionally StIdle_sparse.",
+      "cond": "st == StFlush_sparse",
+      "signals": [
+        "st",
+        "st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:302-304"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "mux_case",
+      "claim": "In StTerminalError_sparse, state stays same and sha3_state_error asserted.",
+      "cond": "st == StTerminalError_sparse",
+      "signals": [
+        "st",
+        "st_d",
+        "sha3_state_error"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:306-310"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "default_fallback",
+      "claim": "For any state not explicitly listed (default), st_d becomes StTerminalError_sparse and sha3_state_error is asserted.",
+      "cond": "st not in {Idle, Absorb, Squeeze, ManualRun, Flush, TerminalError}",
+      "signals": [
+        "st",
+        "st_d",
+        "sha3_state_error"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:312-315"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "state_transition",
+      "claim": "If lc_escalate_en_i passes loose true test, st_d is overridden to StTerminalError_sparse regardless of current state and case logic.",
+      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en_i)",
+      "signals": [
+        "lc_escalate_en_i",
+        "st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:321-323"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "processing signal is correctly managed by keccak core: asserted while busy after keccak_process is issued, and deasserted when done. The state machine relies on !processing to allow a new process command.",
+      "cond": "when st is StAbsorb_sparse and process_i is asserted",
+      "risk": "If processing is permanently high or mis-timed, the FSM may stall in Absorb, never absorb further, or skip a required process step.",
+      "signals": [
+        "processing",
+        "keccak_process",
+        "st"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:264"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "keccak_complete is asserted by keccak core when a software-run keccak operation finishes. The FSM relies on it to exit ManualRun.",
+      "cond": "when st is StManualRun_sparse",
+      "risk": "If keccak_complete is never asserted, the state machine hangs in ManualRun. A premature assertion may cause incorrect return to Squeeze before operation completes.",
+      "signals": [
+        "keccak_complete",
+        "st"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:295"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "absorbed and done_i are multi-bit mubi4 encoded signals and are always driven to legal encoded values (MuBi4True or MuBi4False), never X or invalid.",
+      "cond": "always, especially during state transitions",
+      "risk": "Invalid values may cause mubi4_test_true_strict to return ambiguous or incorrect results, leading to wrong state transitions (e.g., staying in Absorb when should move to Squeeze, or missing done).",
+      "signals": [
+        "absorbed",
+        "done_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:268",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:285"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "If lc_escalate_en_i triggers while current state is StSqueeze_sparse, st_d is immediately forced to StTerminalError_sparse, but the combinatorial outputs state_valid, mux_sel (MuxRelease), and squeezing remain asserted for the rest of the cycle, potentially exposing digest state to the register interface. sha3_state_error is not asserted in that cycle because the case block still sees StSqueeze.",
+      "cond": "st == StSqueeze_sparse and lc_escalate_en_i true (loose)",
+      "risk": "Sensitive state (partial digest) may be readable for one clock cycle before the register updates to the error state, violating zeroisation or protection requirements during escalation.",
+      "signals": [
+        "lc_escalate_en_i",
+        "st",
+        "st_d",
+        "state_valid",
+        "mux_sel",
+        "squeezing",
+        "sha3_state_error"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:318-323",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:275-291"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "sha3_state_error is asserted in the error state and default, but this chunk does not show where the signal goes. Without confirmation that it feeds an alert, interrupt, or other containment action, the error transition may be ineffective.",
+      "cond": "when sha3_state_error = 1",
+      "risk": "A terminal error condition could be silently ignored, violating security escalation requirements if no downstream observer exists.",
+      "signals": [
+        "sha3_state_error"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:250",
         "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:306-315"
       ]
     },
     {
-      "property": "当 `lc_escalate_en_i` 通过 `lc_tx_test_true_loose` 检测为真时，无论当前状态机分支结果如何，下一状态最终都被覆盖为 `StTerminalError_sparse`。",
-      "output_signals": [
-        "st_d"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:318-323"
-      ]
-    }
-  ],
-  "security_implications": "该片段包含安全相关的失效保护逻辑。`mux_sel` 默认保持在 `MuxGuard`，只有在 `StSqueeze_sparse` 才切到 `MuxRelease` 暴露内部状态（/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:247-249,275-279），这有助于限制状态可见窗口。对 `absorbed` 和 `done_i` 使用严格 MuBi 真值检测，而对生命周期升级 `lc_escalate_en_i` 使用宽松检测，并在检测到升级时无条件进入终止错误态（:268,285,318-323），体现了对安全关键升级信号的保守处理。",
-  "assumptions": [
-    {
-      "constraint": "`run_i` 与 `done_i` 在 `StSqueeze_sparse` 中不应在同一周期同时请求相互冲突的动作；代码按优先级先处理 `run_i`，会忽略同周期的 `done_i` 转 Flush。",
-      "bug_relevance": "若合法协议允许两者同时为真而上层又期望优先完成 `done_i`，则状态机会进入 `StManualRun_sparse` 而不是 `StFlush_sparse`，导致完成握手被延后或丢失；若该同发场景设计上本就不应发生，则这是输入协议约束而非 RTL 自身 bug。",
-      "related_signals": [
-        "run_i",
-        "done_i",
-        "st"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:275-291"
-      ]
-    },
-    {
-      "constraint": "在 `StAbsorb_sparse` 中，`process_i` 应只在 `processing` 为假时作为新的处理请求提出；代码会在 `process_i && !processing` 时重复发出 `keccak_process`，否则仅等待 `absorbed`。",
-      "bug_relevance": "若外部在 `processing` 期间错误地产生新的 `process_i` 并期望被接受，该请求会被忽略，可能造成软件/上层控制认为已触发处理但实际未触发的功能错误。",
-      "related_signals": [
-        "process_i",
-        "processing",
-        "keccak_process"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:263-272"
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "low",
+      "claim": "The SEC_CM comments mention FSM.GLOBAL_ESC and FSM.LOCAL_ESC. The global escalation via lc_escalate_en_i is implemented, but no local escalation logic appears in this chunk. It is unclear if local escalation is handled elsewhere or if it is a gap.",
+      "cond": "unknown",
+      "risk": "Lack of local escalation could mean certain internal errors (like FSM glitches) are not escalated at the source, potentially allowing undetected fault propagation.",
+      "signals": [],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:318-319"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:237-250",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:252-316",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:318-323"
-  ],
-  "uncertain_points": [
-    "`keccak_done = done_i` 只在 `done_i` 严格为真时赋值；由于 `keccak_done` 是多比特 MuBi 信号，当前片段无法独立确认此处是否有意保留 `done_i` 的完整编码而非输出规范化的固定真值。",
-    "生命周期升级时仅覆盖 `st_d`，本块未同时把 `sha3_state_error` 立即置 1；若系统期望升级当周期就看到错误标志，则需结合状态寄存器更新和其他逻辑确认。",
-    "`StFlush_sparse` 仅无条件跳回 Idle，本片段未展示 Flush 是否需要等待外部确认或执行额外清理，因此其语义是否真为单周期过渡需结合上下文确认。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:236-324"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
   "line_start": 236,
-  "line_end": 324
+  "line_end": 324,
+  "security_implications": ""
 }

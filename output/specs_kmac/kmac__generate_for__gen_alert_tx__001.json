@@ -1,53 +1,114 @@
 {
   "chunk_id": "kmac__generate_for__gen_alert_tx__001",
-  "summary": "为每个告警通道实例化一个 prim_alert_sender，将内部告警请求/测试信号转换为对应的 alert_tx 输出，并接收外部 alert_rx 握手。",
-  "behavior": "该 generate-for 循环对 0 到 NumAlerts-1 的每个索引 i 各实例化一个 prim_alert_sender。每个实例的异步模式由 AlertAsyncOn[i] 参数控制，fatal 属性由 IsFatal 参数直接取索引 i。实例输入连接为：告警测试输入取 alert_test[i]，实际告警请求取 alerts[i]，外部接收侧返回信号取 alert_rx_i[i]；对应的发送输出驱动 alert_tx_o[i]。alert_ack_o 和 alert_state_o 端口在此片段中未被接收，说明本模块对每路 sender 的确认/内部状态不做后续使用。该片段本身不包含额外仲裁或屏蔽逻辑，因此每路告警发送行为彼此独立，KMAC 对外导出的每一位 alert_tx_o 都完全由对应 prim_alert_sender 实例生成。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "generate",
+    "driven": [
+      "alert_tx_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "alert_test",
+      "alerts",
+      "alert_rx_i"
+    ],
+    "modes": [
+      "NumAlerts",
+      "AlertAsyncOn"
+    ],
+    "tags": [
+      "alert",
+      "fault",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对每个告警索引 i，都存在一条一一对应的发送路径：alert_rx_i[i] 输入到对应的 prim_alert_sender 实例，且该实例的输出唯一驱动 alert_tx_o[i]。",
-      "output_signals": [
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "For each alert index i from 0 to NumAlerts-1, a prim_alert_sender is instantiated with parameter IsFatal=i and AsyncOn=AlertAsyncOn[i], connecting .clk_i and .rst_ni directly, .alert_test_i to alert_test[i], .alert_req_i to alerts[i], .alert_rx_i to alert_rx_i[i], and .alert_tx_o to alert_tx_o[i]; .alert_ack_o and .alert_state_o are left unconnected.",
+      "cond": "always (generate-loop)",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "alert_test",
+        "alerts",
+        "alert_rx_i",
         "alert_tx_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1466-1478"
-      ]
-    },
-    {
-      "property": "每路告警发送器都同时接收对应位的 alert_test[i] 和 alerts[i] 作为触发来源，因此测试注入与真实告警请求不会在本层被过滤掉。",
-      "output_signals": [
-        "alert_tx_o"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1473-1478"
+      "refs": [
+        "kmac.sv:1466-1480"
       ]
     }
   ],
-  "security_implications": "该片段属于安全告警通路：内部告警请求 alerts[i] 以及测试注入 alert_test[i] 都会直接送入告警发送器并对外形成 alert_tx_o[i]，因此告警链路是否为异步、以及各路是否被视为 fatal，均由参数 AlertAsyncOn[i] 和 IsFatal(i) 决定。与此同时，本层未使用 alert_ack_o 或 alert_state_o，若需要软件可观测性或更细粒度的告警状态追踪，则必须依赖 prim_alert_sender 内部机制或其他模块支持。",
   "assumptions": [
     {
-      "constraint": "NumAlerts、alert_rx_i、alert_tx_o、alert_test、alerts 以及 AlertAsyncOn 的索引范围必须一致，保证每个 i 都有有效的对应位可连接。",
-      "bug_relevance": "这是行为契约；若索引空间不一致，某些告警通道可能未连接、连接错误或被综合裁剪，导致告警丢失或错误路由。",
-      "related_signals": [
-        "NumAlerts",
+      "id": "A1",
+      "type": "handshake",
+      "claim": "alert_rx_i[i] must be driven by the alert handler with a valid acknowledge signal meeting the prim_alert_sender's interface timing, relative to the request (alerts[i]).",
+      "cond": "when an alert is requested",
+      "risk": "If alert_rx_i is not properly asserted, the alert sender may not complete its handshake, potentially leaving the alert stuck or causing a mismatch in alert state.",
+      "signals": [
         "alert_rx_i",
-        "alert_tx_o",
-        "alert_test",
-        "alerts",
+        "alerts"
+      ],
+      "refs": [
+        "kmac.sv:1477"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "AlertAsyncOn array must have exactly NumAlerts elements, each a valid parameter for asynchronous alert handling.",
+      "cond": "always",
+      "risk": "Mismatched array length could cause elaboration errors or unintended asynchronous behavior, breaking alert propagation.",
+      "signals": [
         "AlertAsyncOn"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1466-1478"
+      "refs": [
+        "kmac.sv:1468"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The IsFatal parameter is set to the loop index i, classifying only alert 0 as non-fatal (IsFatal=0) and all others as fatal. It is unclear if this matches the intended severity assignment.",
+      "cond": "for all i",
+      "risk": "A non-fatal classification for a safety-critical alert could lead to missed fault escalation; an unintended fatal classification could cause unnecessary system resets or panic.",
+      "signals": [
+        "IsFatal",
+        "i"
+      ],
+      "refs": [
+        "kmac.sv:1469"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The prim_alert_sender outputs alert_ack_o and alert_state_o are left open. It is unknown whether the alert source (alerts[i]) properly deasserts without feedback or if the ack is handled elsewhere in the design.",
+      "cond": "when an alert is requested",
+      "risk": "Alerts could remain asserted, causing repeated transmissions, or fail to re-arm, breaking the alert handshake and potentially masking subsequent faults.",
+      "signals": [
+        "alert_ack_o",
+        "alert_state_o",
+        "alerts"
+      ],
+      "refs": [
+        "kmac.sv:1475-1476"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1466-1480"
-  ],
-  "uncertain_points": [
-    "参数 .IsFatal(i) 看起来直接把 genvar 索引 i 传给名为 IsFatal 的参数；若 prim_alert_sender 的该参数语义是布尔 fatal/non-fatal，则这里可能依赖“第 0 路非 fatal、其余路 fatal”之类的约定，但仅凭此片段无法确认这是否为预期设计，需结合 prim_alert_sender 参数定义确认。",
-    "alert_ack_o 和 alert_state_o 被留空，表明本模块不消费这些信号；但这些信号是否在系统层面应被观测、是否会影响调试或错误恢复，单凭该片段无法确定。"
+    "kmac.sv:1466-1480"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1466,
-  "line_end": 1480
+  "line_end": 1480,
+  "security_implications": ""
 }

@@ -1,0 +1,87 @@
+{
+  "chunk_id": "kmac__continuous_region__declarations_or_instances__011",
+  "summary": "该片段将消息输入路径、应用接口、消息 FIFO 与 SHA3 核连接起来：软件经 TL-UL 写入消息窗口后被转换为内部消息流，kmac_app 复用软件/应用侧输入并产生 KMAC/SHA3 配置，msgfifo 缓冲消息，最终 SHA3 核消费消息并输出状态与错误信息。",
+  "behavior": "当未启用消息掩码生成分支时，内部送往 SHA3 的掩码后消息 `msg_data_masked[0]` 直接等于 `msg_data[0]`，而 `msg_mask`、`cfg_msg_mask` 和 `msg_mask_en` 仅被折叠到 `unused_msgmask` 以避免未使用告警，说明该分支下消息掩码对数据路径不起作用（928-933）。SHA3 实例接收上游消息握手 `msg_valid/msg_ready`、消息数据 `msg_data_masked` 和字节使能 `msg_strb`，同时接收随机数、前缀、模式/强度、命令控制以及生命周期升级信号；它输出吸收状态、块处理完成、FSM 状态、Keccak 状态及多类错误状态，其中运行请求/应答节流接口被固定为始终允许处理，因为 `run_ack_i` 绑为 1，`run_req_o` 未使用（934-988, 980-982）。\n\n消息窗口的 TL 读路径被完全封死：`tlram_rvalid=0`、`tlram_rdata=0`、`tlram_rerror=0`，因此该窗口不返回有效读数据；写数据与写掩码则依据 `cfg_shadowed.msg_endianness.q` 经过 `conv_endian32` 转换，以适配内部按小端处理的 SHA3/Keccak 数据顺序（990-1004）。TL-UL 到 SRAM 风格接口的适配器配置为只允许 1 个 outstanding、支持字节写，并在读访问时报错（`ErrOnRead=1`）；其输出的 `tlram_req/tlram_we/tlram_addr/tlram_wdata/tlram_wmask` 构成软件消息写入接口（1006-1037）。软件消息有效信号定义为 `tlram_req & tlram_we`，即仅写事务会被当作消息输入；如果内部消息宽度与窗口宽度相同，则直接使用转换后的写数据/掩码，否则在高位补零扩展到 `MsgWidth`。TL 写请求的授予 `tlram_gnt` 直接由下游 `sw_msg_ready` 驱动，因此软件写入是否被接受由后级消息接收路径背压决定；`tlram_addr` 在本片段中未参与功能，仅汇总到 `unused_tlram_addr`（1039-1050）。\n\n`kmac_app` 负责复用/仲裁软件与应用接口：它接收寄存器配置的密钥、前缀、KMAC 使能、SHA3 模式、Keccak 强度，以及来自 TL 适配器的软件消息流 `sw_valid/data/mask`；同时连接 sideload key、应用数据/摘要接口和命令接口。该模块向下游输出供消息 FIFO 使用的 `mux2fifo_valid/data/mask`，向核心输出密钥、密钥长度/有效位、KMAC 使能、SHA3 前缀、模式和强度，并把 SHA3 返回的 Keccak 状态转写为寄存器可见的 `reg_state_valid/reg_state`；它还向软件导出 `absorbed`、`app_active`，并基于 SHA3 错误与处理状态生成 `clear_after_error`、应用侧错误和稀疏 FSM 错误。它还依赖 `entropy_configured` 和 LC 升级输入参与控制（1052-1138）。\n\n`kmac_msgfifo` 接收 `kmac_app` 输出的消息流并缓冲，向 SHA3 侧输出 `msgfifo_valid`、消息数据和字节 strobe，同时通过 `msgfifo_ready` 接收下游背压；它还输出 FIFO 空/满/深度状态和错误标志。FIFO 在 `sha3_done` 时被清空，并支持由 `reg2msgfifo_process` 触发、向 `msgfifo2kmac_process` 反映的处理控制路径（1140-1169）。整体上，这一段将软件写消息窗口和应用输入统一汇聚到消息 FIFO，再由 FIFO 驱动 SHA3；读窗口被禁用，而写接收受下游 ready 信号约束。",
+  "guarantees": [
+    {
+      "property": "消息窗口的 TL 读返回在本片段中固定为无效且数据/错误全零，因此该窗口不会通过本地读路径提供有效读数据。",
+      "output_signals": [
+        "tlram_rvalid",
+        "tlram_rdata",
+        "tlram_rerror"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:992-994"
+      ]
+    },
+    {
+      "property": "只有 TL 写请求会被转换为软件消息输入；当下游 `sw_msg_ready` 为 1 时，该写请求才会获得授予。",
+      "output_signals": [
+        "sw_msg_valid",
+        "tlram_gnt"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1039-1047"
+      ]
+    },
+    {
+      "property": "SHA3 核运行节流接口被固定为始终允许，因此本片段不会主动对 SHA3 处理施加 run-ack 背压。",
+      "output_signals": [
+        "run_ack_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:980-982"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及多项安全相关路径：SHA3/KMAC 核接收随机数输入、生命周期升级使能和错误输出（946-952, 967-968, 984-987）；`kmac_app` 还处理寄存器密钥与 sideload key 选择、KMAC 使能、错误清除以及 LC 升级（1062-1063, 1077-1078, 1111-1113, 1122, 1131-1136）。消息窗口读通路被禁用（992-994），有助于避免经该窗口读出内部消息存储内容；但软件写入可直接进入消息处理链路，是否允许某些空闲/异常场景下接收软件消息还取决于 `kmac_app` 的 `SecIdleAcceptSwMsg` 策略和外部上下文（1053-1056）。",
+  "assumptions": [
+    {
+      "constraint": "软件应仅通过对消息窗口的写事务发送消息数据；对该窗口的读访问在设计上不应作为合法功能路径使用。",
+      "bug_relevance": "若软件或上游总线主机依赖读回消息窗口内容，将得到无效读返回/读错误配置路径下的非预期结果；这是接口使用错误，但硬件已采用安全回退而非暴露数据。",
+      "related_signals": [
+        "tlram_rvalid",
+        "tlram_rdata",
+        "tlram_rerror",
+        "tl_win_h2d",
+        "tl_win_d2h"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:990-994",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1007-1013"
+      ]
+    },
+    {
+      "constraint": "上游软件/总线主机需要遵守 `sw_msg_ready` 背压，只在写请求被授予时认为消息被成功送入内部路径。",
+      "bug_relevance": "若忽略 `tlram_gnt/sw_msg_ready` 握手并假设所有写请求都被接收，可能导致消息丢失、分块边界错误或后续摘要不正确，这属于功能契约违背。",
+      "related_signals": [
+        "tlram_req",
+        "tlram_we",
+        "sw_msg_valid",
+        "sw_msg_ready",
+        "tlram_gnt"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1020-1026",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1039-1047"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:928-933",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:934-988",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:992-1004",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1007-1037",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1039-1050",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1052-1138",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1140-1169"
+  ],
+  "uncertain_points": [
+    "在 `g_no_msg_mask` 分支下消息掩码相关信号被忽略，仅保留 `msg_data[0]` 直通（928-933）；这是否完全等价于配置上禁止 masking，还是仅表示当前参数化下单 share 模式无需显式掩码，需要结合上文生成条件确认。",
+    "TL 读路径被本地绑为全零（992-994），同时适配器设置 `ErrOnRead=1`（1012）；最终对外 TL 读访问的精确响应语义（例如错误码如何在 `tl_win_d2h` 上体现）依赖 `tlul_adapter_sram` 的具体实现。",
+    "软件消息写地址 `tlram_addr` 未参与本地功能选择（1049-1050）；这暗示消息窗口可能被视为线性流式入口而非真正可寻址存储，但是否允许任意地址写入、地址是否在适配器内部被检查，需要额外上下文。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 928,
+  "line_end": 1171
+}

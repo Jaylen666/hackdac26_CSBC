@@ -1,0 +1,203 @@
+{
+  "chunk_id": "hmac_continuous_region_declarations_or_instances_009__behavior__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "assign",
+    "driven": [
+      "hw2reg.msg_length_upper.d",
+      "hw2reg.msg_length_lower.d",
+      "msg_fifo_wdata_endian",
+      "msg_fifo_wmask_endian"
+    ],
+    "used": [
+      "message_length",
+      "conv_endian32",
+      "msg_fifo_wdata",
+      "msg_fifo_wmask",
+      "endian_swap"
+    ],
+    "modes": [],
+    "tags": [
+      "mask",
+      "fifo"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "hw2reg.msg_length_upper.d is continuously driven by message_length[63:32].",
+      "cond": "always",
+      "signals": [
+        "message_length",
+        "hw2reg.msg_length_upper.d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:663-663"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "hw2reg.msg_length_lower.d is continuously driven by message_length[31:0].",
+      "cond": "always",
+      "signals": [
+        "message_length",
+        "hw2reg.msg_length_lower.d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:664-664"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "msg_fifo_wdata_endian is the result of conv_endian32(msg_fifo_wdata, endian_swap), i.e., pass-through or byte-swapped based on endian_swap.",
+      "cond": "always",
+      "signals": [
+        "conv_endian32",
+        "msg_fifo_wdata",
+        "endian_swap",
+        "msg_fifo_wdata_endian"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:671-671"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "msg_fifo_wmask_endian is the result of conv_endian32(msg_fifo_wmask, endian_swap), same byte-order transformation applied to the mask.",
+      "cond": "always",
+      "signals": [
+        "conv_endian32",
+        "msg_fifo_wmask",
+        "endian_swap",
+        "msg_fifo_wmask_endian"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:672-672"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "message_length is valid (64-bit) and assumed stable when the consumer samples hw2reg.msg_length_upper.d and hw2reg.msg_length_lower.d.",
+      "cond": "during a sample window defined by the consumer",
+      "risk": "glitches on message_length could lead to mismatched upper/lower halves being latched, causing an incorrect message length to be used.",
+      "signals": [
+        "message_length",
+        "hw2reg.msg_length_upper.d",
+        "hw2reg.msg_length_lower.d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:663-664"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "endian_swap reflects the correct endianness setting for the system (1 when little-endian, 0 when big-endian) to reverse bytes for the big-endian SHA engine.",
+      "cond": "when message data is supplied to the HMAC",
+      "risk": "if endian_swap is set opposite to the actual system endianness, the data and mask fed to SHA will be byte-reversed, resulting in a wrong hash output and integrity failure.",
+      "signals": [
+        "endian_swap",
+        "msg_fifo_wdata",
+        "msg_fifo_wmask"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:666-671"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "conv_endian32 correctly performs a byte swap of the 32-bit word when endian_swap is 1, and passes through unchanged when 0.",
+      "cond": "always",
+      "risk": "a bug in conv_endian32 could corrupt message data or mask bit-to-byte mapping, directly breaking hash computation integrity.",
+      "signals": [
+        "conv_endian32",
+        "endian_swap",
+        "msg_fifo_wdata",
+        "msg_fifo_wmask"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:671-672"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "msg_fifo_wdata and msg_fifo_wmask arriving from the upstream packer are consistent such that the byte-reversal performed by conv_endian32 preserves the intended mask‑data correspondence.",
+      "cond": "when msg_fifo_wdata and msg_fifo_wmask are valid",
+      "risk": "if the mask bits originally align with byte lanes in little-endian order but are then incorrectly swapped, the mask could end up protecting wrong bytes, causing unintended writes or data corruption.",
+      "signals": [
+        "msg_fifo_wdata",
+        "msg_fifo_wmask",
+        "endian_swap"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:671-672"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment states 'reverse if not big-endian', but it is unclear how endian_swap is generated (e.g., hardware strap, software register, or compile-time tie-off).",
+      "cond": "during integration or misconfiguration",
+      "risk": "endian_swap could be set incorrectly at boot time, causing all HMAC operations to produce incorrect digests.",
+      "signals": [
+        "endian_swap"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:666-671"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "conv_endian32 is not defined in this chunk; its exact byte-reordering logic (e.g., for mask bits) must be verified elsewhere.",
+      "cond": "any usage of conv_endian32",
+      "risk": "a mismatch between the byte-swap implementation and the expected SHA big-endian byte order could silently corrupt data.",
+      "signals": [
+        "conv_endian32"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:671-672"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "low",
+      "claim": "If endian_swap is X or invalid, conv_endian32 may output unknown values; no error detection or fallback is present here.",
+      "cond": "endian_swap = X or invalid",
+      "risk": "X propagation on msg_fifo_wdata_endian / msg_fifo_wmask_endian could lead to unknown write data in the SHA engine, potentially causing silent corruption or verification difficulty.",
+      "signals": [
+        "endian_swap",
+        "msg_fifo_wdata_endian",
+        "msg_fifo_wmask_endian"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:671-672"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:663-663",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:664-664",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:666-671",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:671-671",
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:672-672"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 663,
+  "line_end": 673,
+  "security_implications": ""
+}

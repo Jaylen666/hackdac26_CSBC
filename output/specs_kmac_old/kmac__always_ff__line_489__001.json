@@ -1,0 +1,51 @@
+{
+  "chunk_id": "kmac__always_ff__line_489__001",
+  "summary": "在引擎稳定时将软件写入的 key_share0 分段收集到内部密钥寄存器 sw_key_data_reg[0]，复位时清零。",
+  "behavior": "该时序块只驱动 sw_key_data_reg[0]。复位有效时，sw_key_data_reg[0] 被整体清零 [489-492]。正常工作时，只有在 engine_stable 为真时才允许更新；此时遍历 key_share0 的每个 32-bit 字段，若对应的 reg2hw.key_share0[j].qe 置位，则用 reg2hw.key_share0[j].q 覆盖 sw_key_data_reg[0] 中对应的 32-bit 切片 [492-497]。未被 qe 选中的分段保持原值；当 engine_stable 为假时，整个 sw_key_data_reg[0] 保持不变 [492-498]。代码体现出按字写入、可部分更新的软件密钥影子寄存器装载行为，并以 engine_stable 作为写入门控 [492-497]。",
+  "guarantees": [
+    {
+      "property": "复位期间 sw_key_data_reg[0] 一定被清零。",
+      "output_signals": [
+        "sw_key_data_reg"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-492"
+      ]
+    },
+    {
+      "property": "当 engine_stable 为真且 reg2hw.key_share0[j].qe 为 1 时，sw_key_data_reg[0] 的对应 32-bit 分段会被写成 reg2hw.key_share0[j].q；其余未选中的分段不会在该块中被修改。",
+      "output_signals": [
+        "sw_key_data_reg"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:492-497"
+      ]
+    }
+  ],
+  "security_implications": "该片段处理软件提供的密钥 share0，并通过 engine_stable 门控其装载，降低在引擎不稳定阶段意外改写密钥寄存器的风险 [492-497]。复位时清零也有助于避免残留密钥值继续留存在该寄存器中 [490-492]。不过该片段本身只覆盖 share0，是否存在完整的双份密钥保护、擦除或访问控制还需结合其他代码确认。",
+  "assumptions": [
+    {
+      "constraint": "reg2hw.key_share0[j].qe 应只在软件确实要提交对应 32-bit 密钥字段且 engine_stable 允许接收时拉高；否则该字段会保持旧值，这是安全回退但设计上通常不应作为正常更新流程。",
+      "bug_relevance": "若不满足则可能出现部分字段未更新、内部密钥混合新旧字的情况；虽然硬件会保持旧值而非写入未知值，但这通常不是期望的密钥编程行为。",
+      "related_signals": [
+        "reg2hw.key_share0",
+        "engine_stable",
+        "sw_key_data_reg"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:492-497"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-499"
+  ],
+  "uncertain_points": [
+    "代码只更新 sw_key_data_reg[0]，推测对应 key_share0，但 sw_key_data_reg 的完整结构以及 share1 是否由相邻块对称处理，需要上下文确认。",
+    "engine_stable 的具体语义未在该片段内定义；这里只能确认它是密钥装载的门控条件，无法仅凭该片段判断其是否表示空闲、未吸收数据或其他稳定状态。",
+    "若同一编程事务中仅部分 j 的 qe 置位，寄存器会保留其余旧字段；这是代码的实际行为，但是否与上层软件协议一致需要结合寄存器接口规范确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 489,
+  "line_end": 499
+}

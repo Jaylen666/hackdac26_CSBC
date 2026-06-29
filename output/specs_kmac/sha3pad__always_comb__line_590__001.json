@@ -1,48 +1,178 @@
 {
   "chunk_id": "sha3pad__always_comb__line_590__001",
-  "summary": "该组合逻辑根据 sel_mux 选择送往 keccak_data_o 的数据源；无匹配选择时输出全零。",
-  "behavior": "该片段实现一个多路选择器，直接驱动 keccak_data_o。sel_mux 为 MuxFifo 时输出 msg_data_i，为 MuxPrefix 时输出 prefix_data，为 MuxFuncPad 时输出 funcpad_data，为 MuxZeroEnd 时输出 zero_with_endbit；其余情况（注释表明对应 MuxNone）统一回退为全零输出。这说明该模块在不同填充/前缀/消息阶段之间切换 Keccak 输入数据，并对未选择任何有效源的情形提供安全的零值默认输出。源码未显示对 sel_mux 非法编码的单独处理，实际行为是也会落入 default 输出全零。 ",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_comb",
+    "driven": [
+      "keccak_data_o"
+    ],
+    "used": [
+      "sel_mux",
+      "MuxFifo",
+      "MuxPrefix",
+      "MuxFuncPad",
+      "MuxZeroEnd",
+      "msg_data_i",
+      "prefix_data",
+      "funcpad_data",
+      "zero_with_endbit"
+    ],
+    "modes": [
+      "MuxFifo",
+      "MuxPrefix",
+      "MuxFuncPad",
+      "MuxZeroEnd"
+    ],
+    "tags": [
+      "padding",
+      "handshake",
+      "digest"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 sel_mux 等于 MuxFifo、MuxPrefix、MuxFuncPad 或 MuxZeroEnd 时，keccak_data_o 分别严格等于 msg_data_i、prefix_data、funcpad_data 或 zero_with_endbit。",
-      "output_signals": [
-        "keccak_data_o"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When sel_mux is MuxFifo, keccak_data_o is assigned msg_data_i.",
+      "cond": "sel_mux == MuxFifo",
+      "signals": [
+        "sel_mux",
+        "MuxFifo",
+        "keccak_data_o",
+        "msg_data_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:591-595"
+      "refs": [
+        "sha3pad.sv:592"
       ]
     },
     {
-      "property": "当 sel_mux 不匹配任何显式分支时，keccak_data_o 一定为全零。",
-      "output_signals": [
-        "keccak_data_o"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When sel_mux is MuxPrefix, keccak_data_o is assigned prefix_data.",
+      "cond": "sel_mux == MuxPrefix",
+      "signals": [
+        "sel_mux",
+        "MuxPrefix",
+        "keccak_data_o",
+        "prefix_data"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:597-598"
+      "refs": [
+        "sha3pad.sv:593"
       ]
-    }
-  ],
-  "security_implications": "该片段位于 KMAC/SHA3 填充数据通路中，默认分支将输出压成全零而不是保留旧值或传播未知值，有助于在无有效选择或非法选择编码时避免意外把消息、前缀或功能填充数据送入 keccak_data_o。但这是否足以满足更高层安全需求，还取决于 sel_mux 的生成逻辑和系统对错误选择的处理。",
-  "assumptions": [
+    },
     {
-      "constraint": "在合法工作流程中，sel_mux 应只取与当前处理阶段一致的枚举值；虽然非法或意外编码会被安全回退为全零，但该场景设计上不应发生。",
-      "bug_relevance": "若不满足则 keccak_data_o 会输出全零而非期望的数据源，可能导致哈希/KMAC 输入流错误；不过该片段本身提供了安全回退，不一定直接构成局部 RTL bug。",
-      "related_signals": [
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When sel_mux is MuxFuncPad, keccak_data_o is assigned funcpad_data.",
+      "cond": "sel_mux == MuxFuncPad",
+      "signals": [
+        "sel_mux",
+        "MuxFuncPad",
+        "keccak_data_o",
+        "funcpad_data"
+      ],
+      "refs": [
+        "sha3pad.sv:594"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "When sel_mux is MuxZeroEnd, keccak_data_o is assigned zero_with_endbit.",
+      "cond": "sel_mux == MuxZeroEnd",
+      "signals": [
+        "sel_mux",
+        "MuxZeroEnd",
+        "keccak_data_o",
+        "zero_with_endbit"
+      ],
+      "refs": [
+        "sha3pad.sv:595"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When sel_mux is any other value (including X or Z), keccak_data_o is driven to all zeros.",
+      "cond": "sel_mux not equal to MuxFifo, MuxPrefix, MuxFuncPad, MuxZeroEnd",
+      "signals": [
         "sel_mux",
         "keccak_data_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:591-598"
+      "refs": [
+        "sha3pad.sv:598"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "sel_mux must be restricted to the four defined enum values MuxFifo, MuxPrefix, MuxFuncPad, MuxZeroEnd during normal operation; any other encoding or X/Z is illegal.",
+      "cond": "whenever the mux drives valid data",
+      "risk": "If sel_mux takes an illegal value, the default assignment forces keccak_data_o to all zeros, which downstream keccak logic may treat as legitimate input, silently corrupting the SHA3 padding and resulting digest.",
+      "signals": [
+        "sel_mux"
+      ],
+      "refs": [
+        "sha3pad.sv:591-599"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The data input selected by sel_mux (msg_data_i, prefix_data, funcpad_data, or zero_with_endbit) must remain stable and glitch-free while sel_mux is in the corresponding state.",
+      "cond": "when sel_mux is stable in a given state",
+      "risk": "Combinational mux glitches could propagate to keccak_data_o and be incorrectly sampled by downstream logic, leading to data corruption.",
+      "signals": [
+        "sel_mux",
+        "msg_data_i",
+        "prefix_data",
+        "funcpad_data",
+        "zero_with_endbit"
+      ],
+      "refs": [
+        "sha3pad.sv:592-595"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The default case comment labels it as 'MuxNone', but there is no explicit MuxNone case item. If MuxNone is a legal sel_mux encoding, it will fall into the default and incorrectly output all zeros.",
+      "cond": "if MuxNone is a defined and reachable sel_mux value",
+      "risk": "The keccak padding block may produce invalid data during MuxNone cycles, corrupting the SHA3 digest and breaking integrity guarantees.",
+      "signals": [
+        "sel_mux",
+        "MuxNone",
+        "keccak_data_o"
+      ],
+      "refs": [
+        "sha3pad.sv:597-598"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The source logic that drives sel_mux must be verified to never produce values outside {MuxFifo, MuxPrefix, MuxFuncPad, MuxZeroEnd} during operation; otherwise the default all-zero output can silently corrupt padding.",
+      "cond": "when sel_mux is controlled by external logic",
+      "risk": "Silent keccak data corruption leading to wrong hash digest, a security‑relevant functional fault.",
+      "signals": [
+        "sel_mux"
+      ],
+      "refs": [
+        "sha3pad.sv:591-599"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:590-600"
-  ],
-  "uncertain_points": [
-    "注释“MuxNone”暗示 default 主要对应一个有意的空选择状态，但从该片段 alone 无法确认 sel_mux 的完整枚举定义，也无法区分 default 是仅覆盖 MuxNone 还是同时覆盖非法编码。"
+    "sha3pad.sv:590-600"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 590,
-  "line_end": 600
+  "line_end": 600,
+  "security_implications": ""
 }

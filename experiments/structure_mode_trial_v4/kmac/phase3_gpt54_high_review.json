@@ -1,0 +1,40 @@
+{
+  "source_findings": "/home/smy/rtl_bug_agent/experiments/structure_mode_trial_v4/kmac/phase2_semantic/findings_kmac.json",
+  "prompt_template": "/home/smy/rtl_bug_agent/config/prompts/phase3/verify.md",
+  "summary": {
+    "total_findings_reviewed": 115,
+    "confirmed_bug_count": 1
+  },
+  "benchmark_hit_summary": [
+    {
+      "bug_id": "017",
+      "hit": "yes",
+      "evidence_findings": [
+        "F-0011",
+        "F-0021"
+      ],
+      "basis": "F-0011 and F-0021 both land on the masked message path in competition kmac.sv. Direct source inspection confirms that the EnMasking branch no longer uses the entropy-derived msg_mask value and instead hardwires a constant all-ones mask."
+    }
+  ],
+  "confirmed_bugs": [
+    {
+      "bug_id": "masked_message_path_uses_constant_all_ones_mask",
+      "evidence_findings": [
+        "F-0011",
+        "F-0021"
+      ],
+      "rtl_locations": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-926"
+      ],
+      "root_cause": "In the competition RTL EnMasking branch, `static_mask` is hardwired to all ones at kmac.sv:911, `msg_mask_permuted` is derived from `static_mask` rather than from the entropy output at kmac.sv:915-920, and the final masked data path XORs each share with `static_mask` at kmac.sv:923-926. The fresh entropy-derived `msg_mask` is therefore removed from the active masked message path.",
+      "trigger_condition": "Masking enabled (`EnMasking == 1`) with message masking active (`cfg_msg_mask == 1`).",
+      "security_impact": "The masked message path becomes deterministic instead of freshness-dependent, weakening the intended side-channel masking hardening for repeated physical observations.",
+      "software_visible": false,
+      "evidence": [
+        "kmac.sv:911 assigns `static_mask = {MsgWidth{1'b1}}`.",
+        "kmac.sv:919 computes `msg_mask_permuted[i] = static_mask[RndCnstMsgPerm[i]]`, so the permutation no longer depends on entropy.",
+        "kmac.sv:925-926 applies `({MsgWidth{cfg_msg_mask}} & static_mask)` to every share, bypassing the entropy-generated `msg_mask` path entirely."
+      ]
+    }
+  ]
+}

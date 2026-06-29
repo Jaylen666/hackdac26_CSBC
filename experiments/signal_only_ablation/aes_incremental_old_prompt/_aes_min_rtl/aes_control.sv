@@ -1,0 +1,1 @@
+/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv

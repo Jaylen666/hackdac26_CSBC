@@ -1,0 +1,60 @@
+{
+  "chunk_id": "aes_core__always_ff__iv_reg__001",
+  "summary": "实现带各比特独立写使能的初始化向量（IV）寄存器组，支持异步复位清零。",
+  "behavior": "该 always_ff 块在时钟上升沿或复位下降沿触发。当复位信号 rst_ni 为低时，iv_q 所有比特异步清零（行 354-355）。复位释放后，每个时钟上升沿对索引 i 从 0 到 NumSlicesCtr-1 进行判断：若写使能 iv_we[i] 等于高电平（SP2V_HIGH），则将 iv_d[i] 的值锁存至 iv_q[i]；否则 iv_q[i] 保持原值（行 357-361）。因此，该寄存器组支持部分比特更新，未使能的比特位不受影响。",
+  "guarantees": [
+    {
+      "property": "复位有效（rst_ni 为低）期间及复位后，iv_q 所有比特必定为 0。",
+      "output_signals": [
+        "iv_q"
+      ],
+      "source_refs": [
+        "aes_core.sv:354-355"
+      ]
+    },
+    {
+      "property": "对于任意索引 i，若 iv_we[i] 为低电平，iv_q[i] 的值自上一次写入或复位以来保持不变，不会自发翻转。",
+      "output_signals": [
+        "iv_q"
+      ],
+      "source_refs": [
+        "aes_core.sv:358-360"
+      ]
+    }
+  ],
+  "security_implications": "iv_q 存储 AES 初始化向量，其值直接影响加密过程。复位时寄存器全零，但未使用随机数或安全擦除，攻击者可能利用已知复位状态进行差分攻击或重放攻击。此外，iv_we 信号若被恶意操控，可任意修改 IV 值，需结合系统权限控制确保安全。",
+  "assumptions": [
+    {
+      "constraint": "当 iv_we[i] 为高时，iv_d[i] 必须提供期望写入的有效 IV 部分数据，且该值在时钟上升沿前已稳定。",
+      "bug_relevance": "若 iv_d[i] 为错误或不确定值，将导致 iv_q 捕获错误数据，随后加密输出错误，可能造成通信失败或安全漏洞。",
+      "related_signals": [
+        "iv_d",
+        "iv_we",
+        "iv_q"
+      ],
+      "source_refs": [
+        "aes_core.sv:358-359"
+      ]
+    },
+    {
+      "constraint": "NumSlicesCtr 的值不应超过 iv_q 的实际位宽，否则循环索引越界会导致行为未定义。",
+      "bug_relevance": "若 NumSlicesCtr 过大，会将非法索引处的 iv_d/iv_we 值写入 iv_q，产生意想不到的寄存器更新；若过小，高位 IV 将永远无法写入，保持在复位值 0。",
+      "related_signals": [
+        "NumSlicesCtr"
+      ],
+      "source_refs": [
+        "aes_core.sv:357"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_core.sv:353-363"
+  ],
+  "uncertain_points": [
+    "SP2V_HIGH 的具体数值未在片段中定义，可能是 1'b1 或一个宏，需根据上下文确认。",
+    "NumSlicesCtr 与 iv_q/iv_we/iv_d 位宽的关系未明确，若不一致可能导致部分比特无法更新或越界。"
+  ],
+  "source_file": "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_core.sv",
+  "line_start": 353,
+  "line_end": 363
+}

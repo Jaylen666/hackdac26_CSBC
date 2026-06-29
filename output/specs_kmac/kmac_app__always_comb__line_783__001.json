@@ -1,70 +1,224 @@
 {
   "chunk_id": "kmac_app__always_comb__line_783__001",
-  "summary": "该组合逻辑根据当前应用状态和是否选择 keymgr 侧载密钥，在 CSR 密钥与 keymgr 密钥之间选择输出到 KMAC 的密钥、密钥长度和有效标志。",
-  "behavior": "该块先给出默认值：`keymgr_key_used` 置 0，`key_len_o` 取软件寄存器配置 `reg_key_len_i`，`key_data_o` 的每个 share 都直接取 `reg_key_data_i`，并且 `key_valid_o` 默认置 0，因此未被显式列出的状态（包括注释指出的 idle 和 error 状态）都会表现为密钥无效，同时输出的软件密钥/长度仅作为默认回退值存在而不应被认为可用 [783-791]。在 `StAppCfg`、`StAppMsg`、`StAppOutLen`、`StAppProcess`、`StAppWait` 这些硬件应用状态下，逻辑改为选择 keymgr 侧载密钥：若当前应用 `AppCfg[app_id].Mode` 等于 `AppKMAC`，则认为当前硬件应用实际在使用 keyed MAC，`keymgr_key_used` 置 1；同时 `key_len_o` 强制为 `SideloadedKey`，`key_data_o` 全部改取 `keymgr_key`。此时只有在该应用是 `AppKMAC` 且 `keymgr_key_i.valid` 为真时，`key_valid_o` 才为 1 [793-804]。在 `StSw` 软件控制状态下，默认仍使用 CSR 密钥；只有当 `keymgr_key_en_i` 为真时，才切换为 keymgr 密钥路径：`keymgr_key_used` 等于 `kmac_en_o`，`key_len_o` 设为 `SideloadedKey`，`key_data_o` 改取 `keymgr_key` [806-814]。`key_valid_o` 在 `StSw` 中仅当 `kmac_en_o` 为真时才可能置 1；若软件做 keyed MAC 且未启用 keymgr 侧载（`!keymgr_key_en_i`），则无条件认为密钥有效；若启用了 keymgr 侧载，则只有 `keymgr_key_i.valid` 为真时密钥有效 [815-824]。因此，该块实际将“密钥内容/长度来源选择”和“密钥是否可用”的判断分离：某些状态下即使默认驱动了 CSR 密钥值，只要 `key_valid_o=0`，外部逻辑就不应将其视为有效密钥 [783-791, 827-828]。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "keymgr_key_used",
+      "key_len_o",
+      "key_data_o",
+      "key_valid_o"
+    ],
+    "used": [
+      "st",
+      "AppCfg",
+      "app_id",
+      "AppKMAC",
+      "SideloadedKey",
+      "keymgr_key",
+      "keymgr_key_i.valid",
+      "keymgr_key_en_i",
+      "kmac_en_o",
+      "reg_key_len_i",
+      "reg_key_data_i",
+      "Share"
+    ],
+    "modes": [
+      "StAppCfg",
+      "StAppMsg",
+      "StAppOutLen",
+      "StAppProcess",
+      "StAppWait",
+      "StSw",
+      "AppKMAC",
+      "SideloadedKey",
+      "Share"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "mac",
+      "sideloaded_key",
+      "csr",
+      "mode_config",
+      "parameterization",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在 `StAppCfg`、`StAppMsg`、`StAppOutLen`、`StAppProcess` 或 `StAppWait` 状态下，`key_len_o` 一定为 `SideloadedKey`，且 `key_data_o` 一定来自 `keymgr_key` 而非 CSR 密钥。",
-      "output_signals": [
-        "key_len_o",
-        "key_data_o"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:793-804"
-      ]
-    },
-    {
-      "property": "除显式满足状态与条件的情况外，`key_valid_o` 默认为 0；特别是在未列出的默认状态中，该块保证不宣称密钥有效。",
-      "output_signals": [
-        "key_valid_o"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:789-791",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:827-828"
-      ]
-    }
-  ],
-  "security_implications": "该片段直接控制 KMAC 使用软件提供密钥还是 keymgr 侧载密钥，并通过 `key_valid_o` 阻止在 keymgr 密钥无效、非 keyed 模式或非工作状态下将密钥视为可用 [789-803, 815-824]。这有助于避免在错误状态下误用无效或不应暴露的密钥材料。与此同时，在 `StSw` 且 `kmac_en_o=1`、`keymgr_key_en_i=0` 时，软件 CSR 密钥被无条件视为有效，安全性依赖上游对软件写入密钥的正确配置与访问控制 [815-820]。",
-  "assumptions": [
-    {
-      "constraint": "消费 `key_data_o`/`key_len_o` 的下游逻辑必须同时检查 `key_valid_o`，不能仅凭密钥总线上的默认值或回退值就发起 keyed 操作。",
-      "bug_relevance": "如果违反该约束，则在默认/空闲/错误等 `key_valid_o=0` 的场景下，下游可能错误使用 CSR 默认密钥值或无效侧载密钥，导致功能错误，安全相关场景下还可能造成非法 MAC 计算。该场景按本设计应由 `key_valid_o` 屏蔽，不应发生。",
-      "related_signals": [
-        "key_data_o",
-        "key_len_o",
-        "key_valid_o"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:783-791",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:827-828"
-      ]
-    },
-    {
-      "constraint": "在硬件应用状态 `StAppCfg`/`StAppMsg`/`StAppOutLen`/`StAppProcess`/`StAppWait` 中，若期望执行 keyed 硬件应用 MAC，则 `AppCfg[app_id].Mode` 必须正确指示为 `AppKMAC`，且 keymgr 应提供与之匹配的 `keymgr_key_i.valid`。",
-      "bug_relevance": "如果模式配置错误或 keymgr 未提供有效密钥，则 `key_valid_o` 会保持 0，导致硬件应用无法按预期执行 keyed MAC；这属于行为契约，违反会直接造成功能失败。",
-      "related_signals": [
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "In application states (StAppCfg, StAppMsg, StAppOutLen, StAppProcess, StAppWait), keymgr_key_used is 1 iff AppCfg[app_id].Mode == AppKMAC; key_len_o takes SideloadedKey; key_data_o is assigned from keymgr_key; key_valid_o is keymgr_key_used && keymgr_key_i.valid.",
+      "cond": "st ∈ {StAppCfg, StAppMsg, StAppOutLen, StAppProcess, StAppWait}",
+      "signals": [
         "st",
         "AppCfg",
         "app_id",
         "Mode",
         "AppKMAC",
+        "keymgr_key_used",
+        "key_len_o",
+        "key_data_o",
+        "keymgr_key",
+        "key_valid_o",
+        "keymgr_key_i.valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:794-804"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "In StSw state, if keymgr_key_en_i is true, keymgr_key_used = kmac_en_o, key_len_o = SideloadedKey, key_data_o = keymgr_key; if kmac_en_o is true, key_valid_o = keymgr_key_i.valid when keymgr_key_en_i is true else 1; otherwise key_valid_o remains 0 (default).",
+      "cond": "st == StSw",
+      "signals": [
+        "st",
+        "keymgr_key_en_i",
+        "keymgr_key_used",
+        "kmac_en_o",
+        "key_len_o",
+        "key_data_o",
+        "key_valid_o",
+        "keymgr_key_i.valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:806-825"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "In all other states (idle, error, unlisted), keymgr_key_used = 0, key_len_o = reg_key_len_i, key_data_o = reg_key_data_i, key_valid_o = 0.",
+      "cond": "st not in application states and not StSw",
+      "signals": [
+        "st",
+        "keymgr_key_used",
+        "key_len_o",
+        "key_data_o",
+        "key_valid_o",
+        "reg_key_len_i",
+        "reg_key_data_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:784-791,827"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When keymgr_key_i.valid is high, the sideloaded key data (keymgr_key) is valid and its bit-length matches SideloadedKey.",
+      "cond": "any state where keymgr_key is used and keymgr_key_i.valid is sampled",
+      "risk": "If keymgr_key_i.valid is incorrectly asserted or data is invalid, KMAC may process with a corrupted key, compromising MAC integrity.",
+      "signals": [
         "keymgr_key_i.valid",
+        "keymgr_key",
+        "SideloadedKey"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:799,803,812,822"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When in StSw, keymgr_key_en_i is low and kmac_en_o is high, the CSR-registered key (reg_key_data_i, reg_key_len_i) must already contain a valid key.",
+      "cond": "st == StSw, keymgr_key_en_i == 0, kmac_en_o == 1",
+      "risk": "If the CSR key is not correctly configured, key_valid_o asserts high but the actual key is invalid, leading to a broken or insecure MAC operation.",
+      "signals": [
+        "st",
+        "keymgr_key_en_i",
+        "kmac_en_o",
+        "reg_key_data_i",
+        "reg_key_len_i",
         "key_valid_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:793-804"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:815-819"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "AppCfg[app_id].Mode is correctly set to AppKMAC when the application is intended to use keyed MAC.",
+      "cond": "st in application states",
+      "risk": "Misconfiguration causes keymgr_key_used to stay 0 and key_valid_o 0, resulting in unkeyed MAC operation that could weaken security guarantees.",
+      "signals": [
+        "AppCfg",
+        "app_id",
+        "Mode",
+        "AppKMAC",
+        "keymgr_key_used",
+        "key_valid_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:796,803"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "SideloadedKey parameter exactly equals the actual key bit-width produced by keymgr.",
+      "cond": "when key_len_o is driven to SideloadedKey",
+      "risk": "Mismatch leads to truncated or misaligned key data, breaking secure key usage.",
+      "signals": [
+        "SideloadedKey",
+        "key_len_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:797,810"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "In application states, keymgr_key is copied to key_data_o unconditionally, even when keymgr_key_used is 0 (non-keyed mode).",
+      "cond": "st in application states and AppCfg[app_id].Mode != AppKMAC",
+      "risk": "If any downstream logic uses key_data_o without checking key_valid_o, the sideloaded key could leak into unkeyed operations.",
+      "signals": [
+        "st",
+        "AppCfg",
+        "app_id",
+        "Mode",
+        "keymgr_key",
+        "key_data_o",
+        "key_valid_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:798-800,803"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "In StSw, when keymgr_key_en_i is true, keymgr_key is assigned to key_data_o regardless of kmac_en_o (keyed MAC enable).",
+      "cond": "st == StSw, keymgr_key_en_i == 1, kmac_en_o == 0",
+      "risk": "The sideloaded key may appear on internal key_data_o while key_valid_o is low; if key_valid_o is later misused, key data could be exposed through normal operation.",
+      "signals": [
+        "st",
+        "keymgr_key_en_i",
+        "kmac_en_o",
+        "keymgr_key",
+        "key_data_o",
+        "key_valid_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:807-813,816"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:783-829"
   ],
-  "uncertain_points": [
-    "注释称未列出的情况包括 idle 和 error 状态时密钥应视为无效 [789-790]，但这些具体状态名未出现在本片段中，需结合完整状态枚举确认哪些状态属于该类。",
-    "在 `StSw` 且 `keymgr_key_en_i=1` 但 `kmac_en_o=0` 时，代码仍会把 `key_len_o`/`key_data_o` 切到 keymgr 密钥路径，而 `key_valid_o` 保持 0 [807-824]；这表明输出总线的取值与“是否实际使用 keyed MAC”并不完全一致，下游是否只以 `key_valid_o` 为准需要上下文确认。",
-    "`keymgr_key_used` 在硬件应用状态中定义为 `AppCfg[app_id].Mode == AppKMAC`，在 `StSw` 中定义为 `kmac_en_o` 且仅在 `keymgr_key_en_i=1` 时更新 [795-803, 807-814]；该信号更像“当前配置下会实际消费 keymgr 密钥”而非“总线当前选中了 keymgr 密钥”，其精确定义需参考其他片段。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 783,
-  "line_end": 829
+  "line_end": 829,
+  "security_implications": ""
 }

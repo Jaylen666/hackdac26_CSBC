@@ -1,0 +1,149 @@
+{
+  "chunk_id": "hmac__always_comb__select_fifo_wdata__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "index",
+      "fifo_wdata"
+    ],
+    "used": [
+      "hmac_fifo_wsel",
+      "digest_size",
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512",
+      "hmac_fifo_wdata_sel",
+      "digest",
+      "reg_fifo_wentry"
+    ],
+    "modes": [
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512"
+    ],
+    "tags": [
+      "secret",
+      "digest",
+      "integrity",
+      "mask",
+      "fifo",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When hmac_fifo_wsel is false, index is driven to 1'b0 and fifo_wdata to reg_fifo_wentry.",
+      "cond": "!hmac_fifo_wsel",
+      "signals": [
+        "hmac_fifo_wsel",
+        "index",
+        "fifo_wdata",
+        "reg_fifo_wentry"
+      ],
+      "refs": [
+        "hmac.sv:551-552"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When hmac_fifo_wsel is true and digest_size equals SHA2_256, fifo_wdata is assigned the lower 32 bits of a digest word selected by hmac_fifo_wdata_sel[2:0], with mask all-ones; index remains at its default of 1'b0.",
+      "cond": "hmac_fifo_wsel & (digest_size == SHA2_256)",
+      "signals": [
+        "fifo_wdata",
+        "digest",
+        "hmac_fifo_wdata_sel",
+        "mask"
+      ],
+      "refs": [
+        "hmac.sv:556-558"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When hmac_fifo_wsel is true and digest_size is either SHA2_384 or SHA2_512, index is set to the complement of hmac_fifo_wdata_sel[0], and fifo_wdata is assigned a 32-bit slice of a digest word selected by hmac_fifo_wdata_sel[3:1], using index to choose upper or lower half, with mask all-ones.",
+      "cond": "hmac_fifo_wsel & ((digest_size == SHA2_384) | (digest_size == SHA2_512))",
+      "signals": [
+        "index",
+        "fifo_wdata",
+        "digest",
+        "hmac_fifo_wdata_sel"
+      ],
+      "refs": [
+        "hmac.sv:559-562"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When hmac_fifo_wsel is true and digest_size is not SHA2_256, SHA2_384, or SHA2_512, fifo_wdata remains 0 (from the initial assignment inside the if block) and index remains 1'b0.",
+      "cond": "hmac_fifo_wsel & (digest_size != SHA2_256) & (digest_size != SHA2_384) & (digest_size != SHA2_512)",
+      "signals": [
+        "fifo_wdata",
+        "index"
+      ],
+      "refs": [
+        "hmac.sv:554-555, 564"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "hmac_fifo_wdata_sel must provide a valid index into the digest array for the current digest_size. For SHA2_256 the effective address is wdata_sel[2:0]; for SHA2_384/512 it is wdata_sel[3:1]. The array bounds must not be exceeded.",
+      "cond": "hmac_fifo_wsel is active",
+      "risk": "Out-of-bounds read from digest may return undefined or stale data, potentially exposing secret digest contents or causing simulation X propagation.",
+      "signals": [
+        "hmac_fifo_wdata_sel",
+        "digest"
+      ],
+      "refs": [
+        "hmac.sv:558, 562"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "If hmac_fifo_wsel is active and digest_size is not SHA2_256, SHA2_384, or SHA2_512, the output fifo_wdata is silently set to zero with no error or alert. It is unclear if this represents a legal configuration that should be rejected or an impossible state.",
+      "cond": "hmac_fifo_wsel & digest_size not in {SHA2_256, SHA2_384, SHA2_512}",
+      "risk": "An inadvertent configuration could cause silent zeroing of HMAC output data, leading to undetected integrity failure.",
+      "signals": [
+        "digest_size",
+        "fifo_wdata"
+      ],
+      "refs": [
+        "hmac.sv:554-563"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The indexing into the digest array uses hmac_fifo_wdata_sel without bounds checking. If the index exceeds the actual array size for the given digest_size, the design may read out-of-bounds, potentially exposing secret digest data or simulation X. No containment (e.g., error signal or forced zero) is present.",
+      "cond": "hmac_fifo_wsel active and hmac_fifo_wdata_sel out of range",
+      "risk": "Exposure of secret digest segments or propagation of unknown values into the FIFO and subsequent HMAC output, breaking integrity and confidentiality.",
+      "signals": [
+        "hmac_fifo_wdata_sel",
+        "digest"
+      ],
+      "refs": [
+        "hmac.sv:558, 562"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:549-565"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 549,
+  "line_end": 565,
+  "security_implications": ""
+}

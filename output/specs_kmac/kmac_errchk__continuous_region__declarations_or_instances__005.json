@@ -1,54 +1,90 @@
 {
   "chunk_id": "kmac_errchk__continuous_region__declarations_or_instances__005",
-  "summary": "This fragment exposes the internal error bus on error_o and instantiates the error-check FSM state register with a hold condition that suppresses state updates when block_swcmd is asserted.",
-  "behavior": "The combinational output error_o is driven directly from err, so external logic sees the same error indication produced internally without modification (/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:376-376). The fragment also declares the gated next-state signal st_gated_d and instantiates the sparse-FSM state register macro u_state_regs with reset/default state StIdle, using st_gated_d as the registered next state and st as the current state (/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:389-391). The next-state input to that register is combinationally selected as the current state st when block_swcmd is asserted, otherwise the normal next-state value st_d is used; this implements a state hold under block_swcmd rather than advancing the FSM (/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:393-399). Two elaboration-time assertions constrain interface widths: the state and software command widths must match the values assumed by the error reporting logic, and cfg_mode_i/cfg_strength_i widths must remain 2 and 3 bits respectively; comments indicate these widths are tied to error-info field encoding and must be revised together if changed (/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:378-383).",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "mixed",
+    "driven": [
+      "error_o",
+      "st",
+      "st_gated_d"
+    ],
+    "used": [
+      "err",
+      "block_swcmd",
+      "st",
+      "st_d",
+      "sw_cmd_i",
+      "cfg_mode_i",
+      "cfg_strength_i",
+      "StateWidth",
+      "StIdle"
+    ],
+    "modes": [
+      "sparse_fsm",
+      "block_swcmd_gating"
+    ],
+    "tags": [
+      "error",
+      "sparse_fsm",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "error_o always equals the internal err signal.",
-      "output_signals": [
-        "error_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "error_o is continuously assigned the internal error signal err.",
+      "cond": "always",
+      "signals": [
+        "error_o",
+        "err"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:376-376"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:376"
       ]
     },
     {
-      "property": "When block_swcmd is asserted, the FSM next-state input is forced to the current state, preventing a state transition through st_d.",
-      "output_signals": [
-        "st_gated_d"
+      "id": "G2",
+      "type": "state_transition",
+      "claim": "The FSM state register st is updated by the PRIM_FLOP_SPARSE_FSM macro with next-state input st_gated_d. The st_gated_d signal is a mux: it equals st when block_swcmd is true, otherwise it equals st_d. This causes the FSM to hold its state when block_swcmd is asserted and advance to st_d otherwise. Reset sets st to StIdle.",
+      "cond": "on clock edge",
+      "signals": [
+        "block_swcmd",
+        "st",
+        "st_d",
+        "st_gated_d",
+        "StIdle"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:389-391",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:399-399"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:391",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:399"
       ]
     }
   ],
-  "security_implications": "This fragment participates in control-flow hardening for a sparse-encoded FSM and directly exports error status. Holding the FSM state when block_swcmd is asserted can help prevent software-command-driven state progression under disallowed conditions, and the sparse FSM macro suggests fault-detection intent. The width assertions also protect assumptions used in error encoding; if those assumptions drift, error reporting could become misleading.",
-  "assumptions": [
+  "assumptions": [],
+  "uncertain_points": [
     {
-      "constraint": "The encoded widths must remain consistent with the error-response formatting assumptions: $bits(st) == StateWidth, $bits(sw_cmd_i) == 6, $bits(cfg_mode_i) == 2, and $bits(cfg_strength_i) == 3.",
-      "bug_relevance": "This is a behavior contract: if violated, the comments indicate the associated error info fields would no longer match the implemented signal encodings, causing incorrect or misleading error reporting.",
-      "related_signals": [
-        "st",
-        "sw_cmd_i",
-        "cfg_mode_i",
-        "cfg_strength_i"
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The mux-based clock gating condition block_swcmd (line 399) may cause the FSM to hold or advance incorrectly if block_swcmd toggles near the clock edge, creating a glitch hazard. The ICEBOX comment (#14631) indicates this placement is not ideal and prevents explicit clock gating due to the sparse encoding macro.",
+      "cond": "block_swcmd changes too close to the clock edge",
+      "risk": "Potential corruption of the state machine sequence, leading to incorrect error detection behavior.",
+      "signals": [
+        "block_swcmd",
+        "st_gated_d",
+        "st"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:378-383"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:393-399"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:376-376",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:378-383",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:389-399"
-  ],
-  "uncertain_points": [
-    "The exact reset behavior, fault-detection semantics, and any additional guarantees of `PRIM_FLOP_SPARSE_FSM` are not visible in this snippet; only its use with state type st_e and reset/default state StIdle is evident.",
-    "Comments say block_swcmd would ideally be in an always_ff block as a clock-gating condition, but the implemented RTL uses combinational next-state selection to hold state. Without the macro definition, it is not possible to confirm whether there are any subtle differences from a true clock-enable implementation."
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:376-399"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
   "line_start": 376,
-  "line_end": 399
+  "line_end": 399,
+  "security_implications": ""
 }

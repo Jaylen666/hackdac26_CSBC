@@ -1,0 +1,200 @@
+{
+  "chunk_id": "aes_control_fsm_continuous_region_declarations_or_instances_006__behavior__002",
+  "header": {
+    "module": "aes_control_fsm",
+    "block_kind": "assign",
+    "driven": [
+      "block_ctr_expr",
+      "block_ctr_set",
+      "block_ctr_set_val",
+      "block_ctr_decr_val",
+      "block_ctr_d"
+    ],
+    "used": [
+      "block_ctr_q",
+      "ctrl_we_q",
+      "block_ctr_decr",
+      "cipher_prng_reseed_i",
+      "prng_reseed_rate_i",
+      "BlockCtrWidth",
+      "PER_1",
+      "PER_64",
+      "PER_8K"
+    ],
+    "modes": [
+      "prng_reseed_rate_i=PER_1|PER_64|PER_8K|other"
+    ],
+    "tags": [
+      "counter",
+      "prng_reseed",
+      "entropy",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "block_ctr_expr is asserted exactly when block_ctr_q equals zero.",
+      "cond": "always",
+      "signals": [
+        "block_ctr_expr",
+        "block_ctr_q"
+      ],
+      "refs": [
+        "807"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "block_ctr_set is high if ctrl_we_q is high, or if block_ctr_decr is high and (block_ctr_q==0 or cipher_prng_reseed_i is high).",
+      "cond": "always",
+      "signals": [
+        "block_ctr_set",
+        "ctrl_we_q",
+        "block_ctr_decr",
+        "block_ctr_expr",
+        "cipher_prng_reseed_i"
+      ],
+      "refs": [
+        "808"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "block_ctr_set_val is 0 when prng_reseed_rate_i equals PER_1 or when it matches none of PER_1,PER_64,PER_8K; it is 63 for PER_64 and 8191 for PER_8K, all zero-extended or truncated to BlockCtrWidth.",
+      "cond": "always",
+      "signals": [
+        "block_ctr_set_val",
+        "prng_reseed_rate_i",
+        "BlockCtrWidth",
+        "PER_1",
+        "PER_64",
+        "PER_8K"
+      ],
+      "refs": [
+        "810-812"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "block_ctr_decr_val equals block_ctr_q minus 1 (unsigned subtraction); underflow when block_ctr_q is zero yields all‑ones.",
+      "cond": "always",
+      "signals": [
+        "block_ctr_decr_val",
+        "block_ctr_q",
+        "BlockCtrWidth"
+      ],
+      "refs": [
+        "814"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "block_ctr_d selects block_ctr_set_val when block_ctr_set is high, else block_ctr_decr_val when block_ctr_decr is high, else holds block_ctr_q; set overrides decrement.",
+      "cond": "always",
+      "signals": [
+        "block_ctr_d",
+        "block_ctr_set",
+        "block_ctr_set_val",
+        "block_ctr_decr",
+        "block_ctr_decr_val",
+        "block_ctr_q"
+      ],
+      "refs": [
+        "816-817"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "Parameter BlockCtrWidth must be at least 13 so that the constant 8191 fits without truncation.",
+      "cond": "when block_ctr_set asserts and prng_reseed_rate_i equals PER_8K",
+      "risk": "Truncation would reduce the reseed interval, causing more frequent PRNG reseeding than intended and potentially weakening post‑reseeding entropy.",
+      "signals": [
+        "BlockCtrWidth",
+        "block_ctr_set_val"
+      ],
+      "refs": [
+        "812"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "External logic must not assert block_ctr_decr when block_ctr_q is zero, unless wrapping to all‑ones is the desired behavior.",
+      "cond": "when block_ctr_set is low and block_ctr_decr is high",
+      "risk": "Counter wrap moves block_ctr_expr far into the future, severely delaying the next reseed window and upsetting the PRNG reseed schedule.",
+      "signals": [
+        "block_ctr_decr",
+        "block_ctr_q"
+      ],
+      "refs": [
+        "808",
+        "814"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If BlockCtrWidth is less than 13, the cast of 8191 to BlockCtrWidth may truncate the value, silently changing the effective reseed interval.",
+      "cond": "when BlockCtrWidth < 13",
+      "risk": "PRNG may reseed at wrong epoch boundaries, potentially compromising cryptographic unpredictability.",
+      "signals": [
+        "BlockCtrWidth",
+        "block_ctr_set_val"
+      ],
+      "refs": [
+        "812"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "prng_reseed_rate_i may have legal encodings beyond PER_1, PER_64, PER_8K; the unconditional fallback to 0 could represent a missing mapping or undesired rapid reseed.",
+      "cond": "when prng_reseed_rate_i takes any other valid value",
+      "risk": "Reseed every block (set_val=0) would burn PRNG state too fast and may violate the assumed security strength.",
+      "signals": [
+        "prng_reseed_rate_i",
+        "block_ctr_set_val"
+      ],
+      "refs": [
+        "810-812"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "block_ctr_set and block_ctr_decr can be asserted simultaneously; the current priority (set wins) might hide a control conflict that should not occur in normal operation.",
+      "cond": "when both block_ctr_set and block_ctr_decr are high",
+      "risk": "A state machine flaw could toggle both, leading to unexpected counter loading instead of decrement, breaking the block counting protocol.",
+      "signals": [
+        "block_ctr_set",
+        "block_ctr_decr",
+        "block_ctr_d"
+      ],
+      "refs": [
+        "808",
+        "816"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "807-817"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv",
+  "line_start": 807,
+  "line_end": 817,
+  "security_implications": ""
+}

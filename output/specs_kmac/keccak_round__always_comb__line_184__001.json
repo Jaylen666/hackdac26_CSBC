@@ -1,99 +1,437 @@
 {
   "chunk_id": "keccak_round__always_comb__line_184__001",
-  "summary": "该组合状态机根据当前 Keccak 轮处理状态，在空闲、非掩码轮执行、DOM 掩码多周期执行及错误状态之间切换，并协调状态存储更新、轮计数、DOM 输入选择以及随机数握手。",
-  "behavior": "该块先为下一状态和所有控制信号给出保守默认值：状态默认保持，消息异或、状态更新/清零、轮计数增/清零、随机数更新/消耗、DOM 更新、完成指示和错误输出默认关闭；`phase_sel` 默认 `MuBi4False`，DOM 相关保持前值（行 185-206）。在 `KeccakStIdle` 中，若 `valid_i` 为真，则执行 sponge absorbing：保持在 Idle，同时拉高 `xor_message` 与 `update_storage` 以将输入消息异或进状态并写回（行 209-215）。否则若 `clear_i` 被严格判真，则仍停留 Idle 并拉高 `rst_storage` 清空存储（行 216-223）；注释说明设计意图上清零也许只允许在 Idle，或未来改为任意状态都可清零，但当前实现仅在 Idle 分支处理（行 217-220）。若使能掩码且 `run_i` 为真，则进入 `KeccakStPhase1`，并为 DOM 多周期路径预置输入选择：`dom_in_low_d` 取当前 `low_then_high_q`，`dom_in_rand_ext_d` 置 0（行 224-230）。若未使能掩码且 `run_i` 为真，则进入单周期轮处理状态 `KeccakStActive`（行 231-233）；否则保持 Idle（行 234-236）。\n\n在未掩码的 `KeccakStActive` 中，每个周期都更新状态存储（行 239-242）。若 `rnd_eq_end` 为真，说明到达最后一轮：转回 Idle、清零轮计数并置 `complete_d`（行 243-247）；否则保持 Active 并递增轮计数继续下一轮（行 248-252）。\n\n在掩码路径中，`KeccakStPhase1` 进行 Theta/Rho/Pi，DOM 乘法器寄存级不更新，`phase_sel=MuBi4False` 且 `dom_update=0`（行 255-261）。只有在 `rand_early_i` 或 `rand_valid_i` 表示下一周期所需辅助随机数可用时，才会同时推进到 `KeccakStPhase2Cycle1`、更新状态存储并拉高 `keccak_rand_update`，以保证“新状态”和“新随机数”同步送入 DOM 逻辑；同时用 `rand_aux_i` 更新本轮 lane half 处理顺序 `low_then_high_d`，并将该选择及外部随机数使能配置给下一相位的 DOM 输入（行 263-283）。若随机数尚未就绪，则停留在 Phase1 等待（行 283-285）。\n\n`KeccakStPhase2Cycle1` 执行第一批 lane half 的 Chi 第一阶段，`phase_sel=MuBi4True`、`dom_update=1`，并再次请求下个周期的随机数更新 `keccak_rand_update=1`；状态无条件推进到 `KeccakStPhase2Cycle2`，同时将 DOM 输入切换到另一半 lane（`dom_in_low_d=~low_then_high_q`）并继续选择外部随机数（行 288-309）。`KeccakStPhase2Cycle2` 同时完成第一批 lane half 的 Chi 第二阶段/Iota，以及第二批 lane half 的 Chi 第一阶段，继续保持 `phase_sel=MuBi4True` 和 `dom_update=1`（行 311-318）。该周期还会再次请求下一周期随机数更新、拉高 `keccak_rand_consumed` 触发为“下一轮辅助随机选择位”准备新的随机源，并更新状态存储以写回第一批 lane half 的结果（行 320-337）。之后无条件进入 `KeccakStPhase2Cycle3`，并把 DOM 输入重新切回当前 `low_then_high_q` 对应的一半，且关闭外部随机数扩展选择（行 338-343）。注释明确 `keccak_rand_consumed` 对应的辅助随机 `rand_aux_i` 实际会在 2 个周期后（到下一轮的 Phase1）体现，因此这里存在显式的两拍前瞻消耗语义（行 329-333）。\n\n`KeccakStPhase2Cycle3` 完成第二批 lane half 的 Chi 第二阶段和 Iota，保持 `phase_sel=MuBi4True` 但 `dom_update=0`，即不再更新 DOM 内部流水级（行 346-353）。该周期更新状态存储以写回第二批 lane half；注释说明此时刻意不再触发新的随机数更新，以避免旧数据与新随机数组合造成侧信道泄漏（行 355-361）。若 `rnd_eq_end` 为真，则本轮结束后回到 Idle，清零轮计数并置 `complete_d`（行 363-368）；否则转回 `KeccakStPhase1` 开始下一轮、递增轮计数，并为下一轮预置 DOM 输入选择（行 369-377）。\n\n在错误处理上，`KeccakStError` 只是自保持（行 381-383）；`KeccakStTerminalError` 也是终止自保持，并拉高 `sparse_fsm_error_o`（行 385-389）。对任何未列举状态，默认跳转到 `KeccakStTerminalError` 且报告 `sparse_fsm_error_o`（行 391-394）。此外，无论当前状态如何，只要 `lc_escalate_en_i` 被生命周期控制器宽松判真，就会无条件覆盖下一状态为 `KeccakStTerminalError`（行 397-402）；该覆盖不在本块中同时强制拉高 `sparse_fsm_error_o`，因此错误输出是否同周期可见取决于后续进入终止错误态后的状态译码。",
+  "header": {
+    "module": "keccak_round",
+    "block_kind": "always_comb",
+    "driven": [
+      "keccak_st_d",
+      "xor_message",
+      "update_storage",
+      "rst_storage",
+      "inc_rnd_num",
+      "rst_rnd_num",
+      "keccak_rand_update",
+      "keccak_rand_consumed",
+      "phase_sel",
+      "low_then_high_d",
+      "dom_in_low_d",
+      "dom_in_rand_ext_d",
+      "dom_update",
+      "complete_d",
+      "sparse_fsm_error_o"
+    ],
+    "used": [
+      "keccak_st",
+      "valid_i",
+      "clear_i",
+      "EnMasking",
+      "run_i",
+      "rnd_eq_end",
+      "rand_early_i",
+      "rand_valid_i",
+      "rand_aux_i",
+      "low_then_high_q",
+      "dom_in_low_q",
+      "dom_in_rand_ext_q",
+      "lc_escalate_en_i",
+      "prim_mubi_pkg",
+      "mubi4_test_true_strict",
+      "lc_ctrl_pkg",
+      "lc_tx_test_true_loose"
+    ],
+    "modes": [
+      "KeccakStIdle",
+      "KeccakStActive",
+      "KeccakStPhase1",
+      "KeccakStPhase2Cycle1",
+      "KeccakStPhase2Cycle2",
+      "KeccakStPhase2Cycle3",
+      "KeccakStError",
+      "KeccakStTerminalError",
+      "EnMasking"
+    ],
+    "tags": [
+      "masking",
+      "sparse_fsm",
+      "handshake",
+      "counter",
+      "alert",
+      "error",
+      "lifecycle",
+      "sca"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当处于 `KeccakStIdle` 且 `valid_i` 为真时，该块保证发起一次消息吸收写回：`xor_message=1` 且 `update_storage=1`，同时下一状态保持 `KeccakStIdle`。",
-      "output_signals": [
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "All combinational outputs are assigned inactive default values (0 or current state copies) before the case; no implicit latching.",
+      "cond": "always",
+      "signals": [
         "xor_message",
         "update_storage",
-        "keccak_st_d"
+        "rst_storage",
+        "inc_rnd_num",
+        "rst_rnd_num",
+        "keccak_rand_update",
+        "keccak_rand_consumed",
+        "phase_sel",
+        "low_then_high_d",
+        "dom_in_low_d",
+        "dom_in_rand_ext_d",
+        "dom_update",
+        "complete_d",
+        "sparse_fsm_error_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:209-215"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:185-206"
       ]
     },
     {
-      "property": "当处于最后一轮结束点时，状态机会保证返回 Idle 并声明完成：在 `KeccakStActive` 或 `KeccakStPhase2Cycle3` 下若 `rnd_eq_end` 为真，则 `keccak_st_d=KeccakStIdle`、`rst_rnd_num=1`、`complete_d=1`。",
-      "output_signals": [
+      "id": "G2",
+      "type": "state_transition",
+      "claim": "In KeccakStIdle with valid_i asserted, xor_message=1, update_storage=1, keccak_st_d remains Idle.",
+      "cond": "keccak_st == KeccakStIdle && valid_i",
+      "signals": [
         "keccak_st_d",
+        "xor_message",
+        "update_storage"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:209-216"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "In KeccakStIdle with clear_i true (strict multibit), rst_storage=1, keccak_st_d remains Idle.",
+      "cond": "keccak_st == KeccakStIdle && prim_mubi_pkg::mubi4_test_true_strict(clear_i)",
+      "signals": [
+        "keccak_st_d",
+        "rst_storage"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:216-223"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "In KeccakStIdle with EnMasking and run_i, keccak_st_d goes to KeccakStPhase1, dom_in_low_d = low_then_high_q, dom_in_rand_ext_d = 0.",
+      "cond": "keccak_st == KeccakStIdle && EnMasking && run_i",
+      "signals": [
+        "keccak_st_d",
+        "dom_in_low_d",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:224-230"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In KeccakStIdle with !EnMasking and run_i, keccak_st_d goes to KeccakStActive.",
+      "cond": "keccak_st == KeccakStIdle && !EnMasking && run_i",
+      "signals": [
+        "keccak_st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:231-233"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "In KeccakStIdle with no active trigger (else), keccak_st_d remains Idle.",
+      "cond": "keccak_st == KeccakStIdle && !valid_i && !clear_i && !(EnMasking && run_i) && !(!EnMasking && run_i)",
+      "signals": [
+        "keccak_st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:234-236"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "state_transition",
+      "claim": "In KeccakStActive, update_storage=1; if rnd_eq_end then keccak_st_d=Idle, rst_rnd_num=1, complete_d=1; else keccak_st_d=Active, inc_rnd_num=1.",
+      "cond": "keccak_st == KeccakStActive",
+      "signals": [
+        "keccak_st_d",
+        "update_storage",
         "rst_rnd_num",
+        "inc_rnd_num",
         "complete_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:243-247",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:363-368"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:239-252"
       ]
     },
     {
-      "property": "若检测到非法/默认状态，或当前已处于 `KeccakStTerminalError`，该块保证 `sparse_fsm_error_o=1`，并使下一状态保持或进入 `KeccakStTerminalError`。",
-      "output_signals": [
-        "sparse_fsm_error_o",
+      "id": "G8",
+      "type": "state_transition",
+      "claim": "In KeccakStPhase1, if rand_early_i or rand_valid_i, keccak_st_d = KeccakStPhase2Cycle1, update_storage=1, keccak_rand_update=1, low_then_high_d = rand_aux_i, dom_in_low_d = low_then_high_d (newly assigned), dom_in_rand_ext_d=1; otherwise stays Phase1.",
+      "cond": "keccak_st == KeccakStPhase1",
+      "signals": [
+        "keccak_st_d",
+        "update_storage",
+        "keccak_rand_update",
+        "low_then_high_d",
+        "dom_in_low_d",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:255-285"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "state_transition",
+      "claim": "In KeccakStPhase2Cycle1, phase_sel=MuBi4True, dom_update=1, keccak_rand_update=1, unconditionally moves to KeccakStPhase2Cycle2, dom_in_low_d = ~low_then_high_q, dom_in_rand_ext_d = 1.",
+      "cond": "keccak_st == KeccakStPhase2Cycle1",
+      "signals": [
+        "keccak_st_d",
+        "phase_sel",
+        "dom_update",
+        "keccak_rand_update",
+        "dom_in_low_d",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:288-308"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "state_transition",
+      "claim": "In KeccakStPhase2Cycle2, phase_sel=MuBi4True, dom_update=1, keccak_rand_update=1, keccak_rand_consumed=1, update_storage=1, unconditionally moves to KeccakStPhase2Cycle3, dom_in_low_d = low_then_high_q, dom_in_rand_ext_d = 0.",
+      "cond": "keccak_st == KeccakStPhase2Cycle2",
+      "signals": [
+        "keccak_st_d",
+        "phase_sel",
+        "dom_update",
+        "keccak_rand_update",
+        "keccak_rand_consumed",
+        "update_storage",
+        "dom_in_low_d",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:311-343"
+      ]
+    },
+    {
+      "id": "G11",
+      "type": "state_transition",
+      "claim": "In KeccakStPhase2Cycle3, phase_sel=MuBi4True, dom_update=0, update_storage=1; if rnd_eq_end then keccak_st_d=Idle, rst_rnd_num=1, complete_d=1; else keccak_st_d=Phase1, inc_rnd_num=1, dom_in_low_d = low_then_high_q, dom_in_rand_ext_d = 0.",
+      "cond": "keccak_st == KeccakStPhase2Cycle3",
+      "signals": [
+        "keccak_st_d",
+        "phase_sel",
+        "dom_update",
+        "update_storage",
+        "rst_rnd_num",
+        "inc_rnd_num",
+        "complete_d",
+        "dom_in_low_d",
+        "dom_in_rand_ext_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:346-378"
+      ]
+    },
+    {
+      "id": "G12",
+      "type": "state_transition",
+      "claim": "In KeccakStError, keccak_st_d stays KeccakStError, no other outputs set.",
+      "cond": "keccak_st == KeccakStError",
+      "signals": [
         "keccak_st_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:385-394"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:381-383"
+      ]
+    },
+    {
+      "id": "G13",
+      "type": "state_transition",
+      "claim": "In KeccakStTerminalError, keccak_st_d stays TerminalError, sparse_fsm_error_o = 1.",
+      "cond": "keccak_st == KeccakStTerminalError",
+      "signals": [
+        "keccak_st_d",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:385-389"
+      ]
+    },
+    {
+      "id": "G14",
+      "type": "default_fallback",
+      "claim": "If keccak_st is not one of the enumerated states (default), keccak_st_d = KeccakStTerminalError, sparse_fsm_error_o = 1.",
+      "cond": "keccak_st unmatched in unique case",
+      "signals": [
+        "keccak_st_d",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:391-394"
+      ]
+    },
+    {
+      "id": "G15",
+      "type": "state_transition",
+      "claim": "After the case, if lc_escalate_en_i is true (loose multibit test), keccak_st_d forced to KeccakStTerminalError regardless of any prior assignment.",
+      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en_i)",
+      "signals": [
+        "keccak_st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:400-402"
       ]
     }
   ],
-  "security_implications": "该片段直接控制 DOM 掩码 Keccak 的随机数与数据对齐，注释多次强调必须让新状态与新随机数在同一阶段同步送入 DOM 乘法器，并在 `Phase2Cycle3` 避免无谓的随机数更新，以防旧数据/新随机数错配导致侧信道泄漏（/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:263-271,295-300,320-326,355-360）。此外，生命周期升级 `lc_escalate_en_i` 会无条件将状态机打入终止错误态，体现故障/安全升级响应（/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:397-402）。",
   "assumptions": [
     {
-      "constraint": "在掩码执行路径中，`rand_early_i`/`rand_valid_i` 只能在确实保证下一周期可提供与 `keccak_rand_update` 配套的新随机数时拉高；否则 `Phase1` 会在数据状态更新的同时推进到 `Phase2Cycle1`，破坏数据与随机数同步配对。",
-      "bug_relevance": "若违反该行为契约，DOM 逻辑可能把陈旧随机数与新状态，或新随机数与旧状态配对，导致功能偏差或侧信道泄漏。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "valid_i is only asserted when external logic provides valid message data for xor_message/update_storage.",
+      "cond": "in KeccakStIdle",
+      "risk": "Random or stale data absorbed into Keccak state, potentially compromising integrity or causing functional failure.",
+      "signals": [
+        "valid_i",
+        "xor_message",
+        "update_storage"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:210-215"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "In Phase1, rand_early_i or rand_valid_i eventually assert to allow transition to Phase2Cycle1.",
+      "cond": "keccak_st == KeccakStPhase1",
+      "risk": "FSM deadlocks in Phase1, stalling Keccak round processing; system hangs.",
+      "signals": [
         "rand_early_i",
-        "rand_valid_i",
+        "rand_valid_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:272"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "EnMasking is static during operation; switching between masked/unmasked paths while active may cause state inconsistency.",
+      "cond": "after leaving Idle",
+      "risk": "Incorrect state transitions (e.g., entering masked path with unmasked-data setup) could compromise SCA countermeasure or produce wrong results.",
+      "signals": [
+        "EnMasking"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:224-233"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "lifecycle",
+      "claim": "lc_escalate_en_i is a stable, glitch-free indication of a fatal lifecycle error.",
+      "cond": "always",
+      "risk": "A spurious escalation forces the FSM into KeccakStTerminalError, causing denial of service; if the escalation is ignored or missed, security-critical condition may go unhandled.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:400"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "security_precondition",
+      "claim": "The PRNG and DOM multiplier instances deliver fresh randomness synchronously with keccak_rand_update so that data and entropy updates coincide, preventing SCA leakage.",
+      "cond": "during Phase1/Phase2Cycle1/Phase2Cycle2 transitions",
+      "risk": "Stale entropy paired with fresh data or vice versa may lead to exploitable power side-channel leakage.",
+      "signals": [
         "keccak_rand_update",
-        "update_storage",
+        "update_storage"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:266-271,296-300,321-326"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The clear_i handling is implemented only in Idle state, but the comment mentions two options (reset only in Idle vs reset regardless of state). It is unclear which option is intended, leaving potential for incomplete storage clearing if clear_i is asserted in non-Idle states.",
+      "cond": "clear_i asserted while not in KeccakStIdle",
+      "risk": "Sensitive state may not be cleared, violating zeroization or security wipe requirements.",
+      "signals": [
+        "clear_i",
+        "rst_storage"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:216-223"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "When lc_escalate_en_i forces keccak_st_d to KeccakStTerminalError, sparse_fsm_error_o is not asserted in the same cycle; it only becomes 1 when the next state is TerminalError. This delays error signaling by one clock cycle.",
+      "cond": "lc_escalate_en_i asserted",
+      "risk": "Downstream error handlers may miss the immediate fault indication, potentially allowing an operation to proceed with corrupted state.",
+      "signals": [
+        "lc_escalate_en_i",
+        "sparse_fsm_error_o",
         "keccak_st_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:263-275"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:385-389,400-402"
       ]
     },
     {
-      "constraint": "`rand_aux_i` 需要在 `KeccakStPhase1` 接受时稳定且对应本轮要使用的 lane-half 顺序，因为该值会被锁存到 `low_then_high_d` 并驱动后续 Phase2 的 DOM 输入复用。",
-      "bug_relevance": "若违反该行为契约，掩码路径可能按错误的高/低半 lane 顺序处理或切换 DOM 输入，造成计算结果错误；若与随机数时序错配，还可能削弱掩码防护。",
-      "related_signals": [
-        "rand_aux_i",
-        "low_then_high_d",
-        "dom_in_low_d"
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "KeccakStError state exists in the FSM but within this block it is never entered (no transition to it); its behavior is to stay in the same state without asserting sparse_fsm_error_o. It may be dead code or unreachable.",
+      "cond": "always",
+      "risk": "If the state is unintentionally reached via external corruption, the block would silently stay in Error without signaling, violating the error reporting contract. The missing transition might also indicate an incomplete error handling design.",
+      "signals": [
+        "keccak_st",
+        "KeccakStError",
+        "sparse_fsm_error_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:277-282"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:381-383"
       ]
     },
     {
-      "constraint": "`clear_i` 在设计意图上似乎是不应在非 Idle 状态使用的控制；当前实现即使外界在非 Idle 拉高它也只会被忽略而非全局清零。",
-      "bug_relevance": "若不满足则该场景设计上不应发生；硬件回退行为是除 Idle 外不执行 `rst_storage`，因此上层若错误地期望运行中清零，会观察到状态未被清除。",
-      "related_signals": [
-        "clear_i",
-        "rst_storage",
-        "keccak_st"
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The SCA leakage prevention depends on simultaneous application of storage and randomness updates inside keccak_2share. The block asserts keccak_rand_update and update_storage concurrently, but if the target module lags one of them, the pairing may break.",
+      "cond": "during Phase1/Phase2 transitions",
+      "risk": "Mismatched data/entropy leads to exploitable side-channel leakage, undermining the masking countermeasure.",
+      "signals": [
+        "update_storage",
+        "keccak_rand_update"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:216-223"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:266-271,296-300,321-326"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:185-206",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:208-236",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:239-252",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:255-285",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:288-309",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:311-344",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:346-394",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:397-402"
-  ],
-  "uncertain_points": [
-    "`KeccakStError` 与 `KeccakStTerminalError` 的功能分工在该片段内不完全清楚：前者只是自保持且不报错，后者才拉高 `sparse_fsm_error_o`；需要结合其他代码确认 `KeccakStError` 是否为可恢复/暂态错误。",
-    "`clear_i` 的真实设计意图不明确。注释提出“只允许 Idle 清零”与“任意状态都可清零”两种方案，但当前 RTL 仅在 Idle 处理，因此注释与未来方向存在不确定性（/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:217-220）。",
-    "当 `lc_escalate_en_i` 触发时，本块只覆盖 `keccak_st_d` 为 `KeccakStTerminalError`，没有在同一分支显式拉高 `sparse_fsm_error_o`；该升级触发当周期是否要求错误输出立即可见，需要结合状态寄存器与下游错误处理逻辑确认。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:184-403"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
   "line_start": 184,
-  "line_end": 403
+  "line_end": 403,
+  "security_implications": ""
 }

@@ -1,0 +1,229 @@
+{
+  "chunk_id": "hmac_core_continuous_region_hmac_core_001__behavior__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "declaration",
+    "driven": [
+      "hash_done_o",
+      "sha_hash_start_o",
+      "sha_hash_continue_o",
+      "sha_hash_process_o",
+      "sha_rvalid_o",
+      "sha_rdata_o",
+      "fifo_rready_o",
+      "fifo_wsel_o",
+      "fifo_wvalid_o",
+      "fifo_wdata_sel_o",
+      "sha_message_length_o",
+      "idle_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "secret_key_i",
+      "hmac_en_i",
+      "digest_size_i",
+      "key_length_i",
+      "reg_hash_start_i",
+      "reg_hash_stop_i",
+      "reg_hash_continue_i",
+      "reg_hash_process_i",
+      "sha_hash_done_i",
+      "sha_rready_i",
+      "fifo_rvalid_i",
+      "fifo_rdata_i",
+      "fifo_wready_i",
+      "message_length_i"
+    ],
+    "modes": [
+      "digest_mode_e",
+      "key_length_e"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "digest",
+      "fifo",
+      "handshake",
+      "hash",
+      "hmac",
+      "csr",
+      "reset"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "secret_key_i must be held constant throughout an HMAC operation",
+      "cond": "during active HMAC processing",
+      "risk": "key bits changing mid-computation would produce a keyed hash inconsistent with the intended key, breaking authentication",
+      "signals": [
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:11"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "key_length_i must match the effective key length; secret_key_i bits beyond the indicated length must be zero or the core must ignore them",
+      "cond": "when key_length_i < 1024",
+      "risk": "uninitialized or stale high-order bits could be used as key material, leading to an incorrect or weak HMAC",
+      "signals": [
+        "secret_key_i",
+        "key_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:11",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:14"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "when fifo_rvalid_i is asserted, fifo_rdata_i is valid and the producer must not change it until fifo_rready_o is asserted",
+      "cond": "fifo_rvalid_i == 1'b1",
+      "risk": "data corruption or loss if the producer changes data while the core is reading",
+      "signals": [
+        "fifo_rvalid_i",
+        "fifo_rdata_i",
+        "fifo_rready_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:31-33"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "sha_rready_i must be asserted only when the downstream can accept data; sha_rvalid_o will be driven high only when valid data is present",
+      "cond": "sha_rvalid_o == 1'b1",
+      "risk": "if the consumer samples sha_rdata_o when sha_rvalid_o is low, invalid data will be consumed",
+      "signals": [
+        "sha_rvalid_o",
+        "sha_rdata_o",
+        "sha_rready_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:27-29"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "value_domain",
+      "claim": "message_length_i must reflect the true message length for the HMAC operation",
+      "cond": "when preparing the final HMAC block",
+      "risk": "an incorrect length will cause wrong padding and an invalid HMAC result",
+      "signals": [
+        "message_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:42"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The comment on secret_key_i indicates a word ordering {word0,...,word7}, but the bit/byte order within each word and overall endianness are not specified; if misinterpreted, the HMAC key could be applied byte-swapped, breaking interoperability and security.",
+      "cond": "when loading secret_key_i into internal key registers",
+      "risk": "key material is effectively mangled, yielding a valid but different HMAC, which is a covert integrity failure",
+      "signals": [
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:11"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "secret_key_i is 1024 bits wide, but key_length_i selects only a subset; if the internal logic does not mask unused bits, unknown state from those bits could be used as part of the key.",
+      "cond": "when key_length_i is less than 1024 and the core reads secret_key_i directly",
+      "risk": "secret key leakage or use of unpredictable key material that weakens the HMAC",
+      "signals": [
+        "secret_key_i",
+        "key_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:11",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:14"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "fifo_wdata_sel_o output encoding directly exposes digest parts (digest[0][upper] .. digest[7][lower]) to the FIFO writer; if the selection is not properly constrained, it could leak intermediate digest state or even key material through the FIFO output path.",
+      "cond": "when the core writes digest data to the FIFO",
+      "risk": "confidential intermediate hash state or secret key data could be observable outside the core",
+      "signals": [
+        "fifo_wdata_sel_o",
+        "fifo_wsel_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:38-39",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:36"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The behavior of internal state (key, digest) when hmac_en_i is deasserted is not visible in this interface; it is unclear if the core clears secrets when disabled.",
+      "cond": "falling edge of hmac_en_i or at startup with hmac_en_i=0",
+      "risk": "secret key or intermediate hash values may remain in storage and be accessible via other paths",
+      "signals": [
+        "hmac_en_i",
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:12"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The reg_hash_start_i / reg_hash_stop_i / reg_hash_continue_i control signals interact with the SHA engine handshake (sha_hash_start_o etc.); without seeing the internal state machine, there is a risk of command glitches or race conditions.",
+      "cond": "when toggling reg_hash_start_i and sha_hash_done_i concurrently",
+      "risk": "the SHA engine may miss a start command or receive overlapping commands, leading to hung or incorrect hashing",
+      "signals": [
+        "reg_hash_start_i",
+        "sha_hash_start_o",
+        "sha_hash_done_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:16-24"
+      ]
+    },
+    {
+      "id": "U6",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The derived sha_message_length_o output is likely a copy or transformation of message_length_i, but the mapping is unknown; a wrong derivation would break the SHA padding.",
+      "cond": "during HMAC processing",
+      "risk": "incorrect SHA message length leads to hash mismatch",
+      "signals": [
+        "message_length_i",
+        "sha_message_length_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:42-43"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:7-46"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 7,
+  "line_end": 47,
+  "security_implications": ""
+}

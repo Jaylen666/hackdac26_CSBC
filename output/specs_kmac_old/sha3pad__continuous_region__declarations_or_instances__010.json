@@ -1,0 +1,96 @@
+{
+  "chunk_id": "sha3pad__continuous_region__declarations_or_instances__010",
+  "summary": "这段主要是形式验证约束、断言和覆盖点：限定 sha3pad 事务握手与模式配置的合法输入，断言补齐/送往 Keccak 的关键状态与地址范围性质，并覆盖若干填充状态到达场景。",
+  "behavior": "该片段本身不驱动新的 RTL 数据通路，而是通过 assume/assert/covers 描述并约束设计行为。输入侧约束要求：当消息握手发生时，必须处于可处理阶段且尚未收到 process_i；msg_ready_o 也只允许在这种“可处理且未 process”窗口内为真；process_i 只能在 process_valid 时出现，start_i 只能在 start_valid 时出现，而 done_i 的严格真值只能在 done_valid 时出现 [808-816]。模式相关约束要求 mode_i 和 strength_i 在一次操作期间保持稳定，只有在 start_valid 时才允许变化；同时在 start_i 时，合法组合仅限于 SHA3 配 L224/L256/L384/L512，或 SHAKE/cSHAKE 配 L128/L256 [818-845]。消息接口约束方面，若当前通过 FIFO 路径向 keccak 发送数据，则 msg_strb_i 必须全 1，不允许 FIFO 半字节/部分写；反之，若事务被写入 msg_buf，则必须来自一个被 msg_valid_i 标记且最高字节选通未置位的部分写 [847-855]。对于部分写结束消息的契约，若一次部分写被接收，则之后 msg_valid_i 必须撤销并保持不再出现，直到后续出现 process_latched，表示该部分写终止当前消息 [857-862]。设计意图上的关键断言包括：当 process_latched 上升，且当前块未满、未发送 blocksize、并且状态不在 StPrefixWait/StMessageWait 时，设计必须在 1 到 5 个周期内拉起 keccak_valid_o，把未满块通过 padding 路径送往 keccak_round [827-832]；进入 StPad01 的第一个时刻不允许已经处于 end_of_block 条件，避免 Pad01 起始与块尾条件重合 [864-867]；每当 keccak_valid_o 为真时，keccak_addr_o 必须小于当前 strength_i 对应的 KeccakRate，保证吸收地址不会越界 [869-872]。最后的 cover 仅表明验证关注 StMessage、StPad01 且 sent_blocksize、StPad01 且 keccak_ack、以及 StPadFlush 等状态可达性 [879-883]。",
+  "guarantees": [
+    {
+      "property": "当 process_latched 上升且当前块未满、未发送 blocksize、且状态不在 StPrefixWait 或 StMessageWait 时，设计必须在 1 到 5 个周期内产生 keccak_valid_o。",
+      "output_signals": [
+        "keccak_valid_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:829-832"
+      ]
+    },
+    {
+      "property": "只要 keccak_valid_o 为真，keccak_addr_o 必须落在当前强度对应的 KeccakRate 范围内。",
+      "output_signals": [
+        "keccak_valid_o",
+        "keccak_addr_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:870-872"
+      ]
+    },
+    {
+      "property": "当 msg_ready_o 为真时，模块保证自己处于 process_valid 且 !process_i 的接收窗口，不会在其他阶段声称可接收消息。",
+      "output_signals": [
+        "msg_ready_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:810-811"
+      ]
+    }
+  ],
+  "security_implications": "该片段与安全性有间接关系：它约束 KMAC/SHA3 填充路径只接受合法的 mode_i/strength_i 组合，并保证送入 Keccak 的地址不会超过当前 rate 范围 [841-845, 870-872]，这有助于避免越界吸收或非法配置导致的错误哈希行为。断言 CompleteBlockWhenProcess_A 还要求在消息块未满但收到处理请求时必须及时触发 padding 发送 [829-832]，否则可能出现消息截断或不完整吸收。需要注意的是，许多条件以 ASSUME 形式出现，主要用于形式验证环境；它们本身不是综合后的硬件防护，真实系统仍需由上层逻辑满足这些契约。",
+  "assumptions": [
+    {
+      "constraint": "一次操作开始时必须提供合法的 mode_i/strength_i 组合：Sha3 仅配 {L224,L256,L384,L512}，Shake/CShake 仅配 {L128,L256}。",
+      "bug_relevance": "若违反该契约，KeccakRate[strength_i] 等后续行为可能不再对应受支持模式，导致地址范围、填充规则或摘要功能失真；这更像合法配置前提，违反通常构成系统集成或配置错误。",
+      "related_signals": [
+        "start_i",
+        "mode_i",
+        "strength_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:841-845"
+      ]
+    },
+    {
+      "constraint": "若 keccak_valid_o 且选择的是 FIFO 路径，则 msg_strb_i 必须全 1；若 en_msgbuf 为真，则输入必须是带 msg_valid_i 的部分写，且最高 strobe 位为 0。",
+      "bug_relevance": "若 FIFO 路径出现部分写，或 msg_buf 路径出现非部分写，模块对消息结束/缓存语义的假设会被破坏，可能导致消息边界识别错误。这属于接口使用契约；违反后功能错误是可能的。",
+      "related_signals": [
+        "keccak_valid_o",
+        "sel_mux",
+        "msg_strb_i",
+        "en_msgbuf",
+        "msg_valid_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:847-855"
+      ]
+    },
+    {
+      "constraint": "当部分写消息被 msg_valid_i && msg_ready_o && msg_partial 接收后，在 process_latched 之前不应再出现新的 msg_valid_i。",
+      "bug_relevance": "这是消息结束语义的关键契约；若违反，设计可能把同一消息的结束部分与后续数据混淆，造成 padding 位置或消息长度解释错误。",
+      "related_signals": [
+        "msg_valid_i",
+        "msg_ready_o",
+        "msg_partial",
+        "process_latched"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:857-862"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:808-816",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:818-823",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:827-832",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:841-845",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:847-855",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:857-862",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:864-872",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:879-883"
+  ],
+  "uncertain_points": [
+    "该片段绝大多数内容是形式验证的 ASSUME/ASSERT/COVER，而非直接综合逻辑；其中 ASSUME 反映的是环境契约或设计意图，不等同于硬件自身会强制检查这些条件 [808-855]。",
+    "注释称“如果 process_i asserted, completion shall be asserted”但对应断言被注释掉了，因此这并不是当前有效性质，无法据此声称模块一定最终完成吸收 [834-835]。",
+    "AlwaysPartialMsgBuf_M 通过检查 msg_strb_i[MsgStrbW-1] == 0 来定义“partial write”，这是否足以完整表示部分写取决于 msg_strb_i 编码约定；仅凭本片段无法确认是否要求‘非全 1’还是特指最高位未置位 [852-855]。",
+    "ModeStableDuringOp_M 和 StrengthStableDuringOp_M 的含义依赖 start_valid 的语义。断言写成“信号变化只能发生在 start_valid 时”，但是否等价于‘整个操作期间保持稳定’需要结合外部状态机定义确认 [818-823]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 808,
+  "line_end": 884
+}

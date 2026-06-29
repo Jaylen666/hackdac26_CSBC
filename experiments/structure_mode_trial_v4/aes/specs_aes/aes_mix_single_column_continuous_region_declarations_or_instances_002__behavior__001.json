@@ -1,0 +1,210 @@
+{
+  "chunk_id": "aes_mix_single_column_continuous_region_declarations_or_instances_002__behavior__001",
+  "header": {
+    "module": "aes_mix_single_column",
+    "block_kind": "assign",
+    "driven": [
+      "y2_pre_mul2",
+      "y2",
+      "z[0]",
+      "z[1]",
+      "z_muxed[0]",
+      "z_muxed[1]",
+      "data_o[0]",
+      "data_o[1]",
+      "data_o[2]",
+      "data_o[3]"
+    ],
+    "used": [
+      "y[0]",
+      "y[1]",
+      "op_i",
+      "data_i[0]",
+      "data_i[1]",
+      "data_i[2]",
+      "data_i[3]",
+      "x_mul2[0]",
+      "x_mul2[1]",
+      "x_mul2[2]",
+      "x_mul2[3]",
+      "x[1]",
+      "x[3]"
+    ],
+    "modes": [
+      "CIPH_FWD",
+      "CIPH_INV"
+    ],
+    "tags": []
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "y2_pre_mul2 is always the bitwise XOR of y[0] and y[1].",
+      "cond": "always",
+      "signals": [
+        "y2_pre_mul2",
+        "y[0]",
+        "y[1]"
+      ],
+      "refs": [
+        "49"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "y2 always equals the output of aes_mul2 applied to y2_pre_mul2.",
+      "cond": "always",
+      "signals": [
+        "y2",
+        "y2_pre_mul2"
+      ],
+      "refs": [
+        "52"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "z[0] always equals y2 XOR y[0]; z[1] always equals y2 XOR y[1].",
+      "cond": "always",
+      "signals": [
+        "z[0]",
+        "z[1]",
+        "y2",
+        "y[0]",
+        "y[1]"
+      ],
+      "refs": [
+        "55-56"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "z_muxed[0] is driven to z[0] when op_i is CIPH_INV; otherwise driven to 8'b0. z_muxed[1] is driven to z[1] when op_i is CIPH_INV; otherwise driven to 8'b0.",
+      "cond": "op_i value",
+      "signals": [
+        "z_muxed[0]",
+        "z_muxed[1]",
+        "op_i",
+        "z[0]",
+        "z[1]"
+      ],
+      "refs": [
+        "59-62"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "data_o[0] is always data_i[1] XOR x_mul2[3] XOR x[1] XOR z_muxed[1]; data_o[1] is always data_i[0] XOR x_mul2[2] XOR x[1] XOR z_muxed[0]; data_o[2] is always data_i[3] XOR x_mul2[1] XOR x[3] XOR z_muxed[1]; data_o[3] is always data_i[2] XOR x_mul2[0] XOR x[3] XOR z_muxed[0].",
+      "cond": "always",
+      "signals": [
+        "data_o[0]",
+        "data_o[1]",
+        "data_o[2]",
+        "data_o[3]",
+        "data_i[0]",
+        "data_i[1]",
+        "data_i[2]",
+        "data_i[3]",
+        "x_mul2[0]",
+        "x_mul2[1]",
+        "x_mul2[2]",
+        "x_mul2[3]",
+        "x[1]",
+        "x[3]",
+        "z_muxed[0]",
+        "z_muxed[1]"
+      ],
+      "refs": [
+        "65-68"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "op_i is a stable valid cipher mode (CIPH_FWD or CIPH_INV) during data mixing.",
+      "cond": "when output data is processed",
+      "risk": "If op_i takes an undefined value, z_muxed defaults to 0, potentially causing silent incorrect mixing output, especially for decryption.",
+      "signals": [
+        "op_i"
+      ],
+      "refs": [
+        "59-62"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The aes_mul2 instance correctly performs GF(2^8) multiplication by 2 and its output is available.",
+      "cond": "always",
+      "risk": "Incorrect y2 leads to wrong z and ultimately wrong data_o, breaking AES mixing integrity.",
+      "signals": [
+        "y2",
+        "y2_pre_mul2"
+      ],
+      "refs": [
+        "52"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When op_i is neither CIPH_FWD nor CIPH_INV, z_muxed defaults to 0 with no error detection, potentially propagating silent data corruption to data_o.",
+      "cond": "op_i takes an illegal value",
+      "risk": "Secret data path may output corrupted state without alert, violating integrity assumptions.",
+      "signals": [
+        "op_i",
+        "z_muxed[0]",
+        "z_muxed[1]"
+      ],
+      "refs": [
+        "59-62"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The mapping of data_i, x_mul2, x, and z_muxed to data_o indices may not correspond to the standard AES MixColumns matrix; verification with the full column mixing logic is needed.",
+      "cond": "when used in AES",
+      "risk": "Incorrect mixing matrix mapping leads to functional failure of encryption/decryption.",
+      "signals": [
+        "data_o[0]",
+        "data_o[1]",
+        "data_o[2]",
+        "data_o[3]",
+        "data_i[0]",
+        "data_i[1]",
+        "data_i[2]",
+        "data_i[3]",
+        "x_mul2[0]",
+        "x_mul2[1]",
+        "x_mul2[2]",
+        "x_mul2[3]",
+        "x[1]",
+        "x[3]",
+        "z_muxed[0]",
+        "z_muxed[1]"
+      ],
+      "refs": [
+        "65-68"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_mix_single_column.sv:49-70"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_mix_single_column.sv",
+  "line_start": 49,
+  "line_end": 70,
+  "security_implications": ""
+}

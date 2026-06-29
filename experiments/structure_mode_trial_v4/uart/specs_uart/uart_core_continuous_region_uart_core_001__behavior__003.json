@@ -1,0 +1,178 @@
+{
+  "chunk_id": "uart_core_continuous_region_uart_core_001__behavior__003",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "mixed",
+    "driven": [
+      "not_allzero_char",
+      "allzero_err",
+      "allzero_cnt_d"
+    ],
+    "used": [
+      "rx_valid",
+      "event_rx_frame_err",
+      "rx_fifo_data",
+      "break_st_q",
+      "allzero_cnt_q",
+      "BRK_WAIT"
+    ],
+    "modes": [
+      "break_st_e",
+      "BRK_WAIT"
+    ],
+    "tags": [
+      "break_detection",
+      "error",
+      "sparse_fsm",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "not_allzero_char is 1 only when rx_valid is high and either event_rx_frame_err is low or rx_fifo_data is non-zero; otherwise it is 0.",
+      "cond": "always",
+      "signals": [
+        "not_allzero_char",
+        "rx_valid",
+        "event_rx_frame_err",
+        "rx_fifo_data"
+      ],
+      "refs": [
+        "file:96"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "allzero_err is 1 when event_rx_frame_err is high and rx_fifo_data equals zero; otherwise it is 0.",
+      "cond": "always",
+      "signals": [
+        "allzero_err",
+        "event_rx_frame_err",
+        "rx_fifo_data"
+      ],
+      "refs": [
+        "file:97"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "allzero_cnt_d is set to 0 when break_st_q equals BRK_WAIT or not_allzero_char is high; otherwise, if allzero_err is high, it increments by 1 over allzero_cnt_q; otherwise it holds allzero_cnt_q.",
+      "cond": "always",
+      "signals": [
+        "allzero_cnt_d",
+        "break_st_q",
+        "BRK_WAIT",
+        "not_allzero_char",
+        "allzero_err",
+        "allzero_cnt_q"
+      ],
+      "refs": [
+        "file:100-104"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "event_rx_frame_err is asserted only when rx_valid is high and correctly indicates a framing error for the current rx_fifo_data.",
+      "cond": "when evaluating allzero_err to avoid false increments.",
+      "risk": "If event_rx_frame_err asserts without rx_valid, allzero_err may be spuriously asserted, causing an erroneous increment of allzero_cnt_d and potentially incorrect break detection or timing.",
+      "signals": [
+        "event_rx_frame_err",
+        "rx_valid"
+      ],
+      "refs": [
+        "file:96-97"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "rx_fifo_data is valid when rx_valid is high.",
+      "cond": "always",
+      "risk": "If rx_fifo_data is invalid while rx_valid is high, not_allzero_char and allzero_err may produce incorrect outputs, leading to break detection logic errors.",
+      "signals": [
+        "rx_fifo_data",
+        "rx_valid"
+      ],
+      "refs": [
+        "file:96-97"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "break_st_q correctly reflects the break state machine state and transitions to BRK_WAIT when a break condition is detected.",
+      "cond": "to ensure proper reset of allzero_cnt_d.",
+      "risk": "If break_st_q is not updated to BRK_WAIT when needed, the counter may not reset, causing break length measurement errors.",
+      "signals": [
+        "break_st_q",
+        "BRK_WAIT"
+      ],
+      "refs": [
+        "file:100"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "event_rx_frame_err is not gated by rx_valid in this chunk; verification must confirm that event_rx_frame_err is only high when rx_valid is high and aligned with rx_fifo_data.",
+      "cond": "when event_rx_frame_err is high",
+      "risk": "Spurious allzero_err could force an allzero_cnt_d increment, skewing break detection length.",
+      "signals": [
+        "event_rx_frame_err",
+        "rx_valid",
+        "allzero_err"
+      ],
+      "refs": [
+        "file:96-97"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "A comment asserts that allzero_cnt_q[4] is never set without break_st_q == BRK_WAIT, but no formal assertion or RTL check exists for this invariant.",
+      "cond": "always",
+      "risk": "If the invariant is violated, the counter could reach unexpected high values without entering BRK_WAIT, possibly leading to overflow or state mismatch.",
+      "signals": [
+        "allzero_cnt_q",
+        "break_st_q",
+        "BRK_WAIT"
+      ],
+      "refs": [
+        "file:101-102"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "allzero_cnt_d is a 5‑bit counter that increments without saturation; an overflow from 31 back to 0 could reset the break length count prematurely if the break FSM does not enter BRK_WAIT in time.",
+      "cond": "when allzero_err causes repeated increments while break_st_q is not BRK_WAIT",
+      "risk": "The break detection length measurement may be lost, possibly failing to recognize a valid break condition.",
+      "signals": [
+        "allzero_cnt_d",
+        "allzero_cnt_q"
+      ],
+      "refs": [
+        "file:100-104"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:94-104"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 94,
+  "line_end": 104,
+  "security_implications": ""
+}

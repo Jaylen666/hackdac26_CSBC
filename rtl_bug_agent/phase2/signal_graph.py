@@ -45,6 +45,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from rtl_bug_agent.phase2.structural_facts import (
+    compact_structural_fact,
+    index_structural_facts,
+    load_structural_facts,
+    normalize_structural_signal,
+)
+
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -73,6 +80,9 @@ class SignalGraph:
     spec_meta: dict[str, dict[str, Any]] = field(default_factory=dict)
     # All specs keyed by chunk_id
     specs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Optional non-LLM structural facts keyed by normalized signal roots.
+    structural_facts: list[dict[str, Any]] = field(default_factory=list)
+    structural_facts_by_signal: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Query API
@@ -96,6 +106,42 @@ class SignalGraph:
         return sorted(
             set(info.drivers + info.consumers + info.mentioned_in)
         )
+
+    def attach_structural_facts(self, facts: list[dict[str, Any]]) -> None:
+        self.structural_facts = facts
+        self.structural_facts_by_signal = index_structural_facts(facts)
+
+    def get_structural_facts(
+        self,
+        signals: list[str],
+        *,
+        limit: int = 8,
+        include_suspect: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Return compact structural facts related to *signals*.
+
+        The lookup is deliberately signal-root based and top-k bounded so
+        generated register glue does not flood downstream LLM prompts.
+        """
+        seen: set[str] = set()
+        scored: list[tuple[int, int, dict[str, Any]]] = []
+        roots = {
+            normalize_structural_signal(sig)
+            for sig in signals
+            if normalize_structural_signal(sig)
+        }
+        for root in roots:
+            for fact in self.structural_facts_by_signal.get(root, []):
+                fact_id = str(fact.get("fact_id", ""))
+                if not fact_id or fact_id in seen:
+                    continue
+                seen.add(fact_id)
+                score = int(fact.get("rank_score", 0) or 0)
+                if include_suspect and score == 0:
+                    score += 0
+                scored.append((score, int(fact.get("line_start", 0) or 0), _compact_structural_fact(fact)))
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [fact for _, _, fact in scored[:limit]]
 
     def find_ag_pairs(
         self, filter_mode: str = "all"
@@ -335,7 +381,7 @@ class SignalGraph:
 
                 # Also search uncertain_points and assumption.constraint
                 for up in spec.get("uncertain_points", []):
-                    up_lower = up.lower()
+                    up_lower = _uncertain_point_text(up).lower()
                     for kw in keywords_lower:
                         if kw in up_lower:
                             score += 3  # uncertain_points are high-signal
@@ -429,7 +475,10 @@ class SignalGraph:
 # ---------------------------------------------------------------------------
 
 
-def build_signal_graph(specs_dir: str | Path) -> SignalGraph:
+def build_signal_graph(
+    specs_dir: str | Path,
+    structural_facts_path: str | Path | None = None,
+) -> SignalGraph:
     """Load all spec JSONs from *specs_dir* and construct the graph."""
     spec_dir = Path(specs_dir)
     graph = SignalGraph()
@@ -437,6 +486,10 @@ def build_signal_graph(specs_dir: str | Path) -> SignalGraph:
     # Load all specs
     for json_path in sorted(spec_dir.glob("*.json")):
         spec = json.loads(json_path.read_text(encoding="utf-8"))
+        if json_path.name.startswith("_"):
+            continue  # skip manifest / stats / sidecar metadata
+        if not isinstance(spec, dict):
+            continue  # skip batch lists and other non-spec JSON artifacts
         if "error" in spec:
             continue  # skip failed generations
         chunk_id = spec.get("chunk_id", json_path.stem)
@@ -513,7 +566,30 @@ def build_signal_graph(specs_dir: str | Path) -> SignalGraph:
     # Kind inference
     _infer_signal_kinds(graph)
 
+    if structural_facts_path:
+        graph.attach_structural_facts(load_structural_facts(structural_facts_path))
+
     return graph
+
+
+def _uncertain_point_text(point: Any) -> str:
+    """Normalize uncertain-point values to plain text.
+
+    Older specs store uncertain points as strings; newer structured specs
+    store dicts with claim/cond/risk fields.  This helper keeps graph search
+    and downstream collectors compatible with both.
+    """
+    if isinstance(point, dict):
+        parts = [
+            str(point.get("claim", "")).strip(),
+            str(point.get("cond", "")).strip(),
+            str(point.get("risk", "")).strip(),
+            str(point.get("property", "")).strip(),
+            str(point.get("constraint", "")).strip(),
+            str(point.get("bug_relevance", "")).strip(),
+        ]
+        return " ".join(part for part in parts if part)
+    return str(point).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -592,6 +668,10 @@ def _ensure_signal(graph: SignalGraph, name: str) -> SignalInfo:
     if name not in graph.signals:
         graph.signals[name] = SignalInfo(name=name)
     return graph.signals[name]
+
+
+def _compact_structural_fact(fact: dict[str, Any]) -> dict[str, Any]:
+    return compact_structural_fact(fact)
 
 
 def _normalize_signal(raw: str) -> str:

@@ -1,0 +1,134 @@
+{
+  "chunk_id": "uart_core__always_ff__line_216__001",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "tx_out_q"
+    ],
+    "used": [
+      "ovrd_tx_en",
+      "ovrd_tx_val",
+      "sys_loopback",
+      "tx_out",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "override",
+      "loopback"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is asserted low, tx_out_q is asynchronously forced to 1'b1",
+      "cond": "negedge rst_ni (or active-low reset level)",
+      "signals": [
+        "tx_out_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "uart_core.sv:217-218"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When reset is inactive and ovrd_tx_en is high, tx_out_q takes the value of ovrd_tx_val",
+      "cond": "rst_ni==1, ovrd_tx_en==1",
+      "signals": [
+        "tx_out_q",
+        "ovrd_tx_en",
+        "ovrd_tx_val"
+      ],
+      "refs": [
+        "uart_core.sv:219-220"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When reset is inactive, ovrd_tx_en is low, and sys_loopback is high, tx_out_q is forced to 1'b1 (idle)",
+      "cond": "rst_ni==1, ovrd_tx_en==0, sys_loopback==1",
+      "signals": [
+        "tx_out_q",
+        "sys_loopback"
+      ],
+      "refs": [
+        "uart_core.sv:221-222"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "Otherwise (no reset, no override, no loopback), tx_out_q follows the value of tx_out",
+      "cond": "rst_ni==1, ovrd_tx_en==0, sys_loopback==0",
+      "signals": [
+        "tx_out_q",
+        "tx_out"
+      ],
+      "refs": [
+        "uart_core.sv:223-224"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "When ovrd_tx_en=0 and sys_loopback=0, the external signal tx_out must be driven with valid UART serial data (idle or bit values) by the transmitter logic",
+      "cond": "rst_ni==1, ovrd_tx_en==0, sys_loopback==0",
+      "risk": "If tx_out is undriven or illegal during active transmission, corrupted or glitched UART output appears on tx_out_q",
+      "signals": [
+        "tx_out"
+      ],
+      "refs": [
+        "uart_core.sv:223-224"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The ovrd_tx_en signal provides a direct software-controlled path to drive tx_out_q, bypassing the UART transmitter FSM; its security posture (access control, lock, or restriction to debug modes) is unknown in this chunk",
+      "cond": "ovrd_tx_en asserted (external)",
+      "risk": "If ovrd_tx_en is maliciously or erroneously set, the UART output line can be forced to a static value, potentially disrupting communication, injecting faults, or leaking side‑channel state",
+      "signals": [
+        "ovrd_tx_en",
+        "ovrd_tx_val",
+        "tx_out_q"
+      ],
+      "refs": [
+        "uart_core.sv:219-220"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "During loopback mode (sys_loopback==1), the chunk forces tx_out_q to idle (1'b1) instead of connecting the looped-back signal; the rationale (e.g., external pin isolation, glitch prevention) is not documented here",
+      "cond": "sys_loopback==1, ovrd_tx_en==0",
+      "risk": "If the intent is to completely isolate the external pin during loopback test, missing documentation could hide a requirement for additional external pull‑up or may mask a path for unintended output toggling during loopback entry/exit",
+      "signals": [
+        "sys_loopback",
+        "tx_out_q"
+      ],
+      "refs": [
+        "uart_core.sv:221-222"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_core.sv:216-226"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 216,
+  "line_end": 226,
+  "security_implications": ""
+}

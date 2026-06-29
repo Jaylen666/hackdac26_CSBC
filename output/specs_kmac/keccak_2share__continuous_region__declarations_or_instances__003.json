@@ -1,34 +1,145 @@
 {
   "chunk_id": "keccak_2share__continuous_region__declarations_or_instances__003",
-  "summary": "该片段主要对参数合法性做静态检查，并在启用 masking 时对 phase_sel_i 提出一条形式化输入约束：其从假变真后必须至少再保持一拍为真。",
-  "behavior": "片段包含三条初始化期断言，用于限制实现参数组合：Width 的允许取值依赖 EnMasking，未使能 masking 时允许 {25, 50, 100, 200, 400, 800, 1600}，使能 masking 时不允许 25、只允许 {50, 100, 200, 400, 800, 1600}；同时要求派生参数 W 只能取 {1, 2, 4, 8, 16, 32, 64}，L 只能取 0 到 6，且 MaxRound 不得超过 24，以匹配注释所述仅支持 Keccak-f。另有一条注释和形式化 ASSUME 约束说明：在 EnMasking 为真时，如果 phase_sel_i 前一拍为 MuBi4False 且当前拍跳变为 MuBi4True，则下一拍仍必须保持 MuBi4True，即要求其真值脉冲至少持续两个周期；该约束在复位期间或 lc_escalate_en_i 处于 test-true-loose 条件时被禁用。unused_lc_sig 仅用于消费 lc_escalate_en_i，避免未使用信号告警，本身不体现额外功能行为。",
-  "guarantees": [],
-  "security_implications": "该片段与安全相关配置和控制约束有关。首先，masking 模式下禁止 Width=25，体现了共享/掩码实现只支持一组受限参数，避免进入未验证配置。其次，对 phase_sel_i 的两周期保持约束降低了 masking 相关相位选择在边界切换时出现过窄脉冲或不稳定控制的风险；不过这是一条环境假设而非硬件强制机制，实际安全性依赖外部逻辑满足该契约。在 lc_escalate_en_i 测试放宽条件下该约束会被屏蔽，也意味着某些验证假设在升级/测试场景下不成立。",
+  "header": {
+    "module": "keccak_2share",
+    "block_kind": "mixed",
+    "driven": [
+      "unused_lc_sig"
+    ],
+    "used": [
+      "EnMasking",
+      "Width",
+      "W",
+      "L",
+      "MaxRound",
+      "phase_sel_i",
+      "lc_escalate_en_i",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [
+      "EnMasking",
+      "Width",
+      "W",
+      "L",
+      "MaxRound"
+    ],
+    "tags": [
+      "masking",
+      "parameterization",
+      "lifecycle"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "unused_lc_sig is continuously driven by lc_escalate_en_i.",
+      "cond": "always",
+      "signals": [
+        "unused_lc_sig",
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "file:343-344"
+      ]
+    }
+  ],
   "assumptions": [
     {
-      "constraint": "在 EnMasking 为 1 时，若 phase_sel_i 从上一拍的 MuBi4False 跳变为当前拍的 MuBi4True，则下一拍必须仍为 MuBi4True；该约束在复位有效期间或 lc_escalate_en_i 满足 lc_tx_test_true_loose() 时不要求成立。",
-      "bug_relevance": "这是行为契约。若合法运行中不满足该约束，后续依赖 phase_sel_i 稳定持续时间的 masking/相位控制逻辑可能误采样或进入错误处理相位，造成功能错误，潜在影响安全实现假设。",
-      "related_signals": [
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "When EnMasking is 0, Width must be an element of {25, 50, 100, 200, 400, 800, 1600}; when EnMasking is 1, Width must be in {50, 100, 200, 400, 800, 1600}.",
+      "cond": "always (design parameter)",
+      "risk": "Invalid Width selection may cause data path width mismatches or functional failure.",
+      "signals": [
+        "EnMasking",
+        "Width"
+      ],
+      "refs": [
+        "file:336-337"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "W must be an element of {1, 2, 4, 8, 16, 32, 64}.",
+      "cond": "always",
+      "risk": "Invalid W may break internal loop iterations or array indexing.",
+      "signals": [
+        "W"
+      ],
+      "refs": [
+        "file:338"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "L must be an element of {0, 1, 2, 3, 4, 5, 6}.",
+      "cond": "always",
+      "risk": "Invalid L may cause state machine or array overrun.",
+      "signals": [
+        "L"
+      ],
+      "refs": [
+        "file:339"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "MaxRound must be less than or equal to 24.",
+      "cond": "always",
+      "risk": "Keccak‑f round count beyond 24 is undefined and can lead to unintended permutation state.",
+      "signals": [
+        "MaxRound"
+      ],
+      "refs": [
+        "file:340"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "handshake",
+      "claim": "When EnMasking is enabled and phase_sel_i transitions from MuBi4False to MuBi4True, it must remain MuBi4True for at least one subsequent cycle (sequence: $past(phase_sel_i) == MuBi4False && phase_sel_i == MuBi4True |=> phase_sel_i == MuBi4True), unless reset is inactive or lc_escalate_en_i satisfies lc_tx_test_true_loose.",
+      "cond": "EnMasking == 1",
+      "risk": "A short pulse on phase_sel_i may be missed or cause incorrect mask scheduling, compromising the DPA countermeasure.",
+      "signals": [
         "phase_sel_i",
+        "MuBi4False",
+        "MuBi4True",
         "clk_i",
         "rst_ni",
-        "lc_escalate_en_i",
-        "EnMasking"
+        "lc_escalate_en_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:342-349"
+      "refs": [
+        "file:345-349"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "lc_escalate_en_i is only connected to the lint‑dummy signal unused_lc_sig and appears otherwise unused in this region; it may be completely unobserved, suggesting a gap in life‑cycle escalation handling.",
+      "cond": "unknown (module‑wide usage of lc_escalate_en_i not visible in this chunk)",
+      "risk": "Escalation events could be silently ignored, potentially allowing the design to operate in a compromised life‑cycle state.",
+      "signals": [
+        "lc_escalate_en_i",
+        "unused_lc_sig"
+      ],
+      "refs": [
+        "file:343-344"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:336-350"
-  ],
-  "uncertain_points": [
-    "ASSERT_INIT 和 ASSUME 宏的精确定义未在片段中给出；这里按常见 OpenTitan 用法理解为静态/形式化检查，不直接生成功能 RTL。若宏在特定构建配置下会综合或影响仿真，其行为边界需结合宏定义确认。",
-    "phase_sel_i 的具体功能含义未在该片段中出现，只能确认其在 EnMasking 模式下被要求从 false 到 true 后保持至少两拍，无法仅凭本片段确定这样做对数据路径或状态机的具体影响。",
-    "unused_lc_sig 对 lc_escalate_en_i 的赋值看起来仅用于抑制未使用告警；若项目对该赋值有额外 lint/安全语义，需要更多上下文确认。"
+    "file:336-350"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
   "line_start": 336,
-  "line_end": 350
+  "line_end": 350,
+  "security_implications": ""
 }

@@ -1,54 +1,132 @@
 {
   "chunk_id": "kmac_entropy__continuous_region__declarations_or_instances__010",
-  "summary": "该片段把随机数“提前可用”指示直接映射到内部置位条件，并通过请求保持逻辑确保对 EDN 的熵请求在收到应答前不会被撤销，同时对随机数消费时机施加形式约束。",
-  "behavior": "组合上，rand_early_o 直接等于 rand_valid_set，表示“即将/提前可用”的随机数指示由内部的 valid 置位条件直接驱动 [kmac_entropy.sv:447-447]。片段还定义了一个形式假设：Keccak 核心通常不应在 rand_valid_o 未置位时宣告消耗或更新随机数；唯一允许的例外是前一拍刚完成 PRNG reseed，即 $past(seed_done) 为真时，因为 reseed 期间有效标志可能短暂仍保持，核心可能已据此启动处理 [kmac_entropy.sv:449-458]。对 EDN 请求侧，entropy_req_o 不是单纯透传 entropy_req，而是将当前请求与保持寄存器 entropy_req_hold_q 做或运算；同时 entropy_req_hold_d 在“已有保持”或“当前有请求”时置位，并在 entropy_ack_i 到来时清零 [kmac_entropy.sv:460-466]。因此，一旦发出过请求，在收到 ack 前即使原始 entropy_req 因升级或等待超时被撤销，对外的 entropy_req_o 仍会继续保持为 1；若 ack 到来时内部状态已进入错误态，注释表明后续到达的熵会被丢弃，但该丢弃行为本身不在此片段中实现 [kmac_entropy.sv:460-464]。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "mixed",
+    "driven": [
+      "rand_early_o",
+      "entropy_req_o",
+      "entropy_req_hold_d"
+    ],
+    "used": [
+      "rand_valid_set",
+      "entropy_req",
+      "entropy_req_hold_q",
+      "entropy_ack_i",
+      "rand_update_i",
+      "rand_consumed_i",
+      "rand_valid_o",
+      "seed_done"
+    ],
+    "modes": [],
+    "tags": [
+      "entropy",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "rand_early_o 始终与 rand_valid_set 相等。",
-      "output_signals": [
-        "rand_early_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "rand_early_o is driven combinatorially to equal rand_valid_set.",
+      "cond": "always",
+      "signals": [
+        "rand_early_o",
+        "rand_valid_set"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:447-447"
+      "refs": [
+        "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:447"
       ]
     },
     {
-      "property": "只要 entropy_req 或 entropy_req_hold_q 任一为 1，entropy_req_o 就为 1；因此已保持的请求在收到 entropy_ack_i 前不会从输出侧撤销。",
-      "output_signals": [
-        "entropy_req_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "entropy_req_o is asserted whenever entropy_req is asserted or the held request entropy_req_hold_q is asserted.",
+      "cond": "always",
+      "signals": [
+        "entropy_req_o",
+        "entropy_req",
+        "entropy_req_hold_q"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:465-466"
+      "refs": [
+        "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:465"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "entropy_req_hold_d is set high when (entropy_req_hold_q or entropy_req) is asserted and entropy_ack_i is low; it is cleared low when entropy_ack_i is high.",
+      "cond": "always combinational",
+      "signals": [
+        "entropy_req_hold_d",
+        "entropy_req_hold_q",
+        "entropy_req",
+        "entropy_ack_i"
+      ],
+      "refs": [
+        "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:466"
       ]
     }
   ],
-  "security_implications": "该片段涉及熵请求与随机数消费约束。请求保持逻辑降低了在升级或超时情况下半途撤销 EDN 请求、使外部熵源进入异常握手状态的风险 [kmac_entropy.sv:460-466]。同时，注释承认 reseed 刚完成前后一拍内存在罕见窗口，随机缓冲输出可能同时被用于重掩码和辅助随机数，这被认为“并不理想但可接受”；这属于随机性使用上的安全权衡，应由上层确认其可接受性 [kmac_entropy.sv:449-456]。",
   "assumptions": [
     {
-      "constraint": "Keccak 核心只有在 rand_valid_o 为真时才能断言 rand_update_i 或 rand_consumed_i；唯一允许的例外是前一拍 seed_done 为真。",
-      "bug_relevance": "这是行为契约。若违反且又不满足 reseed 例外，核心可能在随机数无效时消费或更新随机源，导致使用陈旧/未授权的随机数据，破坏功能正确性并可能削弱随机性相关安全属性。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The Keccak core (consumer side) asserts rand_update_i or rand_consumed_i only when rand_valid_o is currently asserted or seed_done was asserted in the previous cycle.",
+      "cond": "always, as verified by the assertion",
+      "risk": "If violated, invalid or stale entropy may be consumed, leading to security-critical randomness corruption or data integrity failure.",
+      "signals": [
         "rand_update_i",
         "rand_consumed_i",
         "rand_valid_o",
         "seed_done"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:457-458"
+      "refs": [
+        "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:457-458"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The assumption allows a rare window where reseeding just finished (seed_done asserted previous cycle) and the Keccak core may consume entropy before rand_valid_o is deasserted, causing the same buffer output to be used for both remasking and auxiliary randomness.",
+      "cond": "rand_update_i or rand_consumed_i asserts while $past(seed_done) is true and rand_valid_o is low",
+      "risk": "The dual use of a single entropy word could weaken the randomness if unintended correlation occurs; the comment acknowledges it is not ideal but acceptable, yet the security margin needs confirmation.",
+      "signals": [
+        "rand_update_i",
+        "rand_consumed_i",
+        "rand_valid_o",
+        "seed_done",
+        "$past"
+      ],
+      "refs": [
+        "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:449-456"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The local hold logic clears entropy_req_hold_d on entropy_ack_i, but the comment indicates that when the FSM is in StRandErr, the incoming entropy data is dropped. The downstream FSM must manage this dropped transfer to avoid entropy starvation.",
+      "cond": "entropy_ack_i asserted while the FSM is in StRandErr (error state)",
+      "risk": "If the FSM does not re-initiate a request or fails to account for the lost entropy word, the module may stall due to missing entropy, leading to a deadlock or hung state.",
+      "signals": [
+        "entropy_req_hold_d",
+        "entropy_ack_i",
+        "entropy_req"
+      ],
+      "refs": [
+        "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:460-466"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_entropy.sv:447-447",
-    "kmac_entropy.sv:449-458",
-    "kmac_entropy.sv:460-466"
-  ],
-  "uncertain_points": [
-    "注释称在进入 StRandErr 后若请求随后被 ack，则传入熵会被丢弃，但该错误态检测和丢弃逻辑不在本片段中，需要结合其他代码确认具体实现 [kmac_entropy.sv:463-464]。",
-    "rand_early_o 命名暗示“提前”语义，但此处仅能确定它等于 rand_valid_set；rand_valid_set 与最终 rand_valid_o 的精确关系需要查看别处定义 [kmac_entropy.sv:447-447]。",
-    "关于 reseed 完成后允许一次无 valid 消费的注释描述的是设计意图；实际被编码为形式 ASSUME 而非硬件逻辑，因此它约束环境/验证模型，而不是电路自身的强制防护 [kmac_entropy.sv:449-458]。"
+    "home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:447-466"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 447,
-  "line_end": 466
+  "line_end": 466,
+  "security_implications": ""
 }

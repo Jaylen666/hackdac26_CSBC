@@ -1,0 +1,170 @@
+{
+  "chunk_id": "kmac_msgfifo_continuous_region_declarations_or_instances_001__structure__001",
+  "header": {
+    "module": "kmac_msgfifo",
+    "block_kind": "instance",
+    "driven": [
+      "fifo_rvalid",
+      "fifo_rdata",
+      "fifo_full_o",
+      "fifo_depth_o",
+      "fifo_err",
+      "fifo_wready"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "clear_i",
+      "fifo_wvalid",
+      "fifo_wdata",
+      "fifo_rready"
+    ],
+    "modes": [
+      "Pass=1",
+      "Depth=MsgDepth",
+      "Secure=EnMasking"
+    ],
+    "tags": [
+      "fifo",
+      "masking",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "The input `clr_i` of the FIFO is driven by the output of `prim_mubi_pkg::mubi4_test_true_strict(clear_i)`, which asserts only when `clear_i` is the strictly‑true mubi4 encoding.",
+      "cond": "always",
+      "signals": [
+        "clear_i",
+        "u_msgfifo.clr_i"
+      ],
+      "refs": [
+        "155"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "The `prim_fifo_sync` instance is configured with `.Pass(1'b1)`, enabling pass-through mode.",
+      "cond": "static compile-time parameter",
+      "signals": [],
+      "refs": [
+        "149"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "generate_param",
+      "claim": "The `Secure` parameter of the FIFO is connected to the module parameter `EnMasking`, enabling or disabling internal data masking.",
+      "cond": "static compile-time parameter",
+      "signals": [],
+      "refs": [
+        "151"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "The FIFO data width is set to `$bits(fifo_t)`, matching the width of the `fifo_t` data type.",
+      "cond": "static compile-time parameter",
+      "signals": [],
+      "refs": [
+        "148"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "`clear_i` must be a valid mubi4 signal and must encode the ‘true’ value using the strict encoding expected by `mubi4_test_true_strict`.",
+      "cond": "whenever the design intends to clear the FIFO",
+      "risk": "If `clear_i` carries an invalid encoding, the FIFO will never assert its internal clear, leaving stale sensitive data and potentially causing a functional deadlock.",
+      "signals": [
+        "clear_i"
+      ],
+      "refs": [
+        "155"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The compile-time parameter `EnMasking` must be set to 1 when the design requires on-chip data masking for security.",
+      "cond": "when the KMAC datapath must protect secret key material",
+      "risk": "If `EnMasking` is erroneously set to 0, the FIFO will store unmasked plaintext, potentially violating side-channel or information leakage requirements.",
+      "signals": [],
+      "refs": [
+        "151"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "The external logic must obey standard FIFO handshake: `fifo_wdata` is stable and valid when `fifo_wvalid` is high, and `fifo_rready` is only asserted when data is expected.",
+      "cond": "during normal operation",
+      "risk": "Violation could cause data corruption, spurious writes or reads, and FIFO overflow/underflow errors.",
+      "signals": [
+        "fifo_wvalid",
+        "fifo_wdata",
+        "fifo_rready"
+      ],
+      "refs": [
+        "157-162"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The `Pass` parameter is set to 1, likely enabling a combinational read path that exposes `wdata` on `rdata` when the FIFO is empty; the exact behavior must be verified against the `prim_fifo_sync` specification.",
+      "cond": "whenever the FIFO is not empty or when `Pass` bypasses registers",
+      "risk": "If pass-through mode creates a direct combinational path, secret data written on `wdata_i` could appear on `rdata_o` without a register, exposing it via glitches or enabling faster probing.",
+      "signals": [
+        "fifo_wdata",
+        "fifo_rdata"
+      ],
+      "refs": [
+        "149"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "An invalid mubi4 encoding on `clear_i` silently returns false from `mubi4_test_true_strict`, leaving the FIFO uncleared; no error is signaled to the system.",
+      "cond": "whenever `clear_i` carries a non‑strict‑true value",
+      "risk": "An attacker might force an invalid `clear_i` (e.g., via fault injection) to prevent clearing, retaining sensitive data beyond its intended lifetime and violating data-wipe guarantees.",
+      "signals": [
+        "clear_i",
+        "fifo_err"
+      ],
+      "refs": [
+        "155"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The `EnMasking` feature inside `prim_fifo_sync` is not visible in this chunk; the masking algorithm, its refresh policy, and its resistance to power/EM analysis must be verified at the primitive level.",
+      "cond": "when `EnMasking` is set to 1",
+      "risk": "A weak or incorrectly implemented masking scheme could leak secret key material through side-channel attacks despite the parameter being enabled.",
+      "signals": [],
+      "refs": [
+        "151"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "147-170"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
+  "line_start": 147,
+  "line_end": 170,
+  "security_implications": ""
+}

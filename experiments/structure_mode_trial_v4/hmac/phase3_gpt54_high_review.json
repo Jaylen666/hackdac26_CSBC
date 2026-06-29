@@ -1,0 +1,628 @@
+{
+  "source_findings": "/home/smy/rtl_bug_agent/experiments/structure_mode_trial_v4/hmac/phase2_semantic/findings_hmac.json",
+  "prompt_template": "/home/smy/rtl_bug_agent/config/prompts/phase3/verify.md",
+  "summary": {
+    "total_findings_reviewed": 34,
+    "confirmed_count": 9,
+    "false_alarm_count": 25,
+    "uncertain_count": 0,
+    "needs_more_context_count": 0,
+    "benchmark_hits": {
+      "yes": 1,
+      "partial": 6,
+      "no": 0
+    }
+  },
+  "benchmark_hit_summary": [
+    {
+      "bug_id": "010",
+      "hit": "yes",
+      "evidence_findings": [
+        "F-0012"
+      ],
+      "basis": "F-0012 points directly at hmac_core.sv:223-230. Phase3 confirms SHA2_512 falls into the default branch and uses BlockSizeSHA512in64 + 64'd384 instead of + 64'd512."
+    },
+    {
+      "bug_id": "009",
+      "hit": "partial",
+      "evidence_findings": [
+        "F-0016"
+      ],
+      "basis": "F-0016 is misworded about cfg_block being set on start, but it lands on the correct cfg_block path. Phase3 confirms the real bug is hmac.sv:365-372 clearing cfg_block on reg_hash_stop before completion."
+    },
+    {
+      "bug_id": "011",
+      "hit": "partial",
+      "evidence_findings": [
+        "F-0023",
+        "F-0033"
+      ],
+      "basis": "The findings touch the idle/done_state completion path but do not explicitly identify the 127-cycle cool_down delay. Phase3 tracing of hmac.sv:180-188 and hmac.sv:891-903 confirms the stale-completion bug."
+    },
+    {
+      "bug_id": "wipe_secret_we",
+      "hit": "partial",
+      "evidence_findings": [
+        "F-0010"
+      ],
+      "basis": "F-0010 is wrong about non-zero wipe data being the problem, but it points to the wipe_secret path. Phase3 confirms the real issue is hmac_reg_top.sv:2128 gating wipe_secret_we with reg_error instead of !reg_error."
+    },
+    {
+      "bug_id": "err_code",
+      "hit": "partial",
+      "evidence_findings": [
+        "F-0005",
+        "F-0014",
+        "F-0022"
+      ],
+      "basis": "These findings all land on the err_valid/err_code priority path, but none states the exact root cause. Phase3 confirms hmac.sv:842-845 includes invalid_config_atstart in err_valid while hmac.sv:850-875 omits it from the priority case."
+    },
+    {
+      "bug_id": "extra_hash_stop_msg_freeze",
+      "hit": "partial",
+      "evidence_findings": [
+        "F-0017"
+      ],
+      "basis": "F-0017 is framed as a width issue, but it points to msg_allowed. Phase3 confirms hmac.sv:414-420 never clears msg_allowed on hash_stop, so post-stop MSG_FIFO writes and message_length updates remain possible through hmac.sv:628 and hmac.sv:658-660."
+    },
+    {
+      "bug_id": "extra_hash_stop_unlock_window",
+      "hit": "partial",
+      "evidence_findings": [
+        "F-0016"
+      ],
+      "basis": "F-0016 reaches the cfg_block lock path but states the wrong polarity problem. Phase3 confirms the real defect is the premature unlock on reg_hash_stop at hmac.sv:365-372, which reopens config/key/context writes before the engine is idle."
+    }
+  ],
+  "confirmed_bugs": [
+    {
+      "bug_id": "wipe_secret_we_inverted",
+      "rtl_locations": [
+        "hmac_reg_top.sv:2128",
+        "hmac.sv:210-217"
+      ],
+      "root_cause": "The WIPE_SECRET write strobe is generated as `(addr_hit[8] && reg_we && reg_error)` in hmac_reg_top.sv:2128. The top module only treats `reg2hw.wipe_secret.qe` as the wipe trigger (hmac.sv:210), and only overwrites `secret_key_d` when that trigger is high (hmac.sv:214-217). Ordinary software writes therefore do not start a wipe at all.",
+      "trigger_condition": "A normal software write to WIPE_SECRET at offset 0x20 with no bus error.",
+      "security_impact": "Secret key and related internal state can survive an intended wipe, breaking zeroization and enabling reuse of stale keyed state in later operations.",
+      "software_visible": true,
+      "benchmark_tags": [
+        "wipe_secret_we"
+      ]
+    },
+    {
+      "bug_id": "sha512_outer_length_uses_sha384_constant",
+      "rtl_locations": [
+        "hmac_core.sv:223-230"
+      ],
+      "root_cause": "In the final-hash branch, the `unique case` handles SHA2_256 and SHA2_384 explicitly, but routes SHA2_512 through the default branch, which sets `sha_msg_len = BlockSizeSHA512in64 + 64'd384` instead of `+ 64'd512`.",
+      "trigger_condition": "HMAC mode, second round (`sel_msglen == SelOPadMsg` / outer round), digest_size_i == SHA2_512.",
+      "security_impact": "The SHA-512 HMAC final block is padded with the wrong message length, producing incorrect authentication results.",
+      "software_visible": true,
+      "benchmark_tags": [
+        "010"
+      ]
+    },
+    {
+      "bug_id": "err_code_missing_invalid_config_case",
+      "rtl_locations": [
+        "hmac.sv:842-845",
+        "hmac.sv:850-875"
+      ],
+      "root_cause": "err_valid includes `invalid_config_atstart` in hmac.sv:842-845, but the priority case that drives err_code never handles that condition. Instead it repeats `hash_start_sha_disabled` twice at hmac.sv:851-858. When invalid_config_atstart is the only active cause, the interrupt asserts but err_code falls through to NoError.",
+      "trigger_condition": "Software issues hash_start or hash_continue with invalid digest/key configuration, while no higher-priority error cause is active.",
+      "security_impact": "The module signals an error event without reporting the real cause, weakening software diagnostics and fault-detection coverage for invalid configuration attempts.",
+      "software_visible": true,
+      "benchmark_tags": [
+        "err_code"
+      ]
+    },
+    {
+      "bug_id": "cfg_block_unlocks_on_hash_stop",
+      "rtl_locations": [
+        "hmac.sv:348-371",
+        "hmac.sv:214-226",
+        "hmac.sv:645-653"
+      ],
+      "root_cause": "cfg_block is cleared whenever `reg_hash_done || reg_hash_stop` is true (hmac.sv:370-371). `reg_hash_stop` is only the command pulse decoded at hmac.sv:349, not a completion signal. Clearing cfg_block immediately re-enables key and configuration writes in update_secret_key (hmac.sv:218-225) and CSR message-length writes (hmac.sv:647-653) before hashing is actually finished.",
+      "trigger_condition": "Software writes CMD.hash_stop while a hash operation is still active.",
+      "security_impact": "The module opens a premature write window for key/config/context state during an in-flight stop, allowing corruption of the running operation and unsafe context-switch timing.",
+      "software_visible": true,
+      "benchmark_tags": [
+        "009",
+        "extra_hash_stop_unlock_window"
+      ]
+    },
+    {
+      "bug_id": "msg_allowed_not_cleared_on_hash_stop",
+      "rtl_locations": [
+        "hmac.sv:414-420",
+        "hmac.sv:628",
+        "hmac.sv:656-660",
+        "hmac.sv:813"
+      ],
+      "root_cause": "msg_allowed is set on hash_start_or_continue and only cleared on packer_flush_done (hmac.sv:417-420). A hash_stop command does not clear it. As a result, msg_write remains legal through hmac.sv:628 and message_length keeps incrementing through hmac.sv:658-660 after stop. The `msg_push_not_allowed` error path at hmac.sv:813 also stays inactive because msg_allowed never drops.",
+      "trigger_condition": "Software issues CMD.hash_stop and then continues writing MSG_FIFO before a new start/continue cycle.",
+      "security_impact": "The stopped message stream is not frozen: software can still inject message words and mutate the saved message length after stop, breaking context-switch and finalization semantics.",
+      "software_visible": true,
+      "benchmark_tags": [
+        "extra_hash_stop_msg_freeze"
+      ]
+    },
+    {
+      "bug_id": "stale_completion_idle_precedes_done_event",
+      "rtl_locations": [
+        "hmac.sv:172-188",
+        "hmac.sv:891-903"
+      ],
+      "root_cause": "After hash_stop, the done_state machine waits for `!hash_running` and then intentionally delays `hash_done_event` for 127 cycles (hmac.sv:180-188). Top-level idle/status, however, is driven only by FIFO emptiness and sub-core idle signals (hmac.sv:891-903) and is not held off by done_state or the cool_down counter.",
+      "trigger_condition": "Stop-driven context-switch flow: software stops hashing, observes STATUS.hmac_idle / idle_o, and acts before the delayed hmac_done event arrives.",
+      "security_impact": "Software can observe idle and restore or read context before the official completion event, creating a stale-completion window that can expose or mix old digest/context state across message streams.",
+      "software_visible": true,
+      "benchmark_tags": [
+        "011"
+      ]
+    }
+  ],
+  "per_finding_results": [
+    {
+      "finding_id": "F-0001",
+      "title": "[B-AG+U-UP] Spec assumption indicates alerts[0] is an input port driven by external logic, but the implementation guarantee shows it is an output port driven by an internal bus integ",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "There is no alert-bus wiring bug here. The design only has one alert, so alerts[0] is the only legal request bit and is intentionally driven from hmac_reg_top.",
+      "root_cause": "hmac_reg_pkg.sv:12 fixes NumAlerts=1. hmac.sv:778 drives alerts[0] from u_reg.intg_err_o, and hmac.sv:788-801 instantiates exactly one alert sender consuming that bit.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding assumes a multi-bit alert request bus with unused bits. That assumption is false in this IP because NumAlerts is 1. The top-level alert_rx_i is the external interface; alerts[0] is an internal request wire into prim_alert_sender.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "[B-AG+U-UP] The actual functional guarantees of signals like hash_running, digest_on_blk, sha_hash_done, and sha_core_idle depend en",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.95,
+      "summary": "This is a scope note, not a defect. The finding says some signals depend on prim_sha2_32 internals, but that does not identify a bug in the HMAC RTL.",
+      "root_cause": "The HMAC RTL simply consumes these signals through explicit ports at hmac.sv:735-760 and uses them in the local state machines.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "A dependency on a submodule implementation is normal. After reviewing prim_sha2_32.sv, the connected signals are driven synchronously and are used consistently by hmac.sv and hmac_core.sv.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "[B-AG+U-UP] Assumption states signals i_pad_256/512 and o_pad_256/512 are inputs driven externally, but the implementation drives them as internal outputs. This will result in a mult",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The pads are supposed to be internal combinational values, not externally driven inputs. The zeroed Key_1024 SHA-256 pad case is also blocked by invalid_config logic.",
+      "root_cause": "hmac_core.sv:129-187 intentionally derives i_pad_256/i_pad_512/o_pad_256/o_pad_512 from secret_key_i and key_length_i. hmac.sv:818-820 blocks Key_1024 with SHA2_256 in HMAC mode.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "There is no multi-driver condition. The finding's external-driver assumption is wrong, and the potentially dangerous Key_1024 plus SHA2_256 combination is already rejected before hashing starts.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "[B-AG+U-UP] Are the inputs fifo_empty, fifo_full, and fifo_full_seen_d synchronous to clk_i? If they originate from a different cloc",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.97,
+      "summary": "The FIFO status path is synchronous to clk_i in this IP. There is no clock-domain crossing on fifo_empty or fifo_full here.",
+      "root_cause": "interfaces.md:5-7 declares only one clock. hmac.sv:545 derives fifo_empty from fifo_rvalid, and hmac.sv:568-590 instantiates prim_fifo_sync on clk_i/rst_ni to generate fifo_full/fifo_rvalid.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "Both the FIFO and the tracking flops at hmac.sv:485-494 run on clk_i. The metastability concern depends on a second clock that does not exist in this IP boundary.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "Priority order places update_seckey_inprocess (secret-key related) at the lowest priority; if it co-occurs with higher-p",
+      "verdict": "CONFIRMED",
+      "confidence": 0.93,
+      "summary": "The finding's specific complaint about update_seckey_inprocess priority is not the real bug. However, the same err_valid/err_code priority path is genuinely broken because invalid_config_atstart can raise an error interrupt while ERR_CODE remains NoError.",
+      "root_cause": "hmac.sv:842-845 includes invalid_config_atstart in err_valid. hmac.sv:850-875 never encodes invalid_config_atstart and instead duplicates hash_start_sha_disabled at hmac.sv:851-858, so the case falls through to NoError.",
+      "trigger_condition": "hash_start or hash_continue is written with invalid digest/key configuration and no higher-priority error cause is active.",
+      "security_impact": "Software and fault-detection logic can observe an error interrupt without the true error code, weakening detection of invalid configuration attempts.",
+      "software_visible": true,
+      "reasoning": "The stated update_seckey priority concern is not independently a bug because the design intentionally reports one cause. But tracing the exact same priority tree shows a real omission: invalid_config_atstart asserts err_valid yet is missing from the err_code case tree.",
+      "additional_findings": [
+        "Same underlying bug as F-0014 and F-0022."
+      ]
+    },
+    {
+      "finding_id": "F-0006",
+      "title": "The loop maps reg2hw.key[31-i] to secret_key_d word i, reversing the natural order. The design intent (endianness handli",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The apparent reversal is intentional and matches the documented KEY register ordering.",
+      "root_cause": "registers.md:351-353 defines key[1023:0] = {KEY0, KEY1, ..., KEY31}. hmac.sv:220-224 maps reg2hw.key[31-i] into secret_key_d[32*i+:32], which reconstructs that packed ordering for hmac_core.sv consumers.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "hmac_core.sv uses secret_key_i[1023:896] as the high-order words for short keys, so KEY0 must end up in the high bits. The load loop does exactly that.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0007",
+      "title": "The RTL uses txcount[BlockSizeBitsSHA512-1:...] and similar bit slices that require txcount to be at least BlockSizeBitsSHA512 bits wide. No guarantee exists to verify that txcount is actually declare",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "txcount is declared as a 64-bit counter, so all referenced slices are legal.",
+      "root_cause": "hmac_core.sv:69 declares `logic [63:0] txcount, txcount_d;`. The largest slice used is hmac_core.sv:126 and hmac_core.sv:241-242, which is far smaller than 64 bits.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "This finding is purely disproved by the declaration width. There is no out-of-bounds risk from txcount's declared size.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0008",
+      "title": "pad_index_256 直接从 txcount 的高位切片得到，无任何饱和限幅或范围检查。当 txcount 对应的块内字偏移超过 15 时，该索引将越界访问 i_pad_256/o_pad_256 数组，读取未定义数据，可能泄露密钥材料或产生错误的 HMAC 结果。",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.9,
+      "summary": "The control FSM does not consume pad data beyond the legal block range. The index concern does not become an observable functional bug on this path.",
+      "root_cause": "pad_index_256 comes from hmac_core.sv:127 and is only relevant when sel_rdata selects pad data at hmac_core.sv:194-201. The FSM stops asserting hmac_sha_rvalid once txcnt_eq_blksz is true at hmac_core.sv:354-362 and hmac_core.sv:433-441.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "During the final legal pad word transfer, txcount is 480 for SHA-256 and pad_index_256 is 15. On the next cycle txcount reaches 512, but valid is deasserted and the state advances, so the putative out-of-range data is not consumed by the SHA path.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0009",
+      "title": "The design lacks any mechanism to ensure that msg_write and sha_en are de-asserted when packer_ready is low. If external logic violates the intended coherence, data can be written while the HMAC engin",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.94,
+      "summary": "The valid/ready handshake already prevents acceptance and counting when the packer is not ready.",
+      "root_cause": "u_packer consumes data only on valid_i/ready_o handshake at hmac.sv:674-696, and message_length increments only when msg_write, sha_en, and packer_ready are all true at hmac.sv:656-660. tlul_adapter_sram grant is also gated by packer_ready at hmac.sv:531.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding assumes data is accepted without ready. That is not how the interface is wired: when packer_ready is low, the write is neither packed nor counted.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0010",
+      "title": "擦除值wipe_v由软件可编程寄存器直接驱动，未硬连线为0。若软件配置为非零值，在擦除操作期间secret_key_d将被写入非零常量，无法保证敏感密钥数据被可靠清零，存在残留风险。",
+      "verdict": "CONFIRMED",
+      "confidence": 0.96,
+      "summary": "The finding's stated reason is wrong: WIPE_SECRET is intentionally allowed to use any 32-bit overwrite pattern. But the same wipe_secret signal path contains a real bug: ordinary software writes do not trigger the wipe at all.",
+      "root_cause": "hmac_reg_top.sv:2128 defines `wipe_secret_we = (addr_hit[8] && reg_we && reg_error)`. hmac.sv:210 uses `reg2hw.wipe_secret.qe` as the wipe trigger, and hmac.sv:214-217 only overwrites secret_key_d when that trigger is high. Normal writes with reg_error=0 therefore skip the wipe.",
+      "trigger_condition": "A legal software write to WIPE_SECRET with no TL/register error.",
+      "security_impact": "Secret state can persist across an intended wipe, violating zeroization and enabling reuse of stale keyed state.",
+      "software_visible": true,
+      "reasoning": "registers.md:326-332 explicitly documents overwrite-with-provided-value behavior, so non-zero wipe_v is not itself a defect. The real defect is the inverted write-enable gate in hmac_reg_top, which prevents the documented wipe operation from running on normal accesses.",
+      "additional_findings": [
+        "Matches benchmark wipe_secret_we."
+      ]
+    },
+    {
+      "finding_id": "F-0011",
+      "title": "[B-AG+U-UP] digest_size_supplied is formed by casting cfg_reg.digest_size.q to digest_mode_e without verifying the raw value is a le",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "Illegal digest encodings are handled defensively, not unsafely.",
+      "root_cause": "hmac.sv:296-309 casts the field, then maps unsupported values to SHA2_None. hmac.sv:818-823 treats SHA2_None as invalid_config and blocks start/continue.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding points to the cast, but the following case statement explicitly sanitizes the value before it can drive hashing behavior.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0012",
+      "title": "In the final hash branch, for SHA2_384 and the default/SHA2_512 cases, sha_msg_len is BlockSizeSHA512in64 + 64'd384. For",
+      "verdict": "CONFIRMED",
+      "confidence": 0.99,
+      "summary": "This is a real functional bug. SHA-512 outer-round message length is computed with the SHA-384 digest-size constant.",
+      "root_cause": "hmac_core.sv:223-230 handles SHA2_256 and SHA2_384 explicitly, but leaves SHA2_512 to the default branch, which sets `sha_msg_len = BlockSizeSHA512in64 + 64'd384`.",
+      "trigger_condition": "HMAC mode outer round with digest_size_i == SHA2_512.",
+      "security_impact": "The final SHA-512 HMAC digest is wrong because the padded message length field is wrong by 128 bits.",
+      "software_visible": true,
+      "reasoning": "The units are bits, not bytes, so the bug is not in unit conversion. The actual defect is simpler: SHA2_512 is never given a 512-bit digest contribution in the outer-round message-length calculation.",
+      "additional_findings": [
+        "Matches benchmark 010."
+      ]
+    },
+    {
+      "finding_id": "F-0013",
+      "title": "When hmac_en_i is 1, sha_hash_process_o is formed by OR-ing reg_hash_process_i and hash_process. The purpose of this OR ",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.96,
+      "summary": "The OR is intentional and needed to support both the software-requested process event and the internal outer-round transition.",
+      "root_cause": "hmac_core.sv:123 drives sha_hash_process_o from `reg_hash_process_i | hash_process` in HMAC mode. reg_hash_process_i is used for the software finalization path, while hash_process is asserted internally at hmac_core.sv:374 for the outer round.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "Without the OR, either the inner-round software finalize path or the outer-round automatic finalize path would be lost. The construction matches the two-phase HMAC flow.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0014",
+      "title": "[B-AG+U-UP] The branch condition that triggers this err_code assignment is not visible in this chunk; it may be wrongly prioritized ",
+      "verdict": "CONFIRMED",
+      "confidence": 0.99,
+      "summary": "The err_code priority logic is in fact wrong. invalid_config_atstart can raise err_valid without any matching err_code branch.",
+      "root_cause": "hmac.sv:842-845 includes invalid_config_atstart in err_valid, but hmac.sv:850-875 never encodes it. The priority case duplicates hash_start_sha_disabled at hmac.sv:851-858 instead of adding an invalid_config_atstart branch.",
+      "trigger_condition": "hash_start/hash_continue with invalid digest or key configuration and no other simultaneous error cause.",
+      "security_impact": "Software sees an error interrupt but can read ERR_CODE=NoError, obscuring the real fault condition.",
+      "software_visible": true,
+      "reasoning": "This finding correctly suspected the priority path. Full-file review shows the exact defect: the validity condition and the encoded cause table disagree.",
+      "additional_findings": [
+        "Matches benchmark err_code."
+      ]
+    },
+    {
+      "finding_id": "F-0015",
+      "title": "conv_endian32 is not defined in this chunk; its exact byte-reordering logic (e.g., for mask bits) must be verified elsew",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.95,
+      "summary": "Missing local definition in a chunk is not a defect in the RTL. The finding identifies a review dependency, not a bug.",
+      "root_cause": "conv_endian32 is a shared helper used consistently at hmac.sv:223, hmac.sv:253-281, hmac.sv:542, hmac.sv:671-672.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The question is about where the helper is defined, not about incorrect use on this path. No contradictory or unsafe behavior was found in the HMAC wiring itself.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0016",
+      "title": "硬件在hash_start或hash_continue命令时错误地将cfg_block驱为1，而设计预期该路径使用cfg_block的反相（即0），导致hash_start/hash_continue功能失效。",
+      "verdict": "CONFIRMED",
+      "confidence": 0.96,
+      "summary": "The finding's polarity claim is wrong: setting cfg_block after start/continue is intentional. But the same cfg_block path contains a real bug because hash_stop clears cfg_block before the engine is actually done.",
+      "root_cause": "hmac.sv:365-372 clears cfg_block when reg_hash_stop is asserted. reg_hash_stop is only the decoded command pulse from hmac.sv:349, so the lock is dropped immediately, reopening key/config/context writes through hmac.sv:214-226 and hmac.sv:645-653 before completion.",
+      "trigger_condition": "A stop command is issued while hashing is still in progress.",
+      "security_impact": "Software can modify protected state during an in-flight stop, corrupting results and violating context-switch safety.",
+      "software_visible": true,
+      "reasoning": "hash_start and hash_continue are gated by ~cfg_block at hmac.sv:360-361 using the pre-update value, so they still work. The real failure is on the stop side, where cfg_block drops too early.",
+      "additional_findings": [
+        "Matches benchmark 009 and extra_hash_stop_unlock_window."
+      ]
+    },
+    {
+      "finding_id": "F-0017",
+      "title": "[U-UP] The assignments use 1'b1 and 1'b0, but the reset uses '0. If msg_allowed is wider than 1 bit, the set/clear assignments only affect the LSB, while the",
+      "verdict": "CONFIRMED",
+      "confidence": 0.92,
+      "summary": "The width-mismatch claim is false because msg_allowed is a 1-bit logic. But the same msg_allowed path contains a real stop-handling bug: hash_stop does not clear msg_allowed, so software writes remain allowed after stop.",
+      "root_cause": "msg_allowed is declared as a scalar at hmac.sv:125. The real defect is hmac.sv:414-420, which only clears msg_allowed on packer_flush_done and never on reg_hash_stop. msg_write remains enabled at hmac.sv:628 and message_length keeps updating at hmac.sv:658-660.",
+      "trigger_condition": "CMD.hash_stop followed by further MSG_FIFO writes before a new start/continue sequence.",
+      "security_impact": "Post-stop message injection and message-length mutation remain possible, so the stopped context is not frozen.",
+      "software_visible": true,
+      "reasoning": "The finding lands on the correct register but states the wrong reason. Once the actual sequential logic is traced, the bug is that msg_allowed does not track stop at all.",
+      "additional_findings": [
+        "Matches benchmark extra_hash_stop_msg_freeze."
+      ]
+    },
+    {
+      "finding_id": "F-0018",
+      "title": "[U-UP] The integrity error output (intg_error_o) of u_tlul_adapter is left unconnected. TL-UL integrity errors are not monitored or handled.",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.91,
+      "summary": "The claimed missing top-level TL-UL integrity handling is not real on this path.",
+      "root_cause": "Top-level TL-UL command integrity is already checked in hmac_reg_top.sv:51-82 before accesses are steered to the register file or the MSG_FIFO window. The window adapter instance in hmac.sv:593-623 also leaves CmdIntgCheck at its default 0, so it is not the primary external TL integrity checker.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "Unconnected intg_error_o on the internal window adapter does not mean the external TL bus is unchecked; that check already happens in hmac_reg_top. The finding overstates the consequence.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0019",
+      "title": "[U-UP] The enum base type is `logic`, allowing 4-state values (X, Z); no local mechanism prevents X assignment. If a driver produces X, the selection may sil",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.9,
+      "summary": "This is a generic 4-state simulation concern, not a concrete RTL bug on this design path.",
+      "root_cause": "The relevant enums in hmac_core.sv are locally driven by deterministic combinational logic with explicit defaults, and sel_rdata is further covered by the assertion at hmac_core.sv:498.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "A hypothetical X from an arbitrary driver is not evidence of a design defect. No reachable functional bug was found from the actual RTL assignments.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0020",
+      "title": "Hardware does not guarantee that digest memory is properly initialized before use. When reg2hw.digest[2*i].qe is low and no prior valid write has occurred, the digest engine may operate on garbage or ",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.95,
+      "summary": "The SHA engine does not consume restore digest data unless digest_sw_we is asserted, so missing SW writes do not automatically feed garbage into the core.",
+      "root_cause": "hmac.sv:257-263 only raises digest_sw_we when one of the corresponding digest CSR write-enables is asserted. prim_sha2_32 consumes digest_i together with digest_we_i through hmac.sv:753-755.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding conflates 'no restore write happened' with 'garbage is loaded'. On this interface, the load is explicit and write-enable qualified.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0021",
+      "title": "The error output (err_o) of u_msg_fifo is left unconnected. Any FIFO error (e.g., overflow) cannot be detected or handle",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.88,
+      "summary": "No reachable FIFO-overflow defect was found in the HMAC wiring. The unconnected err_o is not evidence of a functional bug here.",
+      "root_cause": "u_msg_fifo is instantiated at hmac.sv:568-590, while all producers are back-pressured by fifo_wready through hmac.sv:546 and hmac.sv:690. The design does not rely on err_o for normal correctness on this path.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding assumes an overflow path without showing one. In the reviewed RTL, all data sources honor fifo_wready before a write is committed.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0022",
+      "title": "HMAC模块缺失对err_valid信号的寄存器打拍或相应稳定逻辑，组合逻辑err_code直接驱动err_valid，在输入信号变化时可能产生毛刺，导致中断控制器漏采中断。",
+      "verdict": "CONFIRMED",
+      "confidence": 0.9,
+      "summary": "The glitch rationale is not supported, but the same err_valid/err_code path is genuinely broken: invalid_config_atstart can assert err_valid while err_code remains NoError.",
+      "root_cause": "hmac.sv:842-845 and hmac.sv:850-875 disagree about invalid_config_atstart. err_valid includes it; err_code never encodes it and instead duplicates hash_start_sha_disabled.",
+      "trigger_condition": "hash_start/hash_continue with invalid configuration and no other simultaneous error cause.",
+      "security_impact": "The error-reporting path can present an interrupt without the actual reason code, reducing diagnostic and security-response fidelity.",
+      "software_visible": true,
+      "reasoning": "The reviewed RTL does not prove a sampling-glitch issue, because the inputs are synchronous control signals. However, tracing the exact same signals reveals a real design bug on that path, so the finding is confirmed under the phase3 same-signal-path rule.",
+      "additional_findings": [
+        "Same underlying bug as F-0005 and F-0014."
+      ]
+    },
+    {
+      "finding_id": "F-0023",
+      "title": "idle_d可能因为txcnt_eq_blksz与reg_hash_stop_d组合产生的短脉冲或异步信号而提前拉高，导致idle_o在停止处理尚未真正完成时就指示空闲，使系统错误地认为HMAC已空闲，可能引发后续操作错误。",
+      "verdict": "CONFIRMED",
+      "confidence": 0.95,
+      "summary": "The specific short-pulse explanation is wrong, but the completion path really is inconsistent: idle/status can indicate completion before hash_done_event is raised after stop.",
+      "root_cause": "hmac.sv:180-188 delays hash_done_event for up to 127 cycles after !hash_running. Meanwhile idle/status is driven independently by hmac.sv:891-903 and does not wait for done_state or the cool_down counter.",
+      "trigger_condition": "Stop-driven context switching where software observes STATUS.hmac_idle or idle_o before the delayed hmac_done interrupt arrives.",
+      "security_impact": "Software can act on an apparently idle engine before the official completion event, creating a stale-completion window for digest/context handling.",
+      "software_visible": true,
+      "reasoning": "The issue is not metastability on idle_d. The real problem is architectural: completion signaling is split into two paths, and the idle path opens earlier than the delayed interrupt path.",
+      "additional_findings": [
+        "Matches benchmark 011."
+      ]
+    },
+    {
+      "finding_id": "F-0024",
+      "title": "sel_rdata 的驱动规范仅描述了 StOPad 和 StIPad 状态的赋值，未覆盖 StIdle、StMsg 等其余状态，无法保证 sel_rdata 在所有条件下均不取 2'b11。若其他状态产生非法编码，将触发假设中描述的 default 路径静默输出 fifo_rdata_i，掩盖控制故障或毛刺。",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.98,
+      "summary": "sel_rdata is fully covered by defaults and assertions; there is no uncovered 2'b11 path in the reviewed RTL.",
+      "root_cause": "hmac_core.sv:323 sets sel_rdata = SelFifo by default. StIPad and StOPad override it explicitly at hmac_core.sv:352 and hmac_core.sv:430, and hmac_core.sv:498 asserts the legal encoding set.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The default path is not a silent bug mask here; SelFifo is a legal state used in StMsg and idle-like states.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "缺少对复位信号的毛刺抑制或同步器保证，外部干扰可能引起不可靠的复位行为。",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.89,
+      "summary": "This is an environment-level reset-quality concern, not an RTL bug specific to this IP.",
+      "root_cause": "The module consistently uses rst_ni as an asynchronous reset in local flops, for example at hmac.sv:197-208 and hmac_core.sv:308-310.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "Nothing in the reviewed HMAC logic indicates a broken reset implementation beyond the generic assumption that rst_ni is a valid reset source.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "组合逻辑中缺少当 load_txcount 有效时 txcount_d 的赋值逻辑，可能导致该信号处于未定义状态，进而使 txcount 寄存器采样到无效值。",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The assignment that the finding claims is missing is present in the RTL.",
+      "root_cause": "hmac_core.sv:258-266 explicitly assigns txcount_d in the load_txcount branch.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "This finding is directly disproved by the code in the txcount next-value block.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "The state flip-flop specification does not enforce validity of st_d, so an illegal st_d can propagate to st_q, causing the FSM to leave the defined state space and potentially corrupt HMAC operation.",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.97,
+      "summary": "The FSM has a recovery default back to StIdle, so the claimed lack of any recovery mechanism is wrong.",
+      "root_cause": "hmac_core.sv:451-453 assigns st_d = StIdle in the default case, and hmac_core.sv:308-310 registers that state.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "An X on st_d is a separate simulation-quality concern, but the finding's claim that the FSM has no illegal-state recovery is contradicted by the default branch.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "[B-AG+U-UP] It is not locally verified that message_length_i and the block size constants (BlockSizeSHA256in64, BlockSizeSHA512in64)",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.96,
+      "summary": "The units match: message_length is tracked in bits, not bytes, so adding 256/384/512-bit digest lengths and 512/1024-bit block sizes is consistent.",
+      "root_cause": "hmac.sv:632-636 sums the 32-bit expanded write mask, which counts message bits because each written byte contributes eight mask bits. hmac.sv:658-660 adds that bit count into message_length. hmac_core.sv:217-229 then adds block-size and digest-size constants that are also expressed in bits.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The name BlockSizeSHA256in64 is misleading, but the actual values are 512 and 1024 bits. The surrounding accounting shows the interface is bit-based, so there is no unit mismatch on this path.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "A register write one-hot error on u_reg should trigger alert_tx_o[0].",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "This behavior is implemented and even asserted locally.",
+      "root_cause": "hmac_reg_top.sv:58-82 generates reg_we_err and ORs it into intg_err_o. hmac.sv:778 routes intg_err_o to alerts[0], hmac.sv:796 feeds alerts[0] into the alert sender, and hmac.sv:965 contains ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT on alert_tx_o[0].",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The assumption in the finding is true and satisfied by the RTL, so there is no bug.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "Signal unused_cfg_qe drives an XOR reduction of multiple configuration QE bits, but its usage is not visible in this chu",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.98,
+      "summary": "unused_cfg_qe is a benign lint-suppression sink, not a functional bug.",
+      "root_cause": "hmac.sv:287-291 reduces otherwise-unused cfg_reg.qe bits into a local wire. No downstream use is required for correctness.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "Dead 'unused' reductions are common style in OpenTitan RTL. No control or data path depends on this signal.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "[U-UP] The reset initialization uses 'default:'0' to zeroize any fields of the cfg_reg struct not explicitly listed in the assignment. It is unknown whether ",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "The cfg_reg struct has no hidden extra fields that require non-zero reset values.",
+      "root_cause": "hmac_reg_pkg.sv:68-97 shows cfg_reg contains exactly hmac_en, sha_en, endian_swap, digest_swap, key_swap, digest_size, and key_length. hmac.sv:375-407 initializes those explicitly and zeros any padding/default members.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "This is resolved by checking the actual struct definition. There are no omitted functional fields.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "[U-UP] The byte-alignment assumption is enforced only as a simulation/formal property (disabled by `ifndef VERILATOR / SYNTHESIS`). In synthesized hardware, ",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.93,
+      "summary": "The byte-alignment property is an environment check for the incoming TL-generated mask, not an unguarded hardware hazard in normal operation.",
+      "root_cause": "The MSG_FIFO path is sourced from tlul_adapter_sram in hmac.sv:593-623, which generates the mask from TL byte lanes. The property at hmac.sv:911-919 checks that environment invariant during non-synthesis verification.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "No local RTL path was found that can synthesize an arbitrary non-byte-aligned mask on its own. The finding overstates the significance of the assertion guard.",
+      "additional_findings": []
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "[U-UP] The enum `done_state_e` defines four states for done handling, but no transition conditions or FSM behavior are specified in this chunk; design intent",
+      "verdict": "CONFIRMED",
+      "confidence": 0.9,
+      "summary": "The chunk-visibility complaint is not itself a bug, but the same done_state signal path contains a real completion defect: hmac_done is intentionally delayed after idle opens.",
+      "root_cause": "The done_state FSM in hmac.sv:149-195 delays hash_done_event by a 127-cycle cool-down at hmac.sv:180-188, while idle/status is independently exposed by hmac.sv:891-903.",
+      "trigger_condition": "Stop-based completion where software trusts STATUS.hmac_idle / idle_o before the delayed hmac_done event.",
+      "security_impact": "Stale completion ordering can let software restore or inspect context too early, creating cross-stream digest/context confusion.",
+      "software_visible": true,
+      "reasoning": "Reading the full file resolves the 'unspecified FSM' concern, and that full-file read also exposes a real flaw on the exact done_state path. Under the phase3 rule, that makes the finding confirmed.",
+      "additional_findings": [
+        "Same underlying bug as F-0023; matches benchmark 011 partially."
+      ]
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "Internal signals reg2hw, hw2reg, tl_win_h2d, tl_win_d2h are declared but neither driven nor assigned in this chunk; thei",
+      "verdict": "FALSE_ALARM",
+      "confidence": 0.99,
+      "summary": "These are normal interconnect signals whose drivers appear elsewhere in the same module and instances.",
+      "root_cause": "reg2hw/hw2reg are connected through hmac_reg_top at hmac.sv:764-779. tl_win_h2d/tl_win_d2h are connected between hmac_reg_top and tlul_adapter_sram at hmac.sv:599-603 and hmac.sv:771-772.",
+      "trigger_condition": "",
+      "security_impact": "",
+      "software_visible": false,
+      "reasoning": "The finding only reflects chunk incompleteness. The full module contains the missing drivers and connections.",
+      "additional_findings": []
+    }
+  ]
+}

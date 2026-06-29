@@ -1,0 +1,125 @@
+{
+  "chunk_id": "uart_tx__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "uart_tx",
+    "block_kind": "assign",
+    "driven": [
+      "tx",
+      "idle"
+    ],
+    "used": [
+      "tx_q",
+      "tx_enable",
+      "bit_cnt_q"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "tx is continuously driven with the value of tx_q",
+      "cond": "always",
+      "signals": [
+        "tx",
+        "tx_q"
+      ],
+      "refs": [
+        "file:33"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "idle is driven as 1 when tx_enable is 0; when tx_enable is 1, idle is driven as (bit_cnt_q == 4'h0)",
+      "cond": "always",
+      "signals": [
+        "idle",
+        "tx_enable",
+        "bit_cnt_q"
+      ],
+      "refs": [
+        "file:35"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "bit_cnt_q accurately reflects the number of bits remaining in the current transmission when tx_enable is high",
+      "cond": "tx_enable == 1",
+      "risk": "If bit_cnt_q is stale or incorrect, idle may be deasserted prematurely, causing the controller to start a new transmission too early and corrupt UART output",
+      "signals": [
+        "bit_cnt_q",
+        "tx_enable",
+        "idle"
+      ],
+      "refs": [
+        "file:35"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "tx_q is driven to the idle line state (1'b1) when no active transmission is in progress",
+      "cond": "when the transmitter is not shifting out data",
+      "risk": "If tx_q is 0 while idle=1, the UART line stays low, violating idle state and potentially causing a break condition or framing errors at the receiver",
+      "signals": [
+        "tx_q",
+        "tx",
+        "idle"
+      ],
+      "refs": [
+        "file:33"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "When idle=1, tx = tx_q may not be high, potentially holding the line in a non-idle state indefinitely",
+      "cond": "idle == 1 and tx_q == 0",
+      "risk": "Line stuck low can appear as a break condition to connected UART receivers, causing communication errors",
+      "signals": [
+        "tx",
+        "tx_q",
+        "idle"
+      ],
+      "refs": [
+        "file:33",
+        "file:35"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When tx_enable transitions low, idle is forced to 1 regardless of bit_cnt_q, possibly masking an incomplete transmission",
+      "cond": "tx_enable goes low while bit_cnt_q != 0",
+      "risk": "The transmitter may be disabled mid-byte, leaving tx_q at a non-idle value while reporting idle, leading to data loss and no error indication",
+      "signals": [
+        "tx_enable",
+        "bit_cnt_q",
+        "idle",
+        "tx_q"
+      ],
+      "refs": [
+        "file:35"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:33",
+    "file:35"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv",
+  "line_start": 32,
+  "line_end": 79,
+  "security_implications": ""
+}

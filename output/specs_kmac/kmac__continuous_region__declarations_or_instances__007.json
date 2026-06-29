@@ -1,4 +1,211 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__007",
-  "error": "Expecting value: line 1 column 1 (char 0)"
+  "header": {
+    "module": "kmac",
+    "block_kind": "assign",
+    "driven": [
+      "msgfifo_empty_negedge",
+      "msgfifo_full_seen_d",
+      "msgfifo_empty_gate",
+      "status_msgfifo_empty"
+    ],
+    "used": [
+      "msgfifo_empty_q",
+      "msgfifo_empty",
+      "msgfifo_full",
+      "msgfifo2kmac_process",
+      "msgfifo_full_seen_q",
+      "app_active",
+      "sha3_fsm",
+      "sha3_pkg::StAbsorb"
+    ],
+    "modes": [
+      "sha3_pkg::StAbsorb"
+    ],
+    "tags": [
+      "fifo",
+      "interrupt",
+      "empty_gating",
+      "full_tracking",
+      "edge_detection",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "msgfifo_empty_negedge asserts when msgfifo_empty_q is 1 and msgfifo_empty is 0, combinational falling edge detection.",
+      "cond": "always",
+      "signals": [
+        "msgfifo_empty_negedge",
+        "msgfifo_empty_q",
+        "msgfifo_empty"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:631"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "msgfifo_full_seen_d is set to 1 if msgfifo_full is 1, cleared if msgfifo_empty_negedge is 1 or msgfifo2kmac_process is 1, otherwise holds msgfifo_full_seen_q.",
+      "cond": "always",
+      "signals": [
+        "msgfifo_full_seen_d",
+        "msgfifo_full",
+        "msgfifo_empty_negedge",
+        "msgfifo2kmac_process",
+        "msgfifo_full_seen_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:637-640"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "msgfifo_empty_gate is 1 when app_active is 1, or sha3_fsm is not StAbsorb, or msgfifo2kmac_process is 1; when none of those are true, it equals ~msgfifo_full_seen_q.",
+      "cond": "always",
+      "signals": [
+        "msgfifo_empty_gate",
+        "app_active",
+        "sha3_fsm",
+        "sha3_pkg::StAbsorb",
+        "msgfifo2kmac_process",
+        "msgfifo_full_seen_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:645-648"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "status_msgfifo_empty is forced to 0 when msgfifo_empty_gate is 1, otherwise it follows msgfifo_empty.",
+      "cond": "always",
+      "signals": [
+        "status_msgfifo_empty",
+        "msgfifo_empty_gate",
+        "msgfifo_empty"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:650"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "msgfifo_empty_q must be a registered version of msgfifo_empty from the previous cycle for correct falling edge detection.",
+      "cond": "when msgfifo_empty toggles",
+      "risk": "A stale or misaligned msgfifo_empty_q can cause false negedge detection, prematurely clearing full‑seen or missing an empty transition.",
+      "signals": [
+        "msgfifo_empty_q",
+        "msgfifo_empty"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:631"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "msgfifo_full_seen_q must be the clocked output of msgfifo_full_seen_d from the same clock domain.",
+      "cond": "every cycle",
+      "risk": "Without the feedback register the full‑seen tracking state would be lost, breaking the interrupt gating logic (permanently masked or unmasked).",
+      "signals": [
+        "msgfifo_full_seen_q",
+        "msgfifo_full_seen_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:640"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "msgfifo2kmac_process must be asserted concurrently with msgfifo_empty as a pulse during the absorption process.",
+      "cond": "during an active message absorption",
+      "risk": "If the process signal arrives out of sequence, full‑seen may be cleared when no real process occurred, potentially masking subsequent empty interrupts.",
+      "signals": [
+        "msgfifo2kmac_process",
+        "msgfifo_empty"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:643-644,639"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "app_active and sha3_fsm correctly reflect the current absorption context; app_active indicates a genuine absorption operation, and sha3_fsm is synchronous.",
+      "cond": "whenever msgfifo_empty_gate is evaluated",
+      "risk": "Incorrect assertions could permanently mask the empty signal (app_active stuck) or expose it prematurely (FSM mismatch), leading to software deadlock or data underflow.",
+      "signals": [
+        "app_active",
+        "sha3_fsm"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:646-647"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When sha3_fsm==StAbsorb, app_active=0, msgfifo2kmac_process=0, and msgfifo_full_seen_q=0, the empty interrupt is gated even if the FIFO is truly empty. Is it guaranteed that msgfifo_full_seen_q is always set before an empty occurs in this state?",
+      "cond": "FIFO empty while full was never observed in the current absorption window",
+      "risk": "Software may never see the empty interrupt, causing a hang or data loss if a subsequent message is never started.",
+      "signals": [
+        "status_msgfifo_empty",
+        "msgfifo_empty_gate",
+        "msgfifo_full_seen_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:645-650"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The combinational edge detection (msgfifo_empty_q & ~msgfifo_empty) could glitch if msgfifo_empty and its registered version change in the same simulation delta, creating a transient clearing edge on msgfifo_full_seen_d.",
+      "cond": "simultaneous changes on msgfifo_empty and msgfifo_empty_q",
+      "risk": "A glitch might sample a momentary high on msgfifo_empty_negedge into the full‑seen flop, corrupting the tracking state.",
+      "signals": [
+        "msgfifo_empty",
+        "msgfifo_empty_q",
+        "msgfifo_empty_negedge"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:631,639"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The condition sha3_fsm != sha3_pkg::StAbsorb gates the empty interrupt; are there transient FSM states during absorption that are not strictly StAbsorb but still part of the absorption process, potentially causing unintended masking?",
+      "cond": "sha3_fsm in a non‑StAbsorb state while the absorption protocol is incomplete",
+      "risk": "Incorrect gate assertion could mask an empty interrupt that should be seen, or ungate it when it should be suppressed, depending on FSM encoding.",
+      "signals": [
+        "sha3_fsm",
+        "sha3_pkg::StAbsorb"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:647"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:628-650"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 628,
+  "line_end": 650,
+  "security_implications": ""
 }

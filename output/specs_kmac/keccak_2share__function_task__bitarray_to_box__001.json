@@ -1,51 +1,80 @@
 {
   "chunk_id": "keccak_2share__function_task__bitarray_to_box__001",
-  "summary": "将一维状态比特数组按 Keccak 的 x/y lane 顺序重排为三维 box_t 结构。",
-  "behavior": "函数 bitarray_to_box 接收宽度为 Width 的一维输入 s_in，并构造局部变量 box 作为返回值。它遍历 y=0..4、x=0..4 和 z=0..W-1，把 s_in 中第 W*(5*y+x)+z 位映射到 box[x][y][z]。因此输入被解释为 25 个连续 lane、每个 lane 宽 W 位，lane 的线性顺序按 5*y+x 编号；每个 lane 内 z 位保持原有位序，不做翻转或置换。函数返回填充完成的 box，代码中没有默认值或越界保护，映射完全依赖 Width 与 25*W 的一致性。",
+  "header": {
+    "module": "keccak_2share",
+    "block_kind": "function_task",
+    "driven": [
+      "box (return value)"
+    ],
+    "used": [
+      "s_in",
+      "W",
+      "Width"
+    ],
+    "modes": [
+      "W",
+      "Width"
+    ],
+    "tags": [
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "返回值中任意 box[x][y][z] 都等于输入 s_in[W*(5*y+x)+z]，其中 x、y 分别在 0..4，z 在 0..W-1。",
-      "output_signals": [
-        "bitarray_to_box"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "bitarray_to_box maps each flat bit s_in[W*(5*y+x)+z] to box[x][y][z] for all x,y in 0..4 and z in 0..W-1, returning the 3D box array.",
+      "cond": "always",
+      "signals": [
+        "s_in",
+        "box",
+        "W"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:361-370"
-      ]
-    },
-    {
-      "property": "该函数对 box 的所有 5×5×W 个元素都进行了显式赋值后再返回，不保留未初始化元素。",
-      "output_signals": [
-        "bitarray_to_box"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:363-370"
+      "refs": [
+        "366-370"
       ]
     }
   ],
-  "security_implications": "该函数本身只是确定性的位重排，不包含权限、擦除或错误处理逻辑。但它参与 Keccak 状态编码；若外部对 Width/box_t 的定义不一致，会导致状态位映射错误，从而破坏哈希/海绵运算结果，属于密码功能正确性风险。",
   "assumptions": [
     {
-      "constraint": "Width 需要与 25*W 一致，并且输入 s_in 的位宽必须至少覆盖索引 0 到 W*(5*4+4)+(W-1)；否则表达式 s_in[W*(5*y+x)+z] 不能完整表示 5×5×W 的状态。",
-      "bug_relevance": "这是行为契约；若不满足，函数会产生截断、越界或与预期状态布局不一致的结果，导致后续 Keccak 状态解释错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "The caller must ensure parameter Width is exactly 25*W so that s_in[W*(5*y+x)+z] does not index beyond the declared bit range of s_in[Width-1:0].",
+      "cond": "When this function is called",
+      "risk": "Out-of-bounds read on s_in, causing simulation X corruption or synthesis errors.",
+      "signals": [
         "s_in",
-        "W",
-        "Width"
+        "Width",
+        "W"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:361",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:365-366"
+      "refs": [
+        "366"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If the module is instantiated or this function is called with Width < 25*W, the indexing expression W*(5*y+x)+z will exceed s_in's declared bit width, leading to out-of-bounds access.",
+      "cond": "Width < 25*W",
+      "risk": "Undefined simulation behavior (X) or synthesis tool errors; potential incorrect keccak state initialization.",
+      "signals": [
+        "s_in",
+        "Width",
+        "W"
+      ],
+      "refs": [
+        "366"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:361-370"
-  ],
-  "uncertain_points": [
-    "代码表明线性 lane 顺序为 5*y+x，但是否这正是整个设计中约定的外部 bitarray 排列方式，需要结合相反方向的转换函数或上游调用点确认。",
-    "无法仅凭此片段确认参数 Width 是否始终等于 25*W；代码按此关系进行索引，但约束定义在片段外。"
+    "361-371"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
   "line_start": 361,
-  "line_end": 371
+  "line_end": 371,
+  "security_implications": ""
 }

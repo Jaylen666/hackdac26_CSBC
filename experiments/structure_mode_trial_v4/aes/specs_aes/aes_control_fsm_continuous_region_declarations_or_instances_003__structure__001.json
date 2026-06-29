@@ -1,0 +1,148 @@
+{
+  "chunk_id": "aes_control_fsm_continuous_region_declarations_or_instances_003__structure__001",
+  "header": {
+    "module": "aes_control_fsm",
+    "block_kind": "instance",
+    "driven": [
+      "key_init_new",
+      "key_init_new_pulse",
+      "key_init_ready",
+      "iv_ready"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "key_init_we_o",
+      "key_init_load",
+      "key_init_clear",
+      "key_init_arm",
+      "iv_we_o",
+      "iv_load",
+      "iv_clear",
+      "iv_arm"
+    ],
+    "modes": [],
+    "tags": [
+      "key",
+      "iv",
+      "status",
+      "handshake",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "instance connection",
+      "claim": "u_reg_status_key_init is an aes_reg_status instance whose outputs key_init_new, key_init_new_pulse, key_init_ready are directly connected to the local signals of the same names, and whose inputs are wired to clk_i, rst_ni, key_init_we_o, key_init_load, key_init_clear, key_init_arm.",
+      "cond": "always",
+      "signals": [
+        "key_init_new",
+        "key_init_new_pulse",
+        "key_init_ready",
+        "clk_i",
+        "rst_ni",
+        "key_init_we_o",
+        "key_init_load",
+        "key_init_clear",
+        "key_init_arm"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:659-671"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "instance connection",
+      "claim": "u_reg_status_iv is an aes_reg_status instance whose output iv_ready is directly connected to the local signal iv_ready, and whose inputs are wired to clk_i, rst_ni, iv_we_o, iv_load, iv_clear, iv_arm. Outputs new_pulse_o and clean_o are left unconnected.",
+      "cond": "always",
+      "signals": [
+        "iv_ready",
+        "clk_i",
+        "rst_ni",
+        "iv_we_o",
+        "iv_load",
+        "iv_clear",
+        "iv_arm"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:677-689"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The Width parameter passed to aes_reg_status (via $bits(key_init_we_o) and $bits(iv_we_o)) must match the internal bus width expected by the module for the we_i port, and the module must operate correctly for that width.",
+      "cond": "always",
+      "risk": "Width mismatch could cause incorrect bit-level tracking of new/clean/armed status for each bit of the we_i vector, leading to corrupted status flags.",
+      "signals": [
+        "key_init_we_o",
+        "iv_we_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:659-660",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:677-678"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The external logic driving key_init_load, key_init_clear, key_init_arm, iv_load, iv_clear, iv_arm must generate pulses that conform to the aes_reg_status protocol (e.g., one-hot, mutually exclusive or sequenced correctly).",
+      "cond": "when these inputs are asserted",
+      "risk": "Concurrent or malformed pulses could leave the internal status register in an invalid state, leading to lost or false new/ready/clean indications for key or IV.",
+      "signals": [
+        "key_init_load",
+        "key_init_clear",
+        "key_init_arm",
+        "iv_load",
+        "iv_clear",
+        "iv_arm"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:665-667",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:683-685"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The IV instance (u_reg_status_iv) leaves the 'clean_o' output unconnected, while the inline comment states 'We only use clean and unused IVs'. The design may rely solely on software to ensure IV cleanliness, but hardware cannot detect or enforce it without this signal. This could allow loading of a previously used (dirty) IV, corrupting AES encryption/decryption.",
+      "cond": "when a software or counter update writes an IV that is not clean",
+      "risk": "An unclean IV may be loaded and used for AES operations, breaking cryptographic security properties (IV reuse or nonce misuse).",
+      "signals": [
+        "iv_ready",
+        "clean_o (unconnected)"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:673-676",
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:688"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The 'new_pulse_o' output of u_reg_status_iv is also unconnected. It is unclear whether the pulse signal is intentionally omitted or if a missing connection could affect other logic that expects a pulse on IV update.",
+      "cond": "when a new IV is written",
+      "risk": "If downstream logic requires a new-IV pulse and it is not provided, synchronization or handshake may fail silently.",
+      "signals": [
+        "new_pulse_o (unconnected)"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:687"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:659-689"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv",
+  "line_start": 659,
+  "line_end": 689,
+  "security_implications": ""
+}

@@ -1,73 +1,206 @@
 {
   "chunk_id": "kmac_entropy__continuous_region__batched_small_assigns__001",
-  "summary": "该片段完成若干小型连线：将等待定时器上限做位宽转换、在辅助随机数更新时装载或移位 PRNG 使能位，并直接导出主随机数据与辅助随机数据寄存器值。",
-  "behavior": "片段首先声明了等待定时器预分频器的下一状态信号 `wait_timer_prescaler_d`，表明后续逻辑会单独计算该预分频器值，但本片段本身未给出其驱动规则 [kmac_entropy.sv:249-249]。`timer_limit` 由输入 `wait_timer_limit_i` 直接转换为 `TimerW` 位宽，作为等待定时器上限使用；该语句只体现位宽适配，不包含额外判断或饱和处理 [kmac_entropy.sv:251-251]。`prng_en_rand_d` 的组合赋值实现一个 4 位窗口的装载/移位行为：当 `aux_update` 为真时，从 `rand_data_q` 的高位附近切出 4 位 `rand_data_q[EntropyOutputW - 2 -: 4]` 作为新值，注释表明这是一次 refresh；当 `aux_update` 为假时，则将当前 `prng_en_rand_q[3:1]` 右移到低 3 位，并在最高位补 0，注释表明这是 shift out，因此该使能向量会在无刷新时逐步清零 [kmac_entropy.sv:253-255]。最后，输出 `rand_data_o` 和 `rand_aux_o` 分别直接镜像内部寄存器/状态 `rand_data_q` 与 `aux_rand_q`，没有额外屏蔽、重编码或条件选择 [kmac_entropy.sv:257-258]。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "assign",
+    "driven": [
+      "timer_limit",
+      "prng_en_rand_d",
+      "rand_data_o",
+      "rand_aux_o"
+    ],
+    "used": [
+      "wait_timer_limit_i",
+      "aux_update",
+      "rand_data_q",
+      "EntropyOutputW",
+      "prng_en_rand_q",
+      "aux_rand_q"
+    ],
+    "modes": [
+      "TimerPrescalerW",
+      "TimerW",
+      "EntropyOutputW"
+    ],
+    "tags": [
+      "entropy",
+      "prng",
+      "security",
+      "refresh",
+      "parameterization",
+      "timer"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`rand_data_o` 始终等于内部状态 `rand_data_q`，不经过条件门控或变换。",
-      "output_signals": [
-        "rand_data_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "timer_limit is driven to the value of wait_timer_limit_i cast to TimerW bits (truncation/extension may occur).",
+      "cond": "always",
+      "signals": [
+        "timer_limit",
+        "wait_timer_limit_i"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:257-257"
+      "refs": [
+        "kmac_entropy.sv:270"
       ]
     },
     {
-      "property": "`rand_aux_o` 始终等于内部状态 `aux_rand_q`，不经过条件门控或变换。",
-      "output_signals": [
-        "rand_aux_o"
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "prng_en_rand_d is assigned either rand_data_q[EntropyOutputW-2 -: 4] when aux_update is true, or {1'b0, prng_en_rand_q[3:1]} otherwise, implementing a refresh or shift-out choice.",
+      "cond": "aux_update = 1 (refresh) or 0 (shift)",
+      "signals": [
+        "prng_en_rand_d",
+        "aux_update",
+        "rand_data_q",
+        "EntropyOutputW",
+        "prng_en_rand_q"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:258-258"
+      "refs": [
+        "kmac_entropy.sv:417-419"
       ]
     },
     {
-      "property": "当 `aux_update` 为 0 时，`prng_en_rand_d` 的最高位一定为 0，低 3 位等于先前 `prng_en_rand_q[3:1]`。",
-      "output_signals": [
-        "prng_en_rand_d"
+      "id": "G3",
+      "type": "assignment",
+      "claim": "rand_data_o is driven to rand_data_q.",
+      "cond": "always",
+      "signals": [
+        "rand_data_o",
+        "rand_data_q"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:253-255"
+      "refs": [
+        "kmac_entropy.sv:432"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "rand_aux_o is driven to aux_rand_q.",
+      "cond": "always",
+      "signals": [
+        "rand_aux_o",
+        "aux_rand_q"
+      ],
+      "refs": [
+        "kmac_entropy.sv:433"
       ]
     }
   ],
-  "security_implications": "该片段涉及随机/熵相关数据路径。`rand_data_o` 与 `rand_aux_o` 直接暴露内部随机数据状态 [kmac_entropy.sv:257-258]；若这些输出在系统级缺少访问控制或生命周期隔离，可能扩大随机内部状态的可观察性。`prng_en_rand_d` 的 refresh/shift 机制 [kmac_entropy.sv:253-255] 还暗示辅助更新会从随机数据中提取 4 位使能模式，因此其正确性会影响后续随机使能时序，但本片段不足以单独证明其安全性。",
   "assumptions": [
     {
-      "constraint": "`EntropyOutputW` 必须足够大，使位选 `rand_data_q[EntropyOutputW - 2 -: 4]` 合法且落在 `rand_data_q` 范围内；至少需要能覆盖从 `EntropyOutputW-2` 向下连续 4 位。",
-      "bug_relevance": "这是行为契约；若不满足，刷新 `prng_en_rand_d` 时会产生非法位选、编译失败或与设计意图不符的位提取，从而破坏 PRNG 使能更新逻辑。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "EntropyOutputW must be ≥ 2, otherwise the slice rand_data_q[EntropyOutputW-2 -: 4] produces an invalid index.",
+      "cond": "always, as used in prng_en_rand_d assignment",
+      "risk": "Synthesis/simulation failure or mis-indexed read could load unintended bits for PRNG refresh, compromising entropy quality.",
+      "signals": [
+        "EntropyOutputW",
         "rand_data_q",
         "prng_en_rand_d"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:253-255"
+      "refs": [
+        "kmac_entropy.sv:417"
       ]
     },
     {
-      "constraint": "`wait_timer_limit_i` 的数值语义应与 `TimerW` 转换后一致，即上游不应依赖被截断或扩展前的额外高位/符号语义。",
-      "bug_relevance": "这是行为契约；若上游提供的 `wait_timer_limit_i` 在转换到 `TimerW` 后发生非预期截断或扩展，等待定时器上限将被错误解释，导致等待周期错误。",
-      "related_signals": [
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Signal prng_en_rand_q must be at least 4 bits wide to allow the extraction prng_en_rand_q[3:1].",
+      "cond": "always, for the shift path",
+      "risk": "Out-of-range select leads to synthesis error or incorrect shift-out data, breaking PRNG enable sequencing.",
+      "signals": [
+        "prng_en_rand_q"
+      ],
+      "refs": [
+        "kmac_entropy.sv:419"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "When aux_update is asserted, rand_data_q[EntropyOutputW-2 -: 4] must contain valid entropy.",
+      "cond": "aux_update = 1",
+      "risk": "prng_en_rand_d loads stale or predictable bits, undermining the PRNG's security properties.",
+      "signals": [
+        "aux_update",
+        "rand_data_q"
+      ],
+      "refs": [
+        "kmac_entropy.sv:417-419"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If EntropyOutputW < 2, the slice rand_data_q[EntropyOutputW-2 -: 4] is invalid; legal parameterizations may not guarantee EntropyOutputW ≥ 2.",
+      "cond": "EntropyOutputW < 2 (legal configuration not yet excluded)",
+      "risk": "Indexing error could load garbage into prng_en_rand_d, directly compromising PRNG entropy refresh.",
+      "signals": [
+        "EntropyOutputW",
+        "prng_en_rand_d"
+      ],
+      "refs": [
+        "kmac_entropy.sv:417-419"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The shift operation {1'b0, prng_en_rand_q[3:1]} requires prng_en_rand_q width ≥ 4; there is no local check and the parameterization may not enforce this.",
+      "cond": "prng_en_rand_q width < 4",
+      "risk": "Synthesis error or bit-select out of range could corrupt the shift-out logic, affecting PRNG enable timing.",
+      "signals": [
+        "prng_en_rand_q"
+      ],
+      "refs": [
+        "kmac_entropy.sv:417-419"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "TimerW'(wait_timer_limit_i) may truncate the input if wait_timer_limit_i is wider than TimerW, resulting in a smaller timer limit than expected.",
+      "cond": "width(wait_timer_limit_i) > TimerW",
+      "risk": "Shorter timer could accelerate entropy state transitions beyond intended design, weakening entropy accumulation.",
+      "signals": [
         "wait_timer_limit_i",
         "timer_limit"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:251-251"
+      "refs": [
+        "kmac_entropy.sv:270"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The offset EntropyOutputW-2 used to select 4 bits from rand_data_q is arbitrary; the rationale for subtracting 2 is unclear and may be a design-intent error.",
+      "cond": "always when aux_update = 1",
+      "risk": "If the offset is incorrect, prng_en_rand_d may receive non-entropy bits, defeating the refresh mechanism.",
+      "signals": [
+        "rand_data_q",
+        "EntropyOutputW"
+      ],
+      "refs": [
+        "kmac_entropy.sv:417"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_entropy.sv:249-249",
-    "kmac_entropy.sv:251-251",
-    "kmac_entropy.sv:253-255",
-    "kmac_entropy.sv:257-258"
-  ],
-  "uncertain_points": [
-    "`timer_limit` 的后续消费逻辑不在本片段内，因此无法确认 `TimerW'(wait_timer_limit_i)` 是零扩展、截断容忍，还是依赖两者位宽本就匹配的设计约束。",
-    "`prng_en_rand_d` 注释中的 refresh 和 shift out 说明了设计意图，但仅凭本片段无法确认这 4 位使能值在后续逻辑中具体如何使用，以及为何选择 `rand_data_q[EntropyOutputW - 2 -: 4]` 这一位段而不是其他位段。",
-    "`wait_timer_prescaler_d` 仅被声明未在本片段内赋值，无法从该片段判断其默认值、更新条件或是否在其他组合块中完整驱动。"
+    "kmac_entropy.sv:248-248",
+    "kmac_entropy.sv:270-270",
+    "kmac_entropy.sv:417-419",
+    "kmac_entropy.sv:432-433"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 248,
-  "line_end": 433
+  "line_end": 433,
+  "security_implications": ""
 }

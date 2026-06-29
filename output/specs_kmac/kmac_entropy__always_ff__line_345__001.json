@@ -1,50 +1,140 @@
 {
   "chunk_id": "kmac_entropy__always_ff__line_345__001",
-  "summary": "该寄存器块保存熵模式配置：复位时清为 EntropyModeNone，仅在 mode_latch 置位时采样并更新为 mode_i。",
-  "behavior": "该过程块实现寄存器 mode_q 的更新。异步低有效复位有效时，mode_q 被强制设为 EntropyModeNone；非复位状态下，只有当 mode_latch 为 1 时才把输入 mode_i 锁存到 mode_q，否则保持原值不变。代码未显示对 mode_i 的合法性检查，因此 mode_q 会直接保存被采样到的 mode_i 值。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "mode_q"
+    ],
+    "used": [
+      "rst_ni",
+      "mode_latch",
+      "mode_i",
+      "clk_i",
+      "EntropyModeNone"
+    ],
+    "modes": [
+      "EntropyModeNone (constant)"
+    ],
+    "tags": [
+      "entropy",
+      "reset",
+      "mode",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位有效时，mode_q 一定被置为 EntropyModeNone。",
-      "output_signals": [
-        "mode_q"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, mode_q is set to EntropyModeNone on the next posedge clk_i, overriding any mode_latch condition.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "mode_q",
+        "EntropyModeNone"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:345-347"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:346"
       ]
     },
     {
-      "property": "在非复位状态下，若 mode_latch 未置位，则该块不会修改 mode_q，mode_q 保持先前值。",
-      "output_signals": [
-        "mode_q"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:346-348"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑控制熵源模式寄存器的更新，属于安全相关配置路径的一部分。复位默认回到 EntropyModeNone 可降低上电后误用熵模式的风险；但该片段本身不校验 mode_i 的取值是否合法，安全性依赖上游仅在允许时机通过 mode_latch 提供正确模式值。",
-  "assumptions": [
-    {
-      "constraint": "当 mode_latch 置位请求更新时，mode_i 应为设计定义的合法熵模式编码。",
-      "bug_relevance": "若不满足，则 mode_q 可能锁存未定义或非法模式，进而导致后续熵路径行为错误；这更像行为契约而非防御性输入，因为本片段没有做回退处理。",
-      "related_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and mode_latch is true, mode_q is updated with mode_i at the posedge clk_i.",
+      "cond": "!rst_ni negated and mode_latch asserted",
+      "signals": [
         "mode_latch",
         "mode_i",
         "mode_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:347-347"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:347"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and mode_latch is false, mode_q retains its previous value.",
+      "cond": "!rst_ni negated and mode_latch deasserted",
+      "signals": [
+        "mode_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:347 (implicit else)"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "mode_i is stable and holds a valid mode value during the entire clock edge when mode_latch is true.",
+      "cond": "mode_latch asserted at a posedge clk_i",
+      "risk": "If mode_i changes or is invalid while mode_latch is high, mode_q may latch a corrupted or unintended value, potentially selecting an insecure or dead entropy mode.",
+      "signals": [
+        "mode_i",
+        "mode_latch"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:347"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The reset value EntropyModeNone may not be a secure default for mode_q; it is unclear if 'none' implies a safe entropy state (e.g., output zero or disable) or if it creates a window of insecurity.",
+      "cond": "after reset deassertion until the first mode_latch update",
+      "risk": "If EntropyModeNone puts the entropy block into an insecure or predictable state, the system may operate with unprotected or low-quality entropy during that interval.",
+      "signals": [
+        "rst_ni",
+        "mode_q",
+        "EntropyModeNone"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:346"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "mode_i is latched into mode_q without any integrity check (e.g., no parity, multi-cycle sampling, or cross-check with other state).",
+      "cond": "whenever mode_latch is asserted and mode_i is corrupted due to a fault",
+      "risk": "A transient or permanent fault on mode_i could cause mode_q to adopt an illegal mode, potentially bypassing entropy conditioning, leaking state, or permanently stopping entropy generation.",
+      "signals": [
+        "mode_i",
+        "mode_q",
+        "mode_latch"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:347"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If mode_latch is deasserted for an extended period while the system expects a mode change, mode_q retains its old value with no indication of staleness.",
+      "cond": "mode_latch failure or handshake deadlock",
+      "risk": "The entropy module may continue operating in a stale mode, using outdated or inappropriate entropy parameters, which may reduce randomness quality or violate protocol expectations.",
+      "signals": [
+        "mode_latch",
+        "mode_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:347"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:345-348"
   ],
-  "uncertain_points": [
-    "无法仅凭该片段确认 mode_latch 的产生条件及其是否只在允许的配置窗口内拉高。",
-    "无法仅凭该片段确认 mode_i 是否为枚举类型并由类型系统限制为合法 EntropyMode 值；若是强类型枚举，则非法编码风险可能较低。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 345,
-  "line_end": 348
+  "line_end": 348,
+  "security_implications": ""
 }

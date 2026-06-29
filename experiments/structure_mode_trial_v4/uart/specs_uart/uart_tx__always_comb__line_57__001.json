@@ -1,0 +1,210 @@
+{
+  "chunk_id": "uart_tx__always_comb__line_57__001",
+  "header": {
+    "module": "uart_tx",
+    "block_kind": "always_comb",
+    "driven": [
+      "bit_cnt_d",
+      "sreg_d",
+      "tx_d"
+    ],
+    "used": [
+      "tx_enable",
+      "bit_cnt_q",
+      "sreg_q",
+      "tx_q",
+      "wr",
+      "parity_enable",
+      "wr_parity",
+      "wr_data",
+      "tick_baud_q"
+    ],
+    "modes": [
+      "tx_enable=0",
+      "tx_enable=1, wr=1",
+      "tx_enable=1, wr=0, tick_baud_q=1, bit_cnt_q!=0",
+      "tx_enable=1, else"
+    ],
+    "tags": [
+      "uart",
+      "counter",
+      "handshake",
+      "control"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When tx_enable is low, bit_cnt_d is forced to 0, sreg_d to all-ones (11'h7ff), and tx_d to 1.",
+      "cond": "!tx_enable",
+      "signals": [
+        "tx_enable",
+        "bit_cnt_d",
+        "sreg_d",
+        "tx_d"
+      ],
+      "refs": [
+        "uart_tx.sv:58-61"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When tx_enable is high but no write or shift condition is true, the outputs hold their current values: bit_cnt_d = bit_cnt_q, sreg_d = sreg_q, tx_d = tx_q.",
+      "cond": "tx_enable && !wr && !(tick_baud_q && bit_cnt_q != 4'h0)",
+      "signals": [
+        "tx_enable",
+        "bit_cnt_d",
+        "sreg_d",
+        "tx_d",
+        "bit_cnt_q",
+        "sreg_q",
+        "tx_q",
+        "wr",
+        "tick_baud_q"
+      ],
+      "refs": [
+        "uart_tx.sv:63-65"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When tx_enable is high and wr is asserted, the shift register is loaded with a frame: sreg_d = {1'b1, (parity_enable ? wr_parity : 1'b1), wr_data, 1'b0}, and bit_cnt_d is set to 11 if parity is enabled, else 10. tx_d is unchanged from the default hold value.",
+      "cond": "tx_enable && wr",
+      "signals": [
+        "tx_enable",
+        "wr",
+        "sreg_d",
+        "bit_cnt_d",
+        "parity_enable",
+        "wr_parity",
+        "wr_data"
+      ],
+      "refs": [
+        "uart_tx.sv:66-68"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When tx_enable is high, wr is low, tick_baud_q is asserted and bit_cnt_q is non-zero, the shift register is shifted right: tx_d gets sreg_q[0], sreg_d gets {1'b1, sreg_q[10:1]}, and bit_cnt_d is decremented by 1.",
+      "cond": "tx_enable && !wr && tick_baud_q && (bit_cnt_q != 4'h0)",
+      "signals": [
+        "tx_enable",
+        "wr",
+        "tick_baud_q",
+        "bit_cnt_q",
+        "tx_d",
+        "sreg_d",
+        "bit_cnt_d"
+      ],
+      "refs": [
+        "uart_tx.sv:69-72"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "tick_baud_q is a single-cycle pulse occurring at the correct baud rate.",
+      "cond": "always during operation",
+      "risk": "Multiple pulses per bit period or incorrect pulse width will cause extra shifts, corrupting the transmitted frame.",
+      "signals": [
+        "tick_baud_q"
+      ],
+      "refs": [
+        "uart_tx.sv:69"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "lifecycle",
+      "claim": "tx_enable is not deasserted while a transmission is in progress (bit_cnt_q != 0).",
+      "cond": "when tx_enable transitions from 1 to 0",
+      "risk": "Immediate reset of bit_cnt_d, sreg_d, and tx_d will truncate the ongoing frame and force the line high, causing protocol violation.",
+      "signals": [
+        "tx_enable",
+        "bit_cnt_q"
+      ],
+      "refs": [
+        "uart_tx.sv:58-61"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "wr is a single-cycle pulse, and wr_data and wr_parity are stable and valid during that cycle.",
+      "cond": "when wr is asserted",
+      "risk": "If wr stays high for multiple cycles, the shift register and bit count are reloaded every cycle, potentially leading to spurious transmissions or missed data.",
+      "signals": [
+        "wr",
+        "wr_data",
+        "wr_parity"
+      ],
+      "refs": [
+        "uart_tx.sv:66-68"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "If wr is asserted while a transmission is in progress (bit_cnt_q != 4'h0), the new frame is loaded immediately, aborting the previous one.",
+      "cond": "tx_enable && wr && bit_cnt_q != 4'h0",
+      "risk": "Unintended data corruption if this abort behavior is not desired. A hardware busy gating may be missing.",
+      "signals": [
+        "wr",
+        "bit_cnt_q",
+        "sreg_d",
+        "bit_cnt_d"
+      ],
+      "refs": [
+        "uart_tx.sv:67-68"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Deasserting tx_enable during an active transmission instantly resets the transmitter state.",
+      "cond": "tx_enable falling edge while bit_cnt_q != 0",
+      "risk": "The ongoing frame is cut short, which may violate UART protocol or confuse the receiver.",
+      "signals": [
+        "tx_enable",
+        "bit_cnt_q"
+      ],
+      "refs": [
+        "uart_tx.sv:58-61"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "When wr loads a new frame, tx_d is not immediately updated to the start bit (0); it holds the previous tx_q value until the next baud tick.",
+      "cond": "tx_enable && wr",
+      "risk": "The line remains in the idle/mark state for one extra baud-interval before the start bit appears, causing a brief delay that may violate minimum inter‑frame timing or confuse edge‑sensitive receivers.",
+      "signals": [
+        "wr",
+        "tx_d",
+        "sreg_q",
+        "tick_baud_q"
+      ],
+      "refs": [
+        "uart_tx.sv:65-68"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_tx.sv:57-75"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv",
+  "line_start": 57,
+  "line_end": 75,
+  "security_implications": ""
+}

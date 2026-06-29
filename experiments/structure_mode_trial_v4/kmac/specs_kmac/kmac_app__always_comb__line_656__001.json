@@ -1,0 +1,176 @@
+{
+  "chunk_id": "kmac_app__always_comb__line_656__001",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "mux_err"
+    ],
+    "used": [
+      "mux_sel_buf_err_check",
+      "SelSw",
+      "sw_valid_i",
+      "app_active_o",
+      "sw_cmd_i",
+      "CmdNone",
+      "ErrSwPushedMsgFifo",
+      "ErrSwIssuedCmdInAppActive",
+      "ErrNone",
+      "st"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "access_control",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When neither error condition is met, mux_err is driven to {valid:0, code:ErrNone, info:'0}.",
+      "cond": "Always_comb, before any if match",
+      "signals": [
+        "mux_err"
+      ],
+      "refs": [
+        "kmac_app.sv:657"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When mux_sel_buf_err_check != SelSw and sw_valid_i, mux_err is assigned {valid:1, code:ErrSwPushedMsgFifo, info:24'({8'h00, 8'(st), 8'(mux_sel_buf_err_check)})}.",
+      "cond": "if (mux_sel_buf_err_check != SelSw && sw_valid_i)",
+      "signals": [
+        "mux_err",
+        "mux_sel_buf_err_check",
+        "SelSw",
+        "sw_valid_i",
+        "st"
+      ],
+      "refs": [
+        "kmac_app.sv:659-665"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When the first condition is false, app_active_o is true, and sw_cmd_i != CmdNone, mux_err is assigned {valid:1, code:ErrSwIssuedCmdInAppActive, info:24'(sw_cmd_i)}.",
+      "cond": "else if (app_active_o && sw_cmd_i != CmdNone)",
+      "signals": [
+        "mux_err",
+        "app_active_o",
+        "sw_cmd_i",
+        "CmdNone"
+      ],
+      "refs": [
+        "kmac_app.sv:666-672"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "st and mux_sel_buf_err_check must be stable and valid when sw_valid_i is asserted, because they are captured into error info.",
+      "cond": "When sw_valid_i is high and mux_sel_buf_err_check != SelSw",
+      "risk": "If st or mux_sel_buf_err_check change during sw_valid_i, the captured error info may be incorrect, potentially leading to misdiagnosis or leakage if readable.",
+      "signals": [
+        "st",
+        "mux_sel_buf_err_check",
+        "sw_valid_i"
+      ],
+      "refs": [
+        "kmac_app.sv:664"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The enum definitions of SelSw, ErrSwPushedMsgFifo, ErrSwIssuedCmdInAppActive, ErrNone, and CmdNone must match the intended error codes and command values.",
+      "cond": "At synthesis/configuration time",
+      "risk": "Mismatched enum values could cause the block to report wrong error codes or miss errors entirely.",
+      "signals": [
+        "SelSw",
+        "ErrSwPushedMsgFifo",
+        "ErrSwIssuedCmdInAppActive",
+        "ErrNone",
+        "CmdNone"
+      ],
+      "refs": [
+        "kmac_app.sv:659-672"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The condition mux_sel_buf_err_check != SelSw may not cover all legal modes where SW writes are allowed; other non-SelSw modes might legitimately accept SW writes.",
+      "cond": "When mux_sel_buf_err_check is not SelSw but SW write is intended by architecture",
+      "risk": "False ErrSwPushedMsgFifo error reporting could mask real errors or disrupt normal operation.",
+      "signals": [
+        "mux_sel_buf_err_check",
+        "SelSw",
+        "sw_valid_i"
+      ],
+      "refs": [
+        "kmac_app.sv:659"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Error info exposes the internal state st and mux_sel_buf_err_check. If st encodes sensitive or secret state, this could leak information through error reporting.",
+      "cond": "When an error is triggered and the info field is readable by software or observable outside the IP",
+      "risk": "Potential leakage of internal state, which could include key material, operation mode, or other secrets.",
+      "signals": [
+        "st",
+        "mux_err.info"
+      ],
+      "refs": [
+        "kmac_app.sv:664"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "mux_err is a combinational signal; the downstream consumer must sample it when its inputs are stable and handle it appropriately (latching, clearing, etc.).",
+      "cond": "Depends on the consumer logic outside this always_comb",
+      "risk": "If sampled at an incorrect time, the error may be missed, glitched, or duplicated, undermining fault detection.",
+      "signals": [
+        "mux_err"
+      ],
+      "refs": [
+        "kmac_app.sv:656-674"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The second error condition depends on app_active_o and sw_cmd_i. If app_active_o deasserts near a command change, a race could cause a spurious error or miss a real one.",
+      "cond": "During transition of app_active_o and sw_cmd_i",
+      "risk": "Spurious ErrSwIssuedCmdInAppActive could trigger unnecessary error handling, potentially impacting security state machines.",
+      "signals": [
+        "app_active_o",
+        "sw_cmd_i"
+      ],
+      "refs": [
+        "kmac_app.sv:666"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_app.sv:656-674"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
+  "line_start": 656,
+  "line_end": 674,
+  "security_implications": ""
+}

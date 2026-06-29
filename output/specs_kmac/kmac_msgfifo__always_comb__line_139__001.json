@@ -1,40 +1,90 @@
 {
   "chunk_id": "kmac_msgfifo__always_comb__line_139__001",
-  "summary": "将按位字节掩码 packer_wmask 压缩成 FIFO 写数据的逐字节 strobe。",
-  "behavior": "该组合逻辑先将 fifo_wdata.strb 全部清零，然后遍历每个输出字节位置 i，只取 packer_wmask 中对应字节的最低位 packer_wmask[8*i] 来驱动 fifo_wdata.strb[i]。因此 fifo_wdata.strb 的每一位表示对应字节是否有效，但其判定依据不是该字节掩码的任意位或全字节一致性，而是每个 8-bit 分组的 bit0。若某个字节内除 bit0 之外的其他位被置位，这段代码不会反映到 strb 上；这可能是上游保证 packer_wmask 按字节统一生成的设计意图，也可能隐藏了对非规范掩码的忽略行为。源码见 /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:139-144。",
+  "header": {
+    "module": "kmac_msgfifo",
+    "block_kind": "always_comb",
+    "driven": [
+      "fifo_wdata.strb"
+    ],
+    "used": [
+      "packer_wmask",
+      "OutWidth"
+    ],
+    "modes": [
+      "OutWidth"
+    ],
+    "tags": [
+      "fifo",
+      "mask"
+    ]
+  },
   "guarantees": [
     {
-      "property": "fifo_wdata.strb 的位宽范围内，未被循环显式赋值的位保持为 0；每个有效索引 i 上，fifo_wdata.strb[i] 恒等于 packer_wmask[8*i]。",
-      "output_signals": [
-        "fifo_wdata.strb"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "fifo_wdata.strb is first set to all zeros, then for each byte lane i from 0 to OutWidth/8-1, strb[i] is driven to packer_wmask[8*i]. Any bits beyond OutWidth/8-1 remain 0.",
+      "cond": "always",
+      "signals": [
+        "fifo_wdata.strb",
+        "packer_wmask",
+        "OutWidth"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:140-143"
+      "refs": [
+        "kmac_msgfifo.sv:139-144"
       ]
     }
   ],
-  "security_implications": "该逻辑参与决定哪些字节被标记为有效写入 FIFO。若上游 packer_wmask 不是按字节一致编码，而是同一字节内只有非 bit0 位被置位，则相应字节会被错误地标记为无效，可能导致消息数据被部分丢弃。片段本身未做一致性检查，因此对输入掩码编码方式存在隐含依赖。",
   "assumptions": [
     {
-      "constraint": "packer_wmask 应按字节一致编码，即对每个字节 i，8*i 到 8*i+7 的位要么全同、要么至少保证 bit 8*i 能代表该字节是否有效。",
-      "bug_relevance": "若不满足则该片段只采样每字节的最低位，可能把本应有效的字节标成无效；这更像上游接口契约，违反时可能造成消息写入错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Parameter OutWidth is a positive integer multiple of 8, so the loop bound covers all byte lanes correctly.",
+      "cond": "when data path width is defined by OutWidth",
+      "risk": "If OutWidth is not a multiple of 8, some byte lane strobe bits may be undriven, potentially causing spurious writes or data corruption.",
+      "signals": [
+        "OutWidth"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:141"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Input packer_wmask has a width of at least OutWidth bits, so the index 8*i is within bounds for all i in the loop.",
+      "cond": "always",
+      "risk": "Out-of-bounds access may cause simulation errors or unpredictable hardware behavior.",
+      "signals": [
+        "packer_wmask",
+        "OutWidth"
+      ],
+      "refs": [
+        "kmac_msgfifo.sv:142"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "packer_wmask format is undocumented; the chunk extracts every 8th bit as a byte strobe. It is unclear why the bits are spaced 8 apart and whether this correctly represents a byte-write mask.",
+      "cond": "when packer_wmask is generated externally",
+      "risk": "Misinterpretation of packer_wmask may lead to incorrect strobe generation, causing the FIFO to write erroneous byte lanes or mask intended writes.",
+      "signals": [
         "packer_wmask",
         "fifo_wdata.strb"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:141-142"
+      "refs": [
+        "kmac_msgfifo.sv:142"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:139-144"
-  ],
-  "uncertain_points": [
-    "无法仅凭该片段确认 packer_wmask 是否被设计为每字节 8 位完全相同；如果是，则取 packer_wmask[8*i] 只是字节有效位抽取，否则可能遗漏同字节内其他位置的置位信息。",
-    "无法从该片段单独确认 fifo_wdata.strb 的精确位宽是否恰好等于 OutWidth/8；代码通过先清零再按 OutWidth/8 次赋值，暗含两者应兼容。"
+    "kmac_msgfifo.sv:139-144"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
   "line_start": 139,
-  "line_end": 144
+  "line_end": 144,
+  "security_implications": ""
 }

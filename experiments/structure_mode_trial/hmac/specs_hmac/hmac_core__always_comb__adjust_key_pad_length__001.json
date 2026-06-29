@@ -1,0 +1,181 @@
+{
+  "chunk_id": "hmac_core__always_comb__adjust_key_pad_length__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "i_pad_256",
+      "i_pad_512",
+      "o_pad_256",
+      "o_pad_512"
+    ],
+    "used": [
+      "secret_key_i",
+      "key_length_i",
+      "BlockSizeSHA256",
+      "BlockSizeSHA512"
+    ],
+    "modes": [
+      "Key_128",
+      "Key_256",
+      "Key_384",
+      "Key_512",
+      "Key_1024"
+    ],
+    "tags": [
+      "key",
+      "digest",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When key_length_i is Key_128, Key_256, Key_384, or Key_512, the combinational pad outputs are built by taking the corresponding most significant bits of secret_key_i (1023:896, 1023:768, 1023:640, 1023:512), zero-extending to the block size (BlockSizeSHA256 or BlockSizeSHA512), and bitwise XORing with the appropriate pad constant (0x36 for i_pad, 0x5c for o_pad).",
+      "cond": "key_length_i in {Key_128, Key_256, Key_384, Key_512}",
+      "signals": [
+        "i_pad_256",
+        "i_pad_512",
+        "o_pad_256",
+        "o_pad_512",
+        "secret_key_i",
+        "BlockSizeSHA256",
+        "BlockSizeSHA512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:137-175"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When key_length_i is Key_1024, i_pad_256 and o_pad_256 are explicitly set to all zeros; i_pad_512 = secret_key_i[1023:0] XORed with {(BlockSizeSHA512/8){8'h36}} and o_pad_512 = secret_key_i[1023:0] XORed with {(BlockSizeSHA512/8){8'h5c}}.",
+      "cond": "key_length_i == Key_1024",
+      "signals": [
+        "i_pad_256",
+        "o_pad_256",
+        "i_pad_512",
+        "o_pad_512",
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-183"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When key_length_i does not match any of the explicit case items (default), all four pad signals retain their initial all-zeros value because the default case is empty.",
+      "cond": "key_length_i not in {Key_128, Key_256, Key_384, Key_512, Key_1024}",
+      "signals": [
+        "i_pad_256",
+        "i_pad_512",
+        "o_pad_256",
+        "o_pad_512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:184-185"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "key_length_i must always be one of the defined legal values (Key_128, Key_256, Key_384, Key_512, Key_1024) to produce valid HMAC key pads; the block provides no fallback error signaling.",
+      "cond": "always during normal operation",
+      "risk": "If an illegal key_length_i appears, all pads become zero, potentially causing silent HMAC computation with a zeroed inner/outer pad, leading to incorrect authentication tags.",
+      "signals": [
+        "key_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:130-187"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The parameters BlockSizeSHA256 and BlockSizeSHA512 must equal 512 and 1024 respectively (the standard SHA-2 block sizes in bits).",
+      "cond": "always",
+      "risk": "Incorrect parameter values cause wrong zero-padding lengths, leading to HMAC key pad misalignment and interoperability failure.",
+      "signals": [
+        "BlockSizeSHA256",
+        "BlockSizeSHA512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:137-183"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "secret_key_i must present the actual key material left-aligned within its 1024-bit bus, i.e., the most significant bits contain the key; for keys shorter than 1024 bits the lower bits are ignored (or padded with zeros externally).",
+      "cond": "when key_length_i < Key_1024",
+      "risk": "If the key is right-aligned or arbitrarily packed, the extracted secret_key_i bits will not match the intended key, leading to an incorrect HMAC result.",
+      "signals": [
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:138-167"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The default case produces all-zero pads with no error output. If an illegal key_length_i can reach this block (e.g., via a register bit flip), the HMAC engine may continue operating with effectively a zeroed key without any alert.",
+      "cond": "key_length_i takes an unexpected value",
+      "risk": "Silent HMAC degradation and potential undetected authentication failures.",
+      "signals": [
+        "key_length_i",
+        "i_pad_256",
+        "i_pad_512",
+        "o_pad_256",
+        "o_pad_512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:184-185"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The code comment says Key_1024 'not allowed to be configured for SHA-2 256' and zeroes the 256-bit pads, but it is unclear whether upper-level configuration logic prevents HMAC_SHA256 mode when a 1024-bit key is selected. If the prevention is missing, the SHA-256 datapath could use a zeroed pad, seriously compromising security.",
+      "cond": "Key_1024 is selected and SHA-256 operation is enabled",
+      "risk": "HMAC with zeroed inner/outer pad essentially uses a known key, breaking authentication.",
+      "signals": [
+        "i_pad_256",
+        "o_pad_256",
+        "key_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-178,181"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The left-alignment assumption for secret_key_i and the exact bit ranges used for each key length are not documented within the code block; external documentation or CSR specifications should confirm this mapping.",
+      "cond": "any key_length_i < Key_1024",
+      "risk": "Misunderstanding by integrators could lead to key misplacement and HMAC failure.",
+      "signals": [
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:138-167"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:130-187"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 130,
+  "line_end": 187,
+  "security_implications": ""
+}

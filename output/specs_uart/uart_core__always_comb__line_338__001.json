@@ -1,41 +1,117 @@
 {
   "chunk_id": "uart_core__always_comb__line_338__001",
-  "summary": "根据接收FIFO水位等级计算水位阈值并输出水位到达标志",
-  "behavior": "该组合块根据输入的FIFO水位等级选择信号uart_fifo_rxilvl计算接收水位阈值rx_thresh_val。当uart_fifo_rxilvl等于RxFifoDepthW-1（最高合法等级）时，阈值设为RxFifoDepth-2，即FIFO深度减2；当uart_fifo_rxilvl大于RxFifoDepthW-1（超出合法范围）时，阈值设为全1，等效于最大可能深度，使水位标记永不触发；其余合法等级使用指数阈值2^uart_fifo_rxilvl。随后，输出event_rx_watermark由当前FIFO深度rx_fifo_depth与rx_thresh_val的比较结果组合驱动：深度大于等于阈值时有效。所有赋值组合即刻生效。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "rx_thresh_val",
+      "event_rx_watermark"
+    ],
+    "used": [
+      "uart_fifo_rxilvl",
+      "rx_fifo_depth",
+      "RxFifoDepthW",
+      "RxFifoDepth"
+    ],
+    "modes": [
+      "uart_fifo_rxilvl values compared to RxFifoDepthW-1",
+      "RxFifoDepthW and RxFifoDepth parameters"
+    ],
+    "tags": [
+      "fifo",
+      "watermark",
+      "always_comb",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在合法水位等级(0至RxFifoDepthW-1)下，rx_thresh_val为确定值：最高等级对应RxFifoDepth-2，其他等级为2^level；非法等级不会产生意外低压阈值，确保水位标记不会意外触发",
-      "output_signals": [
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "rx_thresh_val is set to RxFifoDepthW'(RxFifoDepth - 2) when uart_fifo_rxilvl equals RxFifoDepthW-1; when uart_fifo_rxilvl > RxFifoDepthW-1, rx_thresh_val is all-ones; otherwise it is 1'b1 << uart_fifo_rxilvl.",
+      "cond": "always (combinational)",
+      "signals": [
         "rx_thresh_val",
-        "event_rx_watermark"
+        "uart_fifo_rxilvl",
+        "RxFifoDepthW",
+        "RxFifoDepth"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:338-351"
+      "refs": [
+        "uart_core.sv:339-348"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "event_rx_watermark is asserted when rx_fifo_depth >= rx_thresh_val, otherwise deasserted.",
+      "cond": "always (combinational)",
+      "signals": [
+        "event_rx_watermark",
+        "rx_fifo_depth",
+        "rx_thresh_val"
+      ],
+      "refs": [
+        "uart_core.sv:350"
       ]
     }
   ],
-  "security_implications": "",
   "assumptions": [
     {
-      "constraint": "RxFifoDepth至少为3，且RxFifoDepthW为表示其位宽的正确值",
-      "bug_relevance": "若RxFifoDepth<3，则最高等级下的阈值RxFifoDepth-2可能为零或负值，导致水位标记过早触发，不符合设计意图；但此类参数错误属于集成配置问题",
-      "related_signals": [
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "The localparam RxFifoDepthW must be ≥ 1; otherwise the case item RxFifoDepthW-1 wraps to a large integer and may spuriously match uart_fifo_rxilvl.",
+      "cond": "when RxFifoDepthW is defined",
+      "risk": "If RxFifoDepthW = 0, the case item becomes a very large value, potentially matching legal uart_fifo_rxilvl values and causing rx_thresh_val to be set to RxFifoDepth-2 instead of the default branch.",
+      "signals": [
+        "RxFifoDepthW",
+        "uart_fifo_rxilvl",
+        "rx_thresh_val"
+      ],
+      "refs": [
+        "uart_core.sv:347"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "If RxFifoDepthW can be 0, the case label RxFifoDepthW-1 will be a large two's-complement number, possibly matching a legal value of uart_fifo_rxilvl and leading to an unintended rx_thresh_val assignment of RxFifoDepth-2.",
+      "cond": "RxFifoDepthW = 0",
+      "risk": "Watermark threshold may be set to an unexpected value, causing incorrect event generation.",
+      "signals": [
+        "RxFifoDepthW",
+        "uart_fifo_rxilvl",
+        "rx_thresh_val"
+      ],
+      "refs": [
+        "uart_core.sv:347"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "For the highest fifo level index (RxFifoDepthW-1), the threshold is set to RxFifoDepth-2, which deviates from the bit-shift pattern used for lower levels. The intent is not documented in this chunk.",
+      "cond": "when uart_fifo_rxilvl = RxFifoDepthW-1",
+      "risk": "If the value is wrong, the receive watermark event may be generated at an incorrect fill level, impacting flow control or interrupt timing.",
+      "signals": [
+        "uart_fifo_rxilvl",
+        "rx_thresh_val",
         "RxFifoDepth",
         "RxFifoDepthW"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:347"
+      "refs": [
+        "uart_core.sv:347"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:338-351"
-  ],
-  "uncertain_points": [
-    "uart_fifo_rxilvl的位宽及数值范围未在片段中显式给出；默认其最高合法值为RxFifoDepthW-1，但该假设依赖参数一致性",
-    "uart_fifo_rxilvl超出合法范围的防御性行为（阈值全1）是否与顶层文档意图完全一致，需结合寄存器规格确认"
+    "uart_core.sv:338-351"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 338,
-  "line_end": 351
+  "line_end": 351,
+  "security_implications": ""
 }

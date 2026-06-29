@@ -20,9 +20,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from rtl_bug_agent.env import load_dotenv, make_client
-from rtl_bug_agent.rtl.io import read_chunks
+from rtl_bug_agent.rtl.chunker import chunk_sv_files_structural_aware
+from rtl_bug_agent.rtl.io import read_chunks, write_chunks
 from rtl_bug_agent.schema import RtlChunk
 from rtl_bug_agent.spec.extractor import generate_chunk_spec
+from rtl_bug_agent.phase2.structural_facts import write_structural_facts
 
 # Chunks of kind ``continuous_region`` with fewer than this many lines are
 # considered "isolated fragments" and will be batched per source file.
@@ -102,8 +104,23 @@ def main() -> None:
     )
     parser.add_argument("--chunks", required=True, help="Path to chunks JSON file")
     parser.add_argument("--out-dir", required=True, help="Output directory for spec JSONs")
+    parser.add_argument(
+        "--structural-aware",
+        action="store_true",
+        help="Enable structure/behavior split and emit manifest/facts side outputs",
+    )
+    parser.add_argument(
+        "--rtl-dir",
+        default=None,
+        help="RTL dir required for --structural-aware mode to re-chunk source files",
+    )
     parser.add_argument("--env", default="/home/smy/.env", help="Path to .env file")
     parser.add_argument("--provider", default="GUOCHUANG_DEEPSEEK", help="Env var prefix for LLM config")
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Optional spec prompt path; defaults to the extractor's current prompt",
+    )
     parser.add_argument(
         "--small-threshold", type=int, default=SMALL_THRESHOLD,
         help=f"Max lines for a continuous_region to be batched (default: {SMALL_THRESHOLD})",
@@ -123,7 +140,22 @@ def main() -> None:
     client = make_client(args.provider, thinking="medium")
 
     # --- Organise chunks ------------------------------------------------------
-    chunks = read_chunks(args.chunks)
+    if args.structural_aware:
+        if not args.rtl_dir:
+            raise SystemExit("--rtl-dir is required when --structural-aware is enabled")
+        chunks, manifest, structure_facts = _build_structural_aware_chunks(args.rtl_dir, client)
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "_chunk_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        write_structural_facts(structure_facts, out_dir / "_structure_facts.jsonl")
+        write_chunks(chunks, out_dir / "_behavior_chunks.json")
+        print(f"  Structural-aware mode: {len(chunks)} behavior chunks, {len(structure_facts)} structure facts")
+    else:
+        chunks = read_chunks(args.chunks)
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
     normal, batched = _separate_chunks(chunks, args.small_threshold)
 
     small_count = sum(
@@ -140,9 +172,6 @@ def main() -> None:
     print()
 
     # --- Generate specs -------------------------------------------------------
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
     all_targets = normal + batched
     # Filter out already-existing specs
     pending = []
@@ -167,7 +196,12 @@ def main() -> None:
         nonlocal ok_count, fail_count
         lines = chunk.line_end - chunk.line_start + 1
         try:
-            spec = generate_chunk_spec(chunk, client, max_tokens=12000)
+            spec = generate_chunk_spec(
+                chunk,
+                client,
+                prompt_path=args.prompt or None,
+                max_tokens=12000,
+            )
             out_path.write_text(
                 json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8"
             )
@@ -214,6 +248,14 @@ def main() -> None:
     (Path(args.out_dir) / "_stats.json").write_text(
         _json.dumps({"phase": "spec_generation", **s}, ensure_ascii=False, indent=2),
         encoding="utf-8")
+
+
+def _build_structural_aware_chunks(
+    rtl_dir: str,
+    client,
+) -> tuple[list[RtlChunk], list[dict[str, object]], list[dict[str, object]]]:
+    chunks, manifest, facts = chunk_sv_files_structural_aware(rtl_dir, client=client)
+    return chunks, manifest, facts
 
 
 if __name__ == "__main__":

@@ -1,0 +1,159 @@
+{
+  "chunk_id": "sha3pad__always_ff__line_797__001",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_ff",
+    "driven": [
+      "done_valid"
+    ],
+    "used": [
+      "absorbed_o",
+      "done_i",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "integrity",
+      "mubi"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When rst_ni is low, done_valid is assigned to 0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "done_valid",
+        "rst_ni"
+      ],
+      "refs": [
+        "sha3pad.sv:798-799"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and absorbed_o is in the true mubi4 state, done_valid is set to 1.",
+      "cond": "rst_ni && prim_mubi_pkg::mubi4_test_true_strict(absorbed_o)",
+      "signals": [
+        "done_valid",
+        "absorbed_o"
+      ],
+      "refs": [
+        "sha3pad.sv:800-801"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When rst_ni is high, absorbed_o is not true, and done_i is in the true mubi4 state, done_valid is cleared to 0.",
+      "cond": "rst_ni && !prim_mubi_pkg::mubi4_test_true_strict(absorbed_o) && prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+      "signals": [
+        "done_valid",
+        "done_i"
+      ],
+      "refs": [
+        "sha3pad.sv:802-803"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When neither absorbed_o nor done_i are in the true mubi4 state, done_valid retains its previous value.",
+      "cond": "rst_ni && !prim_mubi_pkg::mubi4_test_true_strict(absorbed_o) && !prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+      "signals": [
+        "done_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:804 (implicit no-assignment)"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "absorbed_o and done_i must always carry a valid mubi4 encoding (either true or false encoding).",
+      "cond": "always",
+      "risk": "If an invalid mubi4 encoding appears, mubi4_test_true_strict will return false, causing done_valid to freeze and potentially stall the handshake indefinitely.",
+      "signals": [
+        "absorbed_o",
+        "done_i"
+      ],
+      "refs": [
+        "sha3pad.sv:800-803"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "absorbed_o and done_i are not simultaneously in the true mubi4 state.",
+      "cond": "per cycle",
+      "risk": "If both are true, done_valid is set to 1 (absorbed_o priority). This may violate protocol if done_i was expected to reset done_valid in that cycle.",
+      "signals": [
+        "absorbed_o",
+        "done_i"
+      ],
+      "refs": [
+        "sha3pad.sv:800-803"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "rst_ni is asserted low for at least one clk_i cycle after power-up.",
+      "cond": "power-up or reset sequence",
+      "risk": "Without reset, done_valid initial state is unknown, leading to unpredictable handshake.",
+      "signals": [
+        "rst_ni"
+      ],
+      "refs": [
+        "sha3pad.sv:798-799"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If absorbed_o or done_i receive an invalid mubi4 encoding, done_valid freezes (neither set nor cleared) and no error or alert is generated, potentially allowing a silent denial-of-service or data-dependent stall.",
+      "cond": "absorbed_o or done_i contains an invalid mubi4 pattern",
+      "risk": "State machine hang without detection, could be exploited or cause unrecoverable deadlock in security-critical padding path.",
+      "signals": [
+        "absorbed_o",
+        "done_i",
+        "done_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:800-803"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "It is unclear whether the implicit priority of absorbed_o over done_i (line 800 vs 802) is intentional and safe; simultaneous true assertions might cause done_valid to be set when a reset was intended.",
+      "cond": "absorbed_o and done_i both true",
+      "risk": "Potential protocol violation or unexpected done_valid pulse shape causing downstream misinterpretation.",
+      "signals": [
+        "absorbed_o",
+        "done_i",
+        "done_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:800-803"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:797-805"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 797,
+  "line_end": 805,
+  "security_implications": ""
+}

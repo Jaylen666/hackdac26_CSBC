@@ -1,53 +1,203 @@
 {
   "chunk_id": "sha3pad__always_ff__line_663__001",
-  "summary": "该寄存过程维护消息缓冲寄存器，在复位或清除时清零，在使能时装载输入消息去掉最低 8 位后的内容及对应缩短后的 strobe。",
-  "behavior": "该 always_ff 块控制 `msg_buf` 和 `msg_strb` 两组寄存器。异步低有效复位时，两者都被清零，其中 `msg_buf` 的所有 share 元素均置 0，`msg_strb` 置 0 [sha3pad.sv:663-666]。正常工作时，若 `en_msgbuf` 为 1，则对每个 share `i`，把 `msg_data_i[i]` 的低位切片 `0+:(MsgWidth-8)` 写入 `msg_buf[i]`，也就是只保留输入消息的低 `MsgWidth-8` 位；同时把 `msg_strb_i` 的低 `MsgStrbW-1` 位写入 `msg_strb` [sha3pad.sv:667-671]。若 `en_msgbuf` 为 0 且 `clr_msgbuf` 为 1，则再次将 `msg_buf` 和 `msg_strb` 清零 [sha3pad.sv:672-674]。由于条件链使用 `if ... else if ... else if`，优先级为复位最高，其次是 `en_msgbuf`，最后是 `clr_msgbuf`；因此当 `en_msgbuf` 与 `clr_msgbuf` 同时为 1 时，实际行为是装载新数据而不是清零 [sha3pad.sv:664-675]。若上述条件均不满足，则两个寄存器保持原值。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_ff",
+    "driven": [
+      "msg_buf",
+      "msg_strb"
+    ],
+    "used": [
+      "rst_ni",
+      "en_msgbuf",
+      "msg_data_i",
+      "Share",
+      "i",
+      "MsgWidth",
+      "msg_strb_i",
+      "MsgStrbW",
+      "clr_msgbuf"
+    ],
+    "modes": [],
+    "tags": [
+      "parameterization",
+      "mask"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位有效时，`msg_buf` 的所有元素和 `msg_strb` 都被置为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On reset (rst_ni low), msg_buf and msg_strb are forced to all zeros.",
+      "cond": "!: rst_ni == 0",
+      "signals": [
         "msg_buf",
-        "msg_strb"
+        "msg_strb",
+        "rst_ni"
       ],
-      "source_refs": [
-        "sha3pad.sv:663-666"
+      "refs": [
+        "sha3pad.sv:664-666"
       ]
     },
     {
-      "property": "当 `en_msgbuf` 为 1 时，`msg_buf[i]` 一定装载 `msg_data_i[i]` 的低 `MsgWidth-8` 位，且 `msg_strb` 一定装载 `msg_strb_i` 的低 `MsgStrbW-1` 位；此时即使 `clr_msgbuf` 同时为 1，也不会清零。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When en_msgbuf is high (and not in reset), for each share i from 0 to Share-1, msg_buf[i] captures the lower (MsgWidth-8) bits of msg_data_i[i], and msg_strb captures the lower (MsgStrbW-1) bits of msg_strb_i.",
+      "cond": "rst_ni && en_msgbuf",
+      "signals": [
+        "en_msgbuf",
+        "msg_buf",
+        "msg_data_i",
+        "Share",
+        "MsgWidth",
+        "msg_strb",
+        "msg_strb_i",
+        "MsgStrbW"
+      ],
+      "refs": [
+        "sha3pad.sv:667-671"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When clr_msgbuf is asserted and en_msgbuf is low (and not in reset), msg_buf and msg_strb are cleared to all zeros.",
+      "cond": "rst_ni && !en_msgbuf && clr_msgbuf",
+      "signals": [
+        "clr_msgbuf",
+        "en_msgbuf",
         "msg_buf",
         "msg_strb"
       ],
-      "source_refs": [
+      "refs": [
+        "sha3pad.sv:672-675"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and both en_msgbuf and clr_msgbuf are low, msg_buf and msg_strb retain their previous values.",
+      "cond": "rst_ni && !en_msgbuf && !clr_msgbuf",
+      "signals": [
+        "msg_buf",
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:663-676"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "MsgWidth must be >= 8 and MsgStrbW >= 1 to keep slice ranges non-negative; the widths of msg_buf[i] and msg_strb must match the slice widths to avoid truncation or extension.",
+      "cond": "always",
+      "risk": "Compilation/synthesis failure or width mismatch leading to data corruption.",
+      "signals": [
+        "MsgWidth",
+        "MsgStrbW"
+      ],
+      "refs": [
+        "sha3pad.sv:669,671"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "msg_data_i and msg_strb_i must be stable and valid during the clock edge when en_msgbuf is asserted.",
+      "cond": "en_msgbuf high",
+      "risk": "Captured data may be corrupt if inputs change synchronously with the clock edge.",
+      "signals": [
+        "msg_data_i",
+        "msg_strb_i",
+        "en_msgbuf"
+      ],
+      "refs": [
+        "sha3pad.sv:668-671"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "The external logic must be aware that en_msgbuf takes priority over clr_msgbuf; when both are asserted, the clear is suppressed.",
+      "cond": "en_msgbuf && clr_msgbuf both high",
+      "risk": "If a simultaneous clear is intended, the buffer will not be cleared, potentially causing stale data to be used.",
+      "signals": [
+        "en_msgbuf",
+        "clr_msgbuf"
+      ],
+      "refs": [
         "sha3pad.sv:667-675"
       ]
     }
   ],
-  "security_implications": "该逻辑位于 KMAC/SHA3 填充路径中，并处理按 share 分开的消息缓冲数据 [sha3pad.sv:668-670]。清零路径有助于在复位或显式清除时擦除暂存消息，降低残留数据风险 [sha3pad.sv:663-666,672-674]。但若 `en_msgbuf` 与 `clr_msgbuf` 同时拉高，装载优先于清除，因此外部控制若期望在该周期完成擦除，需要避免这种重叠 [sha3pad.sv:667-675]。",
-  "assumptions": [
+  "uncertain_points": [
     {
-      "constraint": "若系统语义要求 `clr_msgbuf` 在某周期内必定擦除缓冲区，则该周期不应同时断言 `en_msgbuf`，因为本块明确给予装载更高优先级。",
-      "bug_relevance": "如果违反该约束，而上层又误以为缓冲区已被清空，可能导致旧/新消息数据继续保留在 `msg_buf`/`msg_strb` 中，造成功能错误，且在安全场景下可能影响敏感消息擦除预期。",
-      "related_signals": [
-        "en_msgbuf",
-        "clr_msgbuf",
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "en_msgbuf writes only the lower (MsgWidth-8) bits of each share msg_buf[i]; the upper bits are not updated and may retain sensitive data from previous messages.",
+      "cond": "en_msgbuf assert, msg_buf[i] width > MsgWidth-8",
+      "risk": "Secret/key material could persist in msg_buf upper bits and be used in subsequent cryptographic operations, leading to information leakage.",
+      "signals": [
+        "msg_buf",
+        "msg_data_i",
+        "MsgWidth"
+      ],
+      "refs": [
+        "sha3pad.sv:668-670"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If MsgWidth is set below 8, the slice `0+:(MsgWidth-8)` has negative width, which is illegal in SystemVerilog.",
+      "cond": "MsgWidth < 8",
+      "risk": "Compilation or synthesis failure.",
+      "signals": [
+        "MsgWidth"
+      ],
+      "refs": [
+        "sha3pad.sv:669"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If MsgStrbW is set to 0, the slice `0+:(MsgStrbW-1)` has negative width, which is illegal.",
+      "cond": "MsgStrbW == 0",
+      "risk": "Compilation or synthesis failure.",
+      "signals": [
+        "MsgStrbW"
+      ],
+      "refs": [
+        "sha3pad.sv:671"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The actual widths of msg_buf[i] and msg_strb are defined outside this chunk; if they differ from the slice widths, truncation or zero-extension may occur.",
+      "cond": "unknown",
+      "risk": "Data corruption or subtle functional bugs due to width mismatch.",
+      "signals": [
         "msg_buf",
         "msg_strb"
       ],
-      "source_refs": [
-        "sha3pad.sv:667-675"
+      "refs": [
+        "sha3pad.sv:669,671"
       ]
     }
   ],
   "evidence_refs": [
     "sha3pad.sv:663-676"
   ],
-  "uncertain_points": [
-    "代码通过 `0+:(MsgWidth-8)` 和 `0+:(MsgStrbW-1)` 丢弃了输入中的最高 8 位数据和最高 1 位 strobe 还是最低 8 位/1 位，取决于信号位序定义；仅从本片段可确定保留的是索引从 0 开始的低位切片 [sha3pad.sv:669-671]。",
-    "为何输入只存储 `MsgWidth-8` 位和 `MsgStrbW-1` 位需要结合 sha3pad 其他逻辑确认；注释缺失，本片段本身仅显示这是有意的位宽裁剪 [sha3pad.sv:669-671]。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 663,
-  "line_end": 676
+  "line_end": 676,
+  "security_implications": ""
 }

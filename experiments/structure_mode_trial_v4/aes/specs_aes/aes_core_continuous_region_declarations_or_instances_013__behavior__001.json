@@ -1,0 +1,191 @@
+{
+  "chunk_id": "aes_core_continuous_region_declarations_or_instances_013__behavior__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "assign",
+    "driven": [
+      "clear_on_fatal",
+      "ctrl_err_update",
+      "alert_recov_o",
+      "hw2reg.status.alert_recov_ctrl_update_err.d",
+      "hw2reg.status.alert_recov_ctrl_update_err.de",
+      "ctrl_err_storage_d"
+    ],
+    "used": [
+      "ClearStatusOnFatalAlert",
+      "alert_fatal_o",
+      "ctrl_reg_err_update",
+      "shadowed_update_err_i",
+      "ctrl_we",
+      "ctrl_reg_err_storage",
+      "shadowed_storage_err_i",
+      "clear_on_fatal"
+    ],
+    "modes": [
+      "ClearStatusOnFatalAlert"
+    ],
+    "tags": [
+      "alert",
+      "error",
+      "csr",
+      "reset",
+      "status"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "clear_on_fatal is the logical AND of parameter ClearStatusOnFatalAlert and signal alert_fatal_o.",
+      "cond": "always",
+      "signals": [
+        "ClearStatusOnFatalAlert",
+        "alert_fatal_o"
+      ],
+      "refs": [
+        "906:906"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "ctrl_err_update is the logical OR of ctrl_reg_err_update and shadowed_update_err_i.",
+      "cond": "always",
+      "signals": [
+        "ctrl_reg_err_update",
+        "shadowed_update_err_i"
+      ],
+      "refs": [
+        "909:909"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "alert_recov_o is equal to ctrl_err_update.",
+      "cond": "always",
+      "signals": [
+        "alert_recov_o",
+        "ctrl_err_update"
+      ],
+      "refs": [
+        "910:910"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "The status register data input for alert_recov_ctrl_update_err is ctrl_err_update AND NOT clear_on_fatal, so it is forced to 0 when clear_on_fatal is asserted.",
+      "cond": "always",
+      "signals": [
+        "ctrl_err_update",
+        "clear_on_fatal",
+        "hw2reg.status.alert_recov_ctrl_update_err.d"
+      ],
+      "refs": [
+        "914:914"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "The status register enable for alert_recov_ctrl_update_err is asserted when ctrl_err_update, ctrl_we, or clear_on_fatal is high, causing an update on any of these events.",
+      "cond": "always",
+      "signals": [
+        "ctrl_err_update",
+        "ctrl_we",
+        "clear_on_fatal",
+        "hw2reg.status.alert_recov_ctrl_update_err.de"
+      ],
+      "refs": [
+        "915:915"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "ctrl_err_storage_d is the logical OR of ctrl_reg_err_storage and shadowed_storage_err_i, accumulating error state.",
+      "cond": "always",
+      "signals": [
+        "ctrl_reg_err_storage",
+        "shadowed_storage_err_i",
+        "ctrl_err_storage_d"
+      ],
+      "refs": [
+        "918:918"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "alert_fatal_o must remain asserted until reset to ensure clear_on_fatal consistently masks recoverable status for the entire fatal condition.",
+      "cond": "when ClearStatusOnFatalAlert is 1",
+      "risk": "If alert_fatal_o deasserts prematurely, clear_on_fatal drops, and a subsequent ctrl_err_update can re-assert the status bit, causing the status register to incorrectly show a recoverable alert after a fatal alert.",
+      "signals": [
+        "alert_fatal_o",
+        "ClearStatusOnFatalAlert"
+      ],
+      "refs": [
+        "906:906",
+        "914:915"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Parameter ClearStatusOnFatalAlert can be set to 0, which disables the clearing of recoverable alert status on fatal alerts. This may violate the requirement that fatal alerts clear all status bits.",
+      "cond": "when ClearStatusOnFatalAlert = 0",
+      "risk": "If a fatal alert occurs, the recoverable alert status remains unchanged, potentially leaking error information or causing internal state inconsistency.",
+      "signals": [
+        "ClearStatusOnFatalAlert"
+      ],
+      "refs": [
+        "906:906"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The hw2reg instance's handling of the d and de signals for the alert_recov_ctrl_update_err status bit is not visible; the actual visibility, latching, and reset behavior depends on the hw2reg implementation.",
+      "cond": "always",
+      "risk": "If hw2reg does not latch on de correctly or has asynchronous behavior, the status may not reflect the intended error events. Verification should check the interaction.",
+      "signals": [
+        "hw2reg.status.alert_recov_ctrl_update_err.d",
+        "hw2reg.status.alert_recov_ctrl_update_err.de"
+      ],
+      "refs": [
+        "914:915"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "If alert_fatal_o is asserted and then deasserted before a subsequent ctrl_we or ctrl_err_update, the de signal (which includes clear_on_fatal) might cause a brief update to 0 that is not latched properly, depending on hw2reg timing.",
+      "cond": "when alert_fatal_o pulses unexpectedly (violating the assumption that it stays until reset)",
+      "risk": "The status register could miss a recoverable error that occurs after the fatal alert pulse but before a register write, if the enable pulse is too short or not captured correctly.",
+      "signals": [
+        "alert_fatal_o",
+        "clear_on_fatal",
+        "hw2reg.status.alert_recov_ctrl_update_err.de"
+      ],
+      "refs": [
+        "906:906",
+        "915:915"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "906:918"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 906,
+  "line_end": 918,
+  "security_implications": ""
+}

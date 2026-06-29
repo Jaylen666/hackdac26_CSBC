@@ -1,51 +1,126 @@
 {
   "chunk_id": "kmac_reduced__generate_for__gen_msg_masking__001",
-  "summary": "为每个 share 生成按使能控制的消息掩码：使能时将同一个置换掩码异或到各个 msg share，上锁时保持原消息不变。",
-  "behavior": "该 generate-for 循环对 `i=0..NumShares-1` 的每个 `msg_masked[i]` 进行相同的组合赋值：输出等于 `msg[i]` 与一个条件掩码按位异或，其中条件掩码为 `msg_mask_en_i` 复制扩展到 `sha3_pkg::MsgWidth` 位后，与 `msg_mask_permuted` 按位与的结果。因此当 `msg_mask_en_i` 为 0 时，条件掩码全 0，`msg_masked[i]` 直接等于 `msg[i]`；当 `msg_mask_en_i` 为 1 时，`msg_masked[i]` 等于 `msg[i] ^ msg_mask_permuted`。同一个 `msg_mask_permuted` 被应用到所有 share，没有在本片段内体现每个 share 使用不同掩码的行为。源码未显示对非法 `i` 或异常 `NumShares` 的专门处理，行为完全由 generate 范围决定。 ",
+  "header": {
+    "module": "kmac_reduced",
+    "block_kind": "generate",
+    "driven": [
+      "msg_masked"
+    ],
+    "used": [
+      "msg",
+      "msg_mask_en_i",
+      "msg_mask_permuted",
+      "sha3_pkg::MsgWidth"
+    ],
+    "modes": [
+      "i",
+      "NumShares",
+      "sha3_pkg::MsgWidth",
+      "msg_mask_en_i"
+    ],
+    "tags": [
+      "secret",
+      "mask",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `msg_mask_en_i` 为 0 时，所有 `msg_masked[i]` 都严格等于对应的 `msg[i]`。",
-      "output_signals": [
-        "msg_masked"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each share index i in [0, NumShares-1], msg_masked[i] is the bitwise XOR of msg[i] and the signal ({sha3_pkg::MsgWidth{msg_mask_en_i}} & msg_mask_permuted). Thus, when msg_mask_en_i is 1, msg_masked[i] = msg[i] ^ msg_mask_permuted; when 0, msg_masked[i] = msg[i].",
+      "cond": "always (combinational logic)",
+      "signals": [
+        "msg_masked",
+        "msg",
+        "msg_mask_en_i",
+        "msg_mask_permuted"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:161-164"
-      ]
-    },
-    {
-      "property": "当 `msg_mask_en_i` 为 1 时，所有 `msg_masked[i]` 都等于对应 `msg[i]` 与同一个 `msg_mask_permuted` 的按位异或结果。",
-      "output_signals": [
-        "msg_masked"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:161-164"
+      "refs": [
+        "kmac_reduced.sv:162-163"
       ]
     }
   ],
-  "security_implications": "该片段实现消息 masking 的开关控制，属于安全相关数据混淆路径。使能后同一 `msg_mask_permuted` 会被异或到所有 share；若该掩码可预测、重复使用或不符合上游 masking 假设，可能削弱抗侧信道效果。另一方面，禁用时消息原样透传，说明系统安全性依赖 `msg_mask_en_i` 的正确配置及 `msg_mask_permuted` 的质量。",
   "assumptions": [
     {
-      "constraint": "`msg_mask_permuted` 必须在语义上是与 `msg[i]` 同宽且适用于所有 share 的合法掩码值；若设计期望每个 share 使用独立掩码，则该前提在此片段中并未满足。",
-      "bug_relevance": "如果上游协议要求每个 share 独立随机化而这里只提供同一掩码，可能导致 masking 强度不足，构成功能/安全意图偏差。",
-      "related_signals": [
-        "msg_mask_permuted",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Arrays msg and msg_masked are sized exactly NumShares elements deep, each element has width equal to sha3_pkg::MsgWidth, and NumShares is at least 1.",
+      "cond": "always",
+      "risk": "Out-of-bounds indexing or width mismatch would produce corrupt data or synthesis errors.",
+      "signals": [
         "msg",
         "msg_masked",
-        "NumShares"
+        "NumShares",
+        "sha3_pkg::MsgWidth"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:161-164"
+      "refs": [
+        "kmac_reduced.sv:161-162"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "msg_mask_permuted is an independent, high-entropy masking value (e.g., from a cryptographic PRNG or permutation) that is uncorrelated with msg inputs.",
+      "cond": "when msg_mask_en_i is asserted",
+      "risk": "Predictable or correlated mask would allow side-channel leakage of message shares.",
+      "signals": [
+        "msg_mask_permuted"
+      ],
+      "refs": [
+        "kmac_reduced.sv:162-163"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "msg_mask_en_i is a stable control signal that correctly reflects the security policy for masking; its assertion/deassertion is managed by external logic.",
+      "cond": "always",
+      "risk": "Incorrect assertion may leave critical data unmasked in a security-sensitive context, exposing secrets.",
+      "signals": [
+        "msg_mask_en_i"
+      ],
+      "refs": [
+        "kmac_reduced.sv:162-163"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The source and entropy quality of msg_mask_permuted are not visible in this chunk; if the generator is weak or predictable, masking effectiveness is compromised.",
+      "cond": "when msg_mask_en_i = 1",
+      "risk": "Insufficient entropy leads to side-channel leakage of the message share through power or timing analysis.",
+      "signals": [
+        "msg_mask_permuted"
+      ],
+      "refs": [
+        "kmac_reduced.sv:162-163"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "Transitions on msg_mask_en_i relative to msg changes may cause a brief unmasked window if the control signal glitches or is not synchronized to data stability.",
+      "cond": "during transitions of msg_mask_en_i while msg is valid",
+      "risk": "Temporary exposure of unmasked msg data could occur before masking is re-established.",
+      "signals": [
+        "msg_mask_en_i",
+        "msg"
+      ],
+      "refs": [
+        "kmac_reduced.sv:162-163"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:161-164"
-  ],
-  "uncertain_points": [
-    "片段对所有 share 使用同一个 `msg_mask_permuted`；这是否符合整体 masking 架构，需要结合上游 `msg` share 编码方式和 `msg_mask_permuted` 的生成逻辑确认。",
-    "仅从本片段无法确认 `msg_mask_en_i` 为 0 的场景是正常工作模式、调试模式，还是仅用于特定配置。"
+    "kmac_reduced.sv:161-164"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 161,
-  "line_end": 164
+  "line_end": 164,
+  "security_implications": ""
 }

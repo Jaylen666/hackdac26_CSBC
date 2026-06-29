@@ -1,52 +1,262 @@
 {
   "chunk_id": "kmac_app__always_comb__line_720__001",
-  "summary": "该组合逻辑仅在软件被选为缓冲区输出且生命周期未升级告警时向软件暴露 Keccak 状态；若同时使用 keymgr 侧载密钥，则对状态中的 capacity 区域做按强度清零以隐藏密钥相关内部状态。",
-  "behavior": "该块默认将 `reg_state_valid` 置 0，并将 `reg_state_o` 全部清零，因而在未满足导出条件时软件侧看不到有效状态输出 [kmac_app.sv:721-722]。只有当 `mux_sel_buf_output == SelSw` 且 `lc_escalate_en_i` 通过 `lc_tx_test_false_strict()` 判定为严格 false 时，才把 `keccak_state_valid_i` 和 `keccak_state_i` 透传到 `reg_state_valid` 与 `reg_state_o` [kmac_app.sv:723-726]。在该透传路径上，如果 `keymgr_key_en_i` 置位，表示使用了侧载密钥且注释说明这是 KMAC 由软件发起的场景，则不会直接向软件暴露完整状态，而是对每个 share 的 `reg_state_o[i]` 按 `reg_keccak_strength_i` 选定的强度，将状态高位中对应的 capacity 比特段清零：L128/L224/L256/L384/L512 分别清零 `KeccakBitCapacity[...]` 指定宽度的最高位切片 [kmac_app.sv:727-736]。若强度值落入 default 分支，则该 share 的整个状态被清零，作为保守回退行为 [kmac_app.sv:737]。注释明确表明该清零的设计意图是“向软件隐藏 capacity”（与 sideload key 相关，见 #17508），而实际 RTL 通过覆盖 `reg_state_o` 的相应位实现该屏蔽 [kmac_app.sv:727-729]。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "reg_state_valid",
+      "reg_state_o"
+    ],
+    "used": [
+      "mux_sel_buf_output",
+      "lc_escalate_en_i",
+      "keccak_state_valid_i",
+      "keccak_state_i",
+      "keymgr_key_en_i",
+      "reg_keccak_strength_i",
+      "Share",
+      "SelSw",
+      "L128",
+      "L224",
+      "L256",
+      "L384",
+      "L512",
+      "sha3_pkg::StateW",
+      "KeccakBitCapacity"
+    ],
+    "modes": [
+      "SelSw",
+      "L128",
+      "L224",
+      "L256",
+      "L384",
+      "L512"
+    ],
+    "tags": [
+      "secret",
+      "mask",
+      "access_control",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `mux_sel_buf_output != SelSw` 或 `lc_escalate_en_i` 未被 `lc_tx_test_false_strict()` 判定为严格 false 时，`reg_state_valid` 一定为 0，且 `reg_state_o` 全零。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "reg_state_valid is 0 unless mux_sel_buf_output equals SelSw and lc_ctrl_pkg::lc_tx_test_false_strict(lc_escalate_en_i) is true, in which case it equals keccak_state_valid_i.",
+      "cond": "always",
+      "signals": [
         "reg_state_valid",
-        "reg_state_o"
+        "mux_sel_buf_output",
+        "lc_escalate_en_i",
+        "keccak_state_valid_i"
       ],
-      "source_refs": [
-        "kmac_app.sv:721-725",
-        "kmac_app.sv:741-742"
+      "refs": [
+        "720-721:721",
+        "723-725:725"
       ]
     },
     {
-      "property": "当软件输出路径打开且 `keymgr_key_en_i` 为 1 时，`reg_state_o` 不会向软件暴露所选强度对应的 capacity 位；若强度值不匹配任何显式枚举，则对应 share 的整个状态为 0。",
-      "output_signals": [
-        "reg_state_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When mux_sel_buf_output == SelSw and lc_escalate not active, and keymgr_key_en_i is low, reg_state_o is assigned directly from keccak_state_i.",
+      "cond": "mux_sel_buf_output == SelSw && lc_ctrl_pkg::lc_tx_test_false_strict(lc_escalate_en_i) && !keymgr_key_en_i",
+      "signals": [
+        "reg_state_o",
+        "keccak_state_i",
+        "keymgr_key_en_i"
       ],
-      "source_refs": [
-        "kmac_app.sv:727-739"
+      "refs": [
+        "723-726:726"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When the outer condition holds and keymgr_key_en_i is high, for each share i from 0 to Share-1, reg_state_o[i] is partially zeroed: if reg_keccak_strength_i is L128/L224/L256/L384/L512, the corresponding capacity bits (high KeccakBitCapacity bits) are zeroed; for any other strength (default branch), the entire reg_state_o[i] is zeroed.",
+      "cond": "mux_sel_buf_output == SelSw && lc_escalate not active && keymgr_key_en_i == 1",
+      "signals": [
+        "reg_state_o",
+        "reg_keccak_strength_i",
+        "keymgr_key_en_i",
+        "Share",
+        "L128",
+        "L224",
+        "L256",
+        "L384",
+        "L512"
+      ],
+      "refs": [
+        "729-739:737-738"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "If mux_sel_buf_output != SelSw or lc_escalate is active, reg_state_o is forced to all zeros.",
+      "cond": "mux_sel_buf_output != SelSw || !lc_ctrl_pkg::lc_tx_test_false_strict(lc_escalate_en_i)",
+      "signals": [
+        "reg_state_o",
+        "mux_sel_buf_output",
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "722:722",
+        "723-724:723-724"
       ]
     }
   ],
-  "security_implications": "该片段直接涉及状态可见性控制和密钥相关信息屏蔽。只有在软件被选中且生命周期升级未触发时，内部 Keccak 状态才可见；一旦使用 keymgr 侧载密钥，capacity 区域会被清零以避免软件观察到可能与密钥相关的内部状态 [kmac_app.sv:723-729]。在未知强度编码下回退为整 share 清零，也体现了失败安全的保守处理 [kmac_app.sv:737]。",
   "assumptions": [
     {
-      "constraint": "`reg_keccak_strength_i` 在 `keymgr_key_en_i` 为 1 且软件状态导出使能时，应为 `L128/L224/L256/L384/L512` 之一；default 分支虽然有安全回退，但该场景设计上不应发生。",
-      "bug_relevance": "若不满足则对应 share 的 `reg_state_o` 被整体清零，软件将无法获得预期的已屏蔽状态视图；这是防御性回退，不一定是安全漏洞，但通常意味着上游配置或编码异常。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "keccak_state_i and keccak_state_valid_i must be stable and correctly represent the Keccak state while mux_sel_buf_output == SelSw and lc_escalate is not active.",
+      "cond": "when outer condition true and keymgr_key_en_i low",
+      "risk": "Glitches or invalid keccak state could propagate to reg_state_o and reg_state_valid, causing downstream logic to use corrupt data.",
+      "signals": [
+        "keccak_state_i",
+        "keccak_state_valid_i",
+        "mux_sel_buf_output",
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "725-726:726"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "KeccakBitCapacity parameter values for L128..L512 must exactly match the actual high-capacity bit-width in keccak_state_i for each strength.",
+      "cond": "when capacity masking is active",
+      "risk": "Mismatch could leave secret capacity bits unmasked or zero part of the data, compromising security or functionality.",
+      "signals": [
+        "KeccakBitCapacity",
+        "L128",
+        "L224",
+        "L256",
+        "L384",
+        "L512"
+      ],
+      "refs": [
+        "732-739:732-739"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "keymgr_key_en_i is asserted only when a sideloaded key is used and KMAC is SW initiated; the zeroing logic relies on this intent.",
+      "cond": "when keymgr_key_en_i = 1",
+      "risk": "If asserted incorrectly (e.g., during HW-initiated mode where the path may differ), the capacity zeroing is unnecessary but harmless; however it indicates a configuration mismatch.",
+      "signals": [
+        "keymgr_key_en_i"
+      ],
+      "refs": [
+        "729:729"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "lifecycle",
+      "claim": "lc_escalate_en_i must correctly reflect the lifecycle escalation state so that lc_tx_test_false_strict returns true only when no escalation is active.",
+      "cond": "always",
+      "risk": "If escalation is active but the function returns true, keccak state could be output during an escalation event, potentially exposing sensitive state.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "723-724:724"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The unique case default branch zeroes all shares when reg_keccak_strength_i does not match any of L128..L512. It is unclear whether this is a deliberate fail‑safe or if the system expects reg_keccak_strength_i to always be within the listed set.",
+      "cond": "keymgr_key_en_i high and reg_keccak_strength_i not in {L128,L224,L256,L384,L512}",
+      "risk": "If a valid strength is omitted inadvertently, full‑state zeroing could break operation; if an illegal value occurs, masking it with zeros may hide a configuration error.",
+      "signals": [
         "reg_keccak_strength_i",
+        "reg_state_o"
+      ],
+      "refs": [
+        "737-738:738"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "When keymgr_key_en_i is low but the outer condition is true, reg_state_o passes keccak_state_i without masking its capacity bits. Need to confirm from higher‑level modules that software cannot read reg_state_o in this case when the Keccak state contains secret capacity (e.g., during non‑sideloaded operations that still produce secrets).",
+      "cond": "keymgr_key_en_i == 0 && mux_sel_buf_output == SelSw && no escalation",
+      "risk": "SW could observe secret capacity bits, leading to a security leak.",
+      "signals": [
+        "keymgr_key_en_i",
+        "reg_state_o",
+        "keccak_state_i"
+      ],
+      "refs": [
+        "726:726"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If parameter Share is set to 0, the for loop is skipped and no capacity masking occurs when keymgr_key_en_i is high, exposing the full keccak_state_i (including capacity) to the SW output.",
+      "cond": "Share == 0",
+      "risk": "Direct exposure of secret capacity bits to software, violating security requirements.",
+      "signals": [
+        "Share",
         "keymgr_key_en_i",
         "reg_state_o"
       ],
-      "source_refs": [
-        "kmac_app.sv:729-739"
+      "refs": [
+        "730:730",
+        "729-739:729-739"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The combinational logic that zeros capacity might produce temporary glitches if reg_keccak_strength_i and keccak_state_i change simultaneously. Although reg_state_valid also tracks keccak_state_valid_i, there is no explicit gating during strength changes.",
+      "cond": "Simultaneous change of reg_keccak_strength_i and keccak_state_i while outer condition true",
+      "risk": "Downstream logic could sample a transient unzeroed state before the case logic resolves, potentially revealing secrets.",
+      "signals": [
+        "reg_keccak_strength_i",
+        "keccak_state_i",
+        "reg_state_valid"
+      ],
+      "refs": [
+        "731-738:738"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When lc_escalate is active, reg_state_o is forced to zero and reg_state_valid is deasserted, but no error flag or alert is generated. It is unclear whether consumers can reliably detect this condition or if they could silently use the zeroed data.",
+      "cond": "lc_escalate active",
+      "risk": "Silent zeroing could mask a security escalation or lead to undetected data corruption.",
+      "signals": [
+        "lc_escalate_en_i",
+        "reg_state_o",
+        "reg_state_valid"
+      ],
+      "refs": [
+        "723-724:724",
+        "721-722:722"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_app.sv:721-739"
-  ],
-  "uncertain_points": [
-    "注释称该逻辑适用于“key is sideloaded and KMAC is SW initiated”场景 [kmac_app.sv:727-729]，但本片段中实际只显式检查了 `keymgr_key_en_i`，并未单独看到“SW initiated”的独立判定；这可能由外层条件 `mux_sel_buf_output == SelSw` 或片段外上下文隐含保证，需结合周边代码确认。",
-    "capacity 被清零的位段具体为何选取 `reg_state_o[i][StateW-1-:KeccakBitCapacity[strength]]` 这一最高位切片，依赖 `keccak_state_i` 在状态向量中的位布局定义；本片段无法单独证明该切片恰好对应全部 capacity 区域，只能依据命名和注释推断。"
+    "720:742"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 720,
-  "line_end": 742
+  "line_end": 742,
+  "security_implications": ""
 }

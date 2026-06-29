@@ -1,0 +1,182 @@
+{
+  "chunk_id": "hmac_core__always_comb__assign_sha_message_length__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "sha_msg_len"
+    ],
+    "used": [
+      "hmac_en_i",
+      "sel_msglen",
+      "SelIPadMsg",
+      "digest_size_i",
+      "message_length_i",
+      "BlockSizeSHA256in64",
+      "BlockSizeSHA512in64",
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512",
+      "64'd0",
+      "64'd256",
+      "64'd384"
+    ],
+    "modes": [
+      "hmac_disabled",
+      "ipad_msg_length",
+      "outer_hash_length"
+    ],
+    "tags": [
+      "digest",
+      "secret",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When hmac_en_i is low, sha_msg_len = message_length_i.",
+      "cond": "hmac_en_i == 1'b0",
+      "signals": [
+        "sha_msg_len",
+        "message_length_i",
+        "hmac_en_i"
+      ],
+      "refs": [
+        "file:211-212"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When hmac_en_i is high and sel_msglen equals SelIPadMsg, sha_msg_len = message_length_i + BlockSizeSHA256in64 for digest_size_i == SHA2_256, = message_length_i + BlockSizeSHA512in64 for SHA2_384 or SHA2_512, and = 64'd0 for any other digest_size_i.",
+      "cond": "hmac_en_i && sel_msglen == SelIPadMsg",
+      "signals": [
+        "sha_msg_len",
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64",
+        "digest_size_i"
+      ],
+      "refs": [
+        "file:215-221"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When hmac_en_i is high and sel_msglen is not SelIPadMsg, sha_msg_len = BlockSizeSHA256in64 + 64'd256 for digest_size_i == SHA2_256, = BlockSizeSHA512in64 + 64'd384 for SHA2_384, and = BlockSizeSHA512in64 + 64'd384 for any other digest_size_i (including SHA2_512).",
+      "cond": "hmac_en_i && sel_msglen != SelIPadMsg",
+      "signals": [
+        "sha_msg_len",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64",
+        "digest_size_i"
+      ],
+      "refs": [
+        "file:224-230"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "BlockSizeSHA256in64 and BlockSizeSHA512in64 must be correctly set to the SHA-256 and SHA-512 block sizes in 64‑bit words (8 and 16 respectively).",
+      "cond": "always",
+      "risk": "Incorrect block-size parameters cause wrong message length calculations, resulting in invalid HMAC outputs.",
+      "signals": [
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "file:217-219",
+        "file:227-228"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "digest_size_i must be restricted to the supported enum values SHA2_256, SHA2_384 and SHA2_512 during normal operation.",
+      "cond": "when hmac_en_i is high",
+      "risk": "An illegal digest_size_i triggers the default branches: 0 in IPAD mode (potential zero‑length hash), or BlockSizeSHA512in64+384 in outer hash mode (potentially wrong length), compromising HMAC security.",
+      "signals": [
+        "digest_size_i"
+      ],
+      "refs": [
+        "file:216-221",
+        "file:226-230"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "sel_msglen must equal SelIPadMsg exactly during IPAD length computation; otherwise it must be a different valid state for the outer hash computation.",
+      "cond": "when hmac_en_i is high",
+      "risk": "A mismatch leads to using the wrong length calculation branch, corrupting the HMAC message length.",
+      "signals": [
+        "sel_msglen"
+      ],
+      "refs": [
+        "file:215",
+        "file:224"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "For digest_size_i == SHA2_512 in the outer hash (else) branch, the code falls through to default and assigns sha_msg_len = BlockSizeSHA512in64 + 64'd384, not + 64'd512. This likely miscalculates the final HMAC length for SHA-512.",
+      "cond": "hmac_en_i && sel_msglen != SelIPadMsg && digest_size_i == SHA2_512",
+      "risk": "Incorrect HMAC output for SHA-512, potentially breaking authentication or equality checks; could be exploitable if HMAC verification uses the same block.",
+      "signals": [
+        "digest_size_i",
+        "sha_msg_len"
+      ],
+      "refs": [
+        "file:226-229"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "In IPAD mode, an unsupported digest_size_i results in sha_msg_len = 64'd0 (default case). It is unclear whether this fallback is intentional or if such an illegal value can reach this block from a register write.",
+      "cond": "hmac_en_i && sel_msglen == SelIPadMsg && digest_size_i not in {SHA2_256, SHA2_384, SHA2_512}",
+      "risk": "A zero message length may allow an attacker to trigger a SHA computation over an empty message in a controlled way, potentially leading to message forgery or extension attacks.",
+      "signals": [
+        "digest_size_i",
+        "sha_msg_len"
+      ],
+      "refs": [
+        "file:216-221"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "The provided guard_context hints that this always_comb block is inside a generate if (!hmac_en_i). If true, the block would only exist when hmac_en_i is compile-time 0, making the IPAD and outer-hash branches unreachable dead code.",
+      "cond": "compile-time generate condition",
+      "risk": "The real hardware may not contain the HMAC length logic shown here, leading to a gap between simulation and synthesis, or the generate condition may be incorrectly communicated.",
+      "signals": [
+        "hmac_en_i",
+        "sel_msglen"
+      ],
+      "refs": [
+        "file:207-232",
+        "compile_time_context"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:207-232"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 207,
+  "line_end": 232,
+  "security_implications": ""
+}

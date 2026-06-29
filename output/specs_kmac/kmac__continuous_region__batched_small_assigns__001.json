@@ -1,42 +1,97 @@
 {
   "chunk_id": "kmac__continuous_region__batched_small_assigns__001",
-  "summary": "该片段将内部致命错误状态直接反映到软件可见的 status.alert_fatal_fault 寄存器写数据通路上。",
-  "behavior": "片段中唯一完整可见的行为是把内部信号 `status_alert_fatal_fault` 直接连到 `hw2reg.status.alert_fatal_fault.d`，用于驱动对应状态寄存器字段的硬件写入数据输入，未见任何额外条件、屏蔽或变换，因此该字段的数据值始终跟随该内部状态信号变化。另一个可见行 `if (EnMasking || SwKeyMasked) begin : gen_key_share1_reg` 只是一个条件生成块开头，缺少其内部内容，无法从本片段单独确定其具体硬件行为。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "hw2reg.status.alert_fatal_fault.d"
+    ],
+    "used": [
+      "EnMasking",
+      "SwKeyMasked",
+      "status_alert_fatal_fault"
+    ],
+    "modes": [
+      "EnMasking",
+      "SwKeyMasked"
+    ],
+    "tags": [
+      "masking",
+      "key",
+      "alert",
+      "fault",
+      "status",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "硬件写回通路 `hw2reg.status.alert_fatal_fault.d` 始终等于内部状态信号 `status_alert_fatal_fault`。",
-      "output_signals": [
-        "hw2reg.status.alert_fatal_fault.d"
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "When EnMasking or SwKeyMasked is true, the gen_key_share1_reg block is instantiated.",
+      "cond": "EnMasking || SwKeyMasked",
+      "signals": [
+        "EnMasking",
+        "SwKeyMasked"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1464-1464"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:502"
       ]
-    }
-  ],
-  "security_implications": "该信号命名表明它与致命故障告警状态相关；此片段确保内部 fatal fault 状态被直接暴露到软件可见状态寄存器写数据路径，若上游 `status_alert_fatal_fault` 置位，则软件侧状态读出/镜像逻辑可据此观察到安全相关故障。由于本片段未显示清零、锁存或访问控制条件，具体故障保持策略和是否可被软件清除仍需结合上下文确认。",
-  "assumptions": [
+    },
     {
-      "constraint": "上游 `status_alert_fatal_fault` 必须正确代表设计期望的致命故障状态，因为本片段对其不做过滤、仲裁或编码转换而直接透传到寄存器写数据通路。",
-      "bug_relevance": "如果该前提不满足，软件可见的 fatal fault 状态可能误报或漏报；这更像功能契约而非防御性输入约束，因为错误状态传播会直接导致状态寄存器语义错误。",
-      "related_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "status_alert_fatal_fault always drives hw2reg.status.alert_fatal_fault.d.",
+      "cond": "always",
+      "signals": [
         "status_alert_fatal_fault",
         "hw2reg.status.alert_fatal_fault.d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1464-1464"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1464"
+      ]
+    }
+  ],
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The gen_key_share1_reg block contents are not visible; its key share register implementation is unknown.",
+      "cond": "EnMasking || SwKeyMasked is true",
+      "risk": "If the block incorrectly stores or masks key shares, secret keys may be exposed.",
+      "signals": [
+        "gen_key_share1_reg",
+        "EnMasking",
+        "SwKeyMasked"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:502"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "status_alert_fatal_fault drives a status bit but its source is not visible; it may be stuck at 0, masking fatal errors.",
+      "cond": "unknown",
+      "risk": "If status_alert_fatal_fault never asserts, fatal error conditions go unreported.",
+      "signals": [
+        "status_alert_fatal_fault",
+        "hw2reg.status.alert_fatal_fault.d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1464"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:502-502",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1464-1464"
-  ],
-  "uncertain_points": [
-    "行 502 仅显示条件生成块 `gen_key_share1_reg` 的开头，缺少其内部语句和结束位置，无法判断 `EnMasking || SwKeyMasked` 对 key share1 相关逻辑的具体影响。",
-    "本片段只给出 `hw2reg.status.alert_fatal_fault.d`，未显示对应的 `de`/`qe`/软件读写语义，因此无法仅凭此处确认该状态位是持续镜像、脉冲更新还是依赖其他使能信号才会真正写入寄存器。",
-    "注释与代码中未直接说明 `status_alert_fatal_fault` 的置位/清除条件、保持时间及是否与 `alert_fatal_fault` 输出完全一致，这些需要其他上下文确认。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:502",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1464"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 501,
-  "line_end": 1464
+  "line_end": 1464,
+  "security_implications": ""
 }

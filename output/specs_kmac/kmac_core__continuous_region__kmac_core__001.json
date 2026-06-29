@@ -1,36 +1,94 @@
 {
   "chunk_id": "kmac_core__continuous_region__kmac_core__001",
-  "summary": "该片段定义了 kmac_core 的参数、接口和若干类型/常量导入，建立消息通路、配置、密钥控制和安全相关信号的外部可见边界，但本片段本身未实现具体数据通路或控制逻辑。",
-  "behavior": "该连续区域主要完成模块边界声明而非具体组合运算。参数 EnMasking 决定是否启用掩码安全加固；由此派生出的 Share 在启用时为 2、否则为 1，并直接影响多路消息输入 fifo_data_i、消息输出 msg_data_o 以及密钥输入 key_data_i 的 share 数量，注释还表明启用掩码时摘要结果会对应两组 1600bit 状态表示，但该结果生成逻辑不在本片段中出现。接口上，模块接收来自消息 FIFO 的 valid/data/strb，向 SHA3 core 提供 msg_valid_o/msg_data_o/msg_strb_o，并通过 fifo_ready_o 与 msg_ready_i 参与握手；同时接收 KMAC 使能、SHA3 模式、strength、密钥数据/长度/有效标志，以及 start/process/done 控制信号，输出 process_o，并暴露 sparse_fsm_error_o 与 key_index_error_o 等错误指示，以及生命周期升级输入 lc_escalate_en_i。文件末尾导入了若干 SHA3 相关宽度和强度常量，供后续实现使用。本片段未给出任何 assign、实例化端口连线或 always 块，因此无法从这里单独推导各输出的驱动关系或控制策略。",
-  "guarantees": [],
-  "security_implications": "该片段暴露了与安全直接相关的设计边界：EnMasking/Share 控制是否采用双 share 掩码数据路径，接口中还包含密钥输入、生命周期升级输入以及 FSM/密钥索引错误输出。这说明后续逻辑预期支持抗侧信道加固、故障/非法状态检测和生命周期响应；但这些安全机制的实际执行方式在本片段中尚未体现。",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [],
+    "modes": [
+      "EnMasking",
+      "Share"
+    ],
+    "tags": [
+      "mask",
+      "handshake",
+      "lifecycle",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "The localparam Share is assigned to 2 if EnMasking is 1, otherwise 1.",
+      "cond": "always (derived localparam)",
+      "signals": [
+        "Share",
+        "EnMasking"
+      ],
+      "refs": [
+        "15"
+      ]
+    }
+  ],
   "assumptions": [
     {
-      "constraint": "当参数 EnMasking=1 时，与 share 相关的外部接口必须按 2 份数据驱动和消费；当 EnMasking=0 时只应按 1 份数据使用。",
-      "bug_relevance": "若外部逻辑对 share 数量的理解与该参数不一致，可能导致消息或密钥 share 映射错误，进而造成功能错误，且在掩码模式下可能破坏安全加固预期。",
-      "related_signals": [
-        "fifo_data_i",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The input done_i must be a valid mubi4_t encoded value as defined in prim_mubi_pkg.",
+      "cond": "whenever done_i is used in the module's control logic (beyond this chunk)",
+      "risk": "If done_i is not a valid encoded value, the module may misinterpret the done condition, potentially causing premature or stalled completion, or unexpected state transitions.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "48"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The parameter comment states that when EnMasking=1, the result digest will be two sets of 1600-bit (masked). The actual logic that generates these two sets and maintains the masking domain must be verified to ensure that unmasking or improper separation does not leak secret data.",
+      "cond": "EnMasking=1 and module is used for secret data processing",
+      "risk": "If masking is incomplete or the two sets are not properly handled (e.g., combined prematurely, exposed on a plaintext interface, or not wiped), secret data could be exposed.",
+      "signals": [
+        "EnMasking",
         "msg_data_o",
+        "fifo_data_i",
         "key_data_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:12-16",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:21-29",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:40-41"
+      "refs": [
+        "14-15",
+        "22",
+        "28",
+        "41"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The kmac_en_i port description says that when cleared, the core should forward incoming messages directly to the SHA3 core without KMAC processing. This forwarding bypass must be verified in the rest of the module's implementation.",
+      "cond": "kmac_en_i == 0",
+      "risk": "If the core does not properly forward messages when kmac_en_i is low, it may block the data path or apply unintended processing, causing functional failure.",
+      "signals": [
+        "kmac_en_i",
+        "fifo_data_i",
+        "msg_data_o"
+      ],
+      "refs": [
+        "34-36"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:12-16",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:20-30",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:34-57",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:60-67"
-  ],
-  "uncertain_points": [
-    "注释称“若 kmac_en 清零，core logic 不工作但会将输入消息转发到 SHA3 core”（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:34-35），但本片段只有接口声明，没有实现该旁路/转发行为，因此无法确认实际逻辑是否完全符合该意图。",
-    "注释称启用 EnMasking 时“result digest will be two set of 1600bit”（/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:12-13），但本片段未出现摘要输出接口或相关实现，无法判断该描述在模块级接口上如何体现。"
+    "7-67"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 7,
-  "line_end": 67
+  "line_end": 67,
+  "security_implications": ""
 }

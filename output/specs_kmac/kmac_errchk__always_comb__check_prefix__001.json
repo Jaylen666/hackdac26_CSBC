@@ -1,53 +1,115 @@
 {
   "chunk_id": "kmac_errchk__always_comb__check_prefix__001",
-  "summary": "在从消息输入阶段返回空闲态且 KMAC 使能时，该组合检查逻辑验证配置前缀是否等于 KMAC 固定编码串，不匹配则产生前缀错误标志。",
-  "behavior": "该组合块默认将 `err_prefix` 清零。只有在状态满足 `st == StIdle` 且前一状态/下一状态指示为 `st_d == StMsgFeed`，并且 `kmac_en_i` 为高时，才执行前缀一致性检查；此时若 `cfg_prefix_6B_i` 不等于常量 `EncodedStringKMAC`，则将 `err_prefix` 置 1，否则保持为 0。由此可见，该片段只在一次特定状态边界上检查 KMAC 模式下的 6-byte 前缀配置，其余状态或未使能 KMAC 时不会报告此前缀错误。代码中声明了 `b` 依赖但本片段未使用。",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "always_comb",
+    "driven": [
+      "err_prefix"
+    ],
+    "used": [
+      "st",
+      "st_d",
+      "kmac_en_i",
+      "cfg_prefix_6B_i"
+    ],
+    "modes": [
+      "StIdle",
+      "StMsgFeed",
+      "kmac_en_i"
+    ],
+    "tags": [
+      "error",
+      "integrity",
+      "handshake",
+      "state_machine"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当不同时满足 `st == StIdle`、`st_d == StMsgFeed` 和 `kmac_en_i` 时，`err_prefix` 一定为 0。",
-      "output_signals": [
-        "err_prefix"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:266-272"
-      ]
-    },
-    {
-      "property": "当 `st == StIdle`、`st_d == StMsgFeed`、`kmac_en_i == 1` 且 `cfg_prefix_6B_i != EncodedStringKMAC` 时，`err_prefix` 一定为 1。",
-      "output_signals": [
-        "err_prefix"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:268-270"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑属于安全/完整性检查的一部分：它在 KMAC 使能时核对前缀配置是否为预期的 KMAC 编码串，能检测错误或异常的前缀设置并拉起 `err_prefix`。这有助于防止在 KMAC 模式下以错误域分离字符串运行，降低因配置错误导致算法语义偏离的风险。",
-  "assumptions": [
-    {
-      "constraint": "在合法的 KMAC 操作中，当状态进入该检查窗口（`st == StIdle && st_d == StMsgFeed && kmac_en_i`）时，`cfg_prefix_6B_i` 应已被正确配置为 `EncodedStringKMAC`。",
-      "bug_relevance": "如果这是一次本应成功的合法 KMAC 操作而该约束不满足，则会触发 `err_prefix`，导致功能上把该次配置视为错误；若这是故意防御非法配置，则该报错是设计预期而非 bug。",
-      "related_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "err_prefix is asserted (1) when st is StIdle, st_d is StMsgFeed, kmac_en_i is high, and cfg_prefix_6B_i does not equal EncodedStringKMAC; otherwise err_prefix is deasserted (0).",
+      "cond": "st == StIdle && st_d == StMsgFeed && kmac_en_i",
+      "signals": [
+        "err_prefix",
         "st",
         "st_d",
         "kmac_en_i",
-        "cfg_prefix_6B_i",
-        "EncodedStringKMAC"
+        "cfg_prefix_6B_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:268-270"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:265-273"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "cfg_prefix_6B_i is stable and valid during the state transition condition.",
+      "cond": "when st == StIdle && st_d == StMsgFeed && kmac_en_i",
+      "risk": "A glitch or invalid value could cause a spurious error or mask a real prefix mismatch.",
+      "signals": [
+        "cfg_prefix_6B_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:268-272"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The state machine transition (st == StIdle && st_d == StMsgFeed && kmac_en_i) accurately identifies the first cycle a new KMAC message prefix is available.",
+      "cond": "during normal operation",
+      "risk": "err_prefix may be asserted at the wrong time or missed if the state machine behavior changes.",
+      "signals": [
+        "st",
+        "st_d",
+        "kmac_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:268"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "err_prefix only checks for a prefix mismatch at the exact transition StIdle → StMsgFeed with kmac_en_i. It is unclear whether a mismatch should also be detected in other states (e.g., if kmac_en_i is asserted later, or the state machine enters StMsgFeed through a different path).",
+      "cond": "when the state machine sequence deviates from the expected entry",
+      "risk": "A corrupted prefix could go undetected, potentially leading to incorrect KMAC operation or security bypass.",
+      "signals": [
+        "err_prefix",
+        "st",
+        "st_d",
+        "kmac_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:268"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "err_prefix is a combinational signal and may glitch; downstream logic must handle or synchronize it correctly to avoid metastability.",
+      "cond": "if err_prefix is used as a control signal without synchronization",
+      "risk": "Spurious error handling or missed error could occur.",
+      "signals": [
+        "err_prefix"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:266-272"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:265-273"
   ],
-  "uncertain_points": [
-    "仅凭该片段无法确定 `st_d` 表示前一拍状态、下一状态还是其他派生状态；这里只能根据条件形式判断它与 `StMsgFeed` 的组合被用作触发检查窗口。见 /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:268。",
-    "仅凭该片段无法确认 `err_prefix` 后续是作为瞬时错误指示、可锁存错误源，还是参与更高层告警/中断汇总。",
-    "片段只在 `kmac_en_i` 为高时检查前缀是否等于 `EncodedStringKMAC`；是否意味着非 KMAC 模式允许其他前缀，需结合模块其余代码或规范确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
   "line_start": 265,
-  "line_end": 273
+  "line_end": 273,
+  "security_implications": ""
 }

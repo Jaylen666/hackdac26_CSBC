@@ -1,0 +1,146 @@
+{
+  "chunk_id": "hmac__always_ff__line_365__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "cfg_block"
+    ],
+    "used": [
+      "hash_start_or_continue",
+      "reg_hash_done",
+      "reg_hash_stop",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "cfg",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When reset (rst_ni=0) is active, cfg_block is cleared to 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:366-367"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When hash_start_or_continue is asserted and not in reset, cfg_block is set to 1.",
+      "cond": "!rst_ni && hash_start_or_continue",
+      "signals": [
+        "hash_start_or_continue",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-369"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When hash_start_or_continue is not asserted and either reg_hash_done or reg_hash_stop is asserted (and not in reset), cfg_block is cleared to 0.",
+      "cond": "!rst_ni && !hash_start_or_continue && (reg_hash_done || reg_hash_stop)",
+      "signals": [
+        "reg_hash_done",
+        "reg_hash_stop",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:370-371"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "In all other non-reset cases (no set, no clear condition), cfg_block holds its previous value.",
+      "cond": "!rst_ni && !hash_start_or_continue && !(reg_hash_done || reg_hash_stop)",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-372"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "hash_start_or_continue is pulsed and deasserts after the start request is accepted; otherwise cfg_block will be forced to 1 constantly.",
+      "cond": "when hash_start_or_continue is used to start a hash operation",
+      "risk": "cfg_block stuck at 1, preventing the block from ever being cleared by done/stop, causing the design to believe a hash is always in progress.",
+      "signals": [
+        "hash_start_or_continue",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-369"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "reg_hash_done and reg_hash_stop are pulsed (deassert after a few cycles); if either stays high, it will permanently clear cfg_block, overriding any subsequent start.",
+      "cond": "normal operation after a hash completes or is stopped",
+      "risk": "cfg_block cannot be set again, blocking further hash operations until the signal deasserts.",
+      "signals": [
+        "reg_hash_done",
+        "reg_hash_stop",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:370-371"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The set condition (hash_start_or_continue) has higher priority than the clear condition (reg_hash_done/reg_hash_stop). The rest of the design must be tolerant to cfg_block becoming 1 even when done/stop are asserted simultaneously.",
+      "cond": "when hash_start_or_continue and (reg_hash_done or reg_hash_stop) are asserted in the same cycle",
+      "risk": "If downstream logic expects cfg_block to be cleared immediately on done/stop, a simultaneous start will cause a spurious active cycle, potentially leading to incorrect state propagation.",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-371"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The priority of hash_start_or_continue over reg_hash_done/reg_hash_stop may be intentional; however, the specification does not clarify whether a new start should be allowed to override an in-progress done/stop condition.",
+      "cond": "when hash_start_or_continue and (reg_hash_done or reg_hash_stop) are true simultaneously",
+      "risk": "A start that coincides with a done/stop could create an unexpected state where the hash core begins a new operation while the previous one finishes, potentially causing data corruption or lost done notification.",
+      "signals": [
+        "cfg_block",
+        "hash_start_or_continue",
+        "reg_hash_done",
+        "reg_hash_stop"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:368-371"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:365-373"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 365,
+  "line_end": 373,
+  "security_implications": ""
+}

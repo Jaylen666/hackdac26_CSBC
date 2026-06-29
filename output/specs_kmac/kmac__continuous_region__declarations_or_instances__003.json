@@ -1,72 +1,207 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__003",
-  "summary": "该片段把 KMAC/SHA3 引擎状态和消息 FIFO 状态直接映射到状态寄存器可见字段，并仅在引擎空闲时允许配置寄存器写使能置位。",
-  "behavior": "片段通过组合赋值将内部 SHA3 状态机 `sha3_fsm` 解码为三个互斥的状态指示：当状态为 `StIdle` 时置 `hw2reg.status.sha3_idle.d`，为 `StAbsorb` 时置 `hw2reg.status.sha3_absorb.d`，为 `StSqueeze` 时置 `hw2reg.status.sha3_squeeze.d`；若状态机处于其他状态，则这三个指示在本片段中都会为 0 [kmac.sv:466-468]。FIFO 相关状态同样被直接导出：`msgfifo_depth` 填入 `hw2reg.status.fifo_depth.d` 的低 `MsgFifoDepthW` 位；如果目标字段位宽更宽，则高位被强制清零，避免未驱动或残留值 [kmac.sv:470-476]。此外，`msgfifo_empty` 和 `msgfifo_full` 分别直接驱动对应状态位 [kmac.sv:475-476]。片段还定义 `engine_stable` 为“SHA3 状态机处于 `StIdle`”这一条件，并将其直接作为 `hw2reg.cfg_regwen.d`，即仅当引擎空闲时，配置寄存器写使能状态对软件呈现为可写 [kmac.sv:479-483]。注释将该机制标记为 `CFG_SHADOWED.CONFIG.REGWEN` 的安全控制。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "assign",
+    "driven": [
+      "hw2reg.status.sha3_idle.d",
+      "hw2reg.status.sha3_absorb.d",
+      "hw2reg.status.sha3_squeeze.d",
+      "hw2reg.status.fifo_depth.d",
+      "hw2reg.status.fifo_empty.d",
+      "hw2reg.status.fifo_full.d",
+      "hw2reg.cfg_regwen.d",
+      "engine_stable"
+    ],
+    "used": [
+      "sha3_fsm",
+      "msgfifo_depth",
+      "msgfifo_empty",
+      "msgfifo_full",
+      "MsgFifoDepthW",
+      "sha3_pkg::StIdle",
+      "sha3_pkg::StAbsorb",
+      "sha3_pkg::StSqueeze",
+      "$bits(hw2reg.status.fifo_depth.d)"
+    ],
+    "modes": [
+      "sha3_pkg::StIdle",
+      "sha3_pkg::StAbsorb",
+      "sha3_pkg::StSqueeze",
+      "MsgFifoDepthW"
+    ],
+    "tags": [
+      "csr",
+      "fifo",
+      "status",
+      "sha3_fsm",
+      "security",
+      "cfg_regwen"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `sha3_fsm` 分别等于 `StIdle`、`StAbsorb`、`StSqueeze` 时，对应的 `hw2reg.status.sha3_idle.d`、`hw2reg.status.sha3_absorb.d`、`hw2reg.status.sha3_squeeze.d` 必定为 1。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "hw2reg.status.sha3_idle.d asserts when sha3_fsm equals sha3_pkg::StIdle, deasserts otherwise.",
+      "cond": "always",
+      "signals": [
         "hw2reg.status.sha3_idle.d",
-        "hw2reg.status.sha3_absorb.d",
-        "hw2reg.status.sha3_squeeze.d"
+        "sha3_fsm"
       ],
-      "source_refs": [
-        "kmac.sv:466-468"
+      "refs": [
+        "kmac.sv:466"
       ]
     },
     {
-      "property": "`hw2reg.status.fifo_depth.d` 的低 `MsgFifoDepthW` 位始终等于 `msgfifo_depth`，且若该状态字段更宽，其高位必定为 0。",
-      "output_signals": [
-        "hw2reg.status.fifo_depth.d"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "hw2reg.status.sha3_absorb.d asserts when sha3_fsm equals sha3_pkg::StAbsorb, deasserts otherwise.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.status.sha3_absorb.d",
+        "sha3_fsm"
       ],
-      "source_refs": [
+      "refs": [
+        "kmac.sv:467"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "hw2reg.status.sha3_squeeze.d asserts when sha3_fsm equals sha3_pkg::StSqueeze, deasserts otherwise.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.status.sha3_squeeze.d",
+        "sha3_fsm"
+      ],
+      "refs": [
+        "kmac.sv:468"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "hw2reg.status.fifo_depth.d[MsgFifoDepthW-1:0] is driven by msgfifo_depth; any upper bits of hw2reg.status.fifo_depth.d beyond MsgFifoDepthW are tied to 0.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.status.fifo_depth.d",
+        "msgfifo_depth",
+        "MsgFifoDepthW"
+      ],
+      "refs": [
         "kmac.sv:471-474"
       ]
     },
     {
-      "property": "`hw2reg.cfg_regwen.d` 当且仅当 `sha3_fsm == sha3_pkg::StIdle` 时为 1，因此引擎非空闲时该写使能状态必定为 0。",
-      "output_signals": [
-        "hw2reg.cfg_regwen.d"
+      "id": "G5",
+      "type": "assignment",
+      "claim": "hw2reg.status.fifo_empty.d follows msgfifo_empty directly.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.status.fifo_empty.d",
+        "msgfifo_empty"
       ],
-      "source_refs": [
-        "kmac.sv:479-483"
+      "refs": [
+        "kmac.sv:475"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "hw2reg.status.fifo_full.d follows msgfifo_full directly.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.status.fifo_full.d",
+        "msgfifo_full"
+      ],
+      "refs": [
+        "kmac.sv:476"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "engine_stable is asserted exclusively when sha3_fsm equals sha3_pkg::StIdle.",
+      "cond": "always",
+      "signals": [
+        "engine_stable",
+        "sha3_fsm"
+      ],
+      "refs": [
+        "kmac.sv:480"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "assignment",
+      "claim": "hw2reg.cfg_regwen.d is driven by engine_stable, i.e., high only when sha3_fsm is in StIdle.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.cfg_regwen.d",
+        "engine_stable",
+        "sha3_fsm"
+      ],
+      "refs": [
+        "kmac.sv:483"
       ]
     }
   ],
-  "security_implications": "该片段把 `cfg_regwen` 绑定到引擎空闲条件，意味着配置写入窗口只在 SHA3/KMAC 引擎空闲时开放，运行期间自动关闭，有助于防止处理中途修改影子配置寄存器。注释中的 `SEC_CM: CFG_SHADOWED.CONFIG.REGWEN` 也表明这是有意的安全控制 [kmac.sv:482-483]。",
   "assumptions": [
     {
-      "constraint": "`msgfifo_depth` 的数值语义应与 `MsgFifoDepthW` 一致，并且不会在该位宽之外携带需要保留的有效高位。",
-      "bug_relevance": "如果实际 FIFO 深度信息需要超过 `MsgFifoDepthW` 的位数表达，则状态寄存器对外可见的深度会被截断，软件可能据此做出错误流控判断。",
-      "related_signals": [
-        "msgfifo_depth",
-        "hw2reg.status.fifo_depth.d",
-        "MsgFifoDepthW"
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "MsgFifoDepthW parameter is exactly the bit width of msgfifo_depth. The chunk directly assigns lower bits and ties off extra upper bits on the status register side, but it does not protect against msgfifo_depth being wider than MsgFifoDepthW (truncation) or narrower (zero‑filled, which is safe).",
+      "cond": "always",
+      "risk": "If MsgFifoDepthW < $bits(msgfifo_depth), the high bits of the actual depth are lost, resulting in a falsely low depth reading and possible FIFO overflow or stall misjudgment.",
+      "signals": [
+        "MsgFifoDepthW",
+        "msgfifo_depth"
       ],
-      "source_refs": [
-        "kmac.sv:471-474"
+      "refs": [
+        "kmac.sv:471-472"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "cfg_regwen.d is a combinational decode of sha3_fsm. A configuration register write that straddles a state transition away from StIdle may see the enable glitch or deassert mid‑cycle, potentially blocking a legitimate update or allowing a write just as the engine leaves idle.",
+      "cond": "sha3_fsm transitions near a configuration write cycle",
+      "risk": "Unauthorized configuration register write while engine is not idle, or denial of a valid update, violating the SEC_CM requirement that CFG_SHADOWED.CONFIG.REGWEN gates writes only when idle.",
+      "signals": [
+        "hw2reg.cfg_regwen.d",
+        "sha3_fsm",
+        "engine_stable"
+      ],
+      "refs": [
+        "kmac.sv:480-483"
       ]
     },
     {
-      "constraint": "外部软件或依赖逻辑若将 `hw2reg.cfg_regwen.d` 视为配置可写条件，则必须接受“仅 `sha3_fsm==StIdle` 时可写”的契约。",
-      "bug_relevance": "若上层流程在引擎非空闲状态仍尝试依赖配置写入成功，配置可能被正确地禁止更新，从而导致流程行为与预期不符；这更像违反接口契约而非本片段 bug。",
-      "related_signals": [
-        "hw2reg.cfg_regwen.d",
-        "sha3_fsm"
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "No width checking or assertion guards the assignment hw2reg.status.fifo_depth.d[MsgFifoDepthW-1:0] = msgfifo_depth. If msgfifo_depth is wider than MsgFifoDepthW, the upper bits are silently truncated.",
+      "cond": "MsgFifoDepthW < $bits(msgfifo_depth)",
+      "risk": "Software reads a truncated depth value, potentially misjudging FIFO empty/full/almost status, which could lead to data loss or stalling the pipeline incorrectly.",
+      "signals": [
+        "msgfifo_depth",
+        "MsgFifoDepthW",
+        "hw2reg.status.fifo_depth.d"
       ],
-      "source_refs": [
-        "kmac.sv:479-483"
+      "refs": [
+        "kmac.sv:471"
       ]
     }
   ],
   "evidence_refs": [
     "kmac.sv:466-483"
   ],
-  "uncertain_points": [
-    "三个 `sha3_*` 状态位在完整状态机枚举下是否设计为严格 one-hot 不可完全由该片段单独证明；这里只能确认它们分别比较 `StIdle`、`StAbsorb`、`StSqueeze`，其他状态时三者均为 0 [kmac.sv:466-468]。",
-    "`engine_stable` 被定义为仅 `StIdle` 为真，注释名称暗示“稳定”可能有更广语义，但该片段实际实现并未包含除空闲外的其他稳定状态 [kmac.sv:479-483]。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 466,
-  "line_end": 483
+  "line_end": 483,
+  "security_implications": ""
 }

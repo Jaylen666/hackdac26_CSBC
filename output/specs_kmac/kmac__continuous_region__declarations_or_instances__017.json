@@ -1,41 +1,105 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__017",
-  "summary": "This fragment exposes one alert bit only as an intentionally unused sink and converts another alert bit into a life-cycle transmit-encoded escalation signal.",
-  "behavior": "The logic declares a local dummy signal `unused_alerts_q0` and ties it to `alerts_q[0]`, which has no further effect in this fragment and appears intended to mark that alert bit as consumed to avoid unused-signal issues [kmac.sv:1507-1508]. It also declares `alert_to_lc_tx` with type `lc_ctrl_pkg::lc_tx_t` and drives it by passing `alerts_q[1]` through `lc_ctrl_pkg::lc_tx_bool_to_lc_tx`, producing a life-cycle encoded version of that alert status for downstream logic [kmac.sv:1510-1512]. The security comment indicates this path is related to escalation and global/local FSM escape mechanisms, but this fragment itself only shows the encoding step from `alerts_q[1]` into the LC transmit type [kmac.sv:1510-1512].",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "unused_alerts_q0",
+      "alert_to_lc_tx"
+    ],
+    "used": [
+      "alerts_q[0]",
+      "alerts_q[1]"
+    ],
+    "modes": [],
+    "tags": [
+      "alert",
+      "escalation",
+      "mubi"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`alert_to_lc_tx` is always the `lc_tx_bool_to_lc_tx` encoding of `alerts_q[1]`.",
-      "output_signals": [
-        "alert_to_lc_tx"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "unused_alerts_q0 is assigned the value of alerts_q[0].",
+      "cond": "always",
+      "signals": [
+        "unused_alerts_q0",
+        "alerts_q[0]"
       ],
-      "source_refs": [
-        "kmac.sv:1511-1512"
+      "refs": [
+        "1507-1508"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "alert_to_lc_tx is assigned the result of lc_ctrl_pkg::lc_tx_bool_to_lc_tx(alerts_q[1]), producing a multi‑bit escalation signal.",
+      "cond": "always",
+      "signals": [
+        "alert_to_lc_tx",
+        "alerts_q[1]"
+      ],
+      "refs": [
+        "1510-1512"
       ]
     }
   ],
-  "security_implications": "This fragment participates in a security-relevant alert/escalation path by translating `alerts_q[1]` into a life-cycle encoded signal, which is consistent with the SEC_CM comment referencing LC escalation and escape FSMs [kmac.sv:1510-1512]. Correct behavior therefore depends on the package conversion function preserving the intended secure MuBi-style encoding; this fragment does not itself validate the encoding.",
   "assumptions": [
     {
-      "constraint": "`lc_ctrl_pkg::lc_tx_bool_to_lc_tx` must map the boolean alert indication into the correct `lc_tx_t` encoding expected by downstream life-cycle or escalation logic.",
-      "bug_relevance": "If this contract is violated, downstream security control could misinterpret `alerts_q[1]`, causing missed escalation or spurious escalation; this would be a functional and potentially security-relevant bug.",
-      "related_signals": [
-        "alerts_q[1]",
+      "id": "A1",
+      "type": "function_contract",
+      "claim": "The function lc_ctrl_pkg::lc_tx_bool_to_lc_tx correctly implements the MUBI‑encoded lc_tx_t format for boolean alerts.",
+      "cond": "always, when alert_to_lc_tx is used",
+      "risk": "If the encoding is incorrect, the escalation receiver may misinterpret the alert, leading to a missed escalation or false activation.",
+      "signals": [
+        "lc_ctrl_pkg::lc_tx_bool_to_lc_tx",
         "alert_to_lc_tx"
       ],
-      "source_refs": [
-        "kmac.sv:1511-1512"
+      "refs": [
+        "1512"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "unused_alerts_q0 is driven by alerts_q[0] but never used; this may indicate a deliberate tie‑off, yet leaves alert bit 0 unconnected to any escalation or handling.",
+      "cond": "unknown; no reader exists for unused_alerts_q0 in the provided chunk",
+      "risk": "An alert on bit 0 is silently ignored, potentially circumventing security escalation.",
+      "signals": [
+        "unused_alerts_q0",
+        "alerts_q[0]"
+      ],
+      "refs": [
+        "1507-1508"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The alert_to_lc_tx output must be correctly connected to the LC escalation module with proper MUBI checking; missing connection or deficient receiver logic could prevent the FSM.GLOBAL_ESC / FSM.LOCAL_ESC assertion.",
+      "cond": "always, when an alert (bit 1) triggers",
+      "risk": "Escalation may not propagate, breaking the security countermeasure LC_ESCALATE_EN.INTERSIG.MUBI.",
+      "signals": [
+        "alert_to_lc_tx",
+        "alerts_q[1]"
+      ],
+      "refs": [
+        "1510-1512"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac.sv:1507-1512"
-  ],
-  "uncertain_points": [
-    "This fragment does not show whether `unused_alerts_q0` is purely for lint/tool suppression or whether some downstream tooling treats it specially; functionally, it only mirrors `alerts_q[0]` locally [kmac.sv:1507-1508].",
-    "The precise semantic meaning of `alerts_q[0]` versus `alerts_q[1]` is not visible here, so it is unclear why only bit 1 is converted into `lc_tx_t` while bit 0 is merely consumed as unused [kmac.sv:1508,1512].",
-    "The SEC_CM comment suggests association with MuBi/inter-signal security checks and escape FSMs, but the actual consumers of `alert_to_lc_tx` are outside this snippet [kmac.sv:1510-1512]."
+    "1507-1508",
+    "1510-1512"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1507,
-  "line_end": 1512
+  "line_end": 1512,
+  "security_implications": ""
 }

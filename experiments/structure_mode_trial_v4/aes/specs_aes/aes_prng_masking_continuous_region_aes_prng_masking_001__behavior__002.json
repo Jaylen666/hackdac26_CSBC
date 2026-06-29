@@ -1,0 +1,159 @@
+{
+  "chunk_id": "aes_prng_masking_continuous_region_aes_prng_masking_001__behavior__002",
+  "header": {
+    "module": "aes_prng_masking",
+    "block_kind": "declaration",
+    "driven": [
+      "data_o",
+      "reseed_ack_o",
+      "entropy_req_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "force_masks_i",
+      "data_update_i",
+      "reseed_req_i",
+      "entropy_ack_i",
+      "entropy_i"
+    ],
+    "modes": [
+      "Width",
+      "EntropyWidth"
+    ],
+    "tags": [
+      "mask",
+      "entropy",
+      "prng",
+      "handshake",
+      "reset"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "External entropy source must respond to entropy_req_o by asserting entropy_ack_i and providing valid entropy_i.",
+      "cond": "When entropy_req_o is asserted",
+      "risk": "Stale or invalid entropy may be used for PRNG reseeding, weakening mask entropy.",
+      "signals": [
+        "entropy_req_o",
+        "entropy_ack_i",
+        "entropy_i"
+      ],
+      "refs": [
+        "40-42"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "External reseed requester must hold reseed_req_i asserted until reseed_ack_o is asserted to complete the reseed operation.",
+      "cond": "When reseed_req_i is asserted",
+      "risk": "Premature deassertion may cause incomplete reseeding, leaving PRNG state partially updated.",
+      "signals": [
+        "reseed_req_i",
+        "reseed_ack_o"
+      ],
+      "refs": [
+        "36-37"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "Consumer of data_o must sample the value only when data_update_i indicates a valid update.",
+      "cond": "When data_update_i is asserted",
+      "risk": "Sampling data_o at an arbitrary time may read inconsistent or stale mask values.",
+      "signals": [
+        "data_update_i",
+        "data_o"
+      ],
+      "refs": [
+        "34-35"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "force_masks_i must be asserted only when it is safe to override automatically generated masks, and must be deasserted to restore normal PRNG-driven masks.",
+      "cond": "When force_masks_i is asserted",
+      "risk": "Incorrect usage could expose predictable masks or compromise masking security.",
+      "signals": [
+        "force_masks_i"
+      ],
+      "refs": [
+        "31"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "lifecycle",
+      "claim": "rst_ni (active-low) must be asserted for at least one full clock cycle to initialize internal PRNG state before any entropy or reseed operations begin.",
+      "cond": "At power-up or after a reset event",
+      "risk": "Uninitialized state could produce predictable initial masks, breaking side-channel resistance.",
+      "signals": [
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "28-29"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The internal logic that uses force_masks_i is not visible; it is possible that asserting force_masks_i could trivially override masks including secure ones if not gated by a secure state machine.",
+      "cond": "When force_masks_i is high",
+      "risk": "Unauthorized forcing of masks could expose secret data or allow predictable operation.",
+      "signals": [
+        "force_masks_i"
+      ],
+      "refs": [
+        "31"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The precise timing relationship between entropy_ack_i and entropy_i validity is not defined; it is unclear if entropy_i must be held stable after entropy_req_o until entropy_ack_i, or can change.",
+      "cond": "During entropy handshake",
+      "risk": "If entropy_i is not correctly sampled, the PRNG reseed may use a partial or incorrect entropy word.",
+      "signals": [
+        "entropy_req_o",
+        "entropy_ack_i",
+        "entropy_i"
+      ],
+      "refs": [
+        "40-42"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "After reseed_ack_o is asserted, the hold time required on reseed_req_i before deassertion is unknown; deasserting too early might truncate the reseed sequence.",
+      "cond": "After reseed_ack_o goes high",
+      "risk": "Partial reseed could leave the PRNG state in a weak or predictable condition.",
+      "signals": [
+        "reseed_req_i",
+        "reseed_ack_o"
+      ],
+      "refs": [
+        "36-37"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "27-43"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv",
+  "line_start": 27,
+  "line_end": 44,
+  "security_implications": ""
+}

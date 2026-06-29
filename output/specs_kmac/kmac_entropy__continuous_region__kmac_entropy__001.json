@@ -1,51 +1,247 @@
 {
   "chunk_id": "kmac_entropy__continuous_region__kmac_entropy__001",
-  "summary": "This chunk declares the kmac_entropy module interface and configuration/status signals for EDN-based entropy supply, internal random data/mask generation, seed management, timers, counters, and error reporting, but does not itself implement combinational behavior.",
-  "behavior": "The snippet defines the external contract of kmac_entropy rather than active RTL logic. It exposes an EDN request/acknowledge/data interface (`entropy_req_o`, `entropy_ack_i`, `entropy_data_i`) for obtaining entropy, internal random-data outputs (`rand_valid_o`, `rand_early_o`, `rand_data_o`, `rand_aux_o`) coordinated with update/consume inputs (`rand_update_i`, `rand_consumed_i`), and a message-mask output (`msg_mask_o`) enabled by `msg_mask_en_i` [kmac_entropy.sv:20-31,47-51]. It also declares control inputs that shape intended behavior: `in_keyblock_i` indicates keyblock processing; `mode_i` selects entropy mode; `entropy_ready_i` is documented as software indicating the EDN application interface is ready; `fast_process_i` is documented to allow garbage random output outside keyblock processing and to keep `rand_valid_o` asserted in that mode; `seed_update_i`/`seed_data_i` provide software seed injection; and `entropy_refresh_req_i` allows software-triggered EDN reseed/refresh [kmac_entropy.sv:33-45,53-58]. Additional interface signals provide wait-timer configuration, a hash-operation counter with clear and threshold inputs, a configuration-status output, lifecycle escalation input, and error/status outputs for generic errors, sparse FSM failure, counter failure, and error-processed handshake [kmac_entropy.sv:60-81]. Because this region contains only declarations/comments and no assign or procedural statements, it makes no direct output-driving guarantees beyond signal existence and widths; behavioral intent such as fast-process semantics and EDN readiness comes from comments and must be confirmed in later implementation.",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "declaration",
+    "driven": [
+      "entropy_req_o",
+      "rand_valid_o",
+      "rand_early_o",
+      "rand_data_o",
+      "rand_aux_o",
+      "msg_mask_o",
+      "hash_cnt_o",
+      "entropy_configured_o",
+      "err_o",
+      "sparse_fsm_error_o",
+      "count_error_o"
+    ],
+    "used": [
+      "entropy_ack_i",
+      "entropy_data_i",
+      "rand_update_i",
+      "rand_consumed_i",
+      "in_keyblock_i",
+      "mode_i",
+      "entropy_ready_i",
+      "fast_process_i",
+      "msg_mask_en_i",
+      "seed_update_i",
+      "seed_data_i",
+      "entropy_refresh_req_i",
+      "wait_timer_prescaler_i",
+      "wait_timer_limit_i",
+      "hash_cnt_clr_i",
+      "hash_threshold_i",
+      "lc_escalate_en_i",
+      "err_processed_i"
+    ],
+    "modes": [
+      "entropy_mode_e (mode_i)",
+      "fast_process_i (config)",
+      "wait_timer_limit_i (0 disables timer)",
+      "RndCnstLfsrPerm (parameter)",
+      "RndCnstLfsrSeed (parameter)",
+      "RndCnstBufferLfsrSeed (parameter)"
+    ],
+    "tags": [
+      "entropy",
+      "key",
+      "secret",
+      "error",
+      "lifecycle",
+      "handshake",
+      "parameterization",
+      "security"
+    ]
+  },
   "guarantees": [],
-  "security_implications": "The interface is security-relevant because it carries entropy, software-controlled seed updates, message masking control, lifecycle escalation, and error reporting [kmac_entropy.sv:20-31,47-58,72-81]. In particular, `seed_update_i`/`seed_data_i` and `entropy_refresh_req_i` imply software influence over randomness state, while `fast_process_i` is documented to permit non-cryptographic garbage random output outside keyblock processing [kmac_entropy.sv:42-45,53-58]. However, this snippet alone does not show the enforcement logic, gating, or protections.",
   "assumptions": [
     {
-      "constraint": "Software should only assert `entropy_ready_i` when the EDN application interface is actually ready to accept requests, as indicated by the interface comment.",
-      "bug_relevance": "If violated, kmac_entropy may issue requests under a false-ready condition; whether this causes a functional failure depends on downstream implementation, but the comment indicates this scenario is not the intended operating mode.",
-      "related_signals": [
+      "id": "A1",
+      "type": "handshake",
+      "claim": "entropy_ready_i is asserted by software only when the EDN app interface is ready to accept entropy requests.",
+      "cond": "when the module raises entropy_req_o",
+      "risk": "Demand for entropy may be issued while EDN is not ready, leading to protocol failure, lost entropy, or hang.",
+      "signals": [
         "entropy_ready_i",
         "entropy_req_o"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:37-40",
-        "kmac_entropy.sv:20-23"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:38-40"
       ]
     },
     {
-      "constraint": "If `fast_process_i` is enabled, system-level users must tolerate `rand_valid_o` remaining asserted and random outputs being garbage when not processing a keyblock, per the interface comment.",
-      "bug_relevance": "If external logic assumes `rand_valid_o` always implies high-quality/keyblock-appropriate randomness, enabling this mode could cause incorrect or insecure consumption of non-cryptographic data; this appears to be an intentional mode, not a local RTL bug.",
-      "related_signals": [
-        "fast_process_i",
-        "in_keyblock_i",
-        "rand_valid_o",
-        "rand_data_o"
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When seed_update_i is asserted, seed_data_i carries a valid new seed for the internal PRNG.",
+      "cond": "seed_update_i active",
+      "risk": "Corrupted or inappropriate seed may compromise entropy quality and downstream security functions.",
+      "signals": [
+        "seed_update_i",
+        "seed_data_i"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:42-45",
-        "kmac_entropy.sv:26-31",
-        "kmac_entropy.sv:34-35"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:53-55"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "entropy_refresh_req_i is pulsed by software to request a manual EDN seed refresh.",
+      "cond": "when seed refresh is needed",
+      "risk": "Mis‑timed pulsing or missing refresh may cause use of aged seed, weakening cryptographic strength.",
+      "signals": [
+        "entropy_refresh_req_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:57-58"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "hash_cnt_clr_i is pulsed to clear the hash operation counter.",
+      "cond": "after SW init or threshold event",
+      "risk": "Uncleared counter can prematurely trigger hash‑count‑based events or prevent accurate tracking.",
+      "signals": [
+        "hash_cnt_clr_i",
+        "hash_cnt_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:69"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "handshake",
+      "claim": "err_processed_i is asserted by the error handler after err_o has been handled, to acknowledge and clear the error state.",
+      "cond": "after err_o is asserted",
+      "risk": "Persistent unacknowledged error may lock the entropy module, stall further operations, or mask real failures.",
+      "signals": [
+        "err_o",
+        "err_processed_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:81"
+      ]
+    },
+    {
+      "id": "A6",
+      "type": "mode_config",
+      "claim": "wait_timer_limit_i set to zero disables the watchdog timer; a non‑zero value enables it.",
+      "cond": "when timer operation is required or disabled",
+      "risk": "Unintended disable could allow a watchdog to be bypassed, permitting prolonged stalls or DoS.",
+      "signals": [
+        "wait_timer_limit_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:60-63"
+      ]
+    },
+    {
+      "id": "A7",
+      "type": "lifecycle",
+      "claim": "lc_escalate_en_i is asserted by the life‑cycle controller when a system‑wide security escalation is triggered.",
+      "cond": "fatal error or security violation",
+      "risk": "Missing escalation may prevent error propagation to higher‑level safety mechanisms, leaving secrets vulnerable.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:75"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The described ‘garbage random’ mode (fast_process_i) that ‘never de‑asserts rand_valid_o unless it is not processing KeyBlock’ is not implemented in this chunk. The actual RTL responsible for rand_valid_o generation must be verified to not expose secret‑controlled patterns or stale data.",
+      "cond": "fast_process_i = 1, in keyblock processing",
+      "risk": "If rand_valid_o stays asserted while garbage data is output, downstream may use unintended entropy, potentially leaking key material or causing randomisation failure.",
+      "signals": [
+        "fast_process_i",
+        "rand_valid_o",
+        "rand_data_o",
+        "in_keyblock_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:42-45"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The handshake protocol between entropy_req_o, entropy_ack_i, and entropy_data_i is not visible. The exact timing and correlation with rand_update_i/rand_consumed_i must be verified in the implementation to avoid deadlocks or data underruns.",
+      "cond": "entropy_req_o asserted",
+      "risk": "Mis‑aligned handshake could cause lost entropy words or hang the EDN interface.",
+      "signals": [
+        "entropy_req_o",
+        "entropy_ack_i",
+        "entropy_data_i",
+        "rand_update_i",
+        "rand_consumed_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:21-31"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment ‘Hash Ops counter. Count how many hashing ops (KMAC) have run after the clear request from SW’ is ambiguous: it is unclear whether the counter increments on every SHA3 squeeze/absorb or only on full KMAC operations. The implementation logic (not present) may misinterpret the trigger, causing premature or missed threshold hits.",
+      "cond": "hash_threshold_i reached",
+      "risk": "Faulty counter logic can disrupt automatic seed refresh or security‑relevant actions.",
+      "signals": [
+        "hash_cnt_o",
+        "hash_threshold_i",
+        "hash_cnt_clr_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:66-70"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The seed_update_i interface allows software to directly seed the PRNG. It is unclear whether there are integrity or freshness checks (e.g., double‑buffer, hash‑then‑seed) before the seed is used. The implementation may be vulnerable to software‑injected weak seeds.",
+      "cond": "seed_update_i asserted",
+      "risk": "Weak or attacker‑controlled seed may break randomness assumptions of the keyed hash.",
+      "signals": [
+        "seed_update_i",
+        "seed_data_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:54-55"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The entropy_configured_o signal and its relation to the EDN interface and state changes are not visible. It is unknown when the module considers entropy setup complete and if a temporary window exists where premature access could proceed with un‑configured entropy.",
+      "cond": "during power‑up or mode change",
+      "risk": "Premature assertion of entropy_configured_o could allow processing with unsafe randomness.",
+      "signals": [
+        "entropy_configured_o",
+        "entropy_ready_i",
+        "mode_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:72"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_entropy.sv:13-15",
-    "kmac_entropy.sv:20-31",
-    "kmac_entropy.sv:33-45",
-    "kmac_entropy.sv:47-58",
-    "kmac_entropy.sv:60-81"
-  ],
-  "uncertain_points": [
-    "The comments describe intended semantics for `fast_process_i`, `entropy_ready_i`, and seed/refresh control, but this snippet contains no implementation to confirm exactly how those signals affect outputs or state.",
-    "The meaning and assertion conditions of `entropy_configured_o`, `err_o`, `sparse_fsm_error_o`, and `count_error_o` are not defined in this region.",
-    "The actual relationship between EDN handshake signals and the internal random outputs (`rand_valid_o`, `rand_early_o`, `rand_data_o`, `rand_aux_o`) is not visible here."
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:7-82"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 7,
-  "line_end": 82
+  "line_end": 82,
+  "security_implications": ""
 }

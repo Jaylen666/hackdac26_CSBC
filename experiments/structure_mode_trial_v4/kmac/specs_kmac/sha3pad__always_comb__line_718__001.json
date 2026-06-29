@@ -1,0 +1,131 @@
+{
+  "chunk_id": "sha3pad__always_comb__line_718__001",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_comb",
+    "driven": [
+      "funcpad_data"
+    ],
+    "used": [
+      "msg_strb",
+      "end_of_block",
+      "funcpad",
+      "msg_buf"
+    ],
+    "modes": [],
+    "tags": [
+      "padding",
+      "error_detection"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When msg_strb equals 7'h00, 7'h01, 7'h03, 7'h07, 7'h0f, 7'h1f, 7'h3f, or 7'h7f, funcpad_data[0] is driven with the concatenation {end_of_block, padding_bits, msg_bytes}, where padding_bits is funcpad replicated to the required width (63, 55, 47, 39, 31, 23, 15, or 7 bits) and msg_bytes are the lower bytes of msg_buf[0] corresponding to the number of trailing ones in msg_strb.",
+      "cond": "msg_strb matches one of the listed patterns",
+      "signals": [
+        "msg_strb",
+        "end_of_block",
+        "funcpad",
+        "msg_buf[0]",
+        "funcpad_data[0]"
+      ],
+      "refs": [
+        "sha3pad.sv:718-727"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "When msg_strb does not match any of the eight listed patterns, the entire funcpad_data array is driven to '{default:'0}.",
+      "cond": "msg_strb outside the enumerated set",
+      "signals": [
+        "msg_strb",
+        "funcpad_data"
+      ],
+      "refs": [
+        "sha3pad.sv:729"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "msg_strb is a byte‑strobe mask with contiguous 1's from the least‑significant bit, i.e., only the eight patterns listed in the case are expected in normal operation.",
+      "cond": "when the design intends functional padding",
+      "risk": "If an invalid mask arrives, G2 zeroes funcpad_data, which may produce an incorrect SHA‑3 padding and lead to a wrong digest without any error propagation.",
+      "signals": [
+        "msg_strb"
+      ],
+      "refs": [
+        "sha3pad.sv:719"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "funcpad is a 1‑bit signal. The width casts (63'(funcpad), etc.) rely on funcpad being 1‑bit; a wider funcpad would cause zero‑extension and change the padding value.",
+      "cond": "when funcpad is used in the concatenation",
+      "risk": "A wider funcpad would produce an unintended extended‑pad pattern, potentially weakening SHA‑3 domain separation or requiring re‑synthesis with different semantics.",
+      "signals": [
+        "funcpad"
+      ],
+      "refs": [
+        "sha3pad.sv:720-727"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "end_of_block is a 1‑bit signal. The top‑bit placement in funcpad_data[0] (bit 63) assumes end_of_block is 1‑bit.",
+      "cond": "when constructing the final block indicator",
+      "risk": "A multi‑bit end_of_block would place only its LSB in bit 63; the upper bits would be dropped, potentially losing block boundary flags.",
+      "signals": [
+        "end_of_block"
+      ],
+      "refs": [
+        "sha3pad.sv:720-727"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "An invalid msg_strb value (any pattern other than the eight listed) causes the entire funcpad_data array to be silently zeroed. The RTL does not assert an error, raise an alert, or otherwise signal that an illegal mask was applied.",
+      "cond": "msg_strb ≠ any of {7'h00, ..., 7'h7f}",
+      "risk": "A transient fault (e.g., due to soft error or integration mistake) could produce an undetected wrong padding, leading to an incorrect SHA‑3 digest without any downstream error indication, which is a security‑critical fault in a crypto core.",
+      "signals": [
+        "msg_strb",
+        "funcpad_data"
+      ],
+      "refs": [
+        "sha3pad.sv:729"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "In the branches where msg_strb is a valid mask, only funcpad_data[0] is assigned. If funcpad_data has more than one element, the other elements are not driven in this block, which would infer latches (or multiple drivers if assigned elsewhere). The default case assigns all elements to zero, so only the invalid‑mask path is fully combinational.",
+      "cond": "when funcpad_data has more than one element and msg_strb is valid",
+      "risk": "If latches are inferred, synthesis results could be unpredictable; if another process drives those indices, a multiple‑driver conflict may occur. This is a structural integrity risk.",
+      "signals": [
+        "funcpad_data"
+      ],
+      "refs": [
+        "sha3pad.sv:720-730"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:718-731"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 718,
+  "line_end": 731,
+  "security_implications": ""
+}

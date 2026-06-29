@@ -1,40 +1,110 @@
 {
   "chunk_id": "kmac_app__always_comb__line_773__001",
-  "summary": "将输入的多份 key manager 密钥 share 按位异或折叠成单个组合结果，并写入 keymgr_key[0]。",
-  "behavior": "该组合逻辑先把 keymgr_key[0] 清零，然后遍历 keymgr_key_i.key 的所有 share，对 keymgr_key[0] 的低 KeyMgrKeyW 位逐个进行异或累加，最终得到所有 share 的按位 XOR 结果。代码只驱动 keymgr_key[0]，且每次计算都会从全零重新开始，因此输出仅取决于当前各 share 的值，不保留历史状态。若 Shares 为 0，则循环体不会执行，结果保持为全零；若 keymgr_key[0] 的位宽大于 KeyMgrKeyW，则高位在该块中被清零且不会被循环重新赋值。来源见 773-778 行。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "keymgr_key[0]"
+    ],
+    "used": [
+      "keymgr_key_i.key",
+      "KeyMgrKeyW",
+      "keymgr_pkg::Shares"
+    ],
+    "modes": [
+      "keymgr_pkg::Shares"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "mask",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "keymgr_key[0] 始终等于对 keymgr_key_i.key[0 .. Shares-1] 的低 KeyMgrKeyW 位进行按位异或后的结果；在此范围外若存在更高位，则被驱动为 0。",
-      "output_signals": [
-        "keymgr_key"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "keymgr_key[0] is driven as the bitwise XOR of all keymgr_key_i.key shares (index 0 to Shares-1), after being initialized to zero.",
+      "cond": "always (combinational)",
+      "signals": [
+        "keymgr_key[0]",
+        "keymgr_key_i.key"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:773-778"
+      "refs": [
+        "kmac_app.sv:773-778"
       ]
     }
   ],
-  "security_implications": "该逻辑处理来自 key manager 的分片密钥，并将多 share 折叠为单一值输出。若这些 share 原本用于掩码/分享安全，则此处的 XOR 重组会显式恢复组合后的密钥值到 keymgr_key[0]，后续逻辑必须确保该值只在预期的安全边界内使用。代码本身未体现额外的访问控制、清零握手或错误检测。",
   "assumptions": [
     {
-      "constraint": "keymgr_key_i.key[i] 的每个 share 都应为同一被分享密钥的有效份额，并且设计意图确实是通过按位异或重构该密钥。",
-      "bug_relevance": "如果这些 share 不是按 XOR 分享编码，或 share 内容不一致/无效，则 keymgr_key[0] 会得到错误的重构结果，进而导致后续使用错误密钥，可能造成功能失败或安全属性失效。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "keymgr_key_i.key must provide at least Shares elements, each exactly KeyMgrKeyW bits wide, to match the loop bound and bit-slice used in XOR.",
+      "cond": "whenever the block is evaluated",
+      "risk": "Out-of-bounds array access or width mismatch leads to undefined key value, potentially exposing or corrupting secret material.",
+      "signals": [
         "keymgr_key_i.key",
+        "keymgr_pkg::Shares",
+        "KeyMgrKeyW"
+      ],
+      "refs": [
+        "kmac_app.sv:775-776"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The XOR-based unmasking of key shares is performed combinational; this may produce glitchy intermediate values that leak secret key bits through power or EM side channels.",
+      "cond": "whenever keymgr_key_i.key changes",
+      "risk": "Secret key material could be recovered via side-channel analysis if no additional countermeasures (e.g., register re-timing, masked logic) are present.",
+      "signals": [
+        "keymgr_key_i.key",
+        "keymgr_key[0]"
+      ],
+      "refs": [
+        "kmac_app.sv:773-778"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Only keymgr_key[0] is computed; the purpose and usage of other potential indices of keymgr_key (if it is a multi-element array) are not visible in this chunk.",
+      "cond": "unknown",
+      "risk": "Incomplete key reconstruction or misrouting of unmasked key value might cause incorrect operation or expose key material to unintended destinations.",
+      "signals": [
         "keymgr_key"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:775-776"
+      "refs": [
+        "kmac_app.sv:773-778"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The loop uses keymgr_pkg::Shares and the bit-slice width KeyMgrKeyW without local assertions; if these parameters disagree with the actual dimensions of keymgr_key_i.key, the XOR result will be silently wrong.",
+      "cond": "if keymgr_pkg::Shares != actual number of keymgr_key_i.key elements or KeyMgrKeyW != actual bit width",
+      "risk": "A mismatched parameter configuration produces an incorrect key value, potentially granting access or breaking security protocols.",
+      "signals": [
+        "keymgr_key_i.key",
+        "keymgr_pkg::Shares",
+        "KeyMgrKeyW"
+      ],
+      "refs": [
+        "kmac_app.sv:775-776"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:773-778"
-  ],
-  "uncertain_points": [
-    "该块只计算 keymgr_key[0]，是否表示后续逻辑只使用单份重构后的密钥，还是 keymgr_key 还有其他元素在别处赋值，需要结合上下文确认。",
-    "从代码可见 share 被 XOR 合并，但无法仅凭该片段确认这是否与注释/架构上的 masking 策略完全一致，尤其是是否有意在此处去掩码。"
+    "kmac_app.sv:773-778"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 773,
-  "line_end": 778
+  "line_end": 778,
+  "security_implications": ""
 }

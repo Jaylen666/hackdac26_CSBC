@@ -1,42 +1,121 @@
 {
   "chunk_id": "keccak_2share__always_comb__line_106__001",
-  "summary": "该组合逻辑根据四值冗余相位选择信号在两个候选相位输出之间选择 state_out，并在非法/非预期编码时回退到 phase1_out。",
-  "behavior": "该片段对 phase_sel_i 做 unique case 选择：当其等于 MuBi4False 时，state_out 取 phase1_out；当其等于 MuBi4True 时，state_out 取 phase2_out；其余所有编码都走 default，同样令 state_out=phase1_out。代码体现出 phase_sel_i 预期只使用 MuBi4False/MuBi4True 两种合法值，但即使输入为其他编码也不会产生悬空或保持，而是安全回退到 phase1_out。[keccak_2share.sv:106-112]",
+  "header": {
+    "module": "keccak_2share",
+    "block_kind": "always_comb",
+    "driven": [
+      "state_out"
+    ],
+    "used": [
+      "phase_sel_i",
+      "phase1_out",
+      "phase2_out"
+    ],
+    "modes": [
+      "MuBi4False",
+      "MuBi4True"
+    ],
+    "tags": [
+      "mask"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 phase_sel_i 为 MuBi4True 时，state_out 一定等于 phase2_out；当 phase_sel_i 为 MuBi4False 或任何未匹配编码时，state_out 一定等于 phase1_out。",
-      "output_signals": [
-        "state_out"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When phase_sel_i equals MuBi4False, state_out is assigned phase1_out.",
+      "cond": "phase_sel_i == MuBi4False",
+      "signals": [
+        "state_out",
+        "phase1_out",
+        "phase_sel_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:107-110"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:108"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When phase_sel_i equals MuBi4True, state_out is assigned phase2_out.",
+      "cond": "phase_sel_i == MuBi4True",
+      "signals": [
+        "state_out",
+        "phase2_out",
+        "phase_sel_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:109"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "If phase_sel_i does not match MuBi4False or MuBi4True, state_out is assigned phase1_out via the default branch.",
+      "cond": "phase_sel_i != MuBi4False && phase_sel_i != MuBi4True",
+      "signals": [
+        "state_out",
+        "phase1_out",
+        "phase_sel_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:110"
       ]
     }
   ],
-  "security_implications": "phase_sel_i 使用 MuBi4True/MuBi4False 这类多比特布尔编码，说明设计可能有意用冗余编码增强控制信号鲁棒性。该片段对非法编码采取回退到 phase1_out 的防御性处理，而不是传播未知选择结果；这有助于避免异常控制值直接切换到 phase2_out，但是否满足更高层安全需求仍需结合相位语义确认。",
   "assumptions": [
     {
-      "constraint": "phase_sel_i 在正常功能路径上应只取 MuBi4False 或 MuBi4True；其他编码虽然有定义好的回退行为，但设计上应视为非预期输入。",
-      "bug_relevance": "若不满足则 state_out 会被强制回退为 phase1_out。该场景因有安全回退不一定构成本地 bug，但可能导致系统功能偏离预期相位选择，需由上游保证避免发生。",
-      "related_signals": [
-        "phase_sel_i",
-        "state_out",
-        "phase1_out",
-        "phase2_out"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "phase_sel_i is driven to a valid, stable encoding of MuBi4False or MuBi4True, not X, Z, or metastable.",
+      "cond": "always",
+      "risk": "An invalid or glitching phase_sel_i may hit the default branch and force state_out to phase1_out, potentially exposing one share of the masked Keccak state or causing incorrect round output.",
+      "signals": [
+        "phase_sel_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:107-110"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:106-112"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The default branch selects phase1_out when phase_sel_i is neither MuBi4False nor MuBi4True. It is unknown whether this fallback is a safe quiescent state or could inadvertently output a masked share under illegal or X conditions.",
+      "cond": "phase_sel_i is invalid or X",
+      "risk": "Leakage of one share of the Keccak state if phase1_out holds secret-dependent data and the fallback is exercised.",
+      "signals": [
+        "phase_sel_i",
+        "phase1_out",
+        "state_out"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:110"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The enum type of phase_sel_i is not defined locally. If it contains legal values beyond MuBi4False and MuBi4True, they will resolve to the default assignment to phase1_out, which may not be the intended mapping.",
+      "cond": "phase_sel_i takes other legal enum values",
+      "risk": "Incorrect state selection, leading to wrong intermediate values in the Keccak permutation.",
+      "signals": [
+        "phase_sel_i",
+        "state_out"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:106-112"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:106-112"
   ],
-  "uncertain_points": [
-    "仅从该片段无法确认 phase1_out 与 phase2_out 分别对应哪一处理阶段，也无法确认非法 phase_sel_i 回退到 phase1_out 是纯防御性设计还是协议要求。",
-    "unique case 表明作者期望分支互斥且完整，但由于同时存在 default，非法编码的处理是明确的；是否还依赖仿真/形式工具对 unique case 的额外检查需结合上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
   "line_start": 106,
-  "line_end": 112
+  "line_end": 112,
+  "security_implications": ""
 }

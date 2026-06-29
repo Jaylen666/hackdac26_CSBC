@@ -1,0 +1,159 @@
+{
+  "chunk_id": "aes_prng_clearing_continuous_region_aes_prng_clearing_001__behavior__004",
+  "header": {
+    "module": "aes_prng_clearing",
+    "block_kind": "assign",
+    "driven": [
+      "entropy_req_o",
+      "reseed_ack_o",
+      "buffer_valid_d",
+      "buffer_d"
+    ],
+    "used": [
+      "SecSkipPRNGReseeding",
+      "reseed_req_i",
+      "seed_valid",
+      "entropy_req_o",
+      "entropy_ack_i",
+      "buffer_valid_q",
+      "entropy_i",
+      "buffer_q"
+    ],
+    "modes": [
+      "SecSkipPRNGReseeding",
+      "buffer_valid_q"
+    ],
+    "tags": [
+      "entropy",
+      "secret",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When SecSkipPRNGReseeding is true, entropy_req_o is forced to 1'b0, ignoring reseed_req_i.",
+      "cond": "always",
+      "signals": [
+        "SecSkipPRNGReseeding",
+        "entropy_req_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:71"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When SecSkipPRNGReseeding is true, reseed_ack_o equals reseed_req_i; otherwise reseed_ack_o equals seed_valid.",
+      "cond": "always",
+      "signals": [
+        "SecSkipPRNGReseeding",
+        "reseed_ack_o",
+        "reseed_req_i",
+        "seed_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:72"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "buffer_valid_d toggles its value (inverts buffer_valid_q) when entropy_req_o and entropy_ack_i are both high; otherwise buffer_valid_d equals buffer_valid_q.",
+      "cond": "always",
+      "signals": [
+        "buffer_valid_d",
+        "entropy_req_o",
+        "entropy_ack_i",
+        "buffer_valid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:75"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "buffer_d is set to entropy_i only when entropy_req_o and entropy_ack_i are both high and buffer_valid_q is low; otherwise buffer_d holds buffer_q.",
+      "cond": "always",
+      "signals": [
+        "buffer_d",
+        "entropy_req_o",
+        "entropy_ack_i",
+        "buffer_valid_q",
+        "entropy_i",
+        "buffer_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:78"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When entropy_req_o and entropy_ack_i are both high and buffer_valid_q is low, entropy_i must be stable and contain valid entropy bits.",
+      "cond": "entropy handshake completing with empty buffer",
+      "risk": "Invalid or unstable entropy_i leads to loading a weak or corrupted seed, compromising PRNG randomness.",
+      "signals": [
+        "entropy_i",
+        "entropy_req_o",
+        "entropy_ack_i",
+        "buffer_valid_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:78"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "When SecSkipPRNGReseeding is true, reseed_ack_o directly passes through reseed_req_i without waiting for seed_valid or any actual entropy injection. The safety and intent of this bypass are unclear.",
+      "cond": "SecSkipPRNGReseeding == 1",
+      "risk": "The reseed operation may be falsely acknowledged without proper entropy reseeding, allowing the system to proceed with a PRNG state lacking sufficient entropy, breaking security assumptions.",
+      "signals": [
+        "SecSkipPRNGReseeding",
+        "reseed_ack_o",
+        "reseed_req_i",
+        "seed_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:72"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "buffer_valid_d toggles buffer_valid_q on each entropy handshake; when buffer_valid_q is high, a handshake clears the valid flag but buffer_d keeps the previous buffer_q value. This may create a window where valid is low yet buffer_d holds stale entropy.",
+      "cond": "entropy handshake while buffer_valid_q == 1",
+      "risk": "A downstream consumer might sample buffer_d while buffer_valid_q is low, using stale entropy and bypassing the intended buffer update sequence, potentially affecting randomness quality.",
+      "signals": [
+        "buffer_valid_q",
+        "buffer_d",
+        "buffer_q",
+        "entropy_req_o",
+        "entropy_ack_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:75,78"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:71",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:72",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:75",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:78"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv",
+  "line_start": 71,
+  "line_end": 78,
+  "security_implications": ""
+}

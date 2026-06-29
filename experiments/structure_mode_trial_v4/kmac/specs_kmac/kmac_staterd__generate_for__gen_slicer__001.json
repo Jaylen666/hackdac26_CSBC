@@ -1,0 +1,129 @@
+{
+  "chunk_id": "kmac_staterd__generate_for__gen_slicer__001",
+  "header": {
+    "module": "kmac_staterd",
+    "block_kind": "instance",
+    "driven": [
+      "muxed_state[*]"
+    ],
+    "used": [
+      "state_i[*]",
+      "tlram_addr",
+      "StateAddrW",
+      "Share"
+    ],
+    "modes": [
+      "Share (loop count)",
+      "StateAddrW parameter"
+    ],
+    "tags": [
+      "secret",
+      "digest",
+      "fifo",
+      "parameterization",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Each share index i (0 to Share-1) drives muxed_state[i] with the output of a prim_slicer instance that selects a 32-bit slice from state_i[i] based on tlram_addr[StateAddrW-1:0].",
+      "cond": "always (combinational or sequential prim_slicer)",
+      "signals": [
+        "muxed_state[i]",
+        "state_i[i]",
+        "tlram_addr[StateAddrW-1:0]"
+      ],
+      "refs": [
+        "kmac_staterd.sv:109-119"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "tlram_addr[StateAddrW-1:0] must select a valid 32-bit word within the state (StateW bits), i.e., its value must be less than StateW/32.",
+      "cond": "when a state slice is accessed (every cycle the slicer output is used)",
+      "risk": "An out-of-range address may cause prim_slicer to output an undefined or the last slice, potentially exposing or corrupting internal state data (e.g., digest or key).",
+      "signals": [
+        "tlram_addr",
+        "StateAddrW",
+        "StateW"
+      ],
+      "refs": [
+        "kmac_staterd.sv:115"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "state_i[i] for each share i must be valid and stable during the access window; it is assumed to be correctly managed by the surrounding logic.",
+      "cond": "when muxed_state is latched/used downstream",
+      "risk": "Glitches or undefined input could leak transient bits of secret data to the output, breaking information flow security.",
+      "signals": [
+        "state_i",
+        "muxed_state"
+      ],
+      "refs": [
+        "kmac_staterd.sv:116-117"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If parameter Share is set to 0, the generate loop produces zero instances and muxed_state is undriven, which may violate module assumptions and leave a critical bus floating.",
+      "cond": "Share == 0 (legal in SystemVerilog)",
+      "risk": "muxed_state may become high-Z, causing downstream logic to behave unpredictably or sample stale/secret data from other sources.",
+      "signals": [
+        "muxed_state",
+        "Share"
+      ],
+      "refs": [
+        "kmac_staterd.sv:109"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The mapping between IndexW=StateAddrW and the number of 32-bit slices (StateW/32) is not verified; if StateAddrW is too small, some state bits may never be accessible via this slicer.",
+      "cond": "StateAddrW < ceil(log2(StateW/32))",
+      "risk": "Unreachable state bits could retain sensitive data across operations, breaking lifecycle security properties (e.g., incomplete clear).",
+      "signals": [
+        "IndexW",
+        "StateAddrW",
+        "StateW"
+      ],
+      "refs": [
+        "kmac_staterd.sv:111-113"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "No range check or error reporting exists on sel_i (tlram_addr). An illegal address may produce undetected data corruption.",
+      "cond": "tlram_addr[StateAddrW-1:0] out of range",
+      "risk": "Corrupt output may be consumed by a CSR read or further processing without alert, violating data integrity.",
+      "signals": [
+        "tlram_addr",
+        "sel_i"
+      ],
+      "refs": [
+        "kmac_staterd.sv:115"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_staterd.sv:109-119"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv",
+  "line_start": 109,
+  "line_end": 119,
+  "security_implications": ""
+}

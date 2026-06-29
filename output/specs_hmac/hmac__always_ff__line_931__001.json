@@ -1,0 +1,131 @@
+{
+  "chunk_id": "hmac__always_ff__line_931__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "initiated"
+    ],
+    "used": [
+      "rst_ni",
+      "hash_start_or_continue",
+      "hash_process",
+      "reg_hash_stop"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "reset"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "initiated is cleared to 1'b0 when reset (rst_ni low)",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "initiated"
+      ],
+      "refs": [
+        "hmac.sv:932"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "initiated is set to 1'b1 on hash_start_or_continue assertion, regardless of hash_process or reg_hash_stop",
+      "cond": "hash_start_or_continue && rst_ni",
+      "signals": [
+        "hash_start_or_continue",
+        "initiated"
+      ],
+      "refs": [
+        "hmac.sv:933"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "initiated is cleared to 1'b0 when hash_process or reg_hash_stop is asserted and hash_start_or_continue is not active",
+      "cond": "(hash_process || reg_hash_stop) && !hash_start_or_continue && rst_ni",
+      "signals": [
+        "hash_process",
+        "reg_hash_stop",
+        "initiated"
+      ],
+      "refs": [
+        "hmac.sv:934"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "initiated holds its current value when no condition triggers (no reset, no start, no process/stop)",
+      "cond": "rst_ni && !hash_start_or_continue && !(hash_process || reg_hash_stop)",
+      "signals": [
+        "initiated"
+      ],
+      "refs": [
+        "hmac.sv:931-935"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "External logic must not assert hash_start_or_continue simultaneously with hash_process or reg_hash_stop if the intent is to clear initiated, because the start condition takes priority and keeps initiated high",
+      "cond": "hash_start_or_continue concurrently with hash_process or reg_hash_stop",
+      "risk": "initiated remains 1, hash core may not enter the expected state, leading to control mismatch",
+      "signals": [
+        "hash_start_or_continue",
+        "hash_process",
+        "reg_hash_stop"
+      ],
+      "refs": [
+        "hmac.sv:933-934"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "initiated is not cleared on error conditions. If an error occurs while initiated is high and neither hash_process nor reg_hash_stop is later asserted, initiated will remain high indefinitely, potentially stalling the hash engine or preventing recovery",
+      "cond": "any error event without subsequent hash_process or reg_hash_stop",
+      "risk": "hash engine stuck in initiated state, blocking new operations or causing security monitor failure",
+      "signals": [
+        "initiated"
+      ],
+      "refs": [
+        "hmac.sv:931-935"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "initiated transitions to 0 when hash_process or reg_hash_stop asserts. If the hash core still needs initiated high for internal handshake completion, premature clearing could cause state inconsistency.",
+      "cond": "hash_process or reg_hash_stop asserted before internal operation fully finishes",
+      "risk": "initiated deasserted too early, desynchronizing from downstream logic relying on it",
+      "signals": [
+        "initiated",
+        "hash_process",
+        "reg_hash_stop"
+      ],
+      "refs": [
+        "hmac.sv:934"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "hmac.sv:931-935"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 931,
+  "line_end": 935,
+  "security_implications": ""
+}

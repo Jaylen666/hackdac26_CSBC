@@ -1,0 +1,175 @@
+{
+  "chunk_id": "aes_control_fsm_continuous_region_declarations_or_instances_005__behavior__001",
+  "header": {
+    "module": "aes_control_fsm",
+    "block_kind": "assign",
+    "driven": [
+      "input_ready",
+      "input_ready_we",
+      "output_valid",
+      "output_valid_we"
+    ],
+    "used": [
+      "data_in_new",
+      "data_in_load",
+      "data_in_we_o",
+      "clear_in_out_status",
+      "data_out_we_o",
+      "data_out_clear_we",
+      "data_out_read"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "input_ready is asserted when data_in_new is low, indicating readiness to accept new input data.",
+      "cond": "data_in_new == 0",
+      "signals": [
+        "input_ready",
+        "data_in_new"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:738"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "input_ready_we is asserted when any of data_in_new, data_in_load, data_in_we_o, or clear_in_out_status is high.",
+      "cond": "data_in_new | data_in_load | data_in_we_o | clear_in_out_status",
+      "signals": [
+        "input_ready_we",
+        "data_in_new",
+        "data_in_load",
+        "data_in_we_o",
+        "clear_in_out_status"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:739"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "output_valid is asserted when data_out_we_o is high and data_out_clear_we is low, indicating valid output data is present.",
+      "cond": "data_out_we_o & ~data_out_clear_we",
+      "signals": [
+        "output_valid",
+        "data_out_we_o",
+        "data_out_clear_we"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:745"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "output_valid_we is asserted when any of data_out_we_o, data_out_read, data_out_clear_we, or clear_in_out_status is high.",
+      "cond": "data_out_we_o | data_out_read | data_out_clear_we | clear_in_out_status",
+      "signals": [
+        "output_valid_we",
+        "data_out_we_o",
+        "data_out_read",
+        "data_out_clear_we",
+        "clear_in_out_status"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:746-747"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "data_in_new must be a clean, glitch-free signal indicating new data availability, with proper timing.",
+      "cond": "during input operations",
+      "risk": "A glitch or mis-timing on data_in_new can cause input_ready to deassert spuriously, leading to lost data acceptance or false readiness.",
+      "signals": [
+        "data_in_new",
+        "input_ready"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:738"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "data_out_read must be asserted only when the downstream consumer actually latches the output data.",
+      "cond": "when output valid data is available",
+      "risk": "Incorrect assertion of data_out_read triggers output_valid_we and may prematurely clear output_valid, causing the consumer to miss valid data.",
+      "signals": [
+        "data_out_read",
+        "output_valid_we",
+        "output_valid"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:746"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The control signals (data_in_new, data_in_load, data_in_we_o, clear_in_out_status, data_out_we_o, data_out_clear_we, data_out_read) must follow a protocol that avoids simultaneous conflicting assertions when they affect the same tracked state.",
+      "cond": "during state transitions or concurrent events",
+      "risk": "Simultaneous assertion of conflicting signals (e.g., data_in_new and clear_in_out_status) may create ambiguous handshake updates, potentially corrupting input/output tracking.",
+      "signals": [
+        "data_in_new",
+        "clear_in_out_status",
+        "data_out_we_o",
+        "data_out_clear_we"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:738-747"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "When both data_in_new and clear_in_out_status are high, input_ready_we is asserted while input_ready is low. It is not clear if this event can trigger an unintended state update in the input handshake logic.",
+      "cond": "data_in_new && clear_in_out_status",
+      "risk": "May cause the FSM to accept new data during a clearing operation or create an inconsistent input status, potentially leading to data corruption or protocol violation.",
+      "signals": [
+        "input_ready_we",
+        "data_in_new",
+        "clear_in_out_status"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:738-739"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If data_out_we_o and data_out_clear_we are asserted simultaneously, output_valid is forced low, which may suppress a new valid output indication while clearing is in progress.",
+      "cond": "data_out_we_o & data_out_clear_we",
+      "risk": "A downstream consumer may miss valid output data or erroneously read stale data, leading to functional errors. The security clearing intent may be prioritized, but a conflict could hide a live data write.",
+      "signals": [
+        "output_valid",
+        "data_out_we_o",
+        "data_out_clear_we"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:745"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_control_fsm.sv:738-747"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv",
+  "line_start": 738,
+  "line_end": 747,
+  "security_implications": ""
+}

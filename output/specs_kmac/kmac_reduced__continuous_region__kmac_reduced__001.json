@@ -1,72 +1,172 @@
 {
   "chunk_id": "kmac_reduced__continuous_region__kmac_reduced__001",
-  "summary": "该片段把外部一次性输入的各份消息 share 通过独立 packer FIFO 拆成 SHA3 消息宽度，并仅在所有 share 同时就绪/同时有效时对外给出统一的 ready/valid。",
-  "behavior": "模块声明表明该设计面向可选 masking 的 KMAC/SHA3 简化实现；当 EnMasking 为 1 时 NumShares=2，否则为 1，消息输入接口因此是按 share 数组提供的预掩码消息 `msg_i[NumShares]` [kmac_reduced.sv:15-17,34-36]。本片段实际实现了“Message unpacking & injection”部分：为每个消息 share 实例化一个 `prim_packer_fifo`，其写侧输入宽度是固定消息长度 `MsgLen`，读侧输出宽度是 `sha3_pkg::MsgWidth`，且 `ClearOnRead` 置 1，因此每个 share 的整条输入消息由 `msg_valid_i` 与对应 `msg_i[x]` 写入后，以 SHA3 消息宽度在读侧导出为 `msg[x]`，读出握手统一由内部 `msg_ready` 驱动 [kmac_reduced.sv:100-120,123-138]。两个 FIFO 的写入使能都直接使用同一个 `msg_valid_i`，读出 ready 也共用同一个 `msg_ready`，因此设计意图是各 share 并行、锁步地装载和消费消息 [kmac_reduced.sv:114-119,131-136]。对外和对后级不会单独暴露每个 share 的握手，而是用按位与归约：`msg_ready_o` 只有在所有 share 的 `wready_o` 都为 1 时才为 1，内部统一 `msg_valid` 只有在所有 share 的 `rvalid_o` 都为 1 时才为 1 [kmac_reduced.sv:140-142]。片段末尾只声明了重掩码相关信号 `msg_mask_en`、`msg_mask`、`msg_mask_permuted`、`msg_masked`，但尚未给出其驱动和使用逻辑，因此这里还看不到实际的消息重掩码行为 [kmac_reduced.sv:144-149]。",
+  "header": {
+    "module": "kmac_reduced",
+    "block_kind": "mixed",
+    "driven": [
+      "msg_ready_o",
+      "msg_valid",
+      "msg",
+      "msg_ready_shares[0]",
+      "msg_ready_shares[1]",
+      "msg_valid_shares[0]",
+      "msg_valid_shares[1]"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "msg_valid_i",
+      "msg_i",
+      "msg_ready",
+      "msg_ready_shares",
+      "msg_valid_shares"
+    ],
+    "modes": [
+      "EnMasking",
+      "NumShares"
+    ],
+    "tags": [
+      "masking",
+      "fifo",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对外部消息源而言，`msg_ready_o` 等于所有消息 share 的 packer FIFO 写侧 ready 的按位与；只要任一 share 不能接收写入，`msg_ready_o` 就不会置位。",
-      "output_signals": [
-        "msg_ready_o"
+      "id": "G1",
+      "type": "instance",
+      "claim": "Message share inputs msg_i[0] and msg_i[1] are connected to prim_packer_fifo instances that pack from MsgLen to MsgWidth with ClearOnRead enabled and clr_i deasserted.",
+      "cond": "always",
+      "signals": [
+        "msg_i[0]",
+        "msg_i[1]",
+        "u_msg_unpacker_share0",
+        "u_msg_unpacker_share1"
       ],
-      "source_refs": [
-        "kmac_reduced.sv:116-117",
-        "kmac_reduced.sv:133-141"
+      "refs": [
+        "106-121",
+        "123-138"
       ]
     },
     {
-      "property": "对后级消息处理逻辑而言，内部统一消息有效信号 `msg_valid` 仅在所有 share 的 FIFO 读侧都有效时才为 1，从而不会将部分 share 缺失的数据当作完整多 share 消息输出。",
-      "output_signals": [
-        "msg_valid"
-      ],
-      "source_refs": [
-        "kmac_reduced.sv:117-119",
-        "kmac_reduced.sv:134-142"
-      ]
-    }
-  ],
-  "security_implications": "该片段直接关系到 masked 消息 share 的一致性传输。通过对各 share 的 ready/valid 做与归约，设计在接口层面避免只接收或只输出部分 share，从而降低 share 不同步导致掩码失配、错误吸收甚至信息泄露的风险。不过源码无保护来处理某个 share FIFO 与其他 share 长期失步的情况，系统行为将退化为整体背压或整体无效。",
-  "assumptions": [
-    {
-      "constraint": "当 `NumShares` 大于 1 时，外部应保证 `msg_valid_i` 置位时各个 `msg_i[share]` 属于同一条逻辑消息的对应 share，并期望被同时写入各自 FIFO。",
-      "bug_relevance": "这是行为契约；若不同 share 携带不对应的数据，虽然本片段仍会并行装载并等待所有 share 同步有效，但后续 masked 处理将基于错误 share 组合，可能导致哈希结果错误或破坏掩码安全性。",
-      "related_signals": [
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "msg_valid_i drives write-valid of both share FIFOs, and both FIFOs share the same read-ready signal msg_ready.",
+      "cond": "always",
+      "signals": [
         "msg_valid_i",
-        "msg_i",
+        "msg_ready",
+        "u_msg_unpacker_share0",
+        "u_msg_unpacker_share1"
+      ],
+      "refs": [
+        "114",
+        "119",
+        "131",
+        "136"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "msg_ready_o is the logical AND of the write-ready outputs from both share FIFOs.",
+      "cond": "always",
+      "signals": [
+        "msg_ready_o",
         "msg_ready_shares"
       ],
-      "source_refs": [
-        "kmac_reduced.sv:33-35",
-        "kmac_reduced.sv:114-116",
-        "kmac_reduced.sv:131-133"
+      "refs": [
+        "141"
       ]
     },
     {
-      "constraint": "外部/后级应接受该接口是锁步握手：任一 share 的 FIFO 若暂时未 ready 或未 valid，整体 `msg_ready_o`/`msg_valid` 都会被拉低；这种失配场景设计上不应长期发生。",
-      "bug_relevance": "若不满足则该片段会安全地施加整体背压或阻止输出，不一定是本块 bug；但若系统未预期这种全局阻塞，可能造成上游无法注入消息或下游一直等待完整 share 数据。",
-      "related_signals": [
-        "msg_ready_o",
-        "msg_ready_shares",
+      "id": "G4",
+      "type": "assignment",
+      "claim": "msg_valid is the logical AND of the read-valid outputs from both share FIFOs.",
+      "cond": "always",
+      "signals": [
         "msg_valid",
         "msg_valid_shares"
       ],
-      "source_refs": [
-        "kmac_reduced.sv:116-119",
-        "kmac_reduced.sv:133-142"
+      "refs": [
+        "142"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The external producer must obey the valid/ready handshake: msg_valid_i must be asserted with stable msg_i shares, and must be deasserted after accepted (msg_ready_o asserted).",
+      "cond": "when msg_valid_i is high",
+      "risk": "If the producer violates handshake (e.g., changes data before acceptance or retracts valid), the FIFOs may capture corrupt data or stall indefinitely.",
+      "signals": [
+        "msg_valid_i",
+        "msg_i",
+        "msg_ready_o"
+      ],
+      "refs": [
+        "100-121",
+        "123-138"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "When EnMasking=0, NumShares=1, the unconditional instantiation of u_msg_unpacker_share1 references msg_i[1] which is out-of-bounds, causing an elaboration failure.",
+      "cond": "parameter EnMasking=0 (legal value)",
+      "risk": "Design fails to elaborate, preventing use of the security-weak unmasked configuration for evaluation or reset.",
+      "signals": [
+        "EnMasking",
+        "NumShares",
+        "msg_i"
+      ],
+      "refs": [
+        "16-17",
+        "34",
+        "123-138"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The signal msg_ready, used as read-ready for both FIFOs, is not driven within this chunk; it must be provided by downstream logic to pop data.",
+      "cond": "when data is ready in FIFOs",
+      "risk": "If msg_ready is never asserted, the unpacked message will never be read and the system stalls.",
+      "signals": [
+        "msg_ready"
+      ],
+      "refs": [
+        "104",
+        "119",
+        "136"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "msg_mask_en is declared but not used; the message (re-)masking block (lines 145-149) has no active logic, leaving masking potentially unimplemented despite the SCA protection intent.",
+      "cond": "always",
+      "risk": "Message shares may not be re-masked before use, weakening differential power analysis resistance.",
+      "signals": [
+        "msg_mask_en"
+      ],
+      "refs": [
+        "147"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_reduced.sv:15-17",
-    "kmac_reduced.sv:33-36",
-    "kmac_reduced.sv:97-119",
-    "kmac_reduced.sv:123-142",
-    "kmac_reduced.sv:144-149"
-  ],
-  "uncertain_points": [
-    "参数 `NumShares` 可由 `EnMasking` 导出为 1 或 2 [kmac_reduced.sv:15-17]，但本片段无条件实例化了 `u_msg_unpacker_share1` 并访问 `msg_i[1]`、`msg[1]` [kmac_reduced.sv:123-137]；若 `EnMasking=0`，该代码是否依赖片段外的 generate/配置约束才能合法编译，单靠本片段无法确认。",
-    "注释将该部分称为“Message unpacking & injection”以及后续“Message (re-)masking” [kmac_reduced.sv:97-99,144-146]，但当前片段只看到 unpacking 和握手归约，尚未看到真正注入 SHA3 核心或重掩码的实现，因此无法确认这些已声明信号后续如何影响消息内容。"
+    "8-149"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 8,
-  "line_end": 149
+  "line_end": 149,
+  "security_implications": ""
 }

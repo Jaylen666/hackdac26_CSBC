@@ -1,0 +1,2102 @@
+[
+  {
+    "chunk_id": "hmac__continuous_region__hmac__001",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 7,
+    "line_end": 147,
+    "title": "hmac: continuous_region hmac (7-147)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 7-147。",
+    "code": "`include \"prim_assert.sv\"\n\nmodule hmac\n  import prim_sha2_pkg::*;\n  import hmac_reg_pkg::*;\n#(\n  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}}\n) (\n  input clk_i,\n  input rst_ni,\n\n  input  tlul_pkg::tl_h2d_t tl_i,\n  output tlul_pkg::tl_d2h_t tl_o,\n\n  input  prim_alert_pkg::alert_rx_t [NumAlerts-1:0] alert_rx_i,\n  output prim_alert_pkg::alert_tx_t [NumAlerts-1:0] alert_tx_o,\n\n  output logic intr_hmac_done_o,\n  output logic intr_fifo_empty_o,\n  output logic intr_hmac_err_o,\n\n  output prim_mubi_pkg::mubi4_t idle_o\n);\n\n\n  /////////////////////////\n  // Signal declarations //\n  /////////////////////////\n  hmac_reg2hw_t reg2hw;\n  hmac_hw2reg_t hw2reg;\n\n  tlul_pkg::tl_h2d_t  tl_win_h2d;\n  tlul_pkg::tl_d2h_t  tl_win_d2h;\n\n  logic [1023:0] secret_key, secret_key_d;\n\n  // Logic will support key length <= block size\n  // Will default to key length = block size, if key length > block size or unsupported value\n  key_length_e key_length_supplied, key_length;\n\n  logic        wipe_secret;\n  logic [31:0] wipe_v;\n\n  logic        fifo_rvalid;\n  logic        fifo_rready;\n  sha_fifo32_t fifo_rdata;\n\n  logic        fifo_wvalid, fifo_wready;\n  sha_fifo32_t fifo_wdata;\n  logic        fifo_full;\n  logic        fifo_empty;\n  logic [5:0]  fifo_depth;\n\n  logic        msg_fifo_req;\n  logic        msg_fifo_gnt;\n  logic        msg_fifo_we;\n  logic [31:0] msg_fifo_wdata;\n  logic [31:0] msg_fifo_wmask;\n  logic [31:0] msg_fifo_rdata;\n  logic [1:0]  msg_fifo_rerror;\n  logic [31:0] msg_fifo_wdata_endian;\n  logic [31:0] msg_fifo_wmask_endian;\n\n  logic        packer_ready;\n  logic        packer_flush_done;\n\n  logic         reg_fifo_wvalid;\n  sha_word32_t  reg_fifo_wdata;\n  sha_word32_t  reg_fifo_wmask;\n  logic         hmac_fifo_wsel;\n  logic         hmac_fifo_wvalid;\n  logic [3:0]   hmac_fifo_wdata_sel;\n\n  logic         shaf_rvalid;\n  sha_fifo32_t  shaf_rdata;\n  logic         shaf_rready;\n\n  logic        sha_en;\n  logic        hmac_en;\n  logic        endian_swap;\n  logic        digest_swap;\n  logic        key_swap;\n\n  logic        reg_hash_start;\n  logic        sha_hash_start;\n  logic        reg_hash_stop;\n  logic        reg_hash_continue;\n  logic        sha_hash_continue;\n  logic        hash_start;     // hash_start is reg_hash_start gated with extra checks\n  logic        hash_continue;  // hash_continue is reg_hash_continue gated with extra checks\n  logic        hash_process;   // hash_process is reg_hash_process gated with extra checks\n  logic        hash_start_or_continue;\n  logic        hash_done_event;\n  logic        reg_hash_process;\n  logic        sha_hash_process;\n  logic        digest_on_blk;\n\n  logic        reg_hash_done;\n  logic        sha_hash_done;\n\n  logic [63:0] message_length, message_length_d;\n  logic [63:0] sha_message_length;\n\n  err_code_e  err_code;\n  logic       err_valid;\n  logic       invalid_config; // HMAC/SHA-2 is configured with invalid digest size/key length\n  logic       invalid_config_atstart;\n\n  sha_word64_t [7:0] digest, digest_sw;\n  logic [7:0]        digest_sw_we;\n\n  digest_mode_e digest_size, digest_size_supplied;\n  // this is the digest size captured into HMAC when it gets started\n  digest_mode_e digest_size_started_d, digest_size_started_q;\n  logic [7:0] cool_down_ct_q, cool_down_ct_d;\n\n  hmac_reg2hw_cfg_reg_t cfg_reg;\n  logic                 cfg_block;   // Prevents changing config\n  logic                 msg_allowed; // MSG_FIFO from software is allowed\n\n  logic hmac_core_idle;\n  logic sha_core_idle;\n  logic hash_running;\n  logic idle;\n\n  ///////////////////////\n  // Connect registers //\n  ///////////////////////\n  assign hw2reg.status.fifo_full.d  = fifo_full;\n  assign hw2reg.status.fifo_empty.d = fifo_empty;\n  assign hw2reg.status.fifo_depth.d = fifo_depth;\n  assign hw2reg.status.hmac_idle.d  = idle;\n\n  typedef enum logic [1:0] {\n    DoneAwaitCmd,\n    DoneAwaitHashDone,\n    DoneAwaitMessageComplete,\n    DoneAwaitHashComplete\n  } done_state_e;\n\n  done_state_e done_state_d, done_state_q;",
+    "dependencies": [
+      "hw2reg",
+      "NumAlerts",
+      "tlul_pkg",
+      "status",
+      "d",
+      "sha_fifo32_t",
+      "fifo_full",
+      "fifo_empty",
+      "fifo_depth",
+      "tl_h2d_t",
+      "tl_d2h_t",
+      "prim_alert_pkg",
+      "sha_word32_t",
+      "digest_mode_e",
+      "idle",
+      "done_state_e",
+      "include",
+      "prim_assert",
+      "sv",
+      "hmac",
+      "prim_sha2_pkg",
+      "hmac_reg_pkg",
+      "AlertAsyncOn",
+      "b1",
+      "clk_i",
+      "rst_ni",
+      "tl_i",
+      "tl_o",
+      "alert_rx_t",
+      "alert_rx_i",
+      "alert_tx_t",
+      "alert_tx_o",
+      "intr_hmac_done_o",
+      "intr_fifo_empty_o",
+      "intr_hmac_err_o",
+      "prim_mubi_pkg",
+      "mubi4_t",
+      "idle_o",
+      "hmac_reg2hw_t",
+      "reg2hw"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [],
+    "structure_refs": [
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:13-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:140-enum"
+    ],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__line_149__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 149,
+    "line_end": 195,
+    "title": "hmac: always_comb line_149 (149-195)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 149-195。",
+    "code": "  always_comb begin\n    done_state_d    = done_state_q;\n    hash_done_event = 8'd0;\n\n    unique case (done_state_q)\n      DoneAwaitCmd: begin\n        cool_down_ct_d = 8'd0;\n        if (sha_hash_process) begin\n          // SHA has been told to process the message, so signal *done* when the hash is done.\n          done_state_d = DoneAwaitHashDone;\n        end else if (reg_hash_stop) begin\n          // SHA has been told to stop, so first wait for the current message block to be complete.\n          done_state_d = DoneAwaitMessageComplete;\n        end\n      end\n\n      DoneAwaitHashDone: begin\n        if (reg_hash_done) begin\n          hash_done_event = 1'b1;\n          done_state_d = DoneAwaitCmd;\n        end\n      end\n\n      DoneAwaitMessageComplete: begin\n        if (digest_on_blk) begin\n          // Once the digest is being computed for the complete message block, wait for the hash to\n          // complete.\n          done_state_d = DoneAwaitHashComplete;\n        end\n      end\n\n      DoneAwaitHashComplete: begin\n        if (!hash_running) begin\n          if (cool_down_ct_q < 8'd127) begin\n            cool_down_ct_d = cool_down_ct_q + 1'b1;\n            hash_done_event = 1'b0;\n            done_state_d = DoneAwaitHashComplete;\n          end else begin\n            hash_done_event = 1'b1;\n            done_state_d = DoneAwaitCmd;\n          end\n        end\n      end\n\n      default: ;\n    endcase\n  end",
+    "dependencies": [
+      "done_state_d",
+      "hash_done_event",
+      "DoneAwaitCmd",
+      "b1",
+      "DoneAwaitHashComplete",
+      "done_state_q",
+      "d0",
+      "cool_down_ct_d",
+      "DoneAwaitHashDone",
+      "DoneAwaitMessageComplete",
+      "cool_down_ct_q",
+      "sha_hash_process",
+      "reg_hash_stop",
+      "reg_hash_done",
+      "digest_on_blk",
+      "hash_running",
+      "d127",
+      "b0"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: sha_hash_process"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: reg_hash_done"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: digest_on_blk"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: !hash_running"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: cool_down_ct_q < 8'd127"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: sha_hash_process",
+      "generate if: reg_hash_done",
+      "generate if: digest_on_blk",
+      "generate if: !hash_running",
+      "generate if: cool_down_ct_q < 8'd127"
+    ]
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_197__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 197,
+    "line_end": 203,
+    "title": "hmac: always_ff line_197 (197-203)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 197-203。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      done_state_q <= DoneAwaitCmd;\n    end else begin\n      done_state_q <= done_state_d;\n    end\n  end",
+    "dependencies": [
+      "rst_ni",
+      "done_state_q",
+      "clk_i",
+      "DoneAwaitCmd",
+      "done_state_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_205__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 205,
+    "line_end": 208,
+    "title": "hmac: always_ff line_205 (205-208)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 205-208。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) cool_down_ct_q <= '0;\n    else         cool_down_ct_q <= cool_down_ct_d;\n  end",
+    "dependencies": [
+      "rst_ni",
+      "cool_down_ct_q",
+      "clk_i",
+      "cool_down_ct_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__001",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 210,
+    "line_end": 211,
+    "title": "hmac: continuous_region declarations_or_instances (210-211)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 210-211。",
+    "code": "  assign wipe_secret = reg2hw.wipe_secret.qe;\n  assign wipe_v      = reg2hw.wipe_secret.q;",
+    "dependencies": [
+      "wipe_secret",
+      "reg2hw",
+      "qe",
+      "wipe_v",
+      "q"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__update_secret_key__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 214,
+    "line_end": 227,
+    "title": "hmac: always_comb update_secret_key (214-227)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 214-227。",
+    "code": "  always_comb begin : update_secret_key\n    secret_key_d = secret_key;\n    if (wipe_secret) begin\n      secret_key_d = {32{wipe_v}};\n    end else if (!cfg_block) begin\n      // Allow updating secret key only when the engine is in Idle.\n      for (int i = 0; i < 32; i++) begin\n        if (reg2hw.key[31-i].qe) begin\n          // swap byte endianness per secret key word if key_swap = 1\n          secret_key_d[32*i+:32] = conv_endian32(reg2hw.key[31-i].q, key_swap);\n        end\n      end\n    end\n  end",
+    "dependencies": [
+      "i",
+      "secret_key_d",
+      "reg2hw",
+      "key",
+      "update_secret_key",
+      "secret_key",
+      "wipe_secret",
+      "wipe_v",
+      "cfg_block",
+      "qe",
+      "conv_endian32",
+      "q",
+      "key_swap"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: wipe_secret"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: reg2hw.key[31-i].qe"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: wipe_secret",
+      "generate if: reg2hw.key[31-i].qe"
+    ]
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_229__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 229,
+    "line_end": 232,
+    "title": "hmac: always_ff line_229 (229-232)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 229-232。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) secret_key <= '0;\n    else         secret_key <= secret_key_d;\n  end",
+    "dependencies": [
+      "rst_ni",
+      "secret_key",
+      "clk_i",
+      "secret_key_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__generate_for__gen_key__001",
+    "kind": "generate_for",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 234,
+    "line_end": 236,
+    "title": "hmac: generate_for gen_key (234-236)",
+    "context_summary": "hmac 中的声明、实例化或寄存器描述上下文，行 234-236。",
+    "code": "  for (genvar i = 0; i < 32; i++) begin : gen_key\n    assign hw2reg.key[31-i].d      = '0;\n  end",
+    "dependencies": [
+      "i",
+      "gen_key",
+      "hw2reg",
+      "key",
+      "d"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate for: i = 0; i < 32; i++"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate for: i = 0; i < 32; i++"
+    ]
+  },
+  {
+    "chunk_id": "hmac__always_comb__assign_digest_reg__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 239,
+    "line_end": 285,
+    "title": "hmac: always_comb assign_digest_reg (239-285)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 239-285。",
+    "code": "  always_comb begin : assign_digest_reg\n    // default\n    // digest SW -> HW\n    digest_sw     = '0;\n    digest_sw_we  = '0;\n    // digest HW -> SW\n    hw2reg.digest = '0;\n\n    for (int i = 0; i < 8; i++) begin\n      // digest SW -> HW (depends on digest size configured even before starting/enabling)\n      // capturing the intermediate digests written by SW when restoring context into the SHA-2\n      // engine before it is started\n      if (digest_size == SHA2_256) begin\n        // digest SW -> HW\n        digest_sw[i][31:0] = conv_endian32(reg2hw.digest[i].q, digest_swap);\n        digest_sw_we[i]    = reg2hw.digest[i].qe;\n      end else if ((digest_size == SHA2_384) || (digest_size == SHA2_512)) begin\n        // digest SW -> HW\n        digest_sw[i][63:32]    = reg2hw.digest[2*i].qe ?\n                                 conv_endian32(reg2hw.digest[2*i].q, digest_swap) :\n                                 digest[i][63:32];\n        digest_sw[i][31:0]     = reg2hw.digest[2*i+1].qe ?\n                                 conv_endian32(reg2hw.digest[2*i+1].q, digest_swap) :\n                                 digest[i][31:0];\n        digest_sw_we[i]        = reg2hw.digest[2*i].qe | reg2hw.digest[2*i+1].qe;\n      end\n\n      // digest HW -> SW (depends on configuration that has been started)\n      if (digest_size_started_q == SHA2_256) begin\n        hw2reg.digest[i].d   = conv_endian32(digest[i][31:0], digest_swap);\n        // replicate digest[0..7] into digest[8..15]. Digest[8...15] are irrelevant for SHA2_256,\n        // but this ensures all digest CSRs are wiped out with random value (at wipe_secret)\n        // across different configurations.\n        hw2reg.digest[i+8].d = conv_endian32(digest[i][31:0], digest_swap);\n      end else if ((digest_size_started_q == SHA2_384) || (digest_size_started_q == SHA2_512)) begin\n        // digest HW -> SW\n        // digest swap only within each 32-bit word of the 64-bit digest word, not digest swap\n        // on the entire 64-bit digest word\n        hw2reg.digest[2*i].d   = conv_endian32(digest[i][63:32], digest_swap);\n        hw2reg.digest[2*i+1].d = conv_endian32(digest[i][31:0], digest_swap);\n      end else begin // for SHA2_None\n        // to ensure secret wiping is always passed to digest CSRs\n        hw2reg.digest[i].d   = conv_endian32(digest[i][31:0], digest_swap);\n        hw2reg.digest[i+8].d = conv_endian32(digest[i][31:0], digest_swap);\n      end\n    end\n  end",
+    "dependencies": [
+      "i",
+      "digest",
+      "conv_endian32",
+      "digest_swap",
+      "reg2hw",
+      "hw2reg",
+      "d",
+      "qe",
+      "digest_sw",
+      "digest_sw_we",
+      "digest_size",
+      "q",
+      "digest_size_started_q",
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512",
+      "assign_digest_reg"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: digest_size == SHA2_256"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: digest_size_started_q == SHA2_256"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: digest_size == SHA2_256",
+      "generate if: digest_size_started_q == SHA2_256"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__002",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 287,
+    "line_end": 296,
+    "title": "hmac: continuous_region declarations_or_instances (287-296)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 287-296。",
+    "code": "  logic unused_cfg_qe;\n  assign unused_cfg_qe = ^{cfg_reg.sha_en.qe,      cfg_reg.hmac_en.qe,\n                           cfg_reg.endian_swap.qe, cfg_reg.digest_swap.qe,\n                           cfg_reg.key_swap.qe,    cfg_reg.digest_size.qe,\n                           cfg_reg.key_length.qe };\n\n  assign sha_en               = cfg_reg.sha_en.q;\n  assign hmac_en              = cfg_reg.hmac_en.q;\n\n  assign digest_size_supplied = digest_mode_e'(cfg_reg.digest_size.q);",
+    "dependencies": [
+      "cfg_reg",
+      "qe",
+      "sha_en",
+      "hmac_en",
+      "q",
+      "unused_cfg_qe",
+      "digest_size",
+      "endian_swap",
+      "digest_swap",
+      "key_swap",
+      "key_length",
+      "digest_size_supplied",
+      "digest_mode_e"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__cast_digest_size__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 297,
+    "line_end": 309,
+    "title": "hmac: always_comb cast_digest_size (297-309)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 297-309。",
+    "code": "  always_comb begin : cast_digest_size\n    digest_size = SHA2_None;\n\n    unique case (digest_size_supplied)\n      SHA2_256:  digest_size = SHA2_256;\n      SHA2_384:  digest_size = SHA2_384;\n      SHA2_512:  digest_size = SHA2_512;\n      // unsupported digest size values are mapped to SHA2_None\n      // if HMAC/SHA-2 is triggered to start with this digest size, it is blocked\n      // and an error is signalled to SW\n      default:   digest_size = SHA2_None;\n    endcase\n  end",
+    "dependencies": [
+      "digest_size",
+      "SHA2_None",
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512",
+      "cast_digest_size",
+      "digest_size_supplied"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__003",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 312,
+    "line_end": 312,
+    "title": "hmac: continuous_region declarations_or_instances (312-312)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 312-312。",
+    "code": "  assign digest_size_started_d = (hash_start_or_continue) ? digest_size : digest_size_started_q;",
+    "dependencies": [
+      "digest_size_started_d",
+      "hash_start_or_continue",
+      "digest_size",
+      "digest_size_started_q"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_314__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 314,
+    "line_end": 317,
+    "title": "hmac: always_ff line_314 (314-317)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 314-317。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) digest_size_started_q <= SHA2_None;\n    else         digest_size_started_q <= digest_size_started_d;\n  end",
+    "dependencies": [
+      "rst_ni",
+      "digest_size_started_q",
+      "clk_i",
+      "SHA2_None",
+      "digest_size_started_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__004",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 319,
+    "line_end": 319,
+    "title": "hmac: continuous_region declarations_or_instances (319-319)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 319-319。",
+    "code": "  assign key_length_supplied  = key_length_e'(cfg_reg.key_length.q);",
+    "dependencies": [
+      "key_length_supplied",
+      "key_length_e",
+      "cfg_reg",
+      "key_length",
+      "q"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__cast_key_length__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 320,
+    "line_end": 334,
+    "title": "hmac: always_comb cast_key_length (320-334)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 320-334。",
+    "code": "  always_comb begin : cast_key_length\n    key_length = Key_None;\n\n    unique case (key_length_supplied)\n      Key_128:  key_length = Key_128;\n      Key_256:  key_length = Key_256;\n      Key_384:  key_length = Key_384;\n      Key_512:  key_length = Key_512;\n      Key_1024: key_length = Key_1024;\n      // unsupported key length values are mapped to Key_None\n      // if HMAC (not SHA-2) is triggered to start with this key length, it is blocked\n      // and an error is signalled to SW\n      default:  key_length = Key_None;\n    endcase\n  end",
+    "dependencies": [
+      "key_length",
+      "Key_None",
+      "Key_128",
+      "Key_256",
+      "Key_384",
+      "Key_512",
+      "Key_1024",
+      "cast_key_length",
+      "key_length_supplied"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__005",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 336,
+    "line_end": 363,
+    "title": "hmac: continuous_region declarations_or_instances (336-363)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 336-363。",
+    "code": "  assign endian_swap = cfg_reg.endian_swap.q;\n  assign digest_swap = cfg_reg.digest_swap.q;\n  assign key_swap    = cfg_reg.key_swap.q;\n\n  assign hw2reg.cfg.hmac_en.d     = cfg_reg.hmac_en.q;\n  assign hw2reg.cfg.sha_en.d      = cfg_reg.sha_en.q;\n  assign hw2reg.cfg.digest_size.d = digest_mode_e'(digest_size);\n  assign hw2reg.cfg.key_length.d  = key_length_e'(key_length);\n  assign hw2reg.cfg.endian_swap.d = cfg_reg.endian_swap.q;\n  assign hw2reg.cfg.digest_swap.d = cfg_reg.digest_swap.q;\n  assign hw2reg.cfg.key_swap.d    = cfg_reg.key_swap.q;\n\n  assign reg_hash_start    = reg2hw.cmd.hash_start.qe & reg2hw.cmd.hash_start.q;\n  assign reg_hash_stop     = reg2hw.cmd.hash_stop.qe & reg2hw.cmd.hash_stop.q;\n  assign reg_hash_continue = reg2hw.cmd.hash_continue.qe & reg2hw.cmd.hash_continue.q;\n  assign reg_hash_process  = reg2hw.cmd.hash_process.qe & reg2hw.cmd.hash_process.q;\n\n  // Error code register\n  assign hw2reg.err_code.de = err_valid;\n  assign hw2reg.err_code.d  = err_code;\n\n  /////////////////////\n  // Control signals //\n  /////////////////////\n  assign hash_start             = reg_hash_start    & sha_en & ~cfg_block & ~invalid_config;\n  assign hash_continue          = reg_hash_continue & sha_en & ~cfg_block & ~invalid_config;\n  assign hash_process           = reg_hash_process  & sha_en & cfg_block &  ~invalid_config;\n  assign hash_start_or_continue = hash_start | hash_continue;",
+    "dependencies": [
+      "q",
+      "hw2reg",
+      "cfg_reg",
+      "d",
+      "reg2hw",
+      "cmd",
+      "cfg",
+      "sha_en",
+      "endian_swap",
+      "digest_swap",
+      "key_swap",
+      "hash_start",
+      "qe",
+      "hash_continue",
+      "hash_process",
+      "err_code",
+      "cfg_block",
+      "invalid_config",
+      "hmac_en",
+      "digest_size",
+      "key_length",
+      "reg_hash_start",
+      "hash_stop",
+      "reg_hash_continue",
+      "reg_hash_process",
+      "digest_mode_e",
+      "key_length_e",
+      "reg_hash_stop",
+      "de",
+      "err_valid",
+      "hash_start_or_continue"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_365__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 365,
+    "line_end": 373,
+    "title": "hmac: always_ff line_365 (365-373)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 365-373。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      cfg_block <= '0;\n    end else if (hash_start_or_continue) begin\n      cfg_block <= 1'b 1;\n    end else if (reg_hash_done || reg_hash_stop) begin\n      cfg_block <= 1'b 0;\n    end\n  end",
+    "dependencies": [
+      "cfg_block",
+      "rst_ni",
+      "b",
+      "clk_i",
+      "hash_start_or_continue",
+      "reg_hash_done",
+      "reg_hash_stop"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_375__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 375,
+    "line_end": 411,
+    "title": "hmac: always_ff line_375 (375-411)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 375-411。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      cfg_reg <= '{\n        hmac_en: '{\n          q: 1'b0,\n          qe: 1'b0\n        },\n        sha_en: '{\n          q: 1'b0,\n          qe: 1'b0\n        },\n        endian_swap: '{\n          q: HMAC_CFG_ENDIAN_SWAP_RESVAL,\n          qe: 1'b0\n        },\n        digest_swap: '{\n          q: HMAC_CFG_DIGEST_SWAP_RESVAL,\n          qe: 1'b0\n        },\n        key_swap: '{\n          q: HMAC_CFG_KEY_SWAP_RESVAL,\n          qe: 1'b0\n        },\n        digest_size: '{\n          q: HMAC_CFG_DIGEST_SIZE_RESVAL,\n          qe: 1'b0\n        },\n        key_length: '{\n          q: HMAC_CFG_KEY_LENGTH_RESVAL,\n          qe: 1'b0\n        },\n        default:'0\n      };\n    end else if (!cfg_block && reg2hw.cfg.hmac_en.qe) begin\n      cfg_reg <= reg2hw.cfg ;\n    end\n  end",
+    "dependencies": [
+      "b0",
+      "qe",
+      "q",
+      "rst_ni",
+      "cfg_reg",
+      "hmac_en",
+      "reg2hw",
+      "cfg",
+      "clk_i",
+      "sha_en",
+      "endian_swap",
+      "HMAC_CFG_ENDIAN_SWAP_RESVAL",
+      "digest_swap",
+      "HMAC_CFG_DIGEST_SWAP_RESVAL",
+      "key_swap",
+      "HMAC_CFG_KEY_SWAP_RESVAL",
+      "digest_size",
+      "HMAC_CFG_DIGEST_SIZE_RESVAL",
+      "key_length",
+      "HMAC_CFG_KEY_LENGTH_RESVAL",
+      "cfg_block"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_414__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 414,
+    "line_end": 422,
+    "title": "hmac: always_ff line_414 (414-422)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 414-422。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      msg_allowed <= '0;\n    end else if (hash_start_or_continue) begin\n      msg_allowed <= 1'b 1;\n    end else if (packer_flush_done) begin\n      msg_allowed <= 1'b 0;\n    end\n  end",
+    "dependencies": [
+      "msg_allowed",
+      "rst_ni",
+      "b",
+      "clk_i",
+      "hash_start_or_continue",
+      "packer_flush_done"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__007",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 461,
+    "line_end": 483,
+    "title": "hmac: continuous_region declarations_or_instances (461-483)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 461-483。",
+    "code": "  logic status_fifo_empty, fifo_empty_gate;\n  logic fifo_empty_negedge, fifo_empty_q;\n  logic fifo_full_posedge, fifo_full_q;\n  logic fifo_full_seen_d, fifo_full_seen_q;\n  assign fifo_empty_negedge = fifo_empty_q & ~fifo_empty;\n  assign fifo_full_posedge  = ~fifo_full_q & fifo_full;\n\n  // Track whether the FIFO was full after being empty. We clear the tracking:\n  // - When receiving the Start, Continue, Process or Stop command. This is to start over for the\n  //   next message.\n  // - When seeing a negative edge on the empty signal. This signals that software has reacted to\n  //   the interrupt and is filling up the FIFO again.\n  assign fifo_full_seen_d =\n      reg_hash_start   || reg_hash_continue ||\n      reg_hash_process || reg_hash_stop     ? 1'b 0 :\n      fifo_empty_negedge                    ? 1'b 0 :\n      fifo_full_posedge                     ? 1'b 1 : fifo_full_seen_q;\n\n  // The interrupt is gated unless software is actually allowed to write the FIFO and the FIFO was\n  // full before.\n  assign fifo_empty_gate = ~msg_allowed || ~fifo_full_seen_q;\n\n  assign status_fifo_empty = fifo_empty_gate ? 1'b 0 : fifo_empty;",
+    "dependencies": [
+      "b",
+      "fifo_empty_gate",
+      "fifo_empty_negedge",
+      "fifo_full_posedge",
+      "fifo_full_seen_q",
+      "status_fifo_empty",
+      "fifo_empty_q",
+      "fifo_full_q",
+      "fifo_full_seen_d",
+      "fifo_empty",
+      "fifo_full",
+      "reg_hash_start",
+      "reg_hash_continue",
+      "reg_hash_process",
+      "reg_hash_stop",
+      "msg_allowed"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_485__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 485,
+    "line_end": 495,
+    "title": "hmac: always_ff line_485 (485-495)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 485-495。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      fifo_empty_q     <= 1'b 0;\n      fifo_full_q      <= 1'b 0;\n      fifo_full_seen_q <= 1'b 0;\n    end else begin\n      fifo_empty_q     <= fifo_empty;\n      fifo_full_q      <= fifo_full;\n      fifo_full_seen_q <= fifo_full_seen_d;\n    end\n  end",
+    "dependencies": [
+      "b",
+      "rst_ni",
+      "fifo_empty_q",
+      "fifo_full_q",
+      "fifo_full_seen_q",
+      "clk_i",
+      "fifo_empty",
+      "fifo_full",
+      "fifo_full_seen_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__008",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 497,
+    "line_end": 548,
+    "title": "hmac: continuous_region declarations_or_instances (497-548)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 497-548。",
+    "code": "  prim_intr_hw #(\n    .Width(1),\n    .IntrT(\"Status\")\n  ) intr_hw_fifo_empty (\n    .clk_i,\n    .rst_ni,\n    .event_intr_i           (status_fifo_empty),\n    .reg2hw_intr_enable_q_i (reg2hw.intr_enable.fifo_empty.q),\n    .reg2hw_intr_test_q_i   (reg2hw.intr_test.fifo_empty.q),\n    .reg2hw_intr_test_qe_i  (reg2hw.intr_test.fifo_empty.qe),\n    .reg2hw_intr_state_q_i  (reg2hw.intr_state.fifo_empty.q),\n    .hw2reg_intr_state_de_o (hw2reg.intr_state.fifo_empty.de),\n    .hw2reg_intr_state_d_o  (hw2reg.intr_state.fifo_empty.d),\n    .intr_o                 (intr_fifo_empty_o)\n  );\n  prim_intr_hw #(.Width(1)) intr_hw_hmac_err (\n    .clk_i,\n    .rst_ni,\n    .event_intr_i           (err_valid),\n    .reg2hw_intr_enable_q_i (reg2hw.intr_enable.hmac_err.q),\n    .reg2hw_intr_test_q_i   (reg2hw.intr_test.hmac_err.q),\n    .reg2hw_intr_test_qe_i  (reg2hw.intr_test.hmac_err.qe),\n    .reg2hw_intr_state_q_i  (reg2hw.intr_state.hmac_err.q),\n    .hw2reg_intr_state_de_o (hw2reg.intr_state.hmac_err.de),\n    .hw2reg_intr_state_d_o  (hw2reg.intr_state.hmac_err.d),\n    .intr_o                 (intr_hmac_err_o)\n  );\n\n  ///////////////\n  // Instances //\n  ///////////////\n\n  assign msg_fifo_rdata  = '1;  // Return all F\n  assign msg_fifo_rerror = '1;  // Return error for read access\n  assign msg_fifo_gnt    = msg_fifo_req & ~hmac_fifo_wsel & packer_ready;\n\n  /////////////////////\n  // Unused Signals //\n  /////////////////////\n  logic unused_signals;\n  assign unused_signals = ^{reg_fifo_wmask[7:1],   reg_fifo_wmask[15:9],\n                            reg_fifo_wmask[23:17], reg_fifo_wmask[31:25]};\n\n  // FIFO control: from packer into message FIFO\n  sha_fifo32_t reg_fifo_wentry;\n  assign reg_fifo_wentry.data = conv_endian32(reg_fifo_wdata, 1'b1); // always convert\n  assign reg_fifo_wentry.mask = {reg_fifo_wmask[0],  reg_fifo_wmask[8],\n                                 reg_fifo_wmask[16], reg_fifo_wmask[24]};\n  assign fifo_empty  = ~fifo_rvalid;\n  assign fifo_wvalid = (hmac_fifo_wsel && fifo_wready) ? hmac_fifo_wvalid : reg_fifo_wvalid;\n\n  logic index;",
+    "dependencies": [
+      "reg2hw",
+      "reg_fifo_wmask",
+      "fifo_empty",
+      "q",
+      "intr_state",
+      "hmac_err",
+      "intr_test",
+      "hw2reg",
+      "reg_fifo_wentry",
+      "prim_intr_hw",
+      "Width",
+      "clk_i",
+      "rst_ni",
+      "event_intr_i",
+      "reg2hw_intr_enable_q_i",
+      "intr_enable",
+      "reg2hw_intr_test_q_i",
+      "reg2hw_intr_test_qe_i",
+      "qe",
+      "reg2hw_intr_state_q_i",
+      "hw2reg_intr_state_de_o",
+      "de",
+      "hw2reg_intr_state_d_o",
+      "d",
+      "intr_o",
+      "hmac_fifo_wsel",
+      "unused_signals",
+      "IntrT",
+      "Status",
+      "intr_hw_fifo_empty",
+      "status_fifo_empty",
+      "intr_fifo_empty_o",
+      "intr_hw_hmac_err",
+      "err_valid",
+      "intr_hmac_err_o",
+      "msg_fifo_rdata",
+      "msg_fifo_rerror",
+      "msg_fifo_gnt",
+      "msg_fifo_req",
+      "packer_ready"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [],
+    "structure_refs": [
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:497-instance",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:512-instance"
+    ],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__select_fifo_wdata__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 549,
+    "line_end": 565,
+    "title": "hmac: always_comb select_fifo_wdata (549-565)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 549-565。",
+    "code": "  always_comb begin : select_fifo_wdata\n    // default when !hmac_fifo_wsel\n    index      = 1'b0;\n    fifo_wdata = reg_fifo_wentry;\n\n    if (hmac_fifo_wsel) begin\n      fifo_wdata = '0;\n      if (digest_size == SHA2_256) begin\n        // only reads out lower 32 bits of each digest word and discards upper 32-bit zero padding\n        fifo_wdata = '{data: digest[hmac_fifo_wdata_sel[2:0]][31:0], mask: '1};\n      end else if ((digest_size == SHA2_384) || (digest_size == SHA2_512)) begin\n        // reads out first upper 32 bits then lower 32 bits of each digest word\n        index = !hmac_fifo_wdata_sel[0];\n        fifo_wdata = '{data: digest[hmac_fifo_wdata_sel[3:1]][32*index+:32], mask: '1};\n      end\n    end\n  end",
+    "dependencies": [
+      "fifo_wdata",
+      "index",
+      "digest_size",
+      "hmac_fifo_wdata_sel",
+      "data",
+      "digest",
+      "mask",
+      "select_fifo_wdata",
+      "b0",
+      "reg_fifo_wentry",
+      "hmac_fifo_wsel",
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: hmac_fifo_wsel"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: digest_size == SHA2_256"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: hmac_fifo_wsel",
+      "generate if: digest_size == SHA2_256"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__int__001",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 568,
+    "line_end": 630,
+    "title": "hmac: continuous_region int (568-630)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 568-630。",
+    "code": "  localparam int MsgFifoDepth = 32;\n  prim_fifo_sync #(\n    .Width       ($bits(sha_fifo32_t)),\n    .Pass        (1'b1),\n    .Depth       (MsgFifoDepth),\n    .NeverClears (1'b1)\n  ) u_msg_fifo (\n    .clk_i,\n    .rst_ni,\n    .clr_i   (1'b0),\n\n    .wvalid_i(fifo_wvalid & sha_en),\n    .wready_o(fifo_wready),\n    .wdata_i (fifo_wdata),\n\n    .depth_o (fifo_depth),\n    .full_o  (fifo_full),\n\n    .rvalid_o(fifo_rvalid),\n    .rready_i(fifo_rready),\n    .rdata_o (fifo_rdata),\n    .err_o   ()\n  );\n\n  // TL ADAPTER SRAM\n  tlul_adapter_sram #(\n    .SramAw (9),\n    .SramDw (32),\n    .Outstanding (1),\n    .ByteAccess  (1),\n    .ErrOnRead   (1)\n  ) u_tlul_adapter (\n    .clk_i,\n    .rst_ni,\n    .tl_i                       (tl_win_h2d),\n    .tl_o                       (tl_win_d2h),\n    .en_ifetch_i                (prim_mubi_pkg::MuBi4False),\n    .req_o                      (msg_fifo_req   ),\n    .req_type_o                 (               ),\n    .gnt_i                      (msg_fifo_gnt   ),\n    .we_o                       (msg_fifo_we    ),\n    .addr_o                     (               ), // Doesn't care the address\n                                                   // other than sub-word\n    .wdata_o                    (msg_fifo_wdata ),\n    .wmask_o                    (msg_fifo_wmask ),\n    .intg_error_o               (               ),\n    .user_rsvd_o                (               ),\n    .rdata_i                    (msg_fifo_rdata ),\n    .rvalid_i                   (1'b0           ),\n    .rerror_i                   (msg_fifo_rerror),\n    .compound_txn_in_progress_o (),\n    .readback_en_i              (prim_mubi_pkg::MuBi4False),\n    .readback_error_o           (),\n    .wr_collision_i             (1'b0),\n    .write_pending_i            (1'b0)\n  );\n\n  // TL-UL to MSG_FIFO byte write handling\n  logic msg_write;\n\n  assign msg_write = msg_fifo_req & msg_fifo_we & ~hmac_fifo_wsel & msg_allowed;\n\n  logic [$clog2(32+1)-1:0] wmask_ones;",
+    "dependencies": [
+      "b0",
+      "MsgFifoDepth",
+      "b1",
+      "clk_i",
+      "rst_ni",
+      "prim_mubi_pkg",
+      "MuBi4False",
+      "msg_fifo_req",
+      "msg_fifo_we",
+      "msg_write",
+      "prim_fifo_sync",
+      "Width",
+      "bits",
+      "sha_fifo32_t",
+      "Pass",
+      "Depth",
+      "NeverClears",
+      "u_msg_fifo",
+      "clr_i",
+      "wvalid_i",
+      "fifo_wvalid",
+      "sha_en",
+      "wready_o",
+      "fifo_wready",
+      "wdata_i",
+      "fifo_wdata",
+      "depth_o",
+      "fifo_depth",
+      "full_o",
+      "fifo_full",
+      "rvalid_o",
+      "fifo_rvalid",
+      "rready_i",
+      "fifo_rready",
+      "rdata_o",
+      "fifo_rdata",
+      "err_o",
+      "tlul_adapter_sram",
+      "SramAw",
+      "SramDw"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [],
+    "structure_refs": [
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:568-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:569-instance",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:593-instance"
+    ],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__line_632__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 632,
+    "line_end": 637,
+    "title": "hmac: always_comb line_632 (632-637)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 632-637。",
+    "code": "  always_comb begin\n    wmask_ones = '0;\n    for (int i = 0 ; i < 32 ; i++) begin\n      wmask_ones = wmask_ones + msg_fifo_wmask[i];\n    end\n  end",
+    "dependencies": [
+      "i",
+      "wmask_ones",
+      "msg_fifo_wmask"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_640__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 640,
+    "line_end": 643,
+    "title": "hmac: always_ff line_640 (640-643)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 640-643。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) message_length <= '0;\n    else         message_length <= message_length_d;\n  end",
+    "dependencies": [
+      "rst_ni",
+      "message_length",
+      "clk_i",
+      "message_length_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__line_645__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 645,
+    "line_end": 661,
+    "title": "hmac: always_comb line_645 (645-661)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 645-661。",
+    "code": "  always_comb begin\n    message_length_d = message_length;\n    if (!cfg_block) begin\n      if (reg2hw.msg_length_lower.qe) begin\n        message_length_d[31:0]  = reg2hw.msg_length_lower.q;\n      end\n      if (reg2hw.msg_length_upper.qe) begin\n        message_length_d[63:32] = reg2hw.msg_length_upper.q;\n      end\n    end\n\n    if (hash_start) begin\n      message_length_d = '0;\n    end else if (msg_write && sha_en && packer_ready) begin\n      message_length_d = message_length + 64'(wmask_ones);\n    end\n  end",
+    "dependencies": [
+      "message_length_d",
+      "reg2hw",
+      "message_length",
+      "msg_length_lower",
+      "qe",
+      "q",
+      "msg_length_upper",
+      "cfg_block",
+      "hash_start",
+      "msg_write",
+      "sha_en",
+      "packer_ready",
+      "wmask_ones"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !cfg_block"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: reg2hw.msg_length_lower.qe"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: reg2hw.msg_length_upper.qe"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: hash_start"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !cfg_block",
+      "generate if: reg2hw.msg_length_lower.qe",
+      "generate if: reg2hw.msg_length_upper.qe",
+      "generate if: hash_start"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__009",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 663,
+    "line_end": 787,
+    "title": "hmac: continuous_region declarations_or_instances (663-787)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 663-787。",
+    "code": "  assign hw2reg.msg_length_upper.d = message_length[63:32];\n  assign hw2reg.msg_length_lower.d = message_length[31:0];\n\n  // Convert endian here\n  //    prim_packer always packs to the right, but SHA engine assumes incoming\n  //    to be big-endian, [31:24] comes first. So, the data is reverted after\n  //    prim_packer before the message fifo. here to reverse if not big-endian\n  //    before pushing to the packer.\n  assign msg_fifo_wdata_endian = conv_endian32(msg_fifo_wdata, endian_swap);\n  assign msg_fifo_wmask_endian = conv_endian32(msg_fifo_wmask, endian_swap);\n\n  prim_packer #(\n    .InW          (32),\n    .OutW         (32),\n    .EnProtection (1'b 0)\n  ) u_packer (\n    .clk_i,\n    .rst_ni,\n\n    .valid_i      (msg_write & sha_en),\n    .data_i       (msg_fifo_wdata_endian),\n    .mask_i       (msg_fifo_wmask_endian),\n    .ready_o      (packer_ready),\n\n    .valid_o      (reg_fifo_wvalid),\n    .data_o       (reg_fifo_wdata),\n    .mask_o       (reg_fifo_wmask),\n    .ready_i      (fifo_wready & ~hmac_fifo_wsel),\n\n    .flush_i      (hash_process),\n    .flush_done_o (packer_flush_done), // ignore at this moment\n\n    .err_o  () // Not used\n  );\n\n  hmac_core u_hmac (\n    .clk_i,\n    .rst_ni,\n    .secret_key_i  (secret_key),\n    .hmac_en_i     (hmac_en),\n    .digest_size_i (digest_size),\n    .key_length_i  (key_length),\n\n    .reg_hash_start_i    (hash_start),\n    .reg_hash_stop_i     (reg_hash_stop),\n    .reg_hash_continue_i (hash_continue),\n    .reg_hash_process_i  (packer_flush_done), // Trigger after all msg written\n    .hash_done_o         (reg_hash_done),\n    .sha_hash_start_o    (sha_hash_start),\n    .sha_hash_continue_o (sha_hash_continue),\n    .sha_hash_process_o  (sha_hash_process),\n    .sha_hash_done_i     (sha_hash_done),\n\n    .sha_rvalid_o     (shaf_rvalid),\n    .sha_rdata_o      (shaf_rdata),\n    .sha_rready_i     (shaf_rready),\n\n    .fifo_rvalid_i (fifo_rvalid),\n    .fifo_rdata_i  (fifo_rdata),\n    .fifo_rready_o (fifo_rready),\n\n    .fifo_wsel_o      (hmac_fifo_wsel),\n    .fifo_wvalid_o    (hmac_fifo_wvalid),\n    .fifo_wdata_sel_o (hmac_fifo_wdata_sel),\n    .fifo_wready_i    (fifo_wready),\n\n    .message_length_i     (message_length),\n    .sha_message_length_o (sha_message_length),\n\n    .idle_o           (hmac_core_idle)\n  );\n\n  // Instantiate SHA-2 256/384/512 engine\n  prim_sha2_32 #(\n      .MultimodeEn(1)\n  ) u_prim_sha2_512 (\n    .clk_i,\n    .rst_ni,\n    .wipe_secret_i        (wipe_secret),\n    .wipe_v_i             (wipe_v),\n    .fifo_rvalid_i        (shaf_rvalid),\n    .fifo_rdata_i         (shaf_rdata),\n    .fifo_rready_o        (shaf_rready),\n    .sha_en_i             (sha_en),\n    .hash_start_i         (sha_hash_start),\n    .hash_stop_i          (reg_hash_stop),\n    .hash_continue_i      (sha_hash_continue),\n    .digest_mode_i        (digest_size),\n    .hash_process_i       (sha_hash_process),\n    .message_length_i     (sha_message_length),\n    .digest_i             (digest_sw),\n    .digest_we_i          (digest_sw_we),\n    .digest_o             (digest),\n    .hash_running_o       (hash_running),\n    .digest_on_blk_o      (digest_on_blk),\n    .hash_done_o          (sha_hash_done),\n    .idle_o               (sha_core_idle)\n  );\n\n  // Register top\n  logic [NumAlerts-1:0] alert_test, alerts;\n  hmac_reg_top u_reg (\n    .clk_i,\n    .rst_ni,\n\n    .tl_i,\n    .tl_o,\n\n    .tl_win_o   (tl_win_h2d),\n    .tl_win_i   (tl_win_d2h),\n\n    .reg2hw,\n    .hw2reg,\n\n    // SEC_CM: BUS.INTEGRITY\n    .intg_err_o (alerts[0])\n  );\n\n  // Alerts\n  assign alert_test = {\n    reg2hw.alert_test.q &\n    reg2hw.alert_test.qe\n  };\n\n  localparam logic [NumAlerts-1:0] AlertIsFatal = {1'b1};",
+    "dependencies": [
+      "clk_i",
+      "rst_ni",
+      "alert_test",
+      "hw2reg",
+      "message_length",
+      "reg2hw",
+      "d",
+      "msg_fifo_wdata_endian",
+      "conv_endian32",
+      "endian_swap",
+      "msg_fifo_wmask_endian",
+      "sha_en",
+      "fifo_wready",
+      "hmac_fifo_wsel",
+      "packer_flush_done",
+      "digest_size",
+      "reg_hash_stop",
+      "hash_done_o",
+      "sha_hash_start",
+      "sha_hash_continue",
+      "sha_hash_process",
+      "sha_hash_done",
+      "shaf_rvalid",
+      "shaf_rdata",
+      "shaf_rready",
+      "fifo_rvalid_i",
+      "fifo_rdata_i",
+      "fifo_rready_o",
+      "message_length_i",
+      "sha_message_length",
+      "idle_o",
+      "NumAlerts",
+      "alerts",
+      "msg_length_upper",
+      "msg_length_lower",
+      "msg_fifo_wdata",
+      "msg_fifo_wmask",
+      "prim_packer",
+      "InW",
+      "OutW"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [],
+    "structure_refs": [
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:674-instance",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:736-instance",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:787-param"
+    ],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__generate_for__gen_alert_tx__001",
+    "kind": "generate_for",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 788,
+    "line_end": 802,
+    "title": "hmac: generate_for gen_alert_tx (788-802)",
+    "context_summary": "hmac 中的声明、实例化或寄存器描述上下文，行 788-802。",
+    "code": "  for (genvar i = 0; i < NumAlerts; i++) begin : gen_alert_tx\n    prim_alert_sender #(\n      .AsyncOn(AlertAsyncOn[i]),\n      .IsFatal(AlertIsFatal[i])\n    ) u_prim_alert_sender (\n      .clk_i,\n      .rst_ni,\n      .alert_test_i  ( alert_test[i] ),\n      .alert_req_i   ( alerts[0]     ),\n      .alert_ack_o   (               ),\n      .alert_state_o (               ),\n      .alert_rx_i    ( alert_rx_i[i] ),\n      .alert_tx_o    ( alert_tx_o[i] )\n    );\n  end",
+    "dependencies": [
+      "i",
+      "alert_rx_i",
+      "alert_tx_o",
+      "NumAlerts",
+      "gen_alert_tx",
+      "prim_alert_sender",
+      "AsyncOn",
+      "AlertAsyncOn",
+      "IsFatal",
+      "AlertIsFatal",
+      "u_prim_alert_sender",
+      "clk_i",
+      "rst_ni",
+      "alert_test_i",
+      "alert_test",
+      "alert_req_i",
+      "alerts",
+      "alert_ack_o",
+      "alert_state_o"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate for: i = 0; i < NumAlerts; i++"
+      }
+    ],
+    "structure_refs": [
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:789-instance"
+    ],
+    "compile_time_context": [
+      "generate for: i = 0; i < NumAlerts; i++"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__010",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 807,
+    "line_end": 823,
+    "title": "hmac: continuous_region declarations_or_instances (807-823)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 807-823。",
+    "code": "  logic hash_start_sha_disabled, update_seckey_inprocess;\n  logic hash_start_active;  // `reg_hash_start` or `reg_hash_continue` set when hash already active\n  logic msg_push_not_allowed; // Message is received when `hash_start_or_continue` isn't set\n\n  assign hash_start_sha_disabled = (reg_hash_start | reg_hash_continue) & ~sha_en;\n  assign hash_start_active = (reg_hash_start | reg_hash_continue) & cfg_block;\n  assign msg_push_not_allowed = msg_fifo_req & ~msg_allowed;\n\n  // Invalid/unconfigured HMAC/SHA-2: not configured/invalid digest size or\n  // not configured/invalid key length for HMAC mode or\n  // key_length = 1024-bit for digest_size = SHA2_256 (max 512-bit is supported for SHA-2 256)\n  assign invalid_config = ((digest_size == SHA2_None)            |\n                           ((key_length == Key_None) && hmac_en) |\n                           ((key_length == Key_1024) && (digest_size == SHA2_256) && hmac_en));\n\n  // invalid_config at reg_hash_start or reg_hash_continue will signal an error to the SW\n  assign invalid_config_atstart = (reg_hash_start || reg_hash_continue) & invalid_config;",
+    "dependencies": [
+      "reg_hash_start",
+      "reg_hash_continue",
+      "hash_start_sha_disabled",
+      "hash_start_active",
+      "msg_push_not_allowed",
+      "invalid_config",
+      "digest_size",
+      "key_length",
+      "hmac_en",
+      "update_seckey_inprocess",
+      "sha_en",
+      "cfg_block",
+      "msg_fifo_req",
+      "msg_allowed",
+      "SHA2_None",
+      "Key_None",
+      "Key_1024",
+      "SHA2_256",
+      "invalid_config_atstart"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__line_825__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 825,
+    "line_end": 836,
+    "title": "hmac: always_comb line_825 (825-836)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 825-836。",
+    "code": "  always_comb begin\n    update_seckey_inprocess = 1'b0;\n    if (cfg_block) begin\n      for (int i = 0 ; i < 32 ; i++) begin\n        if (reg2hw.key[i].qe) begin\n          update_seckey_inprocess = update_seckey_inprocess | 1'b1;\n        end\n      end\n    end else begin\n      update_seckey_inprocess = 1'b0;\n    end\n  end",
+    "dependencies": [
+      "update_seckey_inprocess",
+      "i",
+      "b0",
+      "cfg_block",
+      "reg2hw",
+      "key",
+      "qe",
+      "b1"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: cfg_block"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: reg2hw.key[i].qe"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: cfg_block",
+      "generate if: reg2hw.key[i].qe"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__011",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 842,
+    "line_end": 844,
+    "title": "hmac: continuous_region declarations_or_instances (842-844)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 842-844。",
+    "code": "  assign err_valid = ~reg2hw.intr_state.hmac_err.q &\n                   ( hash_start_sha_disabled | update_seckey_inprocess\n                   | hash_start_active | msg_push_not_allowed | invalid_config_atstart);",
+    "dependencies": [
+      "err_valid",
+      "reg2hw",
+      "intr_state",
+      "hmac_err",
+      "q",
+      "hash_start_sha_disabled",
+      "update_seckey_inprocess",
+      "hash_start_active",
+      "msg_push_not_allowed",
+      "invalid_config_atstart"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_comb__line_846__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 846,
+    "line_end": 876,
+    "title": "hmac: always_comb line_846 (846-876)",
+    "context_summary": "hmac 中的 always_comb 过程块，行 846-876。",
+    "code": "  always_comb begin\n    // default\n    err_code = NoError;\n\n    priority case (1'b1)\n      hash_start_sha_disabled: begin\n        err_code = SwHashStartWhenShaDisabled;\n      end\n\n\n      hash_start_sha_disabled: begin\n        err_code = SwHashStartWhenShaDisabled;\n      end\n\n      hash_start_active: begin\n        err_code = SwHashStartWhenActive;\n      end\n\n      msg_push_not_allowed: begin\n        err_code = SwPushMsgWhenDisallowed;\n      end\n\n      update_seckey_inprocess: begin\n        err_code = SwUpdateSecretKeyInProcess;\n      end\n\n      default: begin\n        err_code = NoError;\n      end\n    endcase\n  end",
+    "dependencies": [
+      "err_code",
+      "NoError",
+      "hash_start_sha_disabled",
+      "SwHashStartWhenShaDisabled",
+      "priority",
+      "b1",
+      "hash_start_active",
+      "SwHashStartWhenActive",
+      "msg_push_not_allowed",
+      "SwPushMsgWhenDisallowed",
+      "update_seckey_inprocess",
+      "SwUpdateSecretKeyInProcess"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__012",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 891,
+    "line_end": 895,
+    "title": "hmac: continuous_region declarations_or_instances (891-895)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 891-895。",
+    "code": "  assign idle = !reg_fifo_wvalid && !fifo_rvalid\n              && hmac_core_idle && sha_core_idle;\n\n  prim_mubi_pkg::mubi4_t idle_q, idle_d;\n  assign idle_d = prim_mubi_pkg::mubi4_bool_to_mubi(idle);",
+    "dependencies": [
+      "idle",
+      "prim_mubi_pkg",
+      "idle_d",
+      "reg_fifo_wvalid",
+      "fifo_rvalid",
+      "hmac_core_idle",
+      "sha_core_idle",
+      "mubi4_t",
+      "idle_q",
+      "mubi4_bool_to_mubi"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_896__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 896,
+    "line_end": 902,
+    "title": "hmac: always_ff line_896 (896-902)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 896-902。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      idle_q <= prim_mubi_pkg::MuBi4False;\n    end else begin\n      idle_q <= idle_d;\n    end\n  end",
+    "dependencies": [
+      "rst_ni",
+      "idle_q",
+      "clk_i",
+      "prim_mubi_pkg",
+      "MuBi4False",
+      "idle_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__013",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 903,
+    "line_end": 915,
+    "title": "hmac: continuous_region declarations_or_instances (903-915)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 903-915。",
+    "code": "  assign idle_o = idle_q;\n\n  //////////////////////////////////////////////\n  // Assertions, Assumptions, and Coverpoints //\n  //////////////////////////////////////////////\n\n`ifndef VERILATOR\n`ifndef SYNTHESIS\n  // HMAC assumes TL-UL mask is byte-aligned.\n  property wmask_bytealign_p(wmask_byte, clk, rst_n);\n    @(posedge clk) disable iff (rst_n == 0)\n      msg_fifo_req & msg_fifo_we |-> wmask_byte inside {'0, '1};\n  endproperty",
+    "dependencies": [
+      "ifndef",
+      "wmask_byte",
+      "clk",
+      "rst_n",
+      "idle_o",
+      "idle_q",
+      "VERILATOR",
+      "SYNTHESIS",
+      "property",
+      "wmask_bytealign_p",
+      "disable",
+      "iff",
+      "msg_fifo_req",
+      "msg_fifo_we",
+      "inside",
+      "endproperty"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__generate_for__gen_assert_wmask_bytealign__001",
+    "kind": "generate_for",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 917,
+    "line_end": 919,
+    "title": "hmac: generate_for gen_assert_wmask_bytealign (917-919)",
+    "context_summary": "hmac 中的声明、实例化或寄存器描述上下文，行 917-919。",
+    "code": "  for (genvar i = 0 ; i < 4; i++) begin: gen_assert_wmask_bytealign\n    assert property (wmask_bytealign_p(msg_fifo_wmask[8*i+:8], clk_i, rst_ni));\n  end",
+    "dependencies": [
+      "i",
+      "gen_assert_wmask_bytealign",
+      "assert",
+      "property",
+      "wmask_bytealign_p",
+      "msg_fifo_wmask",
+      "clk_i",
+      "rst_ni"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate for: i = 0 ; i < 4; i++"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate for: i = 0 ; i < 4; i++"
+    ]
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__014",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 923,
+    "line_end": 923,
+    "title": "hmac: continuous_region declarations_or_instances (923-923)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 923-923。",
+    "code": "  logic in_process;",
+    "dependencies": [
+      "in_process"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_924__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 924,
+    "line_end": 928,
+    "title": "hmac: always_ff line_924 (924-928)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 924-928。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni)                              in_process <= 1'b0;\n    else if (hash_process || reg_hash_stop)   in_process <= 1'b1;\n    else if (reg_hash_done)                   in_process <= 1'b0;\n  end",
+    "dependencies": [
+      "in_process",
+      "rst_ni",
+      "b0",
+      "clk_i",
+      "hash_process",
+      "reg_hash_stop",
+      "b1",
+      "reg_hash_done"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__015",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 930,
+    "line_end": 930,
+    "title": "hmac: continuous_region declarations_or_instances (930-930)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 930-930。",
+    "code": "  logic initiated;",
+    "dependencies": [
+      "initiated"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__always_ff__line_931__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 931,
+    "line_end": 935,
+    "title": "hmac: always_ff line_931 (931-935)",
+    "context_summary": "hmac 中的 always_ff 过程块，行 931-935。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni)                              initiated <= 1'b0;\n    else if (hash_start_or_continue)          initiated <= 1'b1;\n    else if (hash_process || reg_hash_stop)   initiated <= 1'b0;\n  end",
+    "dependencies": [
+      "initiated",
+      "rst_ni",
+      "b0",
+      "clk_i",
+      "hash_start_or_continue",
+      "b1",
+      "hash_process",
+      "reg_hash_stop"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac__continuous_region__declarations_or_instances__016",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+    "module": "hmac",
+    "line_start": 947,
+    "line_end": 966,
+    "title": "hmac: continuous_region declarations_or_instances (947-966)",
+    "context_summary": "hmac 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 947-966。",
+    "code": "          hmac_en != $past(hmac_en) |-> !in_process && !initiated)\n\n  // When wipe_secret is high, sensitive internal variables are cleared by extending the wipe\n  // value specifed in the register\n  `ASSERT(WipeSecretKeyAssert,\n          wipe_secret |=> (secret_key == {($bits(secret_key)/$bits(wipe_v)){$past(wipe_v)}}))\n\n  // All outputs should be known value after reset\n  `ASSERT_KNOWN(IntrHmacDoneOKnown, intr_hmac_done_o)\n  `ASSERT_KNOWN(IntrFifoEmptyOKnown, intr_fifo_empty_o)\n  `ASSERT_KNOWN(TlODValidKnown, tl_o.d_valid)\n  `ASSERT_KNOWN(TlOAReadyKnown, tl_o.a_ready)\n  `ASSERT_KNOWN(AlertKnownO_A, alert_tx_o)\n\n`endif // SYNTHESIS\n`endif // VERILATOR\n\n  // Alert assertions for reg_we onehot check\n  `ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT(RegWeOnehotCheck_A, u_reg, alert_tx_o[0])\nendmodule",
+    "dependencies": [
+      "hmac_en",
+      "past",
+      "secret_key",
+      "bits",
+      "wipe_v",
+      "tl_o",
+      "alert_tx_o",
+      "endif",
+      "in_process",
+      "initiated",
+      "WipeSecretKeyAssert",
+      "wipe_secret",
+      "IntrHmacDoneOKnown",
+      "intr_hmac_done_o",
+      "IntrFifoEmptyOKnown",
+      "intr_fifo_empty_o",
+      "TlODValidKnown",
+      "d_valid",
+      "TlOAReadyKnown",
+      "a_ready",
+      "AlertKnownO_A",
+      "RegWeOnehotCheck_A",
+      "u_reg"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__hmac_core__001",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 7,
+    "line_end": 127,
+    "title": "hmac_core: continuous_region hmac_core (7-127)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 7-127。",
+    "code": "module hmac_core import prim_sha2_pkg::*; (\n  input clk_i,\n  input rst_ni,\n\n  input [1023:0]      secret_key_i, // {word0, word1, ..., word7}\n  input               hmac_en_i,\n  input digest_mode_e digest_size_i,\n  input key_length_e  key_length_i,\n\n  input        reg_hash_start_i,\n  input        reg_hash_stop_i,\n  input        reg_hash_continue_i,\n  input        reg_hash_process_i,\n  output logic hash_done_o,\n  output logic sha_hash_start_o,\n  output logic sha_hash_continue_o,\n  output logic sha_hash_process_o,\n  input        sha_hash_done_i,\n\n  // fifo\n  output logic        sha_rvalid_o,\n  output sha_fifo32_t sha_rdata_o,\n  input               sha_rready_i,\n\n  input               fifo_rvalid_i,\n  input  sha_fifo32_t fifo_rdata_i,\n  output logic        fifo_rready_o,\n\n  // fifo control (select and fifo write data)\n  output logic       fifo_wsel_o,      // 0: from reg, 1: from digest\n  output logic       fifo_wvalid_o,\n  // 0: digest[0][upper], 1:digest[0][lower] .. 14: digest[7][upper], 15: digest[7][lower]\n  output logic [3:0] fifo_wdata_sel_o,\n  input              fifo_wready_i,\n\n  input  [63:0] message_length_i,\n  output [63:0] sha_message_length_o,\n\n  output logic idle_o\n);\n\n  localparam int unsigned BlockSizeSHA256     = 512;\n  localparam int unsigned BlockSizeSHA512     = 1024;\n\n  localparam int unsigned BlockSizeBitsSHA256 = $clog2(BlockSizeSHA256);\n  localparam int unsigned BlockSizeBitsSHA512 = $clog2(BlockSizeSHA512);\n\n  localparam int unsigned HashWordBitsSHA256  = $clog2($bits(sha_word32_t));\n\n  localparam bit [63:0] BlockSizeSHA256in64  = 64'(BlockSizeSHA256);\n  localparam bit [63:0] BlockSizeSHA512in64  = 64'(BlockSizeSHA512);\n\n  logic hash_start;    // generated from internal state machine\n  logic hash_continue; // generated from internal state machine\n  logic hash_process;  // generated from internal state machine to trigger hash\n  logic hmac_hash_done;\n\n  logic [BlockSizeSHA256-1:0] i_pad_256;\n  logic [BlockSizeSHA512-1:0] i_pad_512;\n  logic [BlockSizeSHA256-1:0] o_pad_256;\n  logic [BlockSizeSHA512-1:0] o_pad_512;\n\n  logic [63:0] txcount, txcount_d; // works for both digest lengths\n\n  logic [BlockSizeBitsSHA512-HashWordBitsSHA256-1:0] pad_index_512;\n  logic [BlockSizeBitsSHA256-HashWordBitsSHA256-1:0] pad_index_256;\n  logic clr_txcount, load_txcount, inc_txcount;\n\n  logic hmac_sha_rvalid;\n\n  logic idle_d, idle_q;\n  logic reg_hash_stop_d, reg_hash_stop_q;\n\n  typedef enum logic [1:0] {\n    SelIPad,\n    SelOPad,\n    SelFifo\n  } sel_rdata_t;\n\n  sel_rdata_t sel_rdata;\n\n  typedef enum logic {\n    SelIPadMsg,\n    SelOPadMsg\n  } sel_msglen_t;\n\n  sel_msglen_t sel_msglen;\n\n  typedef enum logic {\n    Inner,  // Update when state goes to StIPad\n    Outer   // Update when state enters StOPad\n  } round_t ;\n\n  logic update_round ;\n  round_t round_q, round_d;\n\n  typedef enum logic [2:0] {\n    StIdle,\n    StIPad,\n    StMsg,              // Actual Msg, and Digest both\n    StPushToMsgFifo,    // Digest --> Msg Fifo\n    StWaitResp,         // Hash done( by checking processed_length? or hash_done)\n    StOPad,\n    StDone              // hmac_done\n  } st_e ;\n\n  st_e st_q, st_d;\n\n  logic clr_fifo_wdata_sel;\n  logic txcnt_eq_blksz;\n\n  logic reg_hash_process_flag;\n\n  assign sha_hash_start_o    = (hmac_en_i) ? hash_start    : reg_hash_start_i;\n  assign sha_hash_continue_o = (hmac_en_i) ? hash_continue : reg_hash_continue_i;\n\n  assign sha_hash_process_o  = (hmac_en_i) ? reg_hash_process_i | hash_process : reg_hash_process_i;\n  assign hash_done_o         = (hmac_en_i) ? hmac_hash_done                    : sha_hash_done_i;\n\n  assign pad_index_512 = txcount[BlockSizeBitsSHA512-1:HashWordBitsSHA256];\n  assign pad_index_256 = txcount[BlockSizeBitsSHA256-1:HashWordBitsSHA256];",
+    "dependencies": [
+      "hmac_en_i",
+      "BlockSizeSHA256",
+      "BlockSizeSHA512",
+      "HashWordBitsSHA256",
+      "reg_hash_process_i",
+      "BlockSizeBitsSHA256",
+      "clog2",
+      "BlockSizeBitsSHA512",
+      "txcount",
+      "reg_hash_start_i",
+      "reg_hash_continue_i",
+      "hash_done_o",
+      "sha_hash_start_o",
+      "sha_hash_continue_o",
+      "sha_hash_process_o",
+      "sha_hash_done_i",
+      "sha_fifo32_t",
+      "hash_start",
+      "hash_continue",
+      "hash_process",
+      "hmac_hash_done",
+      "pad_index_512",
+      "pad_index_256",
+      "sel_rdata_t",
+      "sel_msglen_t",
+      "round_t",
+      "st_e",
+      "hmac_core",
+      "prim_sha2_pkg",
+      "clk_i",
+      "rst_ni",
+      "secret_key_i",
+      "digest_mode_e",
+      "digest_size_i",
+      "key_length_e",
+      "key_length_i",
+      "reg_hash_stop_i",
+      "sha_rvalid_o",
+      "sha_rdata_o",
+      "sha_rready_i"
+    ],
+    "semantic_class": "mixed",
+    "guard_context": [],
+    "structure_refs": [
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:48-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:49-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:51-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:52-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:54-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:56-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:57-param",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:80-enum",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:88-enum",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:95-enum",
+      "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:103-enum"
+    ],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_comb__adjust_key_pad_length__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 130,
+    "line_end": 187,
+    "title": "hmac_core: always_comb adjust_key_pad_length (130-187)",
+    "context_summary": "hmac_core 中的 always_comb 过程块，行 130-187。",
+    "code": "  always_comb begin : adjust_key_pad_length\n    // set defaults\n    i_pad_256 = '{default: '0};\n    i_pad_512 = '{default: '0};\n    o_pad_256 = '{default: '0};\n    o_pad_512 = '{default: '0};\n\n    unique case (key_length_i)\n      Key_128: begin\n        i_pad_256 = {secret_key_i[1023:896],\n                    {(BlockSizeSHA256-128){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}};\n        i_pad_512 = {secret_key_i[1023:896],\n                    {(BlockSizeSHA512-128){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}};\n        o_pad_256 = {secret_key_i[1023:896],\n                    {(BlockSizeSHA256-128){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}};\n        o_pad_512 = {secret_key_i[1023:896],\n                    {(BlockSizeSHA512-128){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}};\n      end\n      Key_256: begin\n        i_pad_256 = {secret_key_i[1023:768],\n                    {(BlockSizeSHA256-256){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}};\n        i_pad_512 = {secret_key_i[1023:768],\n                    {(BlockSizeSHA512-256){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}};\n        o_pad_256 = {secret_key_i[1023:768],\n                    {(BlockSizeSHA256-256){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}};\n        o_pad_512 = {secret_key_i[1023:768],\n                    {(BlockSizeSHA512-256){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}};\n      end\n      Key_384: begin\n        i_pad_256 = {secret_key_i[1023:640],\n                    {(BlockSizeSHA256-384){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}};\n        i_pad_512 = {secret_key_i[1023:640],\n                    {(BlockSizeSHA512-384){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}};\n        o_pad_256 = {secret_key_i[1023:640],\n                    {(BlockSizeSHA256-384){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}};\n        o_pad_512 = {secret_key_i[1023:640],\n                    {(BlockSizeSHA512-384){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}};\n      end\n      Key_512: begin\n        i_pad_256 = secret_key_i[1023:512] ^ {(BlockSizeSHA256/8){8'h36}};\n        i_pad_512 = {secret_key_i[1023:512],\n                    {(BlockSizeSHA512-512){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}};\n        o_pad_256 = secret_key_i[1023:512] ^ {(BlockSizeSHA256/8){8'h5c}};\n        o_pad_512 = {secret_key_i[1023:512],\n                    {(BlockSizeSHA512-512){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}};\n      end\n      Key_1024: begin // not allowed to be configured for SHA-2 256\n        // zero out for SHA-2 256\n        i_pad_256 = '{default: '0};\n        i_pad_512 = secret_key_i[1023:0]   ^ {(BlockSizeSHA512/8){8'h36}};\n        // zero out for SHA-2 256\n        o_pad_256 = '{default: '0};\n        o_pad_512 = secret_key_i[1023:0]   ^ {(BlockSizeSHA512/8){8'h5c}};\n      end\n      default: begin\n      end\n    endcase\n  end",
+    "dependencies": [
+      "secret_key_i",
+      "BlockSizeSHA512",
+      "BlockSizeSHA256",
+      "b0",
+      "h36",
+      "h5c",
+      "i_pad_256",
+      "i_pad_512",
+      "o_pad_256",
+      "o_pad_512",
+      "adjust_key_pad_length",
+      "key_length_i",
+      "Key_128",
+      "Key_256",
+      "Key_384",
+      "Key_512",
+      "Key_1024"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__001",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 189,
+    "line_end": 205,
+    "title": "hmac_core: continuous_region declarations_or_instances (189-205)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 189-205。",
+    "code": "  assign fifo_rready_o = (hmac_en_i) ? (st_q == StMsg) & sha_rready_i : sha_rready_i ;\n  // sha_rvalid is controlled by State Machine below.\n  assign sha_rvalid_o  = (!hmac_en_i) ? fifo_rvalid_i : hmac_sha_rvalid ;\n  assign sha_rdata_o =\n    (!hmac_en_i)    ? fifo_rdata_i                                                             :\n    (sel_rdata == SelIPad && digest_size_i == SHA2_256)\n                  ? '{data: i_pad_256[(BlockSizeSHA256-1)-32*pad_index_256-:32], mask: '1} :\n    (sel_rdata == SelIPad && ((digest_size_i == SHA2_384) || (digest_size_i == SHA2_512)))\n                  ? '{data: i_pad_512[(BlockSizeSHA512-1)-32*pad_index_512-:32], mask: '1} :\n    (sel_rdata == SelOPad && digest_size_i == SHA2_256)\n                  ? '{data: o_pad_256[(BlockSizeSHA256-1)-32*pad_index_256-:32], mask: '1} :\n    (sel_rdata == SelOPad && ((digest_size_i == SHA2_384) || (digest_size_i == SHA2_512)))\n                  ? '{data: o_pad_512[(BlockSizeSHA512-1)-32*pad_index_512-:32], mask: '1} :\n    // Well-defined default case `sel_rdata == SelFifo`. `sel_rdata == 2'b11` cannot occur.\n                  fifo_rdata_i;\n\n  logic [63:0] sha_msg_len;",
+    "dependencies": [
+      "digest_size_i",
+      "sel_rdata",
+      "data",
+      "mask",
+      "hmac_en_i",
+      "sha_rready_i",
+      "fifo_rdata_i",
+      "SelIPad",
+      "SHA2_256",
+      "BlockSizeSHA256",
+      "pad_index_256",
+      "SHA2_384",
+      "SHA2_512",
+      "BlockSizeSHA512",
+      "pad_index_512",
+      "SelOPad",
+      "fifo_rready_o",
+      "st_q",
+      "StMsg",
+      "sha_rvalid_o",
+      "fifo_rvalid_i",
+      "hmac_sha_rvalid",
+      "sha_rdata_o",
+      "i_pad_256",
+      "i_pad_512",
+      "o_pad_256",
+      "o_pad_512",
+      "sha_msg_len"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_comb__assign_sha_message_length__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 207,
+    "line_end": 232,
+    "title": "hmac_core: always_comb assign_sha_message_length (207-232)",
+    "context_summary": "hmac_core 中的 always_comb 过程块，行 207-232。",
+    "code": "  always_comb begin : assign_sha_message_length\n    sha_msg_len = 64'd0;\n\n    // Simple pass-through in non-HMAC mode.\n    if (!hmac_en_i) begin\n      sha_msg_len = message_length_i;\n\n    // Handle intermediate hash length computation.\n    end else if (sel_msglen == SelIPadMsg) begin\n      unique case (digest_size_i)\n        SHA2_256: sha_msg_len = message_length_i + BlockSizeSHA256in64;\n        SHA2_384,\n        SHA2_512: sha_msg_len = message_length_i + BlockSizeSHA512in64;\n        default:  sha_msg_len = 64'd0;\n      endcase\n\n    // Handle final hash computation with padded outer key.\n    end else begin\n      // Padding length depends on output digest size.\n      unique case (digest_size_i)\n        SHA2_256: sha_msg_len = BlockSizeSHA256in64 + 64'd256;\n        SHA2_384: sha_msg_len = BlockSizeSHA512in64 + 64'd384;\n        default:  sha_msg_len = BlockSizeSHA512in64 + 64'd384; \n      endcase\n    end\n  end",
+    "dependencies": [
+      "sha_msg_len",
+      "message_length_i",
+      "BlockSizeSHA512in64",
+      "d0",
+      "digest_size_i",
+      "SHA2_256",
+      "BlockSizeSHA256in64",
+      "SHA2_384",
+      "d384",
+      "assign_sha_message_length",
+      "hmac_en_i",
+      "sel_msglen",
+      "SelIPadMsg",
+      "SHA2_512",
+      "d256"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !hmac_en_i"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !hmac_en_i"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__002",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 234,
+    "line_end": 234,
+    "title": "hmac_core: continuous_region declarations_or_instances (234-234)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 234-234。",
+    "code": "  assign sha_message_length_o = sha_msg_len;",
+    "dependencies": [
+      "sha_message_length_o",
+      "sha_msg_len"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_comb__line_236__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 236,
+    "line_end": 245,
+    "title": "hmac_core: always_comb line_236 (236-245)",
+    "context_summary": "hmac_core 中的 always_comb 过程块，行 236-245。",
+    "code": "  always_comb begin\n    txcnt_eq_blksz = '0;\n\n    unique case (digest_size_i)\n      SHA2_256: txcnt_eq_blksz = (txcount[BlockSizeBitsSHA256-1:0] == '0) && (txcount != '0);\n      SHA2_384: txcnt_eq_blksz = (txcount[BlockSizeBitsSHA512-1:0] == '0) && (txcount != '0);\n      SHA2_512: txcnt_eq_blksz = (txcount[BlockSizeBitsSHA512-1:0] == '0) && (txcount != '0);\n      default;\n    endcase\n  end",
+    "dependencies": [
+      "txcount",
+      "txcnt_eq_blksz",
+      "BlockSizeBitsSHA512",
+      "digest_size_i",
+      "SHA2_256",
+      "BlockSizeBitsSHA256",
+      "SHA2_384",
+      "SHA2_512"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__003",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 247,
+    "line_end": 247,
+    "title": "hmac_core: continuous_region declarations_or_instances (247-247)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 247-247。",
+    "code": "  assign inc_txcount = sha_rready_i && sha_rvalid_o;",
+    "dependencies": [
+      "inc_txcount",
+      "sha_rready_i",
+      "sha_rvalid_o"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_comb__line_254__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 254,
+    "line_end": 270,
+    "title": "hmac_core: always_comb line_254 (254-270)",
+    "context_summary": "hmac_core 中的 always_comb 过程块，行 254-270。",
+    "code": "  always_comb begin\n    txcount_d = txcount;\n    if (clr_txcount) begin\n      txcount_d = '0;\n    end else if (load_txcount) begin\n      // When loading, add block size to the message length because the SW-visible message length\n      // does not include the block containing the key xor'ed with the inner pad.\n      unique case (digest_size_i)\n        SHA2_256: txcount_d = message_length_i + BlockSizeSHA256in64;\n        SHA2_384: txcount_d = message_length_i + BlockSizeSHA512in64;\n        SHA2_512: txcount_d = message_length_i + BlockSizeSHA512in64;\n        default : txcount_d = message_length_i + '0;\n      endcase\n    end else if (inc_txcount) begin\n      txcount_d[63:5] = txcount[63:5] + 1'b1; // increment by 32 (data word size)\n    end\n  end",
+    "dependencies": [
+      "txcount_d",
+      "message_length_i",
+      "txcount",
+      "BlockSizeSHA512in64",
+      "clr_txcount",
+      "load_txcount",
+      "digest_size_i",
+      "SHA2_256",
+      "BlockSizeSHA256in64",
+      "SHA2_384",
+      "SHA2_512",
+      "inc_txcount",
+      "b1"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: clr_txcount"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: clr_txcount"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__line_272__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 272,
+    "line_end": 275,
+    "title": "hmac_core: always_ff line_272 (272-275)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 272-275。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) txcount <= '0;\n    else         txcount <= txcount_d;\n  end",
+    "dependencies": [
+      "rst_ni",
+      "txcount",
+      "clk_i",
+      "txcount_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__line_278__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 278,
+    "line_end": 286,
+    "title": "hmac_core: always_ff line_278 (278-286)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 278-286。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      reg_hash_process_flag <= 1'b0;\n    end else if (reg_hash_process_i) begin\n      reg_hash_process_flag <= 1'b1;\n    end else if (hmac_hash_done || reg_hash_start_i || reg_hash_continue_i) begin\n      reg_hash_process_flag <= 1'b0;\n    end\n  end",
+    "dependencies": [
+      "reg_hash_process_flag",
+      "rst_ni",
+      "b0",
+      "clk_i",
+      "reg_hash_process_i",
+      "b1",
+      "hmac_hash_done",
+      "reg_hash_start_i",
+      "reg_hash_continue_i"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__line_288__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 288,
+    "line_end": 294,
+    "title": "hmac_core: always_ff line_288 (288-294)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 288-294。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      round_q <= Inner;\n    end else if (update_round) begin\n      round_q <= round_d;\n    end\n  end",
+    "dependencies": [
+      "rst_ni",
+      "round_q",
+      "clk_i",
+      "Inner",
+      "update_round",
+      "round_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__line_296__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 296,
+    "line_end": 304,
+    "title": "hmac_core: always_ff line_296 (296-304)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 296-304。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      fifo_wdata_sel_o <= '0;\n    end else if (clr_fifo_wdata_sel) begin\n      fifo_wdata_sel_o <= '0;\n    end else if (fifo_wsel_o && fifo_wvalid_o) begin\n      fifo_wdata_sel_o <= fifo_wdata_sel_o + 1'b1; // increment by 1\n    end\n  end",
+    "dependencies": [
+      "fifo_wdata_sel_o",
+      "rst_ni",
+      "clk_i",
+      "clr_fifo_wdata_sel",
+      "fifo_wsel_o",
+      "fifo_wvalid_o",
+      "b1"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__004",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 306,
+    "line_end": 306,
+    "title": "hmac_core: continuous_region declarations_or_instances (306-306)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 306-306。",
+    "code": "  assign sel_msglen = (round_q == Inner) ? SelIPadMsg : SelOPadMsg ;",
+    "dependencies": [
+      "sel_msglen",
+      "round_q",
+      "Inner",
+      "SelIPadMsg",
+      "SelOPadMsg"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__state_ff__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 308,
+    "line_end": 311,
+    "title": "hmac_core: always_ff state_ff (308-311)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 308-311。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin : state_ff\n    if (!rst_ni) st_q <= StIdle;\n    else         st_q <= st_d;\n  end",
+    "dependencies": [
+      "rst_ni",
+      "st_q",
+      "clk_i",
+      "state_ff",
+      "StIdle",
+      "st_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_comb__next_state__001",
+    "kind": "always_comb",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 313,
+    "line_end": 456,
+    "title": "hmac_core: always_comb next_state (313-456)",
+    "context_summary": "hmac_core 中的 always_comb 过程块，行 313-456。",
+    "code": "  always_comb begin : next_state\n    hmac_hash_done     = 1'b0;\n    hmac_sha_rvalid    = 1'b0;\n    clr_txcount        = 1'b0;\n    load_txcount       = 1'b0;\n    update_round       = 1'b0;\n    round_d            = Inner;\n    fifo_wsel_o        = 1'b0;   // from register\n    fifo_wvalid_o      = 1'b0;\n    clr_fifo_wdata_sel = 1'b1;\n    sel_rdata          = SelFifo;\n    hash_start         = 1'b0;\n    hash_continue      = 1'b0;\n    hash_process       = 1'b0;\n    st_d               = st_q;\n\n    unique case (st_q)\n      StIdle: begin\n        // reset round to Inner\n        // we always switch context into inner round since outer round computes once over\n        // single block at the end (outer key pad + inner hash)\n        update_round = 1'b1;\n        round_d      = Inner;\n        if (hmac_en_i && reg_hash_start_i) begin\n          st_d = StIPad; // start at StIPad if told to start\n\n          clr_txcount  = 1'b1;\n          hash_start   = 1'b1;\n        end else if (hmac_en_i && reg_hash_continue_i) begin\n          st_d = StMsg; // skip StIPad if told to continue - assumed it finished StIPad\n\n          load_txcount  = 1'b1;\n          hash_continue = 1'b1;\n        end else begin\n          st_d = StIdle;\n        end\n      end\n\n      StIPad: begin\n        sel_rdata = SelIPad;\n\n        if (txcnt_eq_blksz) begin\n          st_d = StMsg;\n\n          hmac_sha_rvalid = 1'b0; // block new read request\n        end else begin\n          st_d = StIPad;\n\n          hmac_sha_rvalid = 1'b1;\n        end\n      end\n\n      StMsg: begin\n        sel_rdata   = SelFifo;\n        fifo_wsel_o = (round_q == Outer);\n\n        if ( (((round_q == Inner) && reg_hash_process_flag) || (round_q == Outer))\n            && (txcount >= sha_message_length_o)) begin\n          st_d    = StWaitResp;\n\n          hmac_sha_rvalid = 1'b0; // block reading words from MSG FIFO\n          hash_process    = (round_q == Outer);\n        end else if (txcnt_eq_blksz && (txcount >= sha_message_length_o)\n                     && reg_hash_stop_q && (round_q == Inner)) begin\n          // wait till all MSG words are pushed out from FIFO (txcount reaches msg length)\n          // before transitioning to StWaitResp to wait on sha_hash_done_i and disabling\n          // reading from MSG FIFO\n          st_d =  StWaitResp;\n\n          hmac_sha_rvalid = 1'b0;\n        end else begin\n          st_d            = StMsg;\n          hmac_sha_rvalid = fifo_rvalid_i;\n        end\n      end\n\n      StWaitResp: begin\n        hmac_sha_rvalid = 1'b0;\n\n        if (sha_hash_done_i) begin\n          if (round_q == Outer) begin\n            st_d = StDone;\n          end else begin // round_q == Inner\n            if (reg_hash_stop_q) begin\n              st_d = StDone;\n            end else begin\n              st_d = StPushToMsgFifo;\n            end\n          end\n        end else begin\n          st_d = StWaitResp;\n        end\n      end\n\n      StPushToMsgFifo: begin\n        hmac_sha_rvalid    = 1'b0;\n        fifo_wsel_o        = 1'b1;\n        fifo_wvalid_o      = 1'b1;\n        clr_fifo_wdata_sel = 1'b0;\n\n        if (fifo_wready_i && (((fifo_wdata_sel_o == 4'd7) && (digest_size_i == SHA2_256)) ||\n                             ((fifo_wdata_sel_o == 4'd15) && (digest_size_i == SHA2_512)) ||\n                             ((fifo_wdata_sel_o == 4'd11) && (digest_size_i == SHA2_384)))) begin\n\n          st_d = StOPad;\n\n          clr_txcount  = 1'b1;\n          update_round = 1'b1;\n          round_d      = Outer;\n          hash_start   = 1'b1;\n        end else begin\n          st_d = StPushToMsgFifo;\n\n        end\n      end\n\n      StOPad: begin\n        sel_rdata   = SelOPad;\n        fifo_wsel_o = 1'b1; // Remained HMAC select to indicate HMAC is in second stage\n\n        if (txcnt_eq_blksz) begin\n          st_d = StMsg;\n\n          hmac_sha_rvalid = 1'b0; // block new read request\n        end else begin\n          st_d = StOPad;\n\n          hmac_sha_rvalid = 1'b1;\n        end\n      end\n\n      StDone: begin\n        // raise interrupt (hash_done)\n        st_d = StIdle;\n\n        hmac_hash_done = 1'b1;\n      end\n\n      default: begin\n        st_d = StIdle;\n      end\n\n    endcase\n  end",
+    "dependencies": [
+      "st_d",
+      "b0",
+      "b1",
+      "hmac_sha_rvalid",
+      "round_q",
+      "StMsg",
+      "Outer",
+      "Inner",
+      "fifo_wsel_o",
+      "sel_rdata",
+      "StIdle",
+      "StWaitResp",
+      "clr_txcount",
+      "update_round",
+      "round_d",
+      "hash_start",
+      "StIPad",
+      "txcnt_eq_blksz",
+      "StDone",
+      "StPushToMsgFifo",
+      "fifo_wdata_sel_o",
+      "digest_size_i",
+      "StOPad",
+      "hmac_hash_done",
+      "load_txcount",
+      "fifo_wvalid_o",
+      "clr_fifo_wdata_sel",
+      "SelFifo",
+      "hash_continue",
+      "hash_process",
+      "st_q",
+      "hmac_en_i",
+      "txcount",
+      "sha_message_length_o",
+      "reg_hash_stop_q",
+      "next_state",
+      "reg_hash_start_i",
+      "reg_hash_continue_i",
+      "SelIPad",
+      "reg_hash_process_flag"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: hmac_en_i && reg_hash_start_i"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: txcnt_eq_blksz"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: sha_hash_done_i"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: round_q == Outer"
+      },
+      {
+        "kind": "compile_time",
+        "text": "generate if: reg_hash_stop_q"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: hmac_en_i && reg_hash_start_i",
+      "generate if: txcnt_eq_blksz",
+      "generate if: sha_hash_done_i",
+      "generate if: round_q == Outer",
+      "generate if: reg_hash_stop_q"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__005",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 460,
+    "line_end": 462,
+    "title": "hmac_core: continuous_region declarations_or_instances (460-462)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 460-462。",
+    "code": "  assign reg_hash_stop_d = (reg_hash_stop_i == 1'b1)                            ? 1'b1 :\n                           (sha_hash_done_i == 1'b1 && reg_hash_stop_q == 1'b1) ? 1'b0 :\n                                                                                  reg_hash_stop_q;",
+    "dependencies": [
+      "b1",
+      "reg_hash_stop_q",
+      "reg_hash_stop_d",
+      "reg_hash_stop_i",
+      "sha_hash_done_i",
+      "b0"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__line_464__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 464,
+    "line_end": 470,
+    "title": "hmac_core: always_ff line_464 (464-470)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 464-470。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      reg_hash_stop_q <= 1'b0;\n    end else begin\n      reg_hash_stop_q <= reg_hash_stop_d;\n    end\n  end",
+    "dependencies": [
+      "rst_ni",
+      "reg_hash_stop_q",
+      "clk_i",
+      "b0",
+      "reg_hash_stop_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__006",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 473,
+    "line_end": 484,
+    "title": "hmac_core: continuous_region declarations_or_instances (473-484)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 473-484。",
+    "code": "  assign idle_d =\n      // .. is not idle when told to start or continue\n      (reg_hash_start_i || reg_hash_continue_i) ? 1'b0 :\n      // .. is idle when the FSM is in the Idle state\n      (st_q == StIdle) ? 1'b1 :\n      // .. is idle when it has processed a complete block of a message and is told to stop in any\n      // FSM state\n      (txcnt_eq_blksz && reg_hash_stop_d) ? 1'b1 :\n      // .. and keeps the current idle state in all other cases.\n      idle_q;\n\n  assign idle_o = idle_d;",
+    "dependencies": [
+      "idle_d",
+      "b1",
+      "reg_hash_start_i",
+      "reg_hash_continue_i",
+      "b0",
+      "st_q",
+      "StIdle",
+      "txcnt_eq_blksz",
+      "reg_hash_stop_d",
+      "idle_q",
+      "idle_o"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  },
+  {
+    "chunk_id": "hmac_core__always_ff__line_486__001",
+    "kind": "always_ff",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 486,
+    "line_end": 492,
+    "title": "hmac_core: always_ff line_486 (486-492)",
+    "context_summary": "hmac_core 中的 always_ff 过程块，行 486-492。",
+    "code": "  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) begin\n      idle_q <= 1'b1;\n    end else begin\n      idle_q <= idle_d;\n    end\n  end",
+    "dependencies": [
+      "rst_ni",
+      "idle_q",
+      "clk_i",
+      "b1",
+      "idle_d"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [
+      {
+        "kind": "compile_time",
+        "text": "generate if: !rst_ni"
+      }
+    ],
+    "structure_refs": [],
+    "compile_time_context": [
+      "generate if: !rst_ni"
+    ]
+  },
+  {
+    "chunk_id": "hmac_core__continuous_region__declarations_or_instances__007",
+    "kind": "continuous_region",
+    "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+    "module": "hmac_core",
+    "line_start": 500,
+    "line_end": 502,
+    "title": "hmac_core: continuous_region declarations_or_instances (500-502)",
+    "context_summary": "hmac_core 中的连续非过程逻辑区域，包含声明、实例化或直接组合赋值，行 500-502。",
+    "code": "      digest_size_i inside {SHA2_256, SHA2_384, SHA2_512})\n\nendmodule",
+    "dependencies": [
+      "digest_size_i",
+      "inside",
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512"
+    ],
+    "semantic_class": "behavior",
+    "guard_context": [],
+    "structure_refs": [],
+    "compile_time_context": []
+  }
+]

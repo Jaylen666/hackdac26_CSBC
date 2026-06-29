@@ -1,0 +1,336 @@
+{
+  "chunk_id": "sha3pad_continuous_region_declarations_or_instances_010__behavior__001",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "mixed",
+    "driven": [],
+    "used": [
+      "msg_valid_i",
+      "msg_ready_o",
+      "process_valid",
+      "process_i",
+      "start_i",
+      "start_valid",
+      "done_i",
+      "done_valid",
+      "mode_i",
+      "strength_i",
+      "st",
+      "process_latched",
+      "end_of_block",
+      "sent_blocksize",
+      "keccak_valid_o",
+      "keccak_addr_o",
+      "KeccakRate",
+      "msg_strb_i",
+      "sel_mux",
+      "en_msgbuf",
+      "msg_partial",
+      "MsgStrbW",
+      "StPrefixWait",
+      "StMessageWait",
+      "StPad",
+      "StPad01",
+      "Sha3",
+      "Shake",
+      "CShake",
+      "L224",
+      "L256",
+      "L384",
+      "L512",
+      "L128",
+      "prim_mubi_pkg::mubi4_test_true_strict",
+      "lc_ctrl_pkg::lc_tx_test_true_loose",
+      "lc_escalate_en_i"
+    ],
+    "modes": [
+      "StPrefixWait",
+      "StMessageWait",
+      "StPad",
+      "StPad01",
+      "StPadFlush",
+      "Sha3",
+      "Shake",
+      "CShake",
+      "L224",
+      "L256",
+      "L384",
+      "L512",
+      "L128"
+    ],
+    "tags": [
+      "handshake",
+      "fifo",
+      "state_machine",
+      "mode_stability",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When msg_ready_o is asserted, process_valid is true and process_i is false.",
+      "cond": "msg_ready_o",
+      "signals": [
+        "msg_ready_o",
+        "process_valid",
+        "process_i"
+      ],
+      "refs": [
+        "sha3pad.sv:811"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "state_transition",
+      "claim": "After process_latched rises and (not end_of_block and not sent_blocksize) and st not in {StPrefixWait, StMessageWait}, keccak_valid_o is asserted within 1 to 5 cycles.",
+      "cond": "$rose(process_latched) && (!end_of_block && !sent_blocksize) && !(st inside {StPrefixWait, StMessageWait})",
+      "signals": [
+        "process_latched",
+        "end_of_block",
+        "sent_blocksize",
+        "st",
+        "keccak_valid_o"
+      ],
+      "refs": [
+        "sha3pad.sv:829-832"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "When the state machine transitions from StPad to StPad01 (next state), end_of_block is false.",
+      "cond": "st == StPad && st_d == StPad01",
+      "signals": [
+        "st",
+        "st_d",
+        "end_of_block"
+      ],
+      "refs": [
+        "sha3pad.sv:865-867"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When keccak_valid_o is asserted, keccak_addr_o is less than KeccakRate[strength_i].",
+      "cond": "keccak_valid_o",
+      "signals": [
+        "keccak_valid_o",
+        "keccak_addr_o",
+        "strength_i",
+        "KeccakRate"
+      ],
+      "refs": [
+        "sha3pad.sv:870-872"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "When msg_valid_i and msg_ready_o are both asserted, process_valid must be true and process_i must be false.",
+      "cond": "msg_valid_i && msg_ready_o",
+      "risk": "If violated, message acknowledgment could occur while the process interface is not ready, causing data loss.",
+      "signals": [
+        "msg_valid_i",
+        "msg_ready_o",
+        "process_valid",
+        "process_i"
+      ],
+      "refs": [
+        "sha3pad.sv:808"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "If process_i is asserted, process_valid must also be asserted.",
+      "cond": "process_i",
+      "risk": "Process request without a valid signal could leave the internal state undefined or misaligned.",
+      "signals": [
+        "process_i",
+        "process_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:813"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "If start_i is asserted, start_valid must also be asserted.",
+      "cond": "start_i",
+      "risk": "Start without a valid condition may lead to synchronization failure and dropped operations.",
+      "signals": [
+        "start_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:814"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "When done_i passes the mubi4 true strict test, done_valid must be true.",
+      "cond": "prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+      "risk": "A false‑done signal could prematurely complete the operation, leaving the hash incorrect.",
+      "signals": [
+        "done_i",
+        "done_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:815-816"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "mode_config",
+      "claim": "If mode_i changes value, start_valid must be asserted.",
+      "cond": "$changed(mode_i)",
+      "risk": "Changing the mode during an operation without restarting may cause incorrect padding selection or state behavior.",
+      "signals": [
+        "mode_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:820-822"
+      ]
+    },
+    {
+      "id": "A6",
+      "type": "mode_config",
+      "claim": "If strength_i changes value, start_valid must be asserted.",
+      "cond": "$changed(strength_i)",
+      "risk": "A mid‑operation strength change could misalign the rate calculation and produce a wrong hash.",
+      "signals": [
+        "strength_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:822-824"
+      ]
+    },
+    {
+      "id": "A7",
+      "type": "mode_config",
+      "claim": "At a rising start_i, mode_i and strength_i must belong to the legal combinations: (Sha3 with L224/L256/L384/L512) or (Shake/CShake with L128/L256).",
+      "cond": "start_i",
+      "risk": "Illegal mode/strength pairs bypass the intended security strength and may produce unpredictable results.",
+      "signals": [
+        "start_i",
+        "mode_i",
+        "strength_i"
+      ],
+      "refs": [
+        "sha3pad.sv:841-845"
+      ]
+    },
+    {
+      "id": "A8",
+      "type": "producer_contract",
+      "claim": "When keccak_valid_o is asserted and sel_mux equals MuxFifo, all bits of msg_strb_i must be 1 (no partial write).",
+      "cond": "keccak_valid_o && (sel_mux == MuxFifo)",
+      "risk": "Partial writes to the FIFO path could corrupt keccak input data.",
+      "signals": [
+        "keccak_valid_o",
+        "sel_mux",
+        "msg_strb_i"
+      ],
+      "refs": [
+        "sha3pad.sv:848-850"
+      ]
+    },
+    {
+      "id": "A9",
+      "type": "producer_contract",
+      "claim": "When en_msgbuf is asserted, msg_valid_i must be true and the most‑significant strobe bit (msg_strb_i[MsgStrbW-1]) must be 0, indicating a partial write.",
+      "cond": "en_msgbuf",
+      "risk": "Forcing a full write through the partial‑buffer path may overflow or write invalid data.",
+      "signals": [
+        "en_msgbuf",
+        "msg_valid_i",
+        "msg_strb_i"
+      ],
+      "refs": [
+        "sha3pad.sv:853-855"
+      ]
+    },
+    {
+      "id": "A10",
+      "type": "handshake",
+      "claim": "After a partial message write is acknowledged (msg_valid_i && msg_ready_o && msg_partial), on the next cycle msg_valid_i must be deasserted and remain stable low until process_latched is asserted.",
+      "cond": "msg_valid_i && msg_ready_o && msg_partial",
+      "risk": "Additional valid data after a partial ack would break the message boundary and could mix data from different messages.",
+      "signals": [
+        "msg_valid_i",
+        "msg_ready_o",
+        "msg_partial",
+        "process_latched"
+      ],
+      "refs": [
+        "sha3pad.sv:859-862"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The design relies on the environment to keep mode_i and strength_i stable during operation; no internal latching or error detection exists if they change after start_valid.",
+      "cond": "when start_valid has been high and an operation is in progress, if mode_i or strength_i change",
+      "risk": "A mid‑operation change could produce an incorrect hash or a security weakness without any hardware detection.",
+      "signals": [
+        "mode_i",
+        "strength_i",
+        "start_valid"
+      ],
+      "refs": [
+        "sha3pad.sv:819-824"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "At start_i the design demands legal mode/strength combinations (ModeStrengthCombinations_M) but does not internally report or prevent illegal ones; the module may operate on undefined combinations.",
+      "cond": "start_i is raised with an illegal combination",
+      "risk": "Software or a fault could select an unsupported combination (e.g., Sha3 with L128) leading to a weak or incorrect hash and potential security bypass.",
+      "signals": [
+        "start_i",
+        "mode_i",
+        "strength_i"
+      ],
+      "refs": [
+        "sha3pad.sv:841-845"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When sel_mux selects the FIFO path, partial writes (non‑all‑one msg_strb_i) are forbidden by assumption but no hardware check or rejection is present; a violation would silently corrupt keccak input.",
+      "cond": "keccak_valid_o && (sel_mux == MuxFifo) and msg_strb_i is not all‑ones",
+      "risk": "A programming or interface error could inject partial data into the keccak round without any error flag.",
+      "signals": [
+        "keccak_valid_o",
+        "sel_mux",
+        "msg_strb_i"
+      ],
+      "refs": [
+        "sha3pad.sv:847-850"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:808-884"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 808,
+  "line_end": 884,
+  "security_implications": ""
+}

@@ -1,0 +1,136 @@
+{
+  "chunk_id": "kmac__always_ff__line_382__001",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "count_q",
+      "counting_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "count_d",
+      "counting_d"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "counter"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "On active low asynchronous reset (rst_ni = 0), count_q and counting_q are set to all-zero and 1'b0 respectively.",
+      "cond": "!rst_ni",
+      "signals": [
+        "count_q",
+        "counting_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "kmac.sv:383-385"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "On rising clock edge when reset is inactive (rst_ni = 1), count_q and counting_q are updated with the current values of count_d and counting_d.",
+      "cond": "posedge clk_i & rst_ni",
+      "signals": [
+        "count_q",
+        "counting_q",
+        "count_d",
+        "counting_d"
+      ],
+      "refs": [
+        "kmac.sv:386-388"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "count_d and counting_d must be stable at the rising edge of clk_i when rst_ni is high; they can change asynchronously only when not sampled.",
+      "cond": "posedge clk_i with rst_ni high",
+      "risk": "If count_d or counting_d are not stable, the stored values may be metastable or incorrect, leading to unpredictable counting behavior.",
+      "signals": [
+        "count_d",
+        "counting_d"
+      ],
+      "refs": [
+        "kmac.sv:387-388"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "count_d must be driven such that count_q never overflows or wraps in a way that violates the KMAC message length protocol constraints.",
+      "cond": "during normal operation",
+      "risk": "If count_q overflows, the effective message length tracked may wrap, potentially causing security-relevant length manipulation in digest calculation.",
+      "signals": [
+        "count_d",
+        "count_q"
+      ],
+      "refs": [
+        "kmac.sv:384,387"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "counting_d must correctly reflect whether the counting process should be active; it must be deasserted at appropriate times to stop the counter when required.",
+      "cond": "when counting logic depends on counting_q",
+      "risk": "If counting_d is stuck high or incorrectly asserted, the counter may continue incrementing, potentially causing security-sensitive state corruption or hanging.",
+      "signals": [
+        "counting_d",
+        "counting_q"
+      ],
+      "refs": [
+        "kmac.sv:385,388"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The usage of count_q and counting_q in other blocks must be reviewed to verify that overflow, wrap-around, or glitches do not create security vulnerabilities in the KMAC digest computation.",
+      "cond": "when count_q and counting_q are used as part of the message length counter or state machine",
+      "risk": "If count_q is used as a message length indicator without saturation or error detection, a crafted input could exploit wrap to produce a valid-looking but incorrect tag.",
+      "signals": [
+        "count_q",
+        "counting_q"
+      ],
+      "refs": [
+        "kmac.sv:384-385,387-388"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The exact meaning and bit-width of count_q and counting_q are not defined in this chunk; it is unclear whether they represent a byte count, bit count, or internal cycle count.",
+      "cond": "always",
+      "risk": "Incorrect interpretation could lead to assumptions about maximum values or rollover that affect security analysis.",
+      "signals": [
+        "count_q",
+        "counting_q"
+      ],
+      "refs": [
+        "kmac.sv:384-385"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:382-390"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 382,
+  "line_end": 390,
+  "security_implications": ""
+}

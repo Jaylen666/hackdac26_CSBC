@@ -1,0 +1,226 @@
+{
+  "chunk_id": "sha3_continuous_region_sha3_001__behavior__002",
+  "header": {
+    "module": "sha3",
+    "block_kind": "declaration",
+    "driven": [
+      "msg_ready_o",
+      "rand_update_o",
+      "rand_consumed_o",
+      "absorbed_o",
+      "squeezing_o",
+      "block_processed_o",
+      "sha3_fsm_o",
+      "state_valid_o",
+      "state_o",
+      "run_req_o",
+      "error_o",
+      "sparse_fsm_error_o",
+      "count_error_o",
+      "keccak_storage_rst_error_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "msg_valid_i",
+      "msg_data_i",
+      "msg_strb_i",
+      "rand_valid_i",
+      "rand_early_i",
+      "rand_data_i",
+      "rand_aux_i",
+      "ns_data_i",
+      "mode_i",
+      "strength_i",
+      "start_i",
+      "process_i",
+      "run_i",
+      "done_i",
+      "run_ack_i",
+      "lc_escalate_en_i"
+    ],
+    "modes": [
+      "Share",
+      "StateW",
+      "MsgWidth",
+      "MsgStrbW",
+      "NSRegisterSize",
+      "sha3_mode_e",
+      "keccak_strength_e",
+      "sha3_st_e",
+      "err_t",
+      "mubi4_t",
+      "lc_tx_t"
+    ],
+    "tags": [
+      "digest",
+      "secret",
+      "error",
+      "fault",
+      "access_control",
+      "lifecycle",
+      "handshake",
+      "entropy",
+      "sparse_fsm"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "run_i must be a pulse signal, asserted for a single cycle to trigger one keccak round.",
+      "cond": "when software manually triggers a keccak round via run_i.",
+      "risk": "If run_i stays high for multiple cycles, it could trigger multiple unintended rounds and corrupt the FSM state.",
+      "signals": [
+        "run_i"
+      ],
+      "refs": [
+        "48:50"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "done_i must be a valid MUBI4 encoding (prim_mubi_pkg::mubi4_t) indicating completion of absorbing.",
+      "cond": "when signaling completion to this module.",
+      "risk": "Invalid encoding may cause the module to misdetect done, leading to early termination or infinite wait, potentially leaking intermediate state.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "51:51"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "msg_data_i and msg_strb_i must be stable and valid when msg_valid_i is high and msg_ready_o is high, following a standard ready/valid handshake.",
+      "cond": "during message data transfer.",
+      "risk": "Data corruption or metastability if input changes while transfer is acknowledged.",
+      "signals": [
+        "msg_valid_i",
+        "msg_ready_o",
+        "msg_data_i",
+        "msg_strb_i"
+      ],
+      "refs": [
+        "22:26"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "rand_data_i and rand_aux_i must be valid when rand_valid_i is asserted, and should be held until consumed (rand_consumed_o).",
+      "cond": "when entropy is provided via the entropy interface.",
+      "risk": "Incorrect entropy or timing could weaken randomness and compromise security.",
+      "signals": [
+        "rand_valid_i",
+        "rand_data_i",
+        "rand_aux_i",
+        "rand_consumed_o"
+      ],
+      "refs": [
+        "28:34"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "security_precondition",
+      "claim": "lc_escalate_en_i must be driven to a valid lifecycle state (lc_ctrl_pkg::lc_tx_t) that enables escalation when required.",
+      "cond": "always, for security-critical operation.",
+      "risk": "Incorrect escalation could prevent the module from entering secure lockdown, potentially leaking secrets or allowing unauthorized access.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "75:76"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The conditions under which the error outputs (error_o, sparse_fsm_error_o, count_error_o, keccak_storage_rst_error_o) are asserted are not defined.",
+      "cond": "during operation when internal errors occur.",
+      "risk": "If not clearly specified, error handling might be incomplete, leading to undetected faults propagating to the system.",
+      "signals": [
+        "error_o",
+        "sparse_fsm_error_o",
+        "count_error_o",
+        "keccak_storage_rst_error_o"
+      ],
+      "refs": [
+        "78:88"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The run_req_o/run_ack_i handshake may allow indefinite stalling if run_ack_i is not asserted, potentially affecting overall crypto operation.",
+      "cond": "when the keccak core requests a processing cycle and run_ack_i is delayed.",
+      "risk": "If ack is never asserted, the pipeline may hang, leading to denial-of-service or incomplete digest computation under attacker control.",
+      "signals": [
+        "run_req_o",
+        "run_ack_i"
+      ],
+      "refs": [
+        "69:73"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The done_i signal is MUBI4 encoded but there is no visible handling of illegal encoding values; an invalid encoding might bypass completion detection.",
+      "cond": "when done_i is driven with an invalid MUBI value.",
+      "risk": "If not detected, the module could either hang or proceed without proper completion, leading to incorrect digest output or exposure.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "51:51"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The digest output state_o is zeroed when state_valid_o is false to prevent leakage, but the timing between state_valid_o deassertion and zeroing may have a window where state is still visible.",
+      "cond": "when state_valid_o transitions from high to low.",
+      "risk": "A race or incorrect ordering could expose the digest value on state_o after validity drops, violating the security intent.",
+      "signals": [
+        "state_valid_o",
+        "state_o"
+      ],
+      "refs": [
+        "62:67"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "msg_strb_i is described as 'one strobe for shares', but its usage in controlling write/wipe of shared state is not shown; misdriven strobe could leak secret shares.",
+      "cond": "when msg_valid_i and msg_ready_o handshake occurs.",
+      "risk": "If strobe controls which shares are updated, an attacker could selectively update shares to infer secret state.",
+      "signals": [
+        "msg_strb_i",
+        "msg_data_i"
+      ],
+      "refs": [
+        "24:25"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:18-94"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
+  "line_start": 18,
+  "line_end": 94,
+  "security_implications": ""
+}

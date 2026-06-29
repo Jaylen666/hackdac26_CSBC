@@ -1,0 +1,182 @@
+{
+  "chunk_id": "aes_pkg_continuous_region_aes_pkg_001__structure__001",
+  "header": {
+    "module": "aes_pkg",
+    "block_kind": "mixed",
+    "driven": [],
+    "used": [
+      "aes_reg_pkg::NumRegsIv",
+      "SliceSizeCtr",
+      "WidthPRDClearing",
+      "WidthPRDSBox",
+      "ClearingLfsrWidth",
+      "prim_util_pkg::vbits"
+    ],
+    "modes": [],
+    "tags": [
+      "mask",
+      "key",
+      "entropy",
+      "error",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "The package defines constant WidthPRDClearing = 64, guaranteeing that derived parameters NumChunksPRDClearing128 = 128/64 = 2 and NumChunksPRDClearing256 = 256/64 = 4 compute to integer values without truncation.",
+      "cond": "always",
+      "signals": [
+        "WidthPRDClearing",
+        "NumChunksPRDClearing128",
+        "NumChunksPRDClearing256"
+      ],
+      "refs": [
+        "aes_pkg.sv:23-25"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The masking pseudo-random data widths are derived as WidthPRDData = 16*8 = 128 and WidthPRDKey = 4*8 = 32, resulting in WidthPRDMasking = 128+32 = 160 bits.",
+      "cond": "always",
+      "signals": [
+        "WidthPRDSBox",
+        "WidthPRDData",
+        "WidthPRDKey",
+        "WidthPRDMasking"
+      ],
+      "refs": [
+        "aes_pkg.sv:28-33"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "The clearing LFSR constant seed RndCnstClearingLfsrSeedDefault is set to 64'hc32d580f74f1713a, and the default permutation RndCnstClearingLfsrPermDefault is assigned a 384-bit constant composed of two sub-patterns.",
+      "cond": "always",
+      "signals": [
+        "RndCnstClearingLfsrSeedDefault",
+        "RndCnstClearingLfsrPermDefault"
+      ],
+      "refs": [
+        "aes_pkg.sv:41-45"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "aes_reg_pkg::NumRegsIv is a compile-time constant such that (NumRegsIv*32) is an integer multiple of SliceSizeCtr=16, ensuring NumSlicesCtr is exact without truncation.",
+      "cond": "compile time",
+      "risk": "If the product is not divisible by 16, the derived slice count will be truncated, leading to misaligned IV slice addressing and possible functional failure.",
+      "signals": [
+        "aes_reg_pkg::NumRegsIv",
+        "SliceSizeCtr",
+        "NumSlicesCtr"
+      ],
+      "refs": [
+        "aes_pkg.sv:18-19"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "prim_util_pkg::vbits function is correctly defined and returns the minimal bit width required to represent NumSlicesCtr.",
+      "cond": "always",
+      "risk": "An incorrect vbits implementation would cause SliceIdxWidth to be wrong, potentially leading to indexing errors in slice counters.",
+      "signals": [
+        "prim_util_pkg::vbits",
+        "SliceIdxWidth"
+      ],
+      "refs": [
+        "aes_pkg.sv:20"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "WidthPRDClearing divides 128 and 256 exactly; the package uses integer division to compute NumChunksPRDClearing128 and NumChunksPRDClearing256 without remainder.",
+      "cond": "when WidthPRDClearing is overridden",
+      "risk": "If a non-divisor value is used, the chunk count will be truncated, breaking the clearing pseudo-random data path partitioning and possibly leaving some bits uninitialized.",
+      "signals": [
+        "WidthPRDClearing",
+        "NumChunksPRDClearing128",
+        "NumChunksPRDClearing256"
+      ],
+      "refs": [
+        "aes_pkg.sv:23-25"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "ClearStatusOnFatalAlert is set to 0, disabling automatic clearing of status registers on a fatal alert. It is unclear whether this default should be overridden in a secure configuration to prevent leakage of sensitive operational state.",
+      "cond": "when a fatal alert occurs",
+      "risk": "Status registers may retain stale sensitive data after a fatal event, allowing an attacker or later software to read values that should have been wiped.",
+      "signals": [
+        "ClearStatusOnFatalAlert"
+      ],
+      "refs": [
+        "aes_pkg.sv:11"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The default LFSR seed and permutation constants (RndCnstClearingLfsrSeedDefault, RndCnstClearingLfsrPermDefault) are fixed and publicly visible in the source; if the clearing PRNG is intended to be unpredictable, these hardcoded values may need to be replaced or reseeded by external entropy.",
+      "cond": "depending on clearing PRNG usage for security",
+      "risk": "Deterministic PRNG output may weaken masking countermeasures, enabling side-channel attacks.",
+      "signals": [
+        "RndCnstClearingLfsrSeedDefault",
+        "RndCnstClearingLfsrPermDefault"
+      ],
+      "refs": [
+        "aes_pkg.sv:41-45"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The definition of RndCnstClearingSharePermDefault on line 47 appears incomplete (only an opening brace `{` is visible within the chunk boundaries). The missing initialization value could cause a compilation error if not completed in subsequent source lines.",
+      "cond": "when the package is compiled",
+      "risk": "Undefined or partially defined parameter may lead to compile failure or unexpected default value, potentially breaking the second share permutation.",
+      "signals": [
+        "RndCnstClearingSharePermDefault"
+      ],
+      "refs": [
+        "aes_pkg.sv:47"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "No compile-time assertion ensures that NumSlicesCtr is a positive integer and that SliceIdxWidth correctly covers its range. If aes_reg_pkg::NumRegsIv were to an unexpected value (e.g., 0), SliceIdxWidth might be 0, causing downstream indexing issues.",
+      "cond": "when aes_reg_pkg::NumRegsIv is changed",
+      "risk": "Incorrect counter slice indexing could lead to IV update errors, but this is a low probability dependant on a rare register file change.",
+      "signals": [
+        "NumSlicesCtr",
+        "SliceIdxWidth",
+        "aes_reg_pkg::NumRegsIv"
+      ],
+      "refs": [
+        "aes_pkg.sv:18-20"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_pkg.sv:11-47"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv",
+  "line_start": 11,
+  "line_end": 47,
+  "security_implications": ""
+}

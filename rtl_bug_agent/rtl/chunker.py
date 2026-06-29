@@ -65,6 +65,67 @@ def chunk_sv_files(
     return chunks
 
 
+def chunk_sv_files_structural_aware(
+    rtl_dir: str | Path,
+    client: "OpenAICompatibleClient | None" = None,
+) -> tuple[list[RtlChunk], list[dict[str, object]], list[dict[str, object]]]:
+    """Chunk RTL files and split out structural-only chunks.
+
+    Returns:
+        behavior_chunks: chunks that should still go through Phase 1 spec generation
+        manifest: lightweight classification records for all chunks
+        structure_facts: compact static facts extracted from structural chunks
+    """
+    chunks = chunk_sv_files(rtl_dir, client=client)
+    annotated_behavior: list[RtlChunk] = []
+    manifest: list[dict[str, object]] = []
+    facts: list[dict[str, object]] = []
+
+    for chunk in chunks:
+        split_chunks = (
+            _split_continuous_region_for_structure(chunk)
+            if chunk.kind == "continuous_region"
+            else [chunk]
+        )
+        for piece in split_chunks:
+            info = _classify_structural_mode(piece)
+            annotated = RtlChunk(
+                chunk_id=piece.chunk_id,
+                kind=piece.kind,
+                source_file=piece.source_file,
+                module=piece.module,
+                line_start=piece.line_start,
+                line_end=piece.line_end,
+                title=piece.title,
+                context_summary=piece.context_summary,
+                code=piece.code,
+                dependencies=piece.dependencies,
+                semantic_class=info["semantic_class"],
+                guard_context=info["guard_context"],
+                structure_refs=info["structure_refs"],
+                compile_time_context=info["compile_time_context"],
+            )
+            manifest.append(
+                {
+                    "chunk_id": annotated.chunk_id,
+                    "source_file": annotated.source_file,
+                    "line_start": annotated.line_start,
+                    "line_end": annotated.line_end,
+                    "kind": annotated.kind,
+                    "semantic_class": annotated.semantic_class,
+                    "guard_context": annotated.guard_context,
+                    "structure_refs": annotated.structure_refs,
+                    "compile_time_context": annotated.compile_time_context,
+                    "reason": info["reason"],
+                }
+            )
+            facts.extend(_extract_structure_facts_from_chunk(annotated))
+            if annotated.semantic_class != "structure":
+                annotated_behavior.append(annotated)
+
+    return annotated_behavior, manifest, facts
+
+
 def _should_skip(path: Path) -> bool:
     """Return True if *path* is an auto-generated file (reggen, topgen, etc.).
 
@@ -408,6 +469,363 @@ def _merge_adjacent_same_kind_chunks(
         file_order.setdefault(c.source_file, idx)
     merged.sort(key=lambda c: (file_order.get(c.source_file, 0), c.line_start))
     return merged
+
+
+def _classify_structural_mode(chunk: RtlChunk) -> dict[str, object]:
+    code = chunk.code
+    lower = code.lower()
+    compile_time_context = _extract_compile_time_context(code)
+    guard_context = [{"kind": "compile_time", "text": item} for item in compile_time_context]
+    structure_refs: list[str] = []
+
+    if chunk.kind == "continuous_region":
+        line_roles = [_line_role(line) for line in code.splitlines()]
+        has_structure_lines = any(role == "structure" for role in line_roles)
+        has_behavior_lines = any(role == "behavior" for role in line_roles)
+        if has_structure_lines and not has_behavior_lines:
+            semantic_class = "structure"
+            reason = "continuous region contains only structural statements"
+        elif has_structure_lines and has_behavior_lines:
+            semantic_class = "mixed"
+            reason = "continuous region contains both structural and behavioral statements"
+        else:
+            semantic_class = "behavior"
+            reason = "continuous region contains no structural statements"
+        if semantic_class in {"structure", "mixed"}:
+            structure_refs = _extract_structure_refs(code, chunk)
+        return {
+            "semantic_class": semantic_class,
+            "guard_context": guard_context,
+            "structure_refs": structure_refs,
+            "compile_time_context": compile_time_context,
+            "reason": reason,
+        }
+
+    has_behavior = bool(
+        re.search(r"^\s*always(?:_(?:comb|ff|latch))?\b", code, flags=re.MULTILINE)
+        or re.search(r"^\s*assign\b", code, flags=re.MULTILINE)
+        or re.search(r"^\s*(?:function|task)\b", code, flags=re.MULTILINE)
+    )
+    has_structure = bool(
+        re.search(r"^\s*(?:parameter|localparam)\b", code, flags=re.MULTILINE)
+        or re.search(r"^\s*typedef\b", code, flags=re.MULTILINE)
+        or re.search(r"^\s*(?:input|output|inout)\b", code, flags=re.MULTILINE)
+        or _contains_instance_like(code)
+    )
+
+    if chunk.kind in {"always_comb", "always_ff", "always_latch", "function_task"}:
+        semantic_class = "behavior"
+        reason = f"procedural chunk kind={chunk.kind}"
+    elif chunk.kind == "generate_for":
+        semantic_class = "mixed"
+        reason = "generate block may contain both structural and behavioral statements"
+    elif has_structure and not has_behavior:
+        semantic_class = "structure"
+        reason = "contains declarations / instances / typedefs without procedural behavior"
+    elif has_structure and has_behavior:
+        semantic_class = "mixed"
+        reason = "contains both declarative and behavioral statements"
+    else:
+        semantic_class = "behavior"
+        reason = "default behavior chunk"
+
+    if semantic_class in {"structure", "mixed"}:
+        structure_refs = _extract_structure_refs(code, chunk)
+
+    return {
+        "semantic_class": semantic_class,
+        "guard_context": guard_context,
+        "structure_refs": structure_refs,
+        "compile_time_context": compile_time_context,
+        "reason": reason,
+    }
+
+
+def _split_continuous_region_for_structure(chunk: RtlChunk) -> list[RtlChunk]:
+    """Split a continuous_region chunk into structure/behavior subchunks.
+
+    This is intentionally conservative: only lines that are clearly structural
+    (declarations, typedefs, parameters, or instance headers) are peeled into
+    structural chunks. Everything else stays in behavioral chunks so that
+    assign-heavy glue does not get mislabeled as structure.
+    """
+    lines = chunk.code.splitlines()
+    groups: list[tuple[int, int, str]] = []
+
+    current_role: str | None = None
+    current_start: int | None = None
+    inst_depth = 0
+    typedef_depth = 0
+
+    def flush(end_idx: int) -> None:
+        nonlocal current_role, current_start
+        if current_role is not None and current_start is not None and end_idx >= current_start:
+            groups.append((current_start, end_idx, current_role))
+        current_role = None
+        current_start = None
+
+    for idx, raw in enumerate(lines, start=chunk.line_start):
+        stripped = _strip_line_comment(raw).strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+
+        in_inst_block = inst_depth > 0
+        in_typedef_block = typedef_depth > 0
+        role = _line_role(
+            stripped,
+            inst_depth=in_inst_block or _starts_instance_block(stripped),
+            typedef_depth=in_typedef_block or _starts_typedef_block(stripped),
+        )
+
+        if current_role is None:
+            current_role = role
+            current_start = idx
+        elif role != current_role:
+            flush(idx - 1)
+            current_role = role
+            current_start = idx
+
+        if _starts_instance_block(stripped):
+            inst_depth = 1
+        elif inst_depth > 0:
+            inst_depth += stripped.count("(") - stripped.count(")")
+            if stripped.endswith(");") or stripped == ");":
+                inst_depth = 0
+
+        if _starts_typedef_block(stripped):
+            typedef_depth = 1
+        elif typedef_depth > 0:
+            typedef_depth += stripped.count("{") - stripped.count("}")
+            if stripped.endswith(";") and "}" in stripped:
+                typedef_depth = 0
+
+    if current_role is not None and current_start is not None:
+        flush(chunk.line_end)
+
+    out: list[RtlChunk] = []
+    counters: Counter[str] = Counter()
+    for start, end, role in groups:
+        sub_lines = lines[start - chunk.line_start : end - chunk.line_start + 1]
+        if not _has_meaningful_code(sub_lines):
+            continue
+        sub_code = "\n".join(sub_lines)
+        sub_kind = chunk.kind
+        suffix = _safe_id(role)
+        base = f"{_safe_id(chunk.chunk_id)}__{suffix}"
+        counters[base] += 1
+        out.append(
+            RtlChunk(
+                chunk_id=f"{base}__{counters[base]:03d}",
+                kind=sub_kind,
+                source_file=chunk.source_file,
+                module=chunk.module,
+                line_start=start,
+                line_end=end,
+                title=_title(sub_kind, f"{suffix}_{chunk.line_start}_{chunk.line_end}", chunk.module, start, end),
+                context_summary=_context_summary(sub_kind, chunk.module, start, end),
+                code=sub_code,
+                dependencies=_extract_identifiers(sub_code),
+            )
+        )
+    return out or [chunk]
+
+
+def _starts_instance_block(line: str) -> bool:
+    return bool(
+        re.search(r"\b[A-Za-z_][A-Za-z0-9_$]*\s+#\(", line)
+        or re.match(r"^\s*u_[A-Za-z_][A-Za-z0-9_$]*\s*(?:#\s*\(|\()", line)
+        or re.search(r"\)\s*u_[A-Za-z_][A-Za-z0-9_$]*\s*\(", line)
+    )
+
+
+def _starts_typedef_block(line: str) -> bool:
+    return bool(re.match(r"^\s*typedef\s+", line))
+
+
+def _line_role(line: str, inst_depth: bool = False, typedef_depth: bool = False) -> str:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("//"):
+        return "neutral"
+    if inst_depth or typedef_depth:
+        return "structure"
+    if re.match(r"^\s*(?:parameter|localparam)\b", line):
+        return "structure"
+    if re.match(r"^\s*typedef\b", line):
+        return "structure"
+    if re.match(r"^\s*(?:logic|bit|reg|wire|int|integer|byte|shortint|longint)\b", line):
+        return "structure" if "=" not in line else "behavior"
+    if _starts_instance_block(line):
+        return "structure"
+    if re.match(r"^\s*assign\b", line):
+        return "behavior"
+    if re.match(r"^\s*always(?:_(?:comb|ff|latch))?\b", line):
+        return "behavior"
+    if re.match(r"^\s*(?:function|task)\b", line):
+        return "behavior"
+    if re.match(r"^\s*(?:if|else|case|for|while)\b", line):
+        return "behavior"
+    return "behavior"
+
+
+def _extract_compile_time_context(code: str) -> list[str]:
+    items: list[str] = []
+    for line in code.splitlines():
+        stripped = _strip_line_comment(line).strip()
+        if not stripped:
+            continue
+        m_if = re.match(r"^if\s*\((.+)\)\s*(?:begin\b|:)", stripped)
+        if m_if:
+            items.append(f"generate if: {m_if.group(1).strip()}")
+            continue
+        m_case = re.match(r"^case\s*\((.+)\)", stripped)
+        if m_case:
+            items.append(f"generate case: {m_case.group(1).strip()}")
+            continue
+        m_for = re.match(r"^for\s*\(\s*genvar\s+(.+)\)", stripped)
+        if m_for:
+            items.append(f"generate for: {m_for.group(1).strip()}")
+            continue
+    return list(dict.fromkeys(items))
+
+
+def _contains_instance_like(code: str) -> bool:
+    lines = code.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = _strip_line_comment(line).strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        if re.search(r"\b[A-Za-z_][A-Za-z0-9_$]*\s+#\(", stripped):
+            return True
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_$]*\s+[A-Za-z_][A-Za-z0-9_$]*\s*(?:#\s*\(|\()", stripped):
+            return True
+        if stripped.startswith("u_") and "(" in stripped:
+            return True
+        if idx > 0 and re.match(r"^\s*\.([A-Za-z_][A-Za-z0-9_$]*)\s*\(", stripped):
+            return True
+    return False
+
+
+def _extract_structure_refs(code: str, chunk: RtlChunk) -> list[str]:
+    refs: list[str] = []
+    for idx, line in enumerate(code.splitlines(), start=chunk.line_start):
+        stripped = _strip_line_comment(line).strip()
+        if not stripped:
+            continue
+        if re.match(r"^\s*(?:parameter|localparam)\b", stripped):
+            refs.append(f"{chunk.source_file}:{idx}-param")
+        elif re.match(r"^\s*typedef\s+enum\b", stripped):
+            refs.append(f"{chunk.source_file}:{idx}-enum")
+        elif re.match(r"^\s*typedef\s+struct\b", stripped):
+            refs.append(f"{chunk.source_file}:{idx}-struct")
+        elif re.search(r"\b[A-Za-z_][A-Za-z0-9_$]*\s+#\(", stripped) or stripped.startswith("u_"):
+            refs.append(f"{chunk.source_file}:{idx}-instance")
+    return list(dict.fromkeys(refs))
+
+
+def _extract_structure_facts_from_chunk(chunk: RtlChunk) -> list[dict[str, object]]:
+    facts: list[dict[str, object]] = []
+    lines = chunk.code.splitlines()
+    for offset, line in enumerate(lines, start=chunk.line_start):
+        stripped = _strip_line_comment(line).strip()
+        if not stripped:
+            continue
+        param_match = re.match(
+            r"^\s*parameter\s+(?:logic\s+\[[^\]]+\]\s+|int(?:\s+unsigned)?\s+|bit\s+)?"
+            r"([A-Za-z_][A-Za-z0-9_$]*)\s*=\s*(.+?);\s*$",
+            stripped,
+        )
+        if param_match:
+            facts.append(
+                {
+                    "fact_id": f"{chunk.chunk_id}__param_def__{offset}_{offset}__{param_match.group(1)}",
+                    "kind": "param_def",
+                    "name": param_match.group(1),
+                    "source_file": chunk.source_file,
+                    "line_start": offset,
+                    "line_end": offset,
+                    "expression": param_match.group(2).strip(),
+                    "signals": [param_match.group(1)],
+                    "tags": ["parameterization"],
+                    "rank_score": 2,
+                    "guard_context": chunk.guard_context,
+                    "evidence_refs": [f"{Path(chunk.source_file).name}:{offset}-{offset}"],
+                }
+            )
+            continue
+        if re.match(r"^\s*typedef\s+enum\b", stripped):
+            facts.append(
+                {
+                    "fact_id": f"{chunk.chunk_id}__enum_def__{offset}_{offset}__enum",
+                    "kind": "enum_def",
+                    "name": chunk.title,
+                    "source_file": chunk.source_file,
+                    "line_start": offset,
+                    "line_end": offset,
+                    "expression": stripped,
+                    "signals": [],
+                    "tags": ["enum", "typedef"],
+                    "rank_score": 2,
+                    "guard_context": chunk.guard_context,
+                    "evidence_refs": [f"{Path(chunk.source_file).name}:{offset}-{offset}"],
+                }
+            )
+            continue
+        if re.match(r"^\s*typedef\s+struct\b", stripped):
+            facts.append(
+                {
+                    "fact_id": f"{chunk.chunk_id}__struct_def__{offset}_{offset}__struct",
+                    "kind": "struct_def",
+                    "name": chunk.title,
+                    "source_file": chunk.source_file,
+                    "line_start": offset,
+                    "line_end": offset,
+                    "expression": stripped,
+                    "signals": [],
+                    "tags": ["struct", "typedef"],
+                    "rank_score": 2,
+                    "guard_context": chunk.guard_context,
+                    "evidence_refs": [f"{Path(chunk.source_file).name}:{offset}-{offset}"],
+                }
+            )
+            continue
+        inst = _extract_instance_fact(chunk, stripped, offset)
+        if inst is not None:
+            facts.append(inst)
+    return facts
+
+
+def _extract_instance_fact(chunk: RtlChunk, stripped: str, line_no: int) -> dict[str, object] | None:
+    if not (re.search(r"\b[A-Za-z_][A-Za-z0-9_$]*\s+#\(", stripped) or stripped.startswith("u_")):
+        return None
+    if "." not in stripped and "#(" not in stripped:
+        return None
+    inst_name = ""
+    mod_name = ""
+    header = stripped
+    if "#(" in header:
+        mod_name = header.split("#(", 1)[0].strip().split()[-1]
+        inst_name = mod_name if mod_name.startswith("u_") else ""
+    port_map: dict[str, str] = {}
+    param_map: dict[str, str] = {}
+    fact_id = f"{chunk.chunk_id}__instance_map__{line_no}_{line_no}__{_safe_id(inst_name or mod_name or 'inst')}"
+    return {
+        "fact_id": fact_id,
+        "kind": "instance_map",
+        "name": inst_name or mod_name,
+        "module_name": mod_name,
+        "instance_name": inst_name,
+        "source_file": chunk.source_file,
+        "line_start": line_no,
+        "line_end": line_no,
+        "expression": stripped,
+        "signals": [],
+        "tags": ["instance"],
+        "rank_score": 2,
+        "port_map": port_map,
+        "param_map": param_map,
+        "guard_context": chunk.guard_context,
+        "evidence_refs": [f"{Path(chunk.source_file).name}:{line_no}-{line_no}"],
+    }
 
 
 def _collapse_run(run: list[RtlChunk]) -> RtlChunk:

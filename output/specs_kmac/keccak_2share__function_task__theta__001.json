@@ -1,69 +1,159 @@
 {
   "chunk_id": "keccak_2share__function_task__theta__001",
-  "summary": "该函数实现 Keccak 的 theta 步骤：先按列对 5 个 lane 求奇偶校验，再基于相邻列奇偶生成每列修正向量，并将该修正异或到该列所有 lane 上。",
-  "behavior": "函数 `theta` 接收一个 `box_t state`，返回变换后的 `box_t result`。它首先对每个 `x=0..4` 计算列奇偶 `c[x]`，即将该列 5 个 `y` 位置的 lane 做按位异或：`state[x][0] ^ ... ^ state[x][4]`，因此 `c[x]` 是宽度为 `W` 的向量，逐 bit 汇总该列全部 lane 的奇偶信息（405-411）。随后对每个列 `x` 和每个 bit 位置 `z` 计算修正项 `d[x][z]`：取 `c[ThetaIndexX1[x]][z]` 与 `c[ThetaIndexX2[x]][index_z]` 异或，其中 `index_z` 在 `z==0` 时回绕到 `W-1`，否则为 `z-1`；注释写为 `(z+1)%W`，表明这是对一个相邻列奇偶向量做循环旋转后参与计算（412-417）。最后，对每个 `(x,y)`，把同一列的修正向量 `d[x]` 异或到该列的每个 lane：`result[x][y] = state[x][y] ^ d[x]`，因此同一 `x` 下所有 5 个 lane 使用相同的列修正（419-424）。该函数是纯组合变换，不保留内部状态；边界上 `z=0` 会使用回绕索引 `W-1` 来实现位旋转的首尾连接（415-416）。",
+  "header": {
+    "module": "keccak_2share",
+    "block_kind": "function_task",
+    "driven": [
+      "result"
+    ],
+    "used": [
+      "state",
+      "c",
+      "d",
+      "ThetaIndexX1",
+      "ThetaIndexX2",
+      "W"
+    ],
+    "modes": [
+      "theta",
+      "ThetaIndexX1",
+      "ThetaIndexX2",
+      "W"
+    ],
+    "tags": [
+      "secret",
+      "digest",
+      "integrity",
+      "mask",
+      "parameterization",
+      "keccak"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对任意输出 lane，`result[x][y]` 必定等于输入 `state[x][y]` 与该列对应修正向量 `d[x]` 的按位异或；同一列 `x` 的所有 5 个输出 lane 共享同一个 `d[x]`。",
-      "output_signals": [
-        "result",
-        "theta"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "c[x] = state[x][0] ^ state[x][1] ^ state[x][2] ^ state[x][3] ^ state[x][4] for x in 0..4",
+      "cond": "always",
+      "signals": [
+        "c",
+        "state"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:419-424"
+      "refs": [
+        "file:410"
       ]
     },
     {
-      "property": "每列修正向量 `d[x]` 仅由两列奇偶向量决定：`c[ThetaIndexX1[x]]` 的同位 bit 与 `c[ThetaIndexX2[x]]` 的循环移位 bit 异或得到，其中 `z=0` 时移位索引回绕到 `W-1`。",
-      "output_signals": [
-        "result",
-        "theta"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "d[x][z] = c[ThetaIndexX1[x]][z] ^ c[ThetaIndexX2[x]][(z-1) mod W] for x in 0..4, z in 0..W-1",
+      "cond": "always",
+      "signals": [
+        "d",
+        "c",
+        "ThetaIndexX1",
+        "ThetaIndexX2",
+        "W"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:412-417"
+      "refs": [
+        "file:416"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "result[x][y] = state[x][y] ^ d[x] for x in 0..4, y in 0..4",
+      "cond": "always",
+      "signals": [
+        "result",
+        "state",
+        "d"
+      ],
+      "refs": [
+        "file:421"
       ]
     }
   ],
-  "security_implications": "该片段属于加密置换的核心线性扩散步骤，会把一个列的奇偶信息扩散到其他列并作用于整列所有 lane（410, 416, 421）。如果 `ThetaIndexX1/ThetaIndexX2` 映射或位回绕方向实现错误，会直接改变置换函数本身，导致摘要/认证结果错误，并可能破坏算法预期的扩散与安全性质。",
   "assumptions": [
     {
-      "constraint": "`ThetaIndexX1[x]` 和 `ThetaIndexX2[x]` 对所有 `x=0..4` 都必须产生有效的 0..4 列索引，并且语义上对应 theta 所需的相邻列选择。",
-      "bug_relevance": "若索引超界会导致非法访问；若索引虽在界内但映射错误，则 theta 扩散关系被破坏，置换结果与预期算法不符，可能构成功能和安全错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "module_config",
+      "claim": "ThetaIndexX1 and ThetaIndexX2 are arrays of integers in 0..4 that correctly implement the Keccak Theta rotation indices (x‑1 mod 5 and x+1 mod 5).",
+      "cond": "every call to theta",
+      "risk": "Incorrect indices break the Theta step, producing a wrong hash/digest and potentially enabling collision or preimage attacks.",
+      "signals": [
         "ThetaIndexX1",
-        "ThetaIndexX2",
-        "x",
-        "c",
-        "d"
+        "ThetaIndexX2"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:412-416"
+      "refs": [
+        "file:416"
       ]
     },
     {
-      "constraint": "`W` 必须为正整数，使 `z` 循环和 `W-1` 回绕索引有效；该函数的位旋转语义依赖 `state`/`plane_t` 的宽度与 `W` 一致。",
-      "bug_relevance": "若 `W<=0` 或类型宽度与 `W` 不一致，则 `index_z` 回绕和逐 bit 处理失效，theta 的旋转/扩散行为会错误。该前提属于合法参数配置的行为契约。",
-      "related_signals": [
+      "id": "A2",
+      "type": "width_param",
+      "claim": "W is a positive integer equal to the lane width (e.g., 64), and state[y][x] is W bits wide.",
+      "cond": "always",
+      "risk": "Array sizing mismatches or incorrect rotation step, leading to out-of-bounds access or permutation failure.",
+      "signals": [
         "W",
-        "z",
-        "index_z",
-        "state",
-        "c",
-        "d"
+        "state"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:413-416"
+      "refs": [
+        "file:413-421"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "state is a 5x5 array of lanes of width W with well‑defined 0/1 values (no X or Z).",
+      "cond": "always",
+      "risk": "Simulation X‑propagation; in silicon unknown bits are unlikely but could cause wrong hash.",
+      "signals": [
+        "state"
+      ],
+      "refs": [
+        "file:409-421"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "ThetaIndexX1 and ThetaIndexX2 are external constants with no local documentation; their intended values (x‑1 and x+1 mod 5) are not verified.",
+      "cond": "unknown",
+      "risk": "A misconfiguration could silently break the Keccak permutation and compromise hash security.",
+      "signals": [
+        "ThetaIndexX1",
+        "ThetaIndexX2"
+      ],
+      "refs": [
+        "file:416"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "This function operates on a full state without share separation; in a 2‑share design the caller must invoke theta separately for each share to preserve masking.",
+      "cond": "when the module handles masked secrets",
+      "risk": "If shares are combined before calling theta, side‑channel leakage could reveal secret key material.",
+      "signals": [
+        "state",
+        "result"
+      ],
+      "refs": [
+        "file:405-425"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:405-425"
-  ],
-  "uncertain_points": [
-    "注释 `// (z+1)%W` 与代码 `index_z = (z == 0) ? W-1 : z-1` 在字面上看使用的是 `z-1 mod W` 的索引形式；两者是否由于位编号方向定义而等价，需要结合 `plane_t`/bit ordering 及 Keccak 规范中的旋转方向确认（415-416）。",
-    "无法仅凭该片段确认 `ThetaIndexX1` 与 `ThetaIndexX2` 的具体取值是否正是 Keccak theta 标准中的 `x-1` 与 `x+1` 邻列映射，只能确认实现依赖这两个查表索引（416）。"
+    "file:405-425"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
   "line_start": 405,
-  "line_end": 425
+  "line_end": 425,
+  "security_implications": ""
 }

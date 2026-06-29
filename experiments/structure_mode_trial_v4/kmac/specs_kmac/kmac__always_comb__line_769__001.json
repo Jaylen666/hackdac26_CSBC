@@ -1,0 +1,306 @@
+{
+  "chunk_id": "kmac__always_comb__line_769__001",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "kmac_st_d",
+      "entropy_in_keyblock",
+      "kmac_state_error"
+    ],
+    "used": [
+      "kmac_st",
+      "kmac_cmd",
+      "app_sha3_mode",
+      "sha3_block_processed",
+      "app_kmac_en",
+      "sha3_absorbed",
+      "sha3_done",
+      "lc_escalate_en"
+    ],
+    "modes": [
+      "KmacIdle",
+      "KmacPrefix",
+      "KmacKeyBlock",
+      "KmacMsgFeed",
+      "KmacDigest",
+      "KmacTerminalError",
+      "CmdStart",
+      "CShake"
+    ],
+    "tags": [
+      "key",
+      "digest",
+      "lifecycle",
+      "error",
+      "sparse_fsm",
+      "handshake",
+      "entropy"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "entropy_in_keyblock is 1 only when current state is KmacKeyBlock, otherwise it is 0.",
+      "cond": "always",
+      "signals": [
+        "entropy_in_keyblock",
+        "kmac_st"
+      ],
+      "refs": [
+        "kmac.sv:773",
+        "kmac.sv:801"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "kmac_state_error is 1 when current state is KmacTerminalError (including default fallback), else 0.",
+      "cond": "always",
+      "signals": [
+        "kmac_state_error",
+        "kmac_st"
+      ],
+      "refs": [
+        "kmac.sv:774",
+        "kmac.sv:837",
+        "kmac.sv:842"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "From KmacIdle: if kmac_cmd == CmdStart then next state is KmacPrefix when app_sha3_mode == CShake else KmacMsgFeed, else state remains KmacIdle.",
+      "cond": "kmac_st == KmacIdle",
+      "signals": [
+        "kmac_st_d",
+        "kmac_cmd",
+        "app_sha3_mode"
+      ],
+      "refs": [
+        "kmac.sv:777-788"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "From KmacPrefix: if sha3_block_processed then next state is KmacKeyBlock if app_kmac_en else KmacMsgFeed, else state remains KmacPrefix.",
+      "cond": "kmac_st == KmacPrefix",
+      "signals": [
+        "kmac_st_d",
+        "sha3_block_processed",
+        "app_kmac_en"
+      ],
+      "refs": [
+        "kmac.sv:791-797"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "From KmacKeyBlock: if sha3_block_processed then next state is KmacMsgFeed, else state remains KmacKeyBlock.",
+      "cond": "kmac_st == KmacKeyBlock",
+      "signals": [
+        "kmac_st_d",
+        "sha3_block_processed"
+      ],
+      "refs": [
+        "kmac.sv:800-807"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "From KmacMsgFeed: if sha3_absorbed true_strict and sha3_done true_strict then go to KmacIdle; else if sha3_absorbed true_strict and sha3_done false_loose then go to KmacDigest; else stay KmacMsgFeed.",
+      "cond": "kmac_st == KmacMsgFeed",
+      "signals": [
+        "kmac_st_d",
+        "sha3_absorbed",
+        "sha3_done"
+      ],
+      "refs": [
+        "kmac.sv:809-823"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "state_transition",
+      "claim": "From KmacDigest: if sha3_done true_strict then go to KmacIdle, else stay KmacDigest.",
+      "cond": "kmac_st == KmacDigest",
+      "signals": [
+        "kmac_st_d",
+        "sha3_done"
+      ],
+      "refs": [
+        "kmac.sv:825-831"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "state_transition",
+      "claim": "From KmacTerminalError: kmac_st_d remains KmacTerminalError and kmac_state_error is asserted.",
+      "cond": "kmac_st == KmacTerminalError",
+      "signals": [
+        "kmac_st_d",
+        "kmac_state_error"
+      ],
+      "refs": [
+        "kmac.sv:834-838"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "default_fallback",
+      "claim": "For any other (illegal) state encoding, kmac_st_d is forced to KmacTerminalError and kmac_state_error is asserted.",
+      "cond": "kmac_st not in {KmacIdle, KmacPrefix, KmacKeyBlock, KmacMsgFeed, KmacDigest, KmacTerminalError}",
+      "signals": [
+        "kmac_st_d",
+        "kmac_state_error"
+      ],
+      "refs": [
+        "kmac.sv:840-843"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "state_transition",
+      "claim": "Irrespective of current state, if lc_escalate_en[0] is true_loose, kmac_st_d is forced to KmacTerminalError.",
+      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0])",
+      "signals": [
+        "kmac_st_d",
+        "lc_escalate_en"
+      ],
+      "refs": [
+        "kmac.sv:849-850"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "sha3_block_processed must be a single-cycle pulse that is deasserted by the next clock edge; a level would cause the FSM to spend only one cycle in KmacKeyBlock (immediately transitioning to KmacMsgFeed), skipping key absorption.",
+      "cond": "when kmac_st enters KmacPrefix or KmacKeyBlock",
+      "risk": "key block not absorbed, incorrect KMAC result; security failure",
+      "signals": [
+        "sha3_block_processed",
+        "kmac_st"
+      ],
+      "refs": [
+        "kmac.sv:793",
+        "kmac.sv:802"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "sha3_absorbed and sha3_done must always be valid mubi4-encoded signals for the mubi4_test_true_strict / false_loose checks to operate correctly.",
+      "cond": "always",
+      "risk": "invalid comparisons may lead to incorrect state transitions (e.g., premature Idle, stuck in MsgFeed)",
+      "signals": [
+        "sha3_absorbed",
+        "sha3_done"
+      ],
+      "refs": [
+        "kmac.sv:811-812",
+        "kmac.sv:817-818",
+        "kmac.sv:827"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "app_kmac_en must be stable and valid while in KmacPrefix and at the cycle sha3_block_processed is asserted; it determines whether the next state is KmacKeyBlock or KmacMsgFeed.",
+      "cond": "kmac_st == KmacPrefix and sha3_block_processed == 1",
+      "risk": "incorrect transition could bypass key handling or go to key block incorrectly",
+      "signals": [
+        "app_kmac_en"
+      ],
+      "refs": [
+        "kmac.sv:794"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "lc_escalate_en[0] must be asserted only during a genuine life-cycle escalation; the FSM unconditionally enters KmacTerminalError in response.",
+      "cond": "always",
+      "risk": "premature or false terminal error halts KMAC operations unnecessarily",
+      "signals": [
+        "lc_escalate_en"
+      ],
+      "refs": [
+        "kmac.sv:849"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "If sha3_block_processed remains asserted for more than one cycle, the FSM may skip KmacKeyBlock entirely (transitioning through it in one cycle), causing the key block to never be absorbed.",
+      "cond": "sha3_block_processed level high across state change from KmacPrefix to KmacKeyBlock",
+      "risk": "key not processed, KMAC output incorrect; possible security break",
+      "signals": [
+        "sha3_block_processed",
+        "kmac_st"
+      ],
+      "refs": [
+        "kmac.sv:793-806"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "In KmacMsgFeed, the case where sha3_done is true_strict but sha3_absorbed is not true_strict is unhandled (falls into else branch, staying in MsgFeed). If the SHA3 engine can legitimately assert done without absorbed, the FSM may hang.",
+      "cond": "sha3_done true, sha3_absorbed false",
+      "risk": "FSM stall, permanent inability to finish message feeding or move to Digest/Idle",
+      "signals": [
+        "sha3_done",
+        "sha3_absorbed"
+      ],
+      "refs": [
+        "kmac.sv:817-822"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The FSM performs only one transition from KmacKeyBlock to KmacMsgFeed after sha3_block_processed, regardless of how many SHA3 blocks the key occupies. If the key length exceeds one block, the remainder may be lost or intermixed with message data.",
+      "cond": "key size > one SHA3 block",
+      "risk": "incomplete key absorption; KMAC result may be incorrect, with potential security implications",
+      "signals": [
+        "app_kmac_en",
+        "sha3_block_processed"
+      ],
+      "refs": [
+        "kmac.sv:800-806"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "low",
+      "claim": "The transition to KmacDigest uses mubi4_test_false_loose on sha3_done, which could accept an invalid or transitioning multi-bit value as 'not true'. This might allow an early switch to digest under marginal signal integrity.",
+      "cond": "sha3_done not strictly false but not strictly true",
+      "risk": "premature digest state, possible exposure or data misuse",
+      "signals": [
+        "sha3_done"
+      ],
+      "refs": [
+        "kmac.sv:818"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:769-852"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 769,
+  "line_end": 852,
+  "security_implications": ""
+}

@@ -1,80 +1,252 @@
 {
   "chunk_id": "kmac_core__continuous_region__declarations_or_instances__001",
-  "summary": "该片段在 KMAC 内部数据通路与外部 FIFO 输入之间复用发往消息哈希引擎的接口，并在 KMAC 模式下接管 process 控制以避免密钥写入期间被外部 process 请求打断。",
-  "behavior": "发往下游消息接口的 valid/data/strb 由 `en_kmac_datapath` 选择来源：当其为真时，`msg_valid_o/msg_data_o/msg_strb_o` 分别取自内部 KMAC 数据通路的 `kmac_valid/kmac_data/kmac_strb`；否则直接透传输入 FIFO 的 `fifo_valid_i/fifo_data_i/fifo_strb_i` 到下游接口【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:259-261】。与此一致，`fifo_ready_o` 在选择 KMAC 数据通路时被强制为 0，从而阻止上游 FIFO 继续出数；只有在未启用 KMAC 数据通路时，FIFO 才通过 `msg_ready_i` 接收下游 ready 反馈【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:262】。`kmac_strb` 由 `en_key_write` 控制：发起密钥写入时为全 1，否则为全 0；注释表明秘密密钥写请求总是全宽写入，设计意图是将固定 256-bit KeyMgr 输出作为完整字写入 SHA3 引擎【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:264-266】。同样，`kmac_data` 在 `en_key_write` 为真时输出 `key_sliced`，否则输出全 0 默认值【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:268】。`process_o` 在 `kmac_en_i` 为真时由内部 `kmac_process` 接管，否则透传外部 `process_i`；注释说明其设计意图是防止 KMAC 在向 SHA3 引擎写入秘密密钥时，外部 `process_i` 尤其在空消息场景下与内部操作冲突【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:270-273】。",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "assign",
+    "driven": [
+      "msg_valid_o",
+      "msg_data_o",
+      "msg_strb_o",
+      "fifo_ready_o",
+      "kmac_strb",
+      "kmac_data",
+      "process_o"
+    ],
+    "used": [
+      "en_kmac_datapath",
+      "kmac_valid",
+      "fifo_valid_i",
+      "kmac_data",
+      "fifo_data_i",
+      "kmac_strb",
+      "fifo_strb_i",
+      "msg_ready_i",
+      "en_key_write",
+      "key_sliced",
+      "kmac_en_i",
+      "kmac_process",
+      "process_i"
+    ],
+    "modes": [
+      "en_kmac_datapath",
+      "en_key_write",
+      "kmac_en_i"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "fifo",
+      "handshake",
+      "access_control"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `en_kmac_datapath` 为 1 时，消息输出接口一定由内部 KMAC 数据通路驱动，且 `fifo_ready_o` 一定为 0，不会向上游 FIFO 表示可继续接收数据。",
-      "output_signals": [
-        "msg_valid_o",
-        "msg_data_o",
-        "msg_strb_o",
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "msg_valid_o selects kmac_valid when en_kmac_datapath=1, otherwise selects fifo_valid_i.",
+      "cond": "always",
+      "signals": [
+        "en_kmac_datapath",
+        "kmac_valid",
+        "fifo_valid_i",
+        "msg_valid_o"
+      ],
+      "refs": [
+        "kmac_core.sv:259"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "msg_data_o selects kmac_data when en_kmac_datapath=1, otherwise selects fifo_data_i.",
+      "cond": "always",
+      "signals": [
+        "en_kmac_datapath",
+        "kmac_data",
+        "fifo_data_i",
+        "msg_data_o"
+      ],
+      "refs": [
+        "kmac_core.sv:260"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "msg_strb_o selects kmac_strb when en_kmac_datapath=1, otherwise selects fifo_strb_i.",
+      "cond": "always",
+      "signals": [
+        "en_kmac_datapath",
+        "kmac_strb",
+        "fifo_strb_i",
+        "msg_strb_o"
+      ],
+      "refs": [
+        "kmac_core.sv:261"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "fifo_ready_o is driven low (1'b0) when en_kmac_datapath=1, otherwise equals msg_ready_i.",
+      "cond": "always",
+      "signals": [
+        "en_kmac_datapath",
+        "msg_ready_i",
         "fifo_ready_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:259-262"
+      "refs": [
+        "kmac_core.sv:262"
       ]
     },
     {
-      "property": "当 `kmac_en_i` 为 1 时，`process_o` 一定等于 `kmac_process` 而不是 `process_i`，因此 KMAC 模式下 process 控制权由核心内部接管。",
-      "output_signals": [
-        "process_o"
+      "id": "G5",
+      "type": "assignment",
+      "claim": "kmac_strb is set to all-ones ('1) when en_key_write=1, otherwise all-zero ('0).",
+      "cond": "always",
+      "signals": [
+        "en_key_write",
+        "kmac_strb"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:270-273"
+      "refs": [
+        "kmac_core.sv:266"
       ]
     },
     {
-      "property": "当 `en_key_write` 为 1 时，`kmac_strb` 一定为全 1 且 `kmac_data` 一定等于 `key_sliced`；当 `en_key_write` 为 0 时，`kmac_strb` 为全 0 且 `kmac_data` 为全 0。",
-      "output_signals": [
-        "kmac_strb",
+      "id": "G6",
+      "type": "assignment",
+      "claim": "kmac_data is set to key_sliced when en_key_write=1, otherwise all-zero ('{default:'0}).",
+      "cond": "always",
+      "signals": [
+        "en_key_write",
+        "key_sliced",
         "kmac_data"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:264-268"
+      "refs": [
+        "kmac_core.sv:268"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "mux_case",
+      "claim": "process_o selects kmac_process when kmac_en_i=1, otherwise selects process_i.",
+      "cond": "always",
+      "signals": [
+        "kmac_en_i",
+        "kmac_process",
+        "process_i",
+        "process_o"
+      ],
+      "refs": [
+        "kmac_core.sv:273"
       ]
     }
   ],
-  "security_implications": "该片段直接涉及秘密密钥注入与控制隔离。`en_key_write` 触发时，密钥以全宽写方式通过 `kmac_data/kmac_strb` 送往 SHA3 引擎【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:264-268】；同时 `process_o` 在 KMAC 模式下由内部控制，注释明确其目的之一是避免密钥写入期间被外部 `process_i` 干扰，尤其是空消息场景【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:270-273】。此外，在 KMAC 数据通路使能时将 `fifo_ready_o` 压低，也有助于避免普通消息 FIFO 与密钥注入路径并发混用【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:259-262】。",
   "assumptions": [
     {
-      "constraint": "当 `en_key_write` 置位并通过 KMAC 数据通路向 SHA3 引擎送入密钥时，下游不应把该传输当作普通消息字节处理；也即系统级协议必须保证该周期对应的是 KMAC 密钥注入语义。",
-      "bug_relevance": "若违反该行为契约，秘密密钥可能被按普通消息吸收，导致摘要/KMAC 结果错误，并可能引入安全语义错误。",
-      "related_signals": [
-        "en_key_write",
-        "kmac_data",
-        "kmac_strb",
-        "msg_data_o",
-        "msg_strb_o",
-        "en_kmac_datapath"
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "When kmac_en_i=0, process_i must be low (inactive) to prevent unintended KMAC processing, especially during secret key write (en_key_write=1).",
+      "cond": "kmac_en_i=0",
+      "risk": "If process_i is high when kmac_en_i=0 and the core is writing the secret key, the SHA3 engine may start processing prematurely, potentially corrupting the key state or causing side‑channel leakage.",
+      "signals": [
+        "process_i",
+        "kmac_en_i",
+        "process_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:259-268"
+      "refs": [
+        "kmac_core.sv:270-273"
       ]
     },
     {
-      "constraint": "设计意图要求在 `kmac_en_i` 为 1、尤其内部正在进行密钥写入或相关 KMAC 控制操作时，外部环境不应依赖 `process_i` 直接驱动下游 process 行为，因为该输入会被 `process_o` 屏蔽。",
-      "bug_relevance": "若外部逻辑错误地假设 `process_i` 在 KMAC 模式下仍然生效，可能造成握手/流程控制失配；不过该片段已有安全回退行为，即 `process_o` 由 `kmac_process` 接管，因此这是设计上不应发生的误用而非本片段内部 bug。",
-      "related_signals": [
-        "kmac_en_i",
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "en_key_write must be asserted only when a valid secret key is present on key_sliced and the SHA3 engine is ready to accept a full-width write.",
+      "cond": "en_key_write=1",
+      "risk": "A spurious assertion would write all-ones strb and key_sliced into the SHA3 engine, potentially injecting a wrong key and breaking KMAC security.",
+      "signals": [
+        "en_key_write",
+        "key_sliced",
+        "kmac_strb",
+        "kmac_data"
+      ],
+      "refs": [
+        "kmac_core.sv:266-268"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "There may be a timing window where process_i is asserted while kmac_en_i=0 just as en_key_write goes active, causing an unintended process_o pulse that starts SHA3 processing during secret key write.",
+      "cond": "kmac_en_i=0 and en_key_write=1",
+      "risk": "The SHA3 engine could begin processing prematurely, corrupting the secret key or leaking internal state.",
+      "signals": [
         "process_i",
-        "kmac_process",
+        "kmac_en_i",
+        "process_o",
+        "en_key_write"
+      ],
+      "refs": [
+        "kmac_core.sv:270-273"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The process_o mux passes process_i directly when kmac_en_i=0 without any fault detection or gating; an external fault pulling process_i high could cause unintended SHA3 processing at any time.",
+      "cond": "kmac_en_i=0 and process_i inadvertently high",
+      "risk": "Unintended SHA3 processing could disrupt security‑critical operations, potentially leading to key exposure or state corruption.",
+      "signals": [
+        "process_i",
+        "kmac_en_i",
         "process_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:270-273"
+      "refs": [
+        "kmac_core.sv:273"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The comment hints at a possible kmac_strb width of 3 bits (strb 3) while the key is 256 bits (32 bytes); if true, the all‑ones strobe writes only 3 bytes, not the full key.",
+      "cond": "kmac_strb width = 3 (implied by comment) and key width = 256 bits",
+      "risk": "Incomplete key writing would corrupt the SHA3 state and break KMAC security.",
+      "signals": [
+        "kmac_strb",
+        "en_key_write"
+      ],
+      "refs": [
+        "kmac_core.sv:264-266"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "kmac_data and kmac_strb under en_key_write are purely combinational; the consuming SHA3 engine must be designed to sample them synchronously to avoid capturing transient values.",
+      "cond": "en_key_write assertion / deassertion",
+      "risk": "A glitch could cause an incorrect key byte to be written, compromising key integrity.",
+      "signals": [
+        "en_key_write",
+        "kmac_data",
+        "kmac_strb"
+      ],
+      "refs": [
+        "kmac_core.sv:266-268"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:259-273"
-  ],
-  "uncertain_points": [
-    "片段只定义了 `kmac_data/kmac_strb`，但未在本地展示 `kmac_valid` 的生成方式，因此无法仅凭此片段确认密钥写入周期是否总伴随 `msg_valid_o` 有效，或其与 `en_key_write` 的精确关系。",
-    "注释称秘密密钥写请求“always full width write”，并提到 256-bit KeyMgr 输出与 `right_encode(256)`；但 `kmac_strb = '1` 的实际位宽取决于 `kmac_strb` 声明，需结合片段外定义确认全 1 是否恰好对应注释所述 3-byte/固定编码语义【/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:264-266】。",
-    "注释说明 `process_o` 接管主要是为了防止空消息场景下密钥写入时 `process_i` 被错误拉高，但本片段本身未显示 `kmac_process` 如何在这些场景下生成，因此无法确认所有冲突是否都被完全覆盖。"
+    "kmac_core.sv:259-273"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 259,
-  "line_end": 273
+  "line_end": 273,
+  "security_implications": ""
 }

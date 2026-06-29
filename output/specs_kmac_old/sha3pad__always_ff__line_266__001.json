@@ -1,0 +1,71 @@
+{
+  "chunk_id": "sha3pad__always_ff__line_266__001",
+  "summary": "该寄存器对一次处理过程进行锁存：收到 process_i 后置位，在严格判定 done_i 为真时清零，复位时回到空闲。",
+  "behavior": "该时序块维护寄存器 process_latched 作为“处理进行中”标志。异步低有效复位时，process_latched 被清为 0，表示无处理在进行中【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:266-269】。正常运行时，若 process_i 为 1，则优先将 process_latched 置为 1，开始或保持一次已锁存的处理请求【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-270】；若 process_i 不为 1，但 prim_mubi_pkg::mubi4_test_true_strict(done_i) 为真，则将 process_latched 清为 0，表示处理完成【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:271-272】。若上述条件都不满足，则寄存器保持原值【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-273】。由于条件顺序为 process_i 在 done_i 之前，所以当二者同周期同时出现时，置位优先于清零，process_latched 将保持/变为 1【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-272】。",
+  "guarantees": [
+    {
+      "property": "复位有效时，process_latched 一定被清零。",
+      "output_signals": [
+        "process_latched"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:266-269"
+      ]
+    },
+    {
+      "property": "在未复位条件下，只要 process_i 为 1，process_latched 的下一状态一定为 1，不受同周期 done_i 的清零条件影响。",
+      "output_signals": [
+        "process_latched"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-272"
+      ]
+    },
+    {
+      "property": "在未复位且 process_i 为 0 的条件下，只有当 mubi4_test_true_strict(done_i) 为真时，process_latched 才会被清为 0；否则保持原值。",
+      "output_signals": [
+        "process_latched"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-273"
+      ]
+    }
+  ],
+  "security_implications": "该逻辑使用 prim_mubi_pkg::mubi4_test_true_strict(done_i) 对 done_i 进行严格多比特布尔判真，说明完成信号属于安全敏感控制路径的一部分：只有严格合法的“真”编码才能结束已锁存的处理过程，异常编码不会误清除 process_latched。这有助于降低毛刺、故障注入或非法编码导致处理状态被过早结束的风险【/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:271-272】。",
+  "assumptions": [
+    {
+      "constraint": "合法流程中，done_i 应在对应处理真正完成时才以 mubi4_test_true_strict 可识别的真值出现。",
+      "bug_relevance": "如果 done_i 过早被编码为严格真，process_latched 会被提前清零，可能使后续逻辑误以为处理已完成，构成功能错误；这属于行为契约。",
+      "related_signals": [
+        "done_i",
+        "process_latched"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:271-272"
+      ]
+    },
+    {
+      "constraint": "若设计意图是一次处理完成与下一次处理请求互斥，则 process_i 与严格为真的 done_i 不应在同一周期同时出现；当前实现对该情况有确定回退行为，即 process_i 优先并保持 process_latched 为 1。",
+      "bug_relevance": "若不满足则不会产生未定义行为，但会导致完成清零被覆盖、状态继续保持为忙；该场景按当前代码是安全回退，但通常设计上不应发生。",
+      "related_signals": [
+        "process_i",
+        "done_i",
+        "process_latched"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:269-272"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:266-274"
+  ],
+  "uncertain_points": [
+    "process_latched 的具体下游用途在该片段中不可见，只能确认其行为像“处理进行中/请求已锁存”标志，无法仅凭此处确定它是否表示 busy、pending 还是其他握手状态。",
+    "done_i 的位宽和精确定义未在该片段中展开；仅能从 mubi4_test_true_strict(done_i) 推断其应为多比特布尔编码信号。",
+    "片段依赖列表中出现 b 和 b0，但本 always_ff 块并未使用，无法判断它们与 process_latched 的更大状态机关系。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 266,
+  "line_end": 274
+}

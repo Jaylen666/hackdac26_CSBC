@@ -1,0 +1,158 @@
+{
+  "chunk_id": "aes_core__generate_for__gen_prd_clearing_shares__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "generate",
+    "driven": [
+      "prd_clearing_128",
+      "prd_clearing_256"
+    ],
+    "used": [
+      "prd_clearing"
+    ],
+    "modes": [
+      "NumShares",
+      "NumChunksPRDClearing128",
+      "NumChunksPRDClearing256",
+      "WidthPRDClearing"
+    ],
+    "tags": [
+      "wipe",
+      "mask",
+      "secret",
+      "clearing",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For every share s, prd_clearing_128[s] is assigned such that each chunk c (0 ≤ c < NumChunksPRDClearing128) gets the exact value of prd_clearing[s].",
+      "cond": "always",
+      "signals": [
+        "prd_clearing_128",
+        "prd_clearing",
+        "s",
+        "c"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:218"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "For every share s, prd_clearing_256[s] is assigned such that each chunk c (0 ≤ c < NumChunksPRDClearing256) gets the exact value of prd_clearing[s].",
+      "cond": "always",
+      "signals": [
+        "prd_clearing_256",
+        "prd_clearing",
+        "s",
+        "c"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:221"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The declared width of prd_clearing_128[s] must not exceed WidthPRDClearing * NumChunksPRDClearing128; otherwise high-order bits are left undriven.",
+      "cond": "when prd_clearing_128 is used as a clearing value",
+      "risk": "Undriven bits may retain previous secret data, causing incomplete clear and potential secret leakage.",
+      "signals": [
+        "prd_clearing_128",
+        "WidthPRDClearing",
+        "NumChunksPRDClearing128"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-219"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The declared width of prd_clearing_256[s] must not exceed WidthPRDClearing * NumChunksPRDClearing256; otherwise high-order bits are left undriven.",
+      "cond": "when prd_clearing_256 is used as a clearing value",
+      "risk": "Undriven bits may retain previous secret data, causing incomplete clear and potential secret leakage.",
+      "signals": [
+        "prd_clearing_256",
+        "WidthPRDClearing",
+        "NumChunksPRDClearing256"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:220-222"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "prd_clearing[s] must be driven with a valid clearing word (all‑zero or fresh random) at the time when a clearing operation is expected.",
+      "cond": "when clearing is active",
+      "risk": "A stale or corrupt value may be replicated onto the clearing buses, rendering the wipe ineffective and leaving secret data exposed.",
+      "signals": [
+        "prd_clearing"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:218,221"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The same prd_clearing[s] value is replicated identically across all chunks of the 128‑bit and 256‑bit clearing buses. If non‑zero, this reduces entropy and may be predictable by an attacker who observes multiple chunks.",
+      "cond": "if prd_clearing is a non‑zero random pattern",
+      "risk": "Weakened clearing effectiveness could allow residual secret data to be recovered via side‑channel or fault analysis.",
+      "signals": [
+        "prd_clearing",
+        "prd_clearing_128",
+        "prd_clearing_256"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:218,221"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Both prd_clearing_128 and prd_clearing_256 are generated unconditionally. The selection logic that chooses the correct bus for the active key size is not present here; it must be verified that only one bus is actually used for clearing.",
+      "cond": "during a clearing operation",
+      "risk": "If both buses are (incorrectly) used or the wrong bus is enabled, clearing may be applied to a wider bus than necessary, wasting power or, in the worst case, clearing a partially uninitialized segment that could contain secrets.",
+      "signals": [
+        "prd_clearing_128",
+        "prd_clearing_256"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-223"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The origin of prd_clearing (e.g., PRNG, LFSR, constant) is not defined in this chunk. The security of the clearing operation depends on that source providing a cryptographically appropriate value (random or all‑zero) without reuse.",
+      "cond": "when clearing is triggered",
+      "risk": "A weak or reused prd_clearing may allow an attacker to infer or manipulate the clearing value, reducing wipe effectiveness and potentially recovering secret state.",
+      "signals": [
+        "prd_clearing"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:218,221"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-223"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 216,
+  "line_end": 223,
+  "security_implications": ""
+}

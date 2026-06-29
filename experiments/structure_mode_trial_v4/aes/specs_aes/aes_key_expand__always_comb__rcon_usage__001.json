@@ -1,0 +1,171 @@
+{
+  "chunk_id": "aes_key_expand__always_comb__rcon_usage__001",
+  "header": {
+    "module": "aes_key_expand",
+    "block_kind": "always_comb",
+    "driven": [
+      "use_rcon"
+    ],
+    "used": [
+      "AES192Enable",
+      "key_len_i",
+      "op_i",
+      "rnd_type",
+      "rnd"
+    ],
+    "modes": [
+      "key_len_i==AES_192",
+      "key_len_i==AES_256",
+      "op_i==CIPH_FWD",
+      "op_i==CIPH_INV"
+    ],
+    "tags": [
+      "key",
+      "crypto",
+      "parameterization",
+      "rcon",
+      "key_expand"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "use_rcon defaults to 1'b1 when none of the explicit clear conditions are met",
+      "cond": "not (AES192Enable && AES-192 skip) and not (AES-256 skip)",
+      "signals": [
+        "use_rcon"
+      ],
+      "refs": [
+        "file:89"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "If AES192Enable is true, key_len_i equals AES_192, and ( (op_i==CIPH_FWD and rnd_type[1]) or (op_i==CIPH_INV and (rnd_type[0] or rnd_type[3]) ) ), then use_rcon is driven to 0",
+      "cond": "AES192Enable && key_len_i==AES_192 && (forward with rnd_type[1] or inverse with rnd_type[0] or rnd_type[3])",
+      "signals": [
+        "use_rcon",
+        "AES192Enable",
+        "key_len_i",
+        "op_i",
+        "rnd_type"
+      ],
+      "refs": [
+        "file:91-96"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When key_len_i equals AES_256 and rnd[0] is 0, use_rcon is driven to 0",
+      "cond": "key_len_i==AES_256 and rnd[0]==1'b0",
+      "signals": [
+        "use_rcon",
+        "key_len_i",
+        "rnd"
+      ],
+      "refs": [
+        "file:99-100"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Inputs op_i, key_len_i, rnd_type, and rnd represent valid, stable encodings; this block does not range-check or validate them.",
+      "cond": "always during operation",
+      "risk": "Invalid or unstable inputs could drive use_rcon to a wrong value, corrupting the key schedule and potentially weakening cipher security.",
+      "signals": [
+        "op_i",
+        "key_len_i",
+        "rnd_type",
+        "rnd"
+      ],
+      "refs": [
+        "file:88-102"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "When AES192Enable is true, the external logic must set rnd_type bits correctly so that the conditions (rnd_type[1] for forward, rnd_type[0]||rnd_type[3] for inverse) exactly match the rounds where AES-192 key expansion should omit the round constant.",
+      "cond": "AES192Enable is true and key_len_i==AES_192",
+      "risk": "Misconfigured rnd_type would skip rcon in wrong rounds, breaking the AES-192 key schedule.",
+      "signals": [
+        "rnd_type"
+      ],
+      "refs": [
+        "file:93-94"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "When AES192Enable is false, the design must guarantee that key_len_i is never AES_192; otherwise use_rcon permanently stays 1, which contradicts the AES-192 key expansion spec that requires rcon skipping.",
+      "cond": "AES192Enable is false",
+      "risk": "A false AES192Enable with key_len_i==AES_192 leads to an incorrect key schedule (rcon never skipped), weakening AES-192 operations.",
+      "signals": [
+        "AES192Enable",
+        "key_len_i"
+      ],
+      "refs": [
+        "file:91-96"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The mapping of rnd_type bits (indices 0,1,3) to exact round numbers is not defined here. It is unknown if these bits correctly identify the rounds where AES-192 key expansion should skip the round constant.",
+      "cond": "AES192Enable is true and key_len_i==AES_192",
+      "risk": "If the bit mapping does not match the standard AES-192 key schedule, round keys will be incorrect, leading to broken encryption/decryption.",
+      "signals": [
+        "rnd_type"
+      ],
+      "refs": [
+        "file:93-94"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "For AES-256, use_rcon is suppressed when rnd[0]==0. It is unclear if this (even round number) correctly implements the round constant omission required by the AES-256 key expansion algorithm.",
+      "cond": "key_len_i==AES_256",
+      "risk": "An incorrect condition could cause rcon to be applied in wrong rounds, producing a weak or non-standard key schedule for AES-256.",
+      "signals": [
+        "rnd"
+      ],
+      "refs": [
+        "file:99"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "If AES192Enable is false but key_len_i is AES_192 (due to misconfiguration), the block never deasserts use_rcon, skipping the rcon suppression required by AES-192. There is no handling to flag or prevent this mismatch.",
+      "cond": "AES192Enable is false and key_len_i==AES_192",
+      "risk": "Producing a wrong key schedule for AES-192 would corrupt cryptographic operations if such a configuration could occur.",
+      "signals": [
+        "AES192Enable",
+        "key_len_i"
+      ],
+      "refs": [
+        "file:91-96"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:88-102"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv",
+  "line_start": 88,
+  "line_end": 102,
+  "security_implications": ""
+}

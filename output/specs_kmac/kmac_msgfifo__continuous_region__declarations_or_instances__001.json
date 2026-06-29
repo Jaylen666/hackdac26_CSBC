@@ -1,69 +1,315 @@
 {
   "chunk_id": "kmac_msgfifo__continuous_region__declarations_or_instances__001",
-  "summary": "该片段实例化消息 FIFO，并将上游 packer 写接口与下游消息输出接口直接桥接到 FIFO 的写读握手和数据端口，同时用严格真值检测的 clear_i 驱动 FIFO 清空。",
-  "behavior": "该片段实例化了一个同步 FIFO `u_msgfifo`，其数据宽度为 `$bits(fifo_t)`、深度为 `MsgDepth`、旁路模式 `Pass=1'b1`，并在 `EnMasking` 参数下启用 `Secure` 配置 [147-152]。FIFO 的清空输入不是直接使用 `clear_i`，而是使用 `prim_mubi_pkg::mubi4_test_true_strict(clear_i)` 的结果作为 `clr_i`，因此只有当 `clear_i` 被严格判定为多比特真时才会请求清空 FIFO [155]。写侧将 `packer_wvalid` 直接送到 `fifo_wvalid`，并将 FIFO 的 `fifo_wready` 直接反馈为 `packer_wready`，所以 packer 与 FIFO 的写入握手完全直连 [157-159, 171-172]。读侧将 FIFO 的 `fifo_rvalid` 直接作为对外 `msg_valid_o`，将外部 `msg_ready_i` 直接作为 `fifo_rready`，并把 FIFO 读出的结构体字段拆分为 `msg_data_o=fifo_rdata.data`、`msg_strb_o=fifo_rdata.strb` [161-176]。此外，`fifo_empty_o` 被定义为 `!fifo_rvalid`，因此该空标志反映的是当前是否存在可读项，而不是基于 `depth_o` 的独立空状态判断 [179]。片段中还暴露了 FIFO 的 `full_o`、`depth_o`、`err_o` 连接到内部信号，供后续逻辑使用 [165-167]；第 181 行注释表明后续还有外部 flush 处理状态，但本片段仅声明 `flush_st`/`flush_st_d`，未给出其行为 [181-182]。",
+  "header": {
+    "module": "kmac_msgfifo",
+    "block_kind": "mixed",
+    "driven": [
+      "fifo_wvalid",
+      "packer_wready",
+      "msg_valid_o",
+      "fifo_rready",
+      "msg_data_o",
+      "msg_strb_o",
+      "fifo_empty_o"
+    ],
+    "used": [
+      "packer_wvalid",
+      "fifo_wdata",
+      "msg_ready_i",
+      "clear_i",
+      "clk_i",
+      "rst_ni",
+      "EnMasking",
+      "MsgDepth",
+      "fifo_t",
+      "prim_mubi_pkg::mubi4_test_true_strict"
+    ],
+    "modes": [
+      "Depth=MsgDepth",
+      "Secure=EnMasking",
+      "Pass=1'b1"
+    ],
+    "tags": [
+      "fifo",
+      "handshake",
+      "parameterization",
+      "masking"
+    ]
+  },
   "guarantees": [
     {
-      "property": "上游写握手被无条件透传：`fifo_wvalid` 恒等于 `packer_wvalid`，`packer_wready` 恒等于 `fifo_wready`。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "fifo_wvalid is continuously driven by packer_wvalid.",
+      "cond": "always",
+      "signals": [
         "fifo_wvalid",
-        "packer_wready"
+        "packer_wvalid"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:171"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "packer_wready is continuously driven by the FIFO's write-ready output fifo_wready.",
+      "cond": "always",
+      "signals": [
+        "packer_wready",
+        "fifo_wready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:172"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "msg_valid_o is continuously driven by the FIFO's read-valid output fifo_rvalid.",
+      "cond": "always",
+      "signals": [
+        "msg_valid_o",
+        "fifo_rvalid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:174"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "The FIFO's read-ready input fifo_rready is continuously driven by msg_ready_i.",
+      "cond": "always",
+      "signals": [
+        "fifo_rready",
+        "msg_ready_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:175"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "msg_data_o is continuously assigned from the FIFO read data's `data` field (fifo_rdata.data).",
+      "cond": "always",
+      "signals": [
+        "msg_data_o",
+        "fifo_rdata.data"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:176"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "msg_strb_o is continuously assigned from the FIFO read data's `strb` field (fifo_rdata.strb).",
+      "cond": "always",
+      "signals": [
+        "msg_strb_o",
+        "fifo_rdata.strb"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:177"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "fifo_empty_o is driven as the logical negation of fifo_rvalid.",
+      "cond": "always",
+      "signals": [
+        "fifo_empty_o",
+        "fifo_rvalid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:179"
+      ]
+    },
+    {
+      "id": "G8",
+      "type": "instance_connection",
+      "claim": "prim_fifo_sync u_msgfifo is instantiated with parameters Width=$bits(fifo_t), Pass=1'b1, Depth=MsgDepth, Secure=EnMasking, and its ports are connected as shown: clk_i to clk_i, rst_ni to rst_ni, clr_i to prim_mubi_pkg::mubi4_test_true_strict(clear_i); write interface via fifo_wvalid, fifo_wready, fifo_wdata; read interface via fifo_rvalid, fifo_rready, fifo_rdata; status outputs to fifo_full_o, fifo_depth_o, fifo_err.",
+      "cond": "always",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "clear_i",
+        "fifo_wvalid",
+        "fifo_wready",
+        "fifo_wdata",
+        "fifo_rvalid",
+        "fifo_rready",
+        "fifo_rdata",
+        "fifo_full_o",
+        "fifo_depth_o",
+        "fifo_err"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:147-168"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The packer block must obey the FIFO write handshake: it must assert packer_wvalid only when packer_wready (i.e., fifo_wready) is high.",
+      "cond": "when writing a data item",
+      "risk": "Violation leads to FIFO overflow or data loss.",
+      "signals": [
+        "packer_wvalid",
+        "packer_wready",
+        "fifo_wready"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:171-172"
       ]
     },
     {
-      "property": "下游消息输出始终直接反映 FIFO 读口：`msg_valid_o=fifo_rvalid`，`msg_data_o=fifo_rdata.data`，`msg_strb_o=fifo_rdata.strb`，且 `fifo_empty_o=!fifo_rvalid`。",
-      "output_signals": [
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The downstream consumer must obey the FIFO read handshake: it must assert msg_ready_i only when msg_valid_o is high.",
+      "cond": "when reading a data item",
+      "risk": "Violation may cause FIFO underflow or corrupted data read.",
+      "signals": [
+        "msg_ready_i",
         "msg_valid_o",
-        "msg_data_o",
-        "msg_strb_o",
-        "fifo_empty_o"
+        "fifo_rready",
+        "fifo_rvalid"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:174-179"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:174-175"
       ]
-    }
-  ],
-  "security_implications": "该片段涉及安全相关的清空与 FIFO 加固配置。`clear_i` 经过 `mubi4_test_true_strict` 严格判真后才会清空 FIFO，可降低多比特布尔控制信号被错误编码或故障注入误触发/漏触发的风险 [155]。同时 FIFO 实例的 `Secure` 参数绑定到 `EnMasking` [151]，说明该实例可能在启用掩码/安全配置时使用更安全的实现；但具体保护内容需依赖 `prim_fifo_sync` 的定义。",
-  "assumptions": [
+    },
     {
-      "constraint": "外部若希望通过 `clear_i` 清空 FIFO，必须按 `prim_mubi_pkg::mubi4_test_true_strict` 所要求的合法多比特真编码驱动 `clear_i`。",
-      "bug_relevance": "若不满足则 FIFO 可能不会被清空；这会导致旧消息残留并继续对 `msg_*` 输出可见，可能构成功能错误或安全上的数据滞留问题。",
-      "related_signals": [
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "clear_i must be a multi-bit encoded signal that can be strictly recognized as true by prim_mubi_pkg::mubi4_test_true_strict to assert the FIFO clear.",
+      "cond": "when a FIFO clear is required",
+      "risk": "If clear_i is stuck at a non-true encoding, the FIFO will never clear, potentially leaving secret data accessible.",
+      "signals": [
         "clear_i",
-        "clr_i"
+        "u_msgfifo.clr_i"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:155"
       ]
     },
     {
-      "constraint": "若下游逻辑把 `fifo_empty_o` 当作空标志使用，则必须接受它仅由 `!fifo_rvalid` 定义，而不是由 `fifo_depth_o==0` 独立判定。",
-      "bug_relevance": "若外部错误假设 `fifo_empty_o` 与内部深度计数严格等价，可能在 FIFO 旁路/透传配置 `Pass=1'b1` 下对可读性时机产生误判，进而导致握手或状态管理错误。",
-      "related_signals": [
-        "fifo_empty_o",
-        "fifo_rvalid",
-        "fifo_depth_o"
+      "id": "A4",
+      "type": "mode_config",
+      "claim": "MsgDepth must be set to a depth that accommodates the maximum message size to prevent FIFO overflow under normal operation.",
+      "cond": "when messages are written",
+      "risk": "FIFO overflow leading to data loss.",
+      "signals": [
+        "MsgDepth"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:149",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:161-166",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:179"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:150"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "component_contract",
+      "claim": "The prim_fifo_sync instance must correctly assert fifo_rvalid (high when not empty, low when empty) as per its specification.",
+      "cond": "always",
+      "risk": "Incorrect fifo_rvalid would cause wrong fifo_empty_o and msg_valid_o, leading to handshake violations or data loss.",
+      "signals": [
+        "fifo_rvalid",
+        "fifo_empty_o",
+        "msg_valid_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:161,179,174"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The flush state variables flush_st and flush_st_d are declared but not driven or used in this chunk. The flush handling is expected to be implemented elsewhere, potentially resetting the FIFO or clearing data.",
+      "cond": "when a flush operation is initiated",
+      "risk": "Missing or incorrect flush logic may leave stale secret data in the FIFO after a flush.",
+      "signals": [
+        "flush_st",
+        "flush_st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:182"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The prim_fifo_sync is instantiated with Pass=1'b1. If Pass=1 turns the FIFO into a simple pipeline register that ignores Depth, then MsgDepth, fifo_full_o, fifo_depth_o, and fifo_empty_o may not reflect actual storage depth.",
+      "cond": "when Pass=1 causes depth-related signals to be unused or constant",
+      "risk": "The packer or downstream may rely on inaccurate full/empty flags, leading to data loss or deadlock.",
+      "signals": [
+        "Pass",
+        "MsgDepth",
+        "fifo_full_o",
+        "fifo_depth_o",
+        "fifo_empty_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:149-150,165-166,179"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The FIFO error output fifo_err is not connected to any logic in this chunk. If the FIFO asserts an error, it is not propagated to an output or handler.",
+      "cond": "when fifo_err is asserted",
+      "risk": "An undetected error could allow corrupted or unsecured data to be output on msg_data_o and msg_strb_o.",
+      "signals": [
+        "fifo_err"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:167"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The FIFO clear is gated by a multi-bit strict test (mubi4_test_true_strict). If a fault leaves clear_i at a non-true encoding, the FIFO cannot be cleared, yet no local mechanism flags this condition.",
+      "cond": "when clear_i is not the true encoding but a clear is needed",
+      "risk": "Stale sensitive data may remain in the FIFO after a security-critical clear operation.",
+      "signals": [
+        "clear_i",
+        "u_msgfifo.clr_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:155"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The origin and composition of fifo_wdata (type fifo_t) are not visible in this chunk; it is expected that the packer properly populates the data and strb fields.",
+      "cond": "always",
+      "risk": "Incorrect fifo_wdata formatting would propagate garbage on msg_data_o and msg_strb_o.",
+      "signals": [
+        "fifo_wdata"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:159,176-177"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:147-179",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:181-182"
-  ],
-  "uncertain_points": [
-    "`Pass=1'b1` 对读写同拍透传、`rvalid`/`empty` 的精确语义取决于 `prim_fifo_sync` 实现，本片段只能确认接口连接方式，无法单独证明其边界时序行为。",
-    "`Secure(EnMasking)` 的具体安全增强措施依赖 `prim_fifo_sync` 内部实现，本片段无法确定其是否影响功能语义、错误检测范围或故障响应。",
-    "注释称有 'Flush (process from outside) handling'，但本片段仅声明 `flush_st`/`flush_st_d`，尚无法判断 flush 与 `clear_i`、FIFO 读写或消息输出之间的具体关系。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:147-182"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
   "line_start": 147,
-  "line_end": 182
+  "line_end": 182,
+  "security_implications": ""
 }

@@ -1,20 +1,121 @@
 {
   "chunk_id": "kmac_errchk__continuous_region__int__001",
-  "summary": "This fragment defines the encoded and logical error-checker state types plus internal error/blocking signals, documenting what classes of software/configuration errors the module tracks.",
-  "behavior": "The fragment declares a 6-bit encoded FSM state type `st_e` with explicit state encodings for `StIdle`, `StMsgFeed`, `StProcessing`, `StAbsorbed`, `StSqueezing`, and `StTerminalError`, and allocates current/next state variables `st` and `st_d` for that machine. In parallel it declares a separate 3-bit logical state type `st_logical_e` with corresponding abstract states `StIdleL`, `StMsgFeedL`, `StProcessingL`, `StAbsorbedL`, `StSqueezingL`, and `StErrorL`, plus `stL`, implying the design distinguishes between hardened/explicitly encoded physical state and a simpler logical classification. The fragment also declares internal error indicators for software sequencing errors (`err_swsequence`), invalid mode/strength combinations at command start (`err_modestrength`), invalid KMAC prefix (`err_prefix`), and starting hashing without configured entropy when masking is enabled (`err_entropy_ready`); comments state that `err_modestrength` and `err_prefix` do not necessarily block operation, while `err_entropy_ready` is tied to entropy configuration, and `cfg_entropy_ready` is intended to latch a pulse-style entropy-ready indication. Finally, `block_swcmd` is declared as an internal signal intended to suppress propagation of software commands. This fragment itself only defines types/signals and design intent via comments; it does not include the combinational equations or state transitions that drive them.",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [],
+    "modes": [
+      "StIdle",
+      "StMsgFeed",
+      "StProcessing",
+      "StAbsorbed",
+      "StSqueezing",
+      "StTerminalError",
+      "StIdleL",
+      "StMsgFeedL",
+      "StProcessingL",
+      "StAbsorbedL",
+      "StSqueezingL",
+      "StErrorL"
+    ],
+    "tags": [
+      "error",
+      "fault",
+      "mask",
+      "entropy",
+      "sparse_fsm",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [],
-  "security_implications": "The declared signals are security-relevant because they cover invalid command sequencing, illegal mode/strength selection, malformed KMAC prefix handling, entropy-readiness for masked operation, and command blocking. The comments indicate some errors are detectable without necessarily halting hashing, so whether they are merely reported or enforced must be confirmed in later logic.",
   "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:127-177"
-  ],
   "uncertain_points": [
-    "This fragment only declares states and signals; it does not show how `st`, `st_d`, `stL`, or any `err_*`/`block_swcmd` signal are actually computed or used, so behavioral effects such as transitions, output assertions, or command blocking conditions cannot be confirmed from this chunk alone.",
-    "Comments say `err_modestrength` and `err_prefix` do not block operation, and that `UnexpectedModeStrength` may stop processing based on configuration, but the enforcing logic and exact relationship between these comments and RTL behavior are outside this fragment.",
-    "The comment on `cfg_entropy_ready` says it stores a pulse signal, implying state retention elsewhere, but the storage/update mechanism is not present in this chunk.",
-    "The reason for maintaining both encoded state `st` and logical state `stL` is implied but not proven here; mapping or consistency checks between them are not shown in this fragment."
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The logic that drives err_swsequence, err_modestrength, err_prefix, err_entropy_ready is not present in this chunk; missing or incorrect detection could allow illegal SW commands, unsupported mode/strength combos, wrong prefix, or entropy-less masking.",
+      "cond": "Whenever any of these error conditions occur, the corresponding signal must be asserted by external logic.",
+      "risk": "If these signals are not driven correctly, the design may proceed with invalid or insecure operations, leading to functional failures or security breaches.",
+      "signals": [
+        "err_swsequence",
+        "err_modestrength",
+        "err_prefix",
+        "err_entropy_ready"
+      ],
+      "refs": [
+        "kmac_errchk.sv:154-155",
+        "kmac_errchk.sv:157-160",
+        "kmac_errchk.sv:163-166",
+        "kmac_errchk.sv:168-170"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "err_entropy_ready is declared but the chunk does not show how it is used to block the hashing operation or degrade security; if the error is not properly acted upon, an entropy-less masking scenario may pass undetected.",
+      "cond": "When EnMasking is set and SW issues a start command without prior entropy configuration.",
+      "risk": "Masking without entropy could expose secret data or weaken side-channel protection.",
+      "signals": [
+        "err_entropy_ready",
+        "cfg_entropy_ready"
+      ],
+      "refs": [
+        "kmac_errchk.sv:168-170",
+        "kmac_errchk.sv:173-174"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment for err_modestrength states it does not block the hashing operation but an 'UnexpectedModeStrength' may stop processing based on CFG; it is unclear whether this error is purely informational or can become a fatal error through configuration.",
+      "cond": "When a Mode/Strength combination is not allowed.",
+      "risk": "If the error handling is ambiguous, a security-sensitive operation could continue despite an illegal configuration.",
+      "signals": [
+        "err_modestrength"
+      ],
+      "refs": [
+        "kmac_errchk.sv:157-160"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "block_swcmd is declared but not driven or used in this chunk; if it remains unconnected or unused externally, SW commands may propagate without being blocked as intended.",
+      "cond": "When an error condition that should block SW commands is detected.",
+      "risk": "SW commands could reach the datapath even when an error exists, leading to data corruption or state inconsistency.",
+      "signals": [
+        "block_swcmd"
+      ],
+      "refs": [
+        "kmac_errchk.sv:177"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "cfg_entropy_ready is intended to store a pulse (entropy_ready), but the storage logic is not shown; if it is not properly latched, the error detection could miss a brief entropy-ready pulse.",
+      "cond": "When entropy_ready fires as a short pulse.",
+      "risk": "Failure to capture the pulse may cause err_entropy_ready to never assert, allowing mask operations without entropy.",
+      "signals": [
+        "cfg_entropy_ready"
+      ],
+      "refs": [
+        "kmac_errchk.sv:173-174"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_errchk.sv:127-177"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
   "line_start": 127,
-  "line_end": 177
+  "line_end": 177,
+  "security_implications": ""
 }

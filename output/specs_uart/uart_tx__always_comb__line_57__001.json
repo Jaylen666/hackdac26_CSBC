@@ -1,41 +1,190 @@
 {
   "chunk_id": "uart_tx__always_comb__line_57__001",
-  "summary": "UART发送器组合下一状态逻辑：根据tx_enable、写请求和波特率节拍生成移位寄存器、位计数和串行输出的下一步值。",
-  "behavior": "当tx_enable为低时，发送器处于复位状态，bit_cnt_d清零，sreg_d设为11'h7ff（全1），tx_d驱为1（空闲）。当tx_enable为高时，默认保持当前值（bit_cnt_d=bit_cnt_q, sreg_d=sreg_q, tx_d=tx_q）。若wr有效，则加载新发送帧：sreg_d拼接为{1'b1, (parity_enable ? wr_parity : 1'b1), wr_data, 1'b0}，形成停止位/空闲位（1）、可选校验位、8位数据、起始位（0）；位计数置为11（有校验）或10（无校验）。若wr无效且tick_baud_q有效且bit_cnt_q非零，则执行移位：sreg_d右移一位，高位补1；tx_d更新为移出的最低位sreg_q[0]；bit_cnt_d减1。wr加载的优先级高于移位，会中止并覆盖正在进行的发送。注意在加载周期tx_d仍保持上一个的值，直到下一个tick_baud_q才输出起始位。",
+  "header": {
+    "module": "uart_tx",
+    "block_kind": "always_comb",
+    "driven": [
+      "bit_cnt_d",
+      "sreg_d",
+      "tx_d"
+    ],
+    "used": [
+      "tx_enable",
+      "bit_cnt_q",
+      "sreg_q",
+      "tx_q",
+      "wr",
+      "parity_enable",
+      "wr_parity",
+      "wr_data",
+      "tick_baud_q"
+    ],
+    "modes": [
+      "parity_enable"
+    ],
+    "tags": [
+      "serial",
+      "counter",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当tx_enable=0时，组合输出bit_cnt_d=4'h0, sreg_d=11'h7ff, tx_d=1'b1",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When tx_enable is low, bit_cnt_d is forced to 0, sreg_d to 11'h7ff, and tx_d to 1, overriding any other condition.",
+      "cond": "!tx_enable",
+      "signals": [
+        "tx_enable",
         "bit_cnt_d",
         "sreg_d",
         "tx_d"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:58-61"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When tx_enable is high and wr is asserted, sreg_d is loaded with {1'b1, (parity_enable ? wr_parity : 1'b1), wr_data, 1'b0} and bit_cnt_d is set to 11 (if parity_enable) or 10 (otherwise); tx_d retains its previous value (tx_q).",
+      "cond": "tx_enable && wr",
+      "signals": [
+        "tx_enable",
+        "wr",
+        "parity_enable",
+        "wr_parity",
+        "wr_data",
+        "sreg_d",
+        "bit_cnt_d",
+        "tx_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:62-68"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "When tx_enable is high, wr is low, tick_baud_q is high, and bit_cnt_q is non-zero, sreg_d is shifted right with a 1 inserted at the MSB ({1'b1, sreg_q[10:1]}), tx_d outputs the LSB sreg_q[0], and bit_cnt_d is decremented by 1.",
+      "cond": "tx_enable && !wr && tick_baud_q && (bit_cnt_q != 4'h0)",
+      "signals": [
+        "tx_enable",
+        "wr",
+        "tick_baud_q",
+        "bit_cnt_q",
+        "sreg_d",
+        "sreg_q",
+        "tx_d",
+        "bit_cnt_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:62-73"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When tx_enable is high but neither wr nor the shift condition (tick_baud_q && bit_cnt_q != 0) is true, all driven signals hold their previous flopped values (bit_cnt_d = bit_cnt_q, sreg_d = sreg_q, tx_d = tx_q).",
+      "cond": "tx_enable && !wr && !(tick_baud_q && bit_cnt_q != 4'h0)",
+      "signals": [
+        "bit_cnt_d",
+        "sreg_d",
+        "tx_d",
+        "bit_cnt_q",
+        "sreg_q",
+        "tx_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:63-65,73"
       ]
     }
   ],
-  "security_implications": "",
   "assumptions": [
     {
-      "constraint": "tick_baud_q 每次波特率周期仅产生一个周期的脉冲，不会连续多周期保持高电平",
-      "bug_relevance": "若tick_baud_q连续为高，会导致每个周期都位移并发送下一位，违背UART位周期，产生错误帧",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "wr_data must be exactly 8 bits wide; the frame construction {1, parity, wr_data, 0} assumes 8 data bits to fit the 11-bit sreg.",
+      "cond": "always (structural width requirement)",
+      "risk": "Width mismatch causes misalignment of the serial frame, leading to frame corruption or protocol errors.",
+      "signals": [
+        "wr_data",
+        "sreg_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:67"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "tick_baud_q is a single-cycle strobe asserted exactly at the baud rate; it must not remain high for multiple cycles.",
+      "cond": "during active transmission (tx_enable && !wr && bit_cnt_q != 0)",
+      "risk": "A multi-cycle tick would cause multiple shifts in the same clock cycle or on consecutive edges, resulting in baud rate deviation, lost bits, or double-shifting.",
+      "signals": [
         "tick_baud_q"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:69"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "When tx_enable transitions from 0 to 1, the flopped state registers (bit_cnt_q, sreg_q, tx_q) must already be in the idle state produced during disable (0, all-ones, 1) so that a spurious transmission does not begin.",
+      "cond": "rising edge of tx_enable",
+      "risk": "Arbitrary data may be shifted out on the TX line, causing protocol violations, line contention in multi-drop setups, or exposure of residual secrets.",
+      "signals": [
+        "tx_enable",
+        "bit_cnt_q",
+        "sreg_q",
+        "tx_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:58-65"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If wr is asserted while tick_baud_q is also active and bit_cnt_q != 0, the load takes priority over the shift, aborting the current frame mid-transmission and discarding the remaining bits. The specification does not indicate whether this abort behavior is intentional or if wr should be blocked during active transmission.",
+      "cond": "wr && tick_baud_q && (bit_cnt_q != 4'h0)",
+      "risk": "Corrupted frame on the line; unexpected behavior in higher-level protocol (e.g., framing error, lost synchronization, deadlock if hardware flow control relies on frame completion).",
+      "signals": [
+        "wr",
+        "tick_baud_q",
+        "bit_cnt_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:66-73"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "low",
+      "claim": "When tx_enable is deasserted, sreg_d immediately becomes all-ones, but sreg_q (the actual register) retains the previous transmitted data until the next clock edge. If any downstream logic reads sreg_q during that window, residual secret or sensitive data could be exposed.",
+      "cond": "falling edge of tx_enable (combinational propagation delay)",
+      "risk": "Possibility of a one-cycle leakage of sensitive data on internal buses if the shift register is read before the disable state takes effect; no explicit zeroization or mask is enforced.",
+      "signals": [
+        "sreg_d",
+        "sreg_q",
+        "tx_enable"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:58-61"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:57-75"
   ],
-  "uncertain_points": [
-    "代码中没有对wr在bit_cnt_q非零时的防护；如果wr在传输中途有效，会立即加载新帧，覆盖当前传输。这种优先级行为是否预期（允许中止当前发送）未在片段中明确。",
-    "tx_enable从高变为低时，tx_d立即置为1，可能导致当前正在发送的位被截断，设计意图不确定。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv",
   "line_start": 57,
-  "line_end": 75
+  "line_end": 75,
+  "security_implications": ""
 }

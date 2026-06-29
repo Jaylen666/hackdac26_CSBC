@@ -1,0 +1,74 @@
+{
+  "chunk_id": "kmac_pkg__continuous_region__declarations_or_instances__001",
+  "summary": "This package region defines KMAC sizing constants for buffering, message window/FIFO dimensions, and encoded-key width, and declares the software-visible key length enumeration.",
+  "behavior": "The fragment does not implement active logic; it establishes compile-time parameters that other RTL uses to size storage and interpret configuration. It defines the register interface width as 32 bits and assumes one word write takes 5 cycles, with masked SHA3 processing expected to take 72 cycles; from these, it derives BufferCycles as ceil(Sha3Latency / RegLatency) and BufferSizeBits as RegIntfWidth times BufferCycles, representing the amount of input buffering needed while SHA3 is busy processing [kmac_pkg.sv:28-34]. It then derives the required message FIFO depth as 2 plus ceil(BufferSizeBits / MsgWidth), with MsgFifoDepthW sized as $clog2(MsgFifoDepth+1), indicating an extra margin beyond the computed minimum [kmac_pkg.sv:36-38]. The message window is fixed at 32-bit width and 512 entries, corresponding to a 2 kB register window [kmac_pkg.sv:40-41]. For keys, the package fixes MaxKeyLen at 512 bits and derives the maximum size of encode_string(Key): MaxEncodedKeyLenW = $clog2(MaxKeyLen+1), MaxEncodedKeyLenByte = ceil(MaxEncodedKeyLenW/8), MaxEncodedKeyLenSize = 8 times that byte count, and MaxEncodedKeyW = MaxKeyLen + MaxEncodedKeyLenSize + 8, matching the comment that encoded key storage includes the secret key plus left_encode(len(Key)) overhead [kmac_pkg.sv:43-56]. Finally, it defines a 3-bit enum key_len_e with exactly five supported software-programmable key length codes, mapping 000/001/010/011/100 to 128/192/256/384/512-bit keys respectively [kmac_pkg.sv:58-68].",
+  "guarantees": [
+    {
+      "property": "The package provides a fixed 3-bit encoding for supported KMAC key lengths: Key128=3'b000, Key192=3'b001, Key256=3'b010, Key384=3'b011, and Key512=3'b100.",
+      "output_signals": [
+        "key_len_e",
+        "Key128",
+        "Key192",
+        "Key256",
+        "Key384",
+        "Key512"
+      ],
+      "source_refs": [
+        "kmac_pkg.sv:62-68"
+      ]
+    },
+    {
+      "property": "The maximum encoded key width available to downstream logic is defined as MaxEncodedKeyW = MaxKeyLen + MaxEncodedKeyLenSize + 8, with MaxKeyLen fixed at 512 bits.",
+      "output_signals": [
+        "MaxEncodedKeyW",
+        "MaxKeyLen",
+        "MaxEncodedKeyLenW",
+        "MaxEncodedKeyLenByte",
+        "MaxEncodedKeyLenSize"
+      ],
+      "source_refs": [
+        "kmac_pkg.sv:46-56"
+      ]
+    }
+  ],
+  "security_implications": "This region defines security-relevant key size encodings and maximum encoded-key storage width. The comment explicitly warns that changing MaxKeyLen requires corresponding kmac_core logic updates for encoded_key assignment; if that contract is broken, key material could be mis-sized, truncated, or mis-encoded, which may affect correctness and potentially security of KMAC key handling [kmac_pkg.sv:43-45].",
+  "assumptions": [
+    {
+      "constraint": "Any logic that constructs or assigns encoded_key must remain consistent with MaxKeyLen=512 and the derived encoded-key sizing constants from this package.",
+      "bug_relevance": "If violated, legal key values may be encoded with the wrong length or width, causing truncation, padding mismatch, or incorrect KMAC input formatting; the source comment suggests this would require coordinated RTL changes rather than being safely handled here.",
+      "related_signals": [
+        "MaxKeyLen",
+        "MaxEncodedKeyW"
+      ],
+      "source_refs": [
+        "kmac_pkg.sv:43-46",
+        "kmac_pkg.sv:50-56"
+      ]
+    },
+    {
+      "constraint": "Software or upstream control logic should only use the five defined key_len_e values when programming key length.",
+      "bug_relevance": "If an undefined 3-bit encoding is presented, behavior is not specified by this package; downstream decode logic may reject it, map it unexpectedly, or produce functional/security errors depending on implementation context.",
+      "related_signals": [
+        "key_len_e"
+      ],
+      "source_refs": [
+        "kmac_pkg.sv:58-68"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_pkg.sv:28-34",
+    "kmac_pkg.sv:36-38",
+    "kmac_pkg.sv:40-41",
+    "kmac_pkg.sv:43-56",
+    "kmac_pkg.sv:58-68"
+  ],
+  "uncertain_points": [
+    "MsgFifoDepth depends on MsgWidth, which is referenced but not defined in this snippet, so the exact numeric FIFO depth cannot be determined here.",
+    "The comment says MsgWindowDepth=512 corresponds to 2 kB space; this matches 512 entries at 32 bits each, but this snippet alone does not show how the window is addressed or used.",
+    "The formula for MaxEncodedKeyW adds an extra +8 beyond MaxKeyLen + MaxEncodedKeyLenSize; the comment layout suggests left_encode(len(Key)) overhead, but the precise reason for the final 8 bits is not fully explained in this fragment."
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv",
+  "line_start": 28,
+  "line_end": 68
+}

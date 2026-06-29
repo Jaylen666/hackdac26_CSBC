@@ -1,0 +1,81 @@
+{
+  "chunk_id": "kmac_core__always_comb__line_166__001",
+  "summary": "该组合状态机次态逻辑控制 KMAC 的空闲、写入密钥块、等待消息处理、等待完成和终端错误状态，并在生命周期升级时强制进入终端错误状态。",
+  "behavior": "该块先为次态和控制信号提供默认值：状态和错误计数默认保持，数据通路使能、密钥写使能、清 key 索引、kmac_valid、kmac_process 以及 sparse_fsm_error_o 默认拉低 [kmac_core.sv:167-178]。在 StKmacIdle 中，错误计数被清零；仅当 kmac_en_i 与 start_i 同时为真时转到 StKey，否则停留在空闲态 [kmac_core.sv:181-187]。在 StKey 中，无条件使能 KMAC datapath 和密钥写入，表示该状态会把完整 block size 的 key 写入 SHA3 引擎；若 sent_blocksize 为真则转到 StKmacMsg，同时撤销 kmac_valid 并清除 key 索引 clr_keyidx，否则保持在 StKey 并拉高 kmac_valid 继续发送密钥数据 [kmac_core.sv:190-205]。在 StKmacMsg 中，若 process_i 或先前锁存的 process_latched 为真，则转到 StKmacFlush 并对 SHA3 发出 kmac_process；否则继续停留等待 [kmac_core.sv:208-216]。在 StKmacFlush 中，仅当 done_i 通过 mubi4 严格真值检测时返回 StKmacIdle，否则持续停留在 flush 状态 [kmac_core.sv:219-225]。在 StTerminalError 中，状态保持不变；当错误计数小于 100 时继续递增计数且不报告 sparse_fsm_error_o，达到 100 后才将 sparse_fsm_error_o 拉高 [kmac_core.sv:227-235]。对任何未识别状态，逻辑立即转入 StTerminalError 并立刻拉高 sparse_fsm_error_o [kmac_core.sv:238-242]。此外，无论当前状态为何，只要 lc_escalate_en_i 通过生命周期 loose true 检测，就会覆盖前述次态选择并强制跳转到 StTerminalError；该覆盖只修改 st_d，未在本块中同时强制 sparse_fsm_error_o 立即置位 [kmac_core.sv:245-250]。",
+  "guarantees": [
+    {
+      "property": "在 StKey 状态下，en_kmac_datapath 和 en_key_write 一定同时为 1，用于驱动密钥块写入数据通路。",
+      "output_signals": [
+        "en_kmac_datapath",
+        "en_key_write"
+      ],
+      "source_refs": [
+        "kmac_core.sv:192-195"
+      ]
+    },
+    {
+      "property": "在 StKmacMsg 状态下，只要 process_i 或 process_latched 为真，kmac_process 一定为 1 且次态为 StKmacFlush。",
+      "output_signals": [
+        "kmac_process",
+        "st_d"
+      ],
+      "source_refs": [
+        "kmac_core.sv:208-216"
+      ]
+    },
+    {
+      "property": "当 lc_escalate_en_i 通过 lc_tx_test_true_loose 检测时，次态一定被强制改写为 StTerminalError，不受当前状态分支影响。",
+      "output_signals": [
+        "st_d"
+      ],
+      "source_refs": [
+        "kmac_core.sv:245-250"
+      ]
+    }
+  ],
+  "security_implications": "该片段包含安全相关的错误处理与升级响应。非法/未知 FSM 状态会进入终端错误态，生命周期控制器的 escalation 也会无条件强制进入终端错误态 [kmac_core.sv:238-250]。不过在升级触发的这个组合块内，只保证 st_d 被改写，sparse_fsm_error_o 不会被立即同时置位；而终端错误态中的错误输出还被设计为在计数达到 100 之前保持为 0 [kmac_core.sv:227-235]。因此该设计意图似乎是先锁死状态，再在一定条件后对外报告稀疏 FSM 错误，是否满足系统级告警时序需要依赖上下文确认。",
+  "assumptions": [
+    {
+      "constraint": "start_i 应仅在 kmac_en_i 有效时作为合法启动请求使用；若 start_i 在 kmac_en_i 为假时出现，本状态机会安全地保持在 StKmacIdle，但启动请求会被忽略，这属于设计上不应发生的输入组合。",
+      "bug_relevance": "若不满足则不会错误进入活动状态，但可能导致上层软件或控制逻辑误以为已启动 KMAC，形成功能握手偏差。",
+      "related_signals": [
+        "start_i",
+        "kmac_en_i",
+        "st",
+        "st_d"
+      ],
+      "source_refs": [
+        "kmac_core.sv:181-187"
+      ]
+    },
+    {
+      "constraint": "当系统期望从 StKmacFlush 退出时，done_i 必须按 prim_mubi_pkg::mubi4_test_true_strict 的编码提供严格真值，而不是普通单比特意义上的“1”。",
+      "bug_relevance": "若违反该契约，即使外界认为计算已完成，本状态机也会继续停留在 StKmacFlush，导致事务无法回到空闲态。",
+      "related_signals": [
+        "done_i",
+        "st",
+        "st_d"
+      ],
+      "source_refs": [
+        "kmac_core.sv:219-225"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_core.sv:167-178",
+    "kmac_core.sv:181-187",
+    "kmac_core.sv:190-205",
+    "kmac_core.sv:208-216",
+    "kmac_core.sv:219-225",
+    "kmac_core.sv:227-242",
+    "kmac_core.sv:245-250"
+  ],
+  "uncertain_points": [
+    "注释说明 StKey 会“regardless of process_i”把完整 block size 的 key 写入 SHA3 引擎 [kmac_core.sv:190-191]；从代码看该状态确实不检查 process_i，但具体“完整 block size”如何由 sent_blocksize、kmac_valid 和外部 datapath 配合实现，需要其他代码确认。",
+    "在 StTerminalError 中，sparse_fsm_error_o 只有当 st_err_ct 达到 100 后才拉高 [kmac_core.sv:230-235]，但 default 分支进入该状态时又立即把 sparse_fsm_error_o 拉高 [kmac_core.sv:238-242]。这看起来像是对“非法编码状态”立即报错、对已进入终端错误态则延迟报错；是否为预期的两类错误策略需结合整体 FSM 安全方案确认。",
+    "生命周期升级检测只在本块末尾强制 st_d = StTerminalError [kmac_core.sv:248-249]，并未同时覆盖 sparse_fsm_error_o、en_kmac_datapath 或其他控制信号；升级当拍是否还允许当前状态相关输出继续有效，需结合寄存器更新和其他块确认。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
+  "line_start": 166,
+  "line_end": 251
+}

@@ -1,48 +1,106 @@
 {
   "chunk_id": "kmac_core__always_comb__line_432__001",
-  "summary": "根据所选安全强度 strength_i，组合地产生对应的 Keccak 吸收块地址上限 block_addr_limit；非法或未覆盖的强度值回退为 0。",
-  "behavior": "该组合逻辑对 strength_i 做 unique case 译码，并把 block_addr_limit 设为对应强度索引下的 KeccakRate 表项，再显式转换为 KeccakCountW 位宽。L128、L224、L256、L384、L512 分别选择 KeccakRate[L128/L224/L256/L384/L512]；若 strength_i 不属于这些枚举值，则 block_addr_limit 被置为全 0。代码体现的实际 RTL 行为是在默认分支提供安全回退值 0，而 unique case 则表达设计意图是 strength_i 应只取这些合法强度之一。",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "block_addr_limit"
+    ],
+    "used": [
+      "strength_i",
+      "KeccakRate",
+      "L128",
+      "L224",
+      "L256",
+      "L384",
+      "L512"
+    ],
+    "modes": [
+      "L128",
+      "L224",
+      "L256",
+      "L384",
+      "L512"
+    ],
+    "tags": [
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 strength_i 为 L128、L224、L256、L384 或 L512 时，block_addr_limit 一定等于对应的 KeccakRate 表项并被截断/扩展为 KeccakCountW 位宽。",
-      "output_signals": [
-        "block_addr_limit"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "block_addr_limit is driven by a unique case on strength_i: for L128, L224, L256, L384, L512 it is set to the corresponding KeccakRate entry cast to KeccakCountW; for any other value (default) it is set to zero.",
+      "cond": "always, combinatorial",
+      "signals": [
+        "strength_i",
+        "block_addr_limit",
+        "KeccakRate",
+        "L128",
+        "L224",
+        "L256",
+        "L384",
+        "L512"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:433-438"
-      ]
-    },
-    {
-      "property": "当 strength_i 不匹配任何显式列出的强度值时，block_addr_limit 一定为 0。",
-      "output_signals": [
-        "block_addr_limit"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:440-440"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:432-442"
       ]
     }
   ],
-  "security_implications": "该逻辑根据安全强度选择 Keccak 速率相关的地址上限，属于安全参数派生路径的一部分。对非法 strength_i 回退为 0 可避免产生未定义的块界限，但如果上游错误地给出非法强度，可能导致后续数据路径被异常限制为零长度或进入非预期行为；因此它提供了防御性回退，但不能替代对 strength_i 合法性的系统级保证。",
   "assumptions": [
     {
-      "constraint": "strength_i 在合法工作场景下应只取 L128、L224、L256、L384 或 L512 之一；default 分支仅用于防御非法/不应发生的输入编码。",
-      "bug_relevance": "若不满足则 block_addr_limit 会变为 0。该回退本身是安全的防御性行为，但该场景设计上不应发生，可能导致后续吸收块地址限制错误、吞吐异常或功能停滞。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "strength_i must take one of the defined security strength enum values L128, L224, L256, L384, L512 for the block_addr_limit to reflect a valid Keccak rate.",
+      "cond": "when the block is operational",
+      "risk": "If strength_i is any other value, block_addr_limit becomes zero, potentially allowing unbounded or invalid Keccak block addressing that could corrupt data or weaken security guarantees.",
+      "signals": [
         "strength_i",
         "block_addr_limit"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:433-440"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:432-442"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If any KeccakRate entry for L128, L224, L256, L384, L512 is wider than KeccakCountW bits, the cast KeccakCountW'() will silently truncate the value, yielding a wrong block_addr_limit.",
+      "cond": "when a KeccakRate parameter width exceeds KeccakCountW",
+      "risk": "Truncation could cause incorrect block addressing, leading to secret data exposure or incorrect message authentication code generation.",
+      "signals": [
+        "KeccakRate",
+        "KeccakCountW",
+        "block_addr_limit"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:434-438"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The default case assigns block_addr_limit to '0 for any strength_i not matching L128, L224, L256, L384, L512. If other legal strength values exist, or if strength_i becomes corrupt, this fallback may cause the Keccak core to operate with a zero block rate.",
+      "cond": "strength_i takes an undefined or illegal value",
+      "risk": "A zero block_addr_limit could result in Keccak processing no data or operating in an undefined state, potentially leading to silent data loss or incorrect MAC output.",
+      "signals": [
+        "strength_i",
+        "block_addr_limit"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:440"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:432-442"
   ],
-  "uncertain_points": [
-    "仅从该片段无法确认 KeccakRate 数组元素的精确定义是“字节数、字数还是地址最大值”；这里只能确定 block_addr_limit 直接取自该表项。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 432,
-  "line_end": 442
+  "line_end": 442,
+  "security_implications": ""
 }

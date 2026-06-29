@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from rtl_bug_agent.phase2.trace import TraceSink, append_trace
+
 
 @dataclass
 class Finding:
@@ -35,6 +37,11 @@ class Finding:
     involved_specs: list[str] = field(default_factory=list)
     evidence: list[dict[str, str]] = field(default_factory=list)
     verdict: str = "UNCERTAIN"
+    formal_verdict: str = "NONE"
+    formal_confidence: float = 0.0
+    formal_draft: dict[str, Any] = field(default_factory=dict)
+    formal_result: dict[str, Any] = field(default_factory=dict)
+    formal: dict[str, Any] = field(default_factory=dict)  # Channel B/F solver-ready state
 
     # Computed
     signal_criticality: float = 0.0
@@ -57,6 +64,11 @@ class Finding:
             "involved_signals": self.involved_signals,
             "involved_specs": self.involved_specs,
             "evidence": self.evidence[:8],
+            "formal_verdict": self.formal_verdict,
+            "formal_confidence": round(self.formal_confidence, 3),
+            **({"formal_draft": self.formal_draft} if self.formal_draft else {}),
+            **({"formal_result": self.formal_result} if self.formal_result else {}),
+            **({"formal": self.formal} if self.formal else {}),
         }
 
 
@@ -68,8 +80,21 @@ class Finding:
 def fuse(
     channel_findings: dict[str, list[dict[str, Any]]],
     security_signals: set[str],
+    trace_sink: "TraceSink | None" = None,
+    cluster: bool = True,
 ) -> list[Finding]:
-    """Fuse findings from all channels into a ranked, deduplicated list."""
+    """Fuse findings from all channels into a ranked, deduplicated list.
+
+    When ``cluster`` is True (default), findings that look like they describe
+    the same underlying issue are merged via fuzzy signal/spec overlap.  This
+    is convenient for human reading but, on modules with highly homogeneous
+    signal names (e.g. keymgr's ``key_state_*`` / ``state_*`` family), the
+    greedy clustering forms huge clusters that swallow precise findings — see
+    the keymgr N-003 audit.  Set ``cluster=False`` to keep every channel
+    finding as its own ranked entry: we accept duplicate bug descriptions
+    (cheap to skim during manual review) in exchange for never silently
+    dropping a real bug behind a longer, unrelated cluster representative.
+    """
     all_findings: list[Finding] = []
     counter = 0
 
@@ -90,14 +115,21 @@ def fuse(
         f.contradiction_strength = _verdict_strength(f.verdict)
         f.is_self_ref = len(set(f.involved_specs)) <= 1
 
-    # Cluster with fuzzy signal matching (enables cross-channel overlap)
-    clusters = _cluster_findings(all_findings)
+    if cluster:
+        # Cluster with fuzzy signal matching (enables cross-channel overlap)
+        clusters = _cluster_findings(all_findings)
 
-    # Merge each cluster
-    merged: list[Finding] = []
-    for cluster in clusters:
-        m = _merge_cluster(cluster)
-        merged.append(m)
+        # Merge each cluster
+        merged: list[Finding] = []
+        for c in clusters:
+            m = _merge_cluster(c)
+            merged.append(m)
+    else:
+        # No clustering: every finding survives as its own entry.  Still set
+        # cross_channel_hits so scoring stays well-defined.
+        for f in all_findings:
+            f.cross_channel_hits = len(set(f.channels))
+        merged = all_findings
 
     # Compute final scores
     for f in merged:
@@ -115,6 +147,22 @@ def fuse(
 
     for idx, f in enumerate(merged):
         f.finding_id = f"F-{idx + 1:04d}"
+
+    # Trace: record the fused outcome per finding (deterministic, no LLM).
+    if trace_sink is not None:
+        for f in merged:
+            d = f.to_dict()
+            append_trace(
+                d,
+                "pair",
+                sink=trace_sink,
+                finding_id=f.finding_id,
+                channels=f.channels,
+                verdict=f.verdict,
+                score=round(f.score, 3),
+                signals=f.involved_signals[:8],
+                specs=f.involved_specs[:8],
+            )
 
     return merged
 
@@ -243,6 +291,17 @@ def _normalise(
                     "excerpt": str(e.get("excerpt", ""))[:200],
                 })
 
+    formal_verdict, formal_confidence = _extract_formal_summary(raw)
+    formal_draft = raw.get("formal_draft", {})
+    if not isinstance(formal_draft, dict):
+        formal_draft = {}
+    formal_result = raw.get("formal_result", {})
+    if not isinstance(formal_result, dict):
+        formal_result = {}
+    formal = raw.get("formal", {})
+    if not isinstance(formal, dict):
+        formal = {}
+
     return Finding(
         finding_id=finding_id,
         title=title[:200],
@@ -253,6 +312,11 @@ def _normalise(
         involved_specs=specs,
         evidence=evidence,
         verdict=verdict,
+        formal_verdict=formal_verdict,
+        formal_confidence=formal_confidence,
+        formal_draft=formal_draft,
+        formal_result=formal_result,
+        formal=formal,
     )
 
 
@@ -393,6 +457,9 @@ def _merge_cluster(cluster: list[Finding]) -> Finding:
     all_evidence: list[dict[str, str]] = list(merged.evidence)
     best_contradiction = merged.contradiction
     best_verdict = merged.verdict
+    best_formal_verdict = merged.formal_verdict
+    best_formal_confidence = merged.formal_confidence
+    best_formal_draft = dict(merged.formal_draft)
 
     for other in cluster[1:]:
         all_channels.extend(other.channels)
@@ -407,6 +474,14 @@ def _merge_cluster(cluster: list[Finding]) -> Finding:
             best_contradiction = other.contradiction
         if _verdict_strength(other.verdict) > _verdict_strength(best_verdict):
             best_verdict = other.verdict
+        best_formal_verdict, best_formal_confidence, best_formal_draft = _merge_formal_summary(
+            best_formal_verdict,
+            best_formal_confidence,
+            best_formal_draft,
+            other.formal_verdict,
+            other.formal_confidence,
+            other.formal_draft,
+        )
 
     unique_channels = list(dict.fromkeys(all_channels))
     merged.channels = unique_channels
@@ -416,6 +491,9 @@ def _merge_cluster(cluster: list[Finding]) -> Finding:
     merged.evidence = all_evidence[:10]
     merged.contradiction = best_contradiction
     merged.verdict = best_verdict
+    merged.formal_verdict = best_formal_verdict
+    merged.formal_confidence = best_formal_confidence
+    merged.formal_draft = best_formal_draft
     # Self-ref is false if any involved spec came from a different source
     merged.is_self_ref = len(set(all_specs)) <= 1
 
@@ -424,6 +502,87 @@ def _merge_cluster(cluster: list[Finding]) -> Finding:
             f"[{'+'.join(unique_channels)}] {merged.title[:170]}"
         )
 
+    return merged
+
+
+def _extract_formal_summary(raw: dict[str, Any]) -> tuple[str, float]:
+    verdict = str(raw.get("formal_verdict", "") or "").strip().upper()
+    conf = raw.get("formal_confidence", 0.0)
+    try:
+        confidence = float(conf or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    if verdict in {"DIRECT", "PARTIAL", "NONE"}:
+        return verdict, round(max(0.0, min(confidence, 1.0)), 3)
+
+    verdict, confidence = _formal_summary_from_items(raw)
+    return verdict, confidence
+
+
+def _formal_summary_from_items(raw: dict[str, Any]) -> tuple[str, float]:
+    sketches: list[dict[str, Any]] = []
+    assumption = raw.get("assumption")
+    if isinstance(assumption, dict):
+        sketch = assumption.get("formal_sketch")
+        if isinstance(sketch, dict):
+            sketches.append(sketch)
+    for key in ("relevant_guarantees", "driver_guarantees"):
+        for item in raw.get(key, []) or []:
+            if isinstance(item, dict):
+                sketch = item.get("formal_sketch")
+                if isinstance(sketch, dict):
+                    sketches.append(sketch)
+    if not sketches:
+        return "NONE", 0.0
+
+    best = max(float(sketch.get("confidence", 0.0) or 0.0) for sketch in sketches)
+    direct = any(str(sketch.get("formalizability", "")).lower() == "direct" for sketch in sketches)
+    partial = any(str(sketch.get("formalizability", "")).lower() == "partial" for sketch in sketches)
+    if direct:
+        verdict = "DIRECT"
+    elif partial:
+        verdict = "PARTIAL"
+    else:
+        verdict = "NONE"
+    return verdict, round(best, 3)
+
+
+def _merge_formal_summary(
+    current_verdict: str,
+    current_confidence: float,
+    current_draft: dict[str, Any],
+    other_verdict: str,
+    other_confidence: float,
+    other_draft: dict[str, Any],
+) -> tuple[str, float, dict[str, Any]]:
+    def rank(verdict: str) -> int:
+        v = verdict.upper()
+        if v == "DIRECT":
+            return 2
+        if v == "PARTIAL":
+            return 1
+        return 0
+
+    if rank(other_verdict) > rank(current_verdict) or (
+        rank(other_verdict) == rank(current_verdict)
+        and other_confidence > current_confidence
+    ):
+        return other_verdict, other_confidence, _merge_draft(current_draft, other_draft)
+    return current_verdict, current_confidence, _merge_draft(current_draft, other_draft)
+
+
+def _merge_draft(
+    current: dict[str, Any],
+    other: dict[str, Any],
+) -> dict[str, Any]:
+    if not current:
+        return dict(other or {})
+    if not other:
+        return dict(current)
+    merged = dict(current)
+    for key, value in other.items():
+        if key not in merged or not merged.get(key):
+            merged[key] = value
     return merged
 
 

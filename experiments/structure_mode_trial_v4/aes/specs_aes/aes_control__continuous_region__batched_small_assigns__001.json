@@ -1,0 +1,161 @@
+{
+  "chunk_id": "aes_control__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "aes_control",
+    "block_kind": "mixed",
+    "driven": [
+      "count_d",
+      "start_trigger",
+      "mux_sel_err"
+    ],
+    "used": [
+      "start_i",
+      "count_q",
+      "SecStartTriggerDelay",
+      "WidthCounter",
+      "mux_sel_err_i",
+      "mr_err"
+    ],
+    "modes": [
+      "SecStartTriggerDelay",
+      "Sp2VWidth",
+      "NumSp2VSig"
+    ],
+    "tags": [
+      "handshake",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "Static lint assertion requires SecStartTriggerDelay == 0, reporting an error if non-zero.",
+      "cond": "always at lint",
+      "signals": [
+        "SecStartTriggerDelay"
+      ],
+      "refs": [
+        "aes_control.sv:125"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "Inside gen_start_delay (SecStartTriggerDelay > 0), count_d is assigned: if (!start_i) then '0; else if start_trigger then count_q; else count_q + 1'b1.",
+      "cond": "SecStartTriggerDelay > 0",
+      "signals": [
+        "count_d",
+        "start_i",
+        "start_trigger",
+        "count_q"
+      ],
+      "refs": [
+        "aes_control.sv:130-131"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "Inside gen_start_delay, start_trigger is asserted when count_q equals SecStartTriggerDelay[WidthCounter-1:0].",
+      "cond": "SecStartTriggerDelay > 0",
+      "signals": [
+        "start_trigger",
+        "count_q",
+        "SecStartTriggerDelay",
+        "WidthCounter"
+      ],
+      "refs": [
+        "aes_control.sv:132"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "mux_sel_err is the bitwise OR of mux_sel_err_i and mr_err.",
+      "cond": "always",
+      "signals": [
+        "mux_sel_err",
+        "mux_sel_err_i",
+        "mr_err"
+      ],
+      "refs": [
+        "aes_control.sv:142"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "count_q is a sequential flop that updates from count_d each cycle, providing a stable counter state.",
+      "cond": "when SecStartTriggerDelay > 0",
+      "risk": "start_trigger generation may be corrupt or count_d ignored, leading to stuck or erratic start behavior.",
+      "signals": [
+        "count_q",
+        "count_d"
+      ],
+      "refs": [
+        "aes_control.sv:130-132"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "start_i is deasserted to reset count_d to zero; the logic relies on start_i going low after a trigger to reset the counter.",
+      "cond": "during operation",
+      "risk": "if start_i remains high indefinitely, count_d will not reset and start_trigger may stay asserted, causing spurious or stuck AES start.",
+      "signals": [
+        "start_i",
+        "count_d"
+      ],
+      "refs": [
+        "aes_control.sv:130"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The static lint assertion (SecStartTriggerDelay == 0) contradicts the generate block that implements a start delay when SecStartTriggerDelay > 0. It is unclear whether the parameter is intended to be zero only, or if the assertion is stale/overridable.",
+      "cond": "when SecStartTriggerDelay is set to a non-zero value",
+      "risk": "If the assertion is bypassed or the parameter is changed, unintended start delay could violate SCA measurement timing or system startup protocols, causing functional failure.",
+      "signals": [
+        "SecStartTriggerDelay"
+      ],
+      "refs": [
+        "aes_control.sv:125",
+        "aes_control.sv:127"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Counter state count_q is used in start_trigger generation, but its reset or initialization is not visible in this chunk. An unknown initial value could cause a false start_trigger.",
+      "cond": "when system powers up or comes out of reset and SecStartTriggerDelay > 0",
+      "risk": "An unintended start_trigger pulse could prematurely start an AES key expansion or cipher operation.",
+      "signals": [
+        "count_q",
+        "start_trigger"
+      ],
+      "refs": [
+        "aes_control.sv:132"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_control.sv:124-127",
+    "aes_control.sv:132-134",
+    "aes_control.sv:179-182",
+    "aes_control.sv:186-187",
+    "aes_control.sv:505-505",
+    "aes_control.sv:525-526"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv",
+  "line_start": 124,
+  "line_end": 526,
+  "security_implications": ""
+}

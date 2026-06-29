@@ -1,62 +1,193 @@
 {
   "chunk_id": "kmac__always_ff__line_395__001",
-  "summary": "该寄存过程在复位后清空当前命令和缓冲命令，并在软件写入命令与内部更新时机之间实现一个单项命令缓冲/延后装载机制。",
-  "behavior": "复位时，当前命令寄存器 cmd_q 和命令缓冲寄存器 cmd_buf_q 都被清为 CmdNone（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:396-399）。正常工作时，这个过程根据软件是否写 cmd 寄存器（reg2hw.cmd.cmd.qe）以及内部命令更新时间点 cmd_update 来更新两个寄存器。若同一周期同时出现新写入和 cmd_update，则认为“有新写入且计数器到期”，当前命令 cmd_q 取先前缓存的 cmd_buf_q，而新写入的命令被放入 cmd_buf_q，因此旧缓冲命令先被发出，新命令继续排在下一次更新之后（:400-403）。若只有新写入而没有 cmd_update，则当 counting_q 为 0 时直接把写入命令装入 cmd_q；当 counting_q 为 1 时不立即生效，而是写入 cmd_buf_q 作为挂起命令（:405-411）。若没有新写入但 cmd_update 为 1，则表示等待窗口结束，cmd_q 装入当前缓冲命令 cmd_buf_q，同时把 cmd_buf_q 清回 CmdNone（:413-416）。若以上条件都不满足，则两个寄存器保持原值。整体上，该逻辑实现了：空闲时新命令可直接进入当前命令；忙碌/计数期间新命令被暂存；更新事件到来时优先消费已缓存命令。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "cmd_q",
+      "cmd_buf_q"
+    ],
+    "used": [
+      "reg2hw.cmd.cmd.qe",
+      "reg2hw.cmd.cmd.q",
+      "cmd_update",
+      "counting_q",
+      "rst_ni"
+    ],
+    "modes": [
+      "kmac_cmd_e",
+      "CmdNone",
+      "counting_q==0",
+      "counting_q!=0"
+    ],
+    "tags": [
+      "csr",
+      "handshake",
+      "security",
+      "command_queue"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后当前命令和缓冲命令都被清为 CmdNone。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On reset (rst_ni low), cmd_q and cmd_buf_q are both set to CmdNone.",
+      "cond": "!rst_ni",
+      "signals": [
         "cmd_q",
-        "cmd_buf_q"
+        "cmd_buf_q",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:396-399"
+      "refs": [
+        "line 396-398"
       ]
     },
     {
-      "property": "当 cmd_update 在没有同时发生新写入的情况下出现时，当前命令一定装载为此前缓存的命令，且命令缓冲被清空为 CmdNone。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When reg2hw.cmd.cmd.qe and cmd_update are both true, cmd_q is loaded from the previous cmd_buf_q, and cmd_buf_q is loaded from reg2hw.cmd.cmd.q (cast to kmac_cmd_e).",
+      "cond": "reg2hw.cmd.cmd.qe && cmd_update",
+      "signals": [
+        "reg2hw.cmd.cmd.qe",
+        "cmd_update",
         "cmd_q",
-        "cmd_buf_q"
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q",
+        "kmac_cmd_e"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:413-416"
+      "refs": [
+        "line 400-404"
       ]
     },
     {
-      "property": "当发生软件新写入且 counting_q 为 0、同时没有走到更高优先级的“新写入且 cmd_update”分支时，写入命令会直接成为当前命令而不是进入缓冲。",
-      "output_signals": [
-        "cmd_q"
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When reg2hw.cmd.cmd.qe is true and cmd_update is false, cmd_q is directly loaded from reg2hw.cmd.cmd.q if counting_q is 0; otherwise, cmd_buf_q is loaded and cmd_q remains unchanged.",
+      "cond": "reg2hw.cmd.cmd.qe && !cmd_update",
+      "signals": [
+        "reg2hw.cmd.cmd.qe",
+        "counting_q",
+        "cmd_q",
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:405-409"
+      "refs": [
+        "line 405-411"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When reg2hw.cmd.cmd.qe is false and cmd_update is true, cmd_q is loaded from cmd_buf_q and cmd_buf_q is set to CmdNone.",
+      "cond": "!reg2hw.cmd.cmd.qe && cmd_update",
+      "signals": [
+        "cmd_update",
+        "cmd_q",
+        "cmd_buf_q",
+        "CmdNone"
+      ],
+      "refs": [
+        "line 413-416"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When none of the above conditions are true, cmd_q and cmd_buf_q hold their current values.",
+      "cond": "!(reg2hw.cmd.cmd.qe || cmd_update)",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "line 399-418"
       ]
     }
   ],
-  "security_implications": "该逻辑属于命令接收与节流路径，影响 KMAC 命令何时立即执行、何时被延后。它通过在 counting_q 期间缓存命令，避免新命令在受限窗口内直接覆盖当前命令；但若上层允许在缓冲未消费前再次写入，后写命令可能覆盖先前缓冲内容，从而影响命令顺序或丢失预期操作。若这些命令涉及擦除、启动或错误处理等安全敏感控制，则上层需要确保写入时序符合预期。",
   "assumptions": [
     {
-      "constraint": "在 counting_q 为 1 且已有待处理缓冲命令时，上层不应再次通过 reg2hw.cmd.cmd.qe 发起新的命令写入，除非设计允许用最新写入覆盖旧的 cmd_buf_q。",
-      "bug_relevance": "若不满足则新的写入会直接改写 cmd_buf_q，先前尚未被 cmd_update 消费的缓冲命令可能丢失；这通常属于不应发生的软件/系统使用场景，但硬件的回退行为是保留最新命令而非报错。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "When reg2hw.cmd.cmd.qe is asserted, reg2hw.cmd.cmd.q holds a valid kmac_cmd_e encoding suitable for the direct cast to kmac_cmd_e'().",
+      "cond": "reg2hw.cmd.cmd.qe",
+      "risk": "An invalid encoding may produce an undefined or illegal command, potentially triggering unintended operations or state corruption downstream.",
+      "signals": [
+        "reg2hw.cmd.cmd.q",
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "line 403, 408, 410"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "cmd_update and counting_q are correctly generated by a counter module; counting_q=0 indicates the command execution engine is idle, and cmd_update is asserted only when a counter expires to signal that the buffered command should be loaded.",
+      "cond": "always",
+      "risk": "Mis-timed or unsynchronized signals could cause commands to be loaded at incorrect times, leading to duplicate execution, command loss, or pipeline corruption.",
+      "signals": [
+        "cmd_update",
+        "counting_q"
+      ],
+      "refs": [
+        "line 400, 405, 407, 413"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The exact meaning and expected timing of the 1-bit counting_q signal is unclear; it determines whether a new command loads immediately into cmd_q or is buffered. The protocol and safety conditions governing counting_q need elaboration.",
+      "cond": "reg2hw.cmd.cmd.qe asserted and counting_q checked",
+      "risk": "If counting_q is incorrectly asserted during a write, a command could be buffered when it should have executed immediately, causing stale or out-of-order execution.",
+      "signals": [
+        "counting_q"
+      ],
+      "refs": [
+        "line 407-411"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The simultaneous assertion of reg2hw.cmd.cmd.qe and cmd_update causes a swap of cmd_q and cmd_buf_q while loading a new command; are these signals guaranteed to be mutually exclusive or properly synchronized to avoid a race condition?",
+      "cond": "reg2hw.cmd.cmd.qe && cmd_update",
+      "risk": "Setup or hold violations near the clock edge could corrupt cmd_q or cmd_buf_q, leading to an incorrect command being executed and potentially violating security policies.",
+      "signals": [
+        "reg2hw.cmd.cmd.qe",
+        "cmd_update",
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "line 400-404"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "Only a single buffered command is supported; a new command write while a previous command is still pending (counting_q != 0 and cmd_buf_q already holds a non-CmdNone value) will overwrite the buffer, silently dropping the pending command.",
+      "cond": "reg2hw.cmd.cmd.qe asserted and counting_q != 0 and cmd_buf_q != CmdNone",
+      "risk": "A critical command (e.g., key load, start) could be lost without any error indication, leading to a security or functional failure.",
+      "signals": [
         "reg2hw.cmd.cmd.qe",
         "counting_q",
         "cmd_buf_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:405-411"
+      "refs": [
+        "line 410"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:395-419"
-  ],
-  "uncertain_points": [
-    "cmd_update 的具体产生条件和它是否严格表示某个命令节流/计数器到期，需要结合其他上下文确认；本片段只能看出它会触发从 cmd_buf_q 向 cmd_q 的转移（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:400-403,413-416）。",
-    "注释“New write & counter expired”与代码中的条件是 reg2hw.cmd.cmd.qe && cmd_update，并未直接检查 counting_q，因此 cmd_update 与“counter expired”之间的精确定义需要外部上下文确认（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:400-402）。",
-    "该片段只体现了单级命令缓冲；若在缓冲未清空前重复写入，代码会覆盖 cmd_buf_q。是否这是刻意的最后写入优先策略，还是依赖外部避免该情况，单靠此片段无法完全确定（/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:403,410）。"
+    "line 395-419"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 395,
-  "line_end": 419
+  "line_end": 419,
+  "security_implications": ""
 }

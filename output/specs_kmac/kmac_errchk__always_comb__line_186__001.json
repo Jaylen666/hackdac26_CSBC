@@ -1,51 +1,220 @@
 {
   "chunk_id": "kmac_errchk__always_comb__line_186__001",
-  "summary": "该组合逻辑按当前状态检查软件命令是否合法，并在非法命令序列或非法/未识别状态下分别给出序列错误或稀疏 FSM 错误指示。",
-  "behavior": "该块默认将 err_swsequence 和 sparse_fsm_error_o 清零，然后根据状态 st 限制允许的软件命令 sw_cmd_i。处于 StIdle 时仅接受 CmdNone 或 CmdStart，其他命令都会置位 err_swsequence；处于 StMsgFeed 时仅接受 CmdNone 或 CmdProcess；处于 StProcessing 时不接受任何命令，只有 CmdNone 合法；处于 StAbsorbed 时仅接受 CmdNone、CmdManualRun 或 CmdDone；处于 StSqueezing 时同样只接受 CmdNone，任何非空命令都被视为软件命令顺序错误。若状态为 StTerminalError，则不报告软件序列错误，而是直接置位 sparse_fsm_error_o。对于 default 分支中的其他状态值，也不置位 err_swsequence，而是置位 sparse_fsm_error_o，表示状态编码异常或落入未列举状态。代码注释说明这些检查体现了各状态允许的命令协议；其中 TerminalError 分支把错误归类为 FSM 错误而非软件顺序错误，这与一般非法命令处理不同。",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "always_comb",
+    "driven": [
+      "err_swsequence",
+      "sparse_fsm_error_o"
+    ],
+    "used": [
+      "st",
+      "sw_cmd_i",
+      "CmdNone",
+      "CmdStart",
+      "CmdProcess",
+      "CmdManualRun",
+      "CmdDone"
+    ],
+    "modes": [
+      "StIdle",
+      "StMsgFeed",
+      "StProcessing",
+      "StAbsorbed",
+      "StSqueezing",
+      "StTerminalError",
+      "illegal_state"
+    ],
+    "tags": [
+      "error",
+      "sparse_fsm"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 st 为 StIdle 且 sw_cmd_i 不属于 {CmdNone, CmdStart} 时，err_swsequence 一定为 1。",
-      "output_signals": [
-        "err_swsequence"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:191-195"
-      ]
-    },
-    {
-      "property": "当 st 为 StTerminalError 或落入 default 分支的未列举状态时，sparse_fsm_error_o 一定为 1，且 err_swsequence 为 0。",
-      "output_signals": [
-        "sparse_fsm_error_o",
-        "err_swsequence"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:224-231"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑属于错误检查/控制面约束：它限制软件在不同 KMAC 处理阶段可发出的命令，防止非法命令序列继续推进内部流程；同时对终止错误态或未识别状态直接输出 sparse_fsm_error_o，有助于把异常状态编码视为更严重的 FSM 完整性问题，而不是普通软件使用错误。",
-  "assumptions": [
-    {
-      "constraint": "正常软件流程应只在各状态允许的命令集合内驱动 sw_cmd_i：StIdle 只发 CmdStart，StMsgFeed 只发 CmdProcess，StAbsorbed 只发 CmdManualRun 或 CmdDone，其余这些状态下应发 CmdNone。",
-      "bug_relevance": "若不满足，则本块会将其判定为 err_swsequence；这属于防御性设计下的非法软件用法，设计已有安全回退指示，但上层若仍把该输入当作合法事务，可能导致流程中止或告警。",
-      "related_signals": [
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "当 state 为 StIdle 且 sw_cmd_i 不在 {CmdNone, CmdStart} 时，err_swsequence 置 1",
+      "cond": "st == StIdle && !(sw_cmd_i inside {CmdNone, CmdStart})",
+      "signals": [
         "st",
         "sw_cmd_i",
         "err_swsequence"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:191-220"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:191-196"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "当 state 为 StMsgFeed 且 sw_cmd_i 不在 {CmdNone, CmdProcess} 时，err_swsequence 置 1",
+      "cond": "st == StMsgFeed && !(sw_cmd_i inside {CmdNone, CmdProcess})",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:198-203"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "当 state 为 StProcessing 且 sw_cmd_i != CmdNone 时，err_swsequence 置 1",
+      "cond": "st == StProcessing && sw_cmd_i != CmdNone",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:205-209"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "当 state 为 StAbsorbed 且 sw_cmd_i 不在 {CmdNone, CmdManualRun, CmdDone} 时，err_swsequence 置 1",
+      "cond": "st == StAbsorbed && !(sw_cmd_i inside {CmdNone, CmdManualRun, CmdDone})",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:211-216"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "mux_case",
+      "claim": "当 state 为 StSqueezing 且 sw_cmd_i != CmdNone 时，err_swsequence 置 1",
+      "cond": "st == StSqueezing && sw_cmd_i != CmdNone",
+      "signals": [
+        "st",
+        "sw_cmd_i",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:218-222"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "mux_case",
+      "claim": "当 state 为 StTerminalError 时，sparse_fsm_error_o 置 1 且 err_swsequence 清 0",
+      "cond": "st == StTerminalError",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:224-227"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "default_fallback",
+      "claim": "当 state 为任何未显式处理的非法编码（default 分支）时，sparse_fsm_error_o 置 1 且 err_swsequence 清 0",
+      "cond": "st 取值为未定义的非法编码",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:229-232"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "当 err_swsequence 或 sparse_fsm_error_o 被置位时，外部错误处理逻辑必须捕获并采取安全措施（例如中断、alert 或复位），否则后续操作可能使用已损坏的数据。",
+      "cond": "err_swsequence == 1 或 sparse_fsm_error_o == 1",
+      "risk": "错误被忽略将导致不安全状态传播，可能破坏密钥材料或输出错误结果。",
+      "signals": [
+        "err_swsequence",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:186-234"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "在 StTerminalError 状态下仅置位 sparse_fsm_error_o 而清零 err_swsequence，但未同时指示软件序列错误。如果该状态代表致命错误，可能仍需报告非法命令以提供完整的诊断信息。",
+      "cond": "st == StTerminalError 且接收到非法 sw_cmd_i",
+      "risk": "错误处理仅依赖稀疏 FSM 错误可能遗漏命令序列违规，导致双重故障或错误覆盖不全。",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:224-227"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "default 分支中清零 err_swsequence 而仅触发 sparse_fsm_error_o，可能是设计意图（非法状态本身已是最严重错误），但如果非法状态是软件命令序列错误导致，可能掩盖了根本原因。",
+      "cond": "st 为非法编码",
+      "risk": "故障定位困难，可能导致根本原因未被记录。",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o",
+        "err_swsequence"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:229-232"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "在 StProcessing 和 StSqueezing 状态仅允许 CmdNone，但规范或文档可能允许某些特殊命令（如强制 Done 或中断）而不产生软件序列错误。",
+      "cond": "st == StProcessing || st == StSqueezing",
+      "risk": "固件在需要紧急停止时可能无法发出命令，导致系统死锁。",
+      "signals": [
+        "st",
+        "sw_cmd_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:205-209,218-222"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "状态信号 st 由外部模块驱动，必须保证无亚稳态且不会产生非法编码。本块仅通过 sparse_fsm_error_o 报告，但不含锁存或清除逻辑，外部模块必须安全处理这一组合逻辑脉冲。",
+      "cond": "st 出现非法值或亚稳态",
+      "risk": "脉冲干扰可能导致错误处理逻辑错误触发，或误将系统带入不可恢复状态。",
+      "signals": [
+        "st",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:229-232"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:186-234"
   ],
-  "uncertain_points": [
-    "该片段只产生 err_swsequence 和 sparse_fsm_error_o，未展示这些错误信号后续如何被消化、是否触发告警或状态转移，因此无法从本片段单独确认非法命令的系统级后果。",
-    "default 分支被归类为 sparse_fsm_error_o，暗示 st 可能采用稀疏编码 FSM，但具体编码完整性机制及 StTerminalError 与 default 异常状态的来源需结合其他代码确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
   "line_start": 186,
-  "line_end": 234
+  "line_end": 234,
+  "security_implications": ""
 }

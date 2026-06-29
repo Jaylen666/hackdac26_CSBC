@@ -1,0 +1,233 @@
+{
+  "chunk_id": "hmac_continuous_region_declarations_or_instances_008__behavior__002",
+  "header": {
+    "module": "hmac",
+    "block_kind": "assign",
+    "driven": [
+      "unused_signals",
+      "reg_fifo_wentry.data",
+      "reg_fifo_wentry.mask",
+      "fifo_empty",
+      "fifo_wvalid"
+    ],
+    "used": [
+      "reg_fifo_wmask",
+      "reg_fifo_wdata",
+      "conv_endian32",
+      "fifo_rvalid",
+      "hmac_fifo_wsel",
+      "fifo_wready",
+      "hmac_fifo_wvalid",
+      "reg_fifo_wvalid"
+    ],
+    "modes": [],
+    "tags": [
+      "fifo",
+      "handshake",
+      "endian",
+      "mask"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "reg_fifo_wentry.data is always driven by conv_endian32(reg_fifo_wdata, 1'b1)",
+      "cond": "always",
+      "signals": [
+        "reg_fifo_wentry.data",
+        "reg_fifo_wdata",
+        "conv_endian32"
+      ],
+      "refs": [
+        "542"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "reg_fifo_wentry.mask is always assigned the concatenation of reg_fifo_wmask bits 0, 8, 16, 24",
+      "cond": "always",
+      "signals": [
+        "reg_fifo_wentry.mask",
+        "reg_fifo_wmask"
+      ],
+      "refs": [
+        "543:544"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "fifo_empty is always the logical negation of fifo_rvalid",
+      "cond": "always",
+      "signals": [
+        "fifo_empty",
+        "fifo_rvalid"
+      ],
+      "refs": [
+        "545"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "mux_case",
+      "claim": "fifo_wvalid is assigned hmac_fifo_wvalid when hmac_fifo_wsel and fifo_wready are both true; otherwise it is assigned reg_fifo_wvalid",
+      "cond": "hmac_fifo_wsel && fifo_wready",
+      "signals": [
+        "fifo_wvalid",
+        "hmac_fifo_wsel",
+        "fifo_wready",
+        "hmac_fifo_wvalid",
+        "reg_fifo_wvalid"
+      ],
+      "refs": [
+        "546"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "unused_signals is always the XOR reduction of reg_fifo_wmask bits 7:1, 15:9, 23:17, 31:25",
+      "cond": "always",
+      "signals": [
+        "unused_signals",
+        "reg_fifo_wmask"
+      ],
+      "refs": [
+        "537:538"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "conv_endian32 function performs the correct byte‑order conversion expected by the downstream FIFO entry",
+      "cond": "whenever a word is written into the FIFO",
+      "risk": "incorrect data endianness leads to corrupted HMAC message buffer",
+      "signals": [
+        "conv_endian32",
+        "reg_fifo_wentry.data"
+      ],
+      "refs": [
+        "542"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "fifo_rvalid accurately reflects whether the FIFO has valid data available on the read side",
+      "cond": "always",
+      "risk": "fifo_empty inversion could cause logic to read an empty FIFO or miss available data",
+      "signals": [
+        "fifo_rvalid",
+        "fifo_empty"
+      ],
+      "refs": [
+        "545"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "When hmac_fifo_wsel is asserted and fifo_wready is high, hmac_fifo_wvalid is a valid write request and fifo_wready correctly indicates the FIFO can accept a write",
+      "cond": "during a FIFO write operation",
+      "risk": "mux selects an invalid or mis‑timed write valid, causing dropped or spurious writes into the message FIFO",
+      "signals": [
+        "hmac_fifo_wsel",
+        "fifo_wready",
+        "hmac_fifo_wvalid"
+      ],
+      "refs": [
+        "546"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "Bits [7:1], [15:9], [23:17], [31:25] of reg_fifo_wmask are expected to be zero or functionally irrelevant; no error is flagged if they are non‑zero",
+      "cond": "when reg_fifo_wmask is updated",
+      "risk": "invalid byte‑enable bits go undetected and may indicate a corrupted mask without any error containment",
+      "signals": [
+        "reg_fifo_wmask",
+        "unused_signals"
+      ],
+      "refs": [
+        "537:538"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "producer_contract",
+      "claim": "reg_fifo_wmask bits 0, 8, 16, 24 correctly represent byte‑level write enables for the corresponding 32‑bit data word",
+      "cond": "on every write",
+      "risk": "incorrect byte enables cause partial‑word corruption inside the FIFO entry",
+      "signals": [
+        "reg_fifo_wmask",
+        "reg_fifo_wentry.mask"
+      ],
+      "refs": [
+        "543:544"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "unused_signals may be computed solely to silence lint warnings and may not be connected downstream; if it is truly dead, it serves no functional purpose",
+      "cond": "unknown",
+      "risk": "dead code adds no value; if the signal is intended for error detection, the mechanism is missing",
+      "signals": [
+        "unused_signals"
+      ],
+      "refs": [
+        "537:538"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "Mask bits [7:1],[15:9],[23:17],[31:25] are not used in the functional mask and have no error detection; a fault setting these bits would go undetected",
+      "cond": "if the design intent requires those bits to be zero",
+      "risk": "silent data‑mask corruption could occur without triggering any integrity check",
+      "signals": [
+        "reg_fifo_wmask",
+        "unused_signals"
+      ],
+      "refs": [
+        "537:538",
+        "543:544"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "conv_endian32 implementation is not defined in this chunk; its correctness and endianness convention must be verified in the full module context",
+      "cond": "always",
+      "risk": "an incorrect byte‑swap could compromise the entire HMAC computation",
+      "signals": [
+        "conv_endian32"
+      ],
+      "refs": [
+        "542"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "537:538",
+    "541",
+    "542",
+    "543:544",
+    "545",
+    "546"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 537,
+  "line_end": 547,
+  "security_implications": ""
+}

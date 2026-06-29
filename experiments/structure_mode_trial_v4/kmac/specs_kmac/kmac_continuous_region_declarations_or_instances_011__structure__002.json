@@ -1,0 +1,237 @@
+{
+  "chunk_id": "kmac_continuous_region_declarations_or_instances_011__structure__002",
+  "header": {
+    "module": "kmac",
+    "block_kind": "instance",
+    "driven": [
+      "msg_ready",
+      "sha3_rand_update",
+      "sha3_rand_consumed",
+      "sha3_absorbed",
+      "unused_sha3_squeeze",
+      "sha3_block_processed",
+      "sha3_fsm",
+      "state_valid",
+      "state",
+      "sha3_err",
+      "sha3_state_error",
+      "sha3_count_error",
+      "sha3_storage_rst_error"
+    ],
+    "used": [
+      "msg_valid",
+      "msg_data_masked",
+      "msg_strb",
+      "sha3_rand_valid",
+      "sha3_rand_early",
+      "sha3_rand_data",
+      "sha3_rand_aux",
+      "ns_prefix",
+      "app_sha3_mode",
+      "app_keccak_strength",
+      "sha3_start",
+      "kmac2sha3_process",
+      "sha3_run",
+      "sha3_done",
+      "lc_escalate_en[2]"
+    ],
+    "modes": [
+      "EnMasking (parameter)",
+      "app_sha3_mode",
+      "app_keccak_strength"
+    ],
+    "tags": [
+      "masking",
+      "entropy",
+      "error",
+      "fault",
+      "lifecycle",
+      "handshake",
+      "sparse_fsm"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "The run_ack_i input of u_sha3 is tied to 1'b1 permanently, asserting acknowledgment and bypassing the power-spike REQ/ACK handshake.",
+      "cond": "always",
+      "signals": [
+        "run_ack_i"
+      ],
+      "refs": [
+        "kmac.sv:982"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The run_req_o output port of u_sha3 is left unconnected, discarding any power-spike request from the SHA3 core.",
+      "cond": "always",
+      "signals": [
+        "run_req_o"
+      ],
+      "refs": [
+        "kmac.sv:981"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "connection",
+      "claim": "All error outputs (sha3_err, sha3_state_error, sha3_count_error, sha3_storage_rst_error) are connected to kmac-level nets, making error conditions observable outside the sha3 instance.",
+      "cond": "always",
+      "signals": [
+        "sha3_err",
+        "sha3_state_error",
+        "sha3_count_error",
+        "sha3_storage_rst_error"
+      ],
+      "refs": [
+        "kmac.sv:984-987"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "The EnMasking compile-time parameter is passed to the sha3 instance, controlling whether the core is built with masking logic.",
+      "cond": "compile time",
+      "signals": [
+        "EnMasking"
+      ],
+      "refs": [
+        "kmac.sv:934-935"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "When EnMasking is enabled, msg_data_masked must carry properly masked data (using fresh entropy) before msg_valid is asserted.",
+      "cond": "EnMasking=1 and msg_valid high",
+      "risk": "Unmasked secret plaintext enters the SHA3 core, leading to side-channel or data exposure.",
+      "signals": [
+        "msg_data_masked",
+        "msg_valid",
+        "EnMasking"
+      ],
+      "refs": [
+        "kmac.sv:941-942"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "lifecycle",
+      "claim": "lc_escalate_en[2] must accurately reflect a security escalation state that requires SHA3 to wipe or halt.",
+      "cond": "system in a compromised lifecycle state",
+      "risk": "The SHA3 core continues normal operation in a security-critical condition, potentially leaking secrets.",
+      "signals": [
+        "lc_escalate_en[2]"
+      ],
+      "refs": [
+        "kmac.sv:968"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "Control inputs (sha3_start, sha3_run, sha3_done) are sequenced correctly by the kmac controller so that no illegal combination reaches the SHA3 core.",
+      "cond": "during active operation",
+      "risk": "SHA3 internal FSM may enter undefined behavior or corrupt internal state.",
+      "signals": [
+        "sha3_start",
+        "sha3_run",
+        "sha3_done"
+      ],
+      "refs": [
+        "kmac.sv:962-965"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "app_sha3_mode and app_keccak_strength are set to legal, supported values before sha3_start is asserted.",
+      "cond": "configuration phase",
+      "risk": "SHA3 may misinterpret the mode/strength, leading to wrong digest or state machine errors.",
+      "signals": [
+        "app_sha3_mode",
+        "app_keccak_strength"
+      ],
+      "refs": [
+        "kmac.sv:958-959"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The squeezing_o output is explicitly unused; this may be intentional, but its absence could hide a squeeze/absorb mismatch.",
+      "cond": "after sha3_done is asserted or during squeezing",
+      "risk": "If kmac ignores the squeeze state, it might miss protocol violations or read invalid state data.",
+      "signals": [
+        "squeezing_o",
+        "unused_sha3_squeeze"
+      ],
+      "refs": [
+        "kmac.sv:971"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The power-spike REQ/ACK handshake is bypassed (run_ack_i tied high, run_req_o disconnected). The risk of simultaneous high-current draw remains unmitigated at this boundary.",
+      "cond": "when SHA3 core processes a block while other power-hungry blocks are active",
+      "risk": "Excessive IR drop could cause functional failures elsewhere in the chip.",
+      "signals": [
+        "run_req_o",
+        "run_ack_i"
+      ],
+      "refs": [
+        "kmac.sv:981-982"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Error outputs (sha3_err, sparse_fsm_error, count_error, keccak_storage_rst_error) are connected but their handling (logging, masking, alert escalation) is not visible here.",
+      "cond": "when any error is asserted",
+      "risk": "A detected fault may be ignored or not escalate to a system-wide security alert, compromising fault containment.",
+      "signals": [
+        "sha3_err",
+        "sha3_state_error",
+        "sha3_count_error",
+        "sha3_storage_rst_error"
+      ],
+      "refs": [
+        "kmac.sv:984-987"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The msg_data_masked signal is used without local verification that sha3_rand_valid is asserted concurrently with msg_valid when masking is enabled.",
+      "cond": "EnMasking=1 and a message is being sent",
+      "risk": "SHA3 may process unmasked or stale random data, exposing secrets through the digest or intermediate state.",
+      "signals": [
+        "msg_data_masked",
+        "sha3_rand_valid",
+        "msg_valid"
+      ],
+      "refs": [
+        "kmac.sv:941-942, 947"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:934-988"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 934,
+  "line_end": 991,
+  "security_implications": ""
+}

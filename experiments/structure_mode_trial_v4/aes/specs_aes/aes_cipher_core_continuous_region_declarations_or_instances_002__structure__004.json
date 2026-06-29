@@ -1,0 +1,175 @@
+{
+  "chunk_id": "aes_cipher_core_continuous_region_declarations_or_instances_002__structure__004",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "instance",
+    "driven": [
+      "prd_masking",
+      "prd_masking_rsd_ack",
+      "entropy_req_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "force_masks_i",
+      "prd_masking_upd",
+      "prd_masking_rsd_req",
+      "entropy_ack_i",
+      "entropy_i"
+    ],
+    "modes": [
+      "WidthPRDMasking",
+      "EntropyWidth",
+      "SecAllowForcingMasks",
+      "SecSkipPRNGReseeding",
+      "RndCnstMaskingLfsrSeed",
+      "RndCnstMaskingLfsrPerm"
+    ],
+    "tags": [
+      "masking",
+      "entropy",
+      "security",
+      "secret",
+      "lifecycle",
+      "prng"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "The LFSR seed and permutation parameters of the masking PRNG are fixed to RndCnstMaskingLfsrSeed and RndCnstMaskingLfsrPerm, preventing runtime manipulation of the PRNG's internal randomness sources.",
+      "cond": "always",
+      "signals": [
+        "RndCnstMaskingLfsrSeed",
+        "RndCnstMaskingLfsrPerm"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:301-302"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The output net prd_masking is driven exclusively by u_aes_prng_masking.data_o, ensuring no other direct driver interferes with the masking value.",
+      "cond": "always",
+      "signals": [
+        "prd_masking",
+        "u_aes_prng_masking.data_o"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:308"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "When entropy_req_o is asserted, the external entropy source must respond with entropy_ack_i and valid entropy_i in a timely manner.",
+      "cond": "entropy_req_o high",
+      "risk": "PRNG may stall or produce predictable masks, compromising side-channel protection.",
+      "signals": [
+        "entropy_req_o",
+        "entropy_ack_i",
+        "entropy_i"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:311-313"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "force_masks_i must be deasserted (0) during normal cryptographic operation; if SecAllowForcingMasks enables the port, asserting force_masks_i can force masks to known values.",
+      "cond": "normal operation with SecAllowForcingMasks true",
+      "risk": "Masks forced to known values can expose intermediate data and defeat masking.",
+      "signals": [
+        "force_masks_i",
+        "SecAllowForcingMasks"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:299,306"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "prd_masking_rsd_req must be pulsed appropriately to trigger reseeding when required; missing reseeding may lead to mask reuse and reduced randomness.",
+      "cond": "when reseeding is needed",
+      "risk": "Mask reuse reduces temporal randomness, weakening side-channel resistance.",
+      "signals": [
+        "prd_masking_rsd_req"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:309"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "SecSkipPRNGReseeding when true may disable reseeding of the masking PRNG; the security rationale and conditions under which this is safe are not described here.",
+      "cond": "if SecSkipPRNGReseeding is true",
+      "risk": "The PRNG may produce predictable masks without reseeding, defeating the masking countermeasure.",
+      "signals": [
+        "SecSkipPRNGReseeding"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:300"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The parent module drives force_masks_i; it is unclear whether this signal is properly gated to only test/debug states, risking accidental forcing of masks during normal operation.",
+      "cond": "unknown parent logic",
+      "risk": "Active force_masks_i during cryptographic operations can force masks to known values, exposing secrets.",
+      "signals": [
+        "force_masks_i"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:306"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "WidthPRDMasking could be inconsistent with the actual data width requiring masking; no local cross-check guarantees alignment.",
+      "cond": "if WidthPRDMasking != expected underlying data width",
+      "risk": "Misaligned mask width leads to ineffective or misaligned masking, potentially leaking information.",
+      "signals": [
+        "WidthPRDMasking"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:297"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The timing of prd_masking_upd relative to mask consumption in the data path is not bounded; stale or unsynchronized updates could leave data unprotected for some cycles.",
+      "cond": "when prd_masking_upd is asserted",
+      "risk": "Data processed with an old mask may create a side-channel leakage window.",
+      "signals": [
+        "prd_masking_upd",
+        "prd_masking"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:307"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_cipher_core.sv:296-314"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
+  "line_start": 296,
+  "line_end": 314,
+  "security_implications": ""
+}

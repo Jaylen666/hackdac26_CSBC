@@ -1,0 +1,225 @@
+{
+  "chunk_id": "sha3__always_comb__line_348__001",
+  "header": {
+    "module": "sha3",
+    "block_kind": "always_comb",
+    "driven": [
+      "error_o"
+    ],
+    "used": [
+      "st",
+      "process_i",
+      "run_i",
+      "done_i",
+      "start_i",
+      "processing"
+    ],
+    "modes": [
+      "StIdle_sparse",
+      "StAbsorb_sparse",
+      "StSqueeze_sparse",
+      "StManualRun_sparse",
+      "StFlush_sparse"
+    ],
+    "tags": [
+      "error",
+      "sparse_fsm",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "error_o defaults to valid=0, code=ErrNone, info=0 before the case statement, and remains so unless a state branch overrides it.",
+      "cond": "always",
+      "signals": [
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:349"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "In StIdle_sparse, error_o is driven valid=1, code=ErrSha3SwControl, info={done_i, run_i, process_i, start_i} when (process_i || run_i || prim_mubi_pkg::mubi4_test_true_loose(done_i)) is true. start_i alone does not trigger an error.",
+      "cond": "st == StIdle_sparse and (process_i or run_i or mubi4_test_true_loose(done_i))",
+      "signals": [
+        "st",
+        "process_i",
+        "run_i",
+        "done_i",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:352-360"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "error_detection",
+      "claim": "In StAbsorb_sparse, error_o is driven as above when (start_i || run_i || mubi4_test_true_loose(done_i) || (process_i && processing)) is true.",
+      "cond": "st == StAbsorb_sparse and (start_i or run_i or mubi4_test_true_loose(done_i) or (process_i and processing))",
+      "signals": [
+        "st",
+        "start_i",
+        "run_i",
+        "done_i",
+        "process_i",
+        "processing",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:363-371"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "error_detection",
+      "claim": "In StSqueeze_sparse, error_o is driven when (start_i || process_i) is true. run_i and done_i are allowed.",
+      "cond": "st == StSqueeze_sparse and (start_i or process_i)",
+      "signals": [
+        "st",
+        "start_i",
+        "process_i",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:374-381"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "error_detection",
+      "claim": "In StManualRun_sparse, error_o is driven when (start_i || process_i || run_i || mubi4_test_true_loose(done_i)) is true.",
+      "cond": "st == StManualRun_sparse and (start_i or process_i or run_i or mubi4_test_true_loose(done_i))",
+      "signals": [
+        "st",
+        "start_i",
+        "process_i",
+        "run_i",
+        "done_i",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:384-392"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "error_detection",
+      "claim": "In StFlush_sparse, error_o is driven when (start_i || process_i || run_i || mubi4_test_true_loose(done_i)) is true.",
+      "cond": "st == StFlush_sparse and (start_i or process_i or run_i or mubi4_test_true_loose(done_i))",
+      "signals": [
+        "st",
+        "start_i",
+        "process_i",
+        "run_i",
+        "done_i",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:395-404"
+      ]
+    },
+    {
+      "id": "G7",
+      "type": "default_fallback",
+      "claim": "For any state not explicitly listed (the default branch), error_o is never asserted, regardless of control input signals.",
+      "cond": "st is not one of StIdle_sparse, StAbsorb_sparse, StSqueeze_sparse, StManualRun_sparse, StFlush_sparse",
+      "signals": [
+        "error_o",
+        "st"
+      ],
+      "refs": [
+        "sha3.sv:406-407"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "The state signal st is always one of the five legal sparse encodings (StIdle_sparse, StAbsorb_sparse, StSqueeze_sparse, StManualRun_sparse, StFlush_sparse). If st takes an invalid value, the default branch will not assert error_o, allowing illegal control input combinations to go undetected.",
+      "cond": "always",
+      "risk": "Undetected illegal commands; potential system state corruption or safety violation.",
+      "signals": [
+        "st"
+      ],
+      "refs": [
+        "sha3.sv:406-407"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The processing signal correctly reflects that the absorption engine is busy. If processing is stuck low, the condition (process_i && processing) in StAbsorb_sparse never fires, missing a double-process error. If processing spuriously high, false error may be reported.",
+      "cond": "when st == StAbsorb_sparse and process_i is asserted",
+      "risk": "Incorrect error detection: either missing an illegal overlapping request or generating a false software error.",
+      "signals": [
+        "processing",
+        "process_i",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:365"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "The done_i input is a valid mubi4-encoded signal such that prim_mubi_pkg::mubi4_test_true_loose returns true only for correctly asserted multibit patterns. If done_i carries X or an illegal encoding, the error detection may behave unpredictably.",
+      "cond": "when st uses done_i in its error condition",
+      "risk": "False error assertion or missed error detection, compromising software handshake integrity.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "sha3.sv:353-354",
+        "sha3.sv:364",
+        "sha3.sv:385-386",
+        "sha3.sv:396-397"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If st takes an illegal encoding (e.g., through a fault attack or soft error), the default case does not assert any error even when control inputs are illegal. This could allow the hardware to process commands in an undefined state, potentially breaking security properties (e.g., absorbing/squeezing out of order).",
+      "cond": "st is not one of the five legal sparse values",
+      "risk": "Unchecked commands in corrupted state; possible data leakage or integrity failure.",
+      "signals": [
+        "st",
+        "error_o"
+      ],
+      "refs": [
+        "sha3.sv:406-407"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "In StIdle_sparse, the error condition does not include start_i, while all other states (except StSqueeze_sparse which also omits run_i/done_i) either include it or treat it as an error. It is unclear whether start_i should be illegal during Idle according to the system specification.",
+      "cond": "st == StIdle_sparse and start_i is true",
+      "risk": "If the specification forbids start_i in Idle, this detection gap may allow an unexpected software command to proceed unnoticed.",
+      "signals": [
+        "st",
+        "start_i"
+      ],
+      "refs": [
+        "sha3.sv:352-360"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:348-409"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
+  "line_start": 348,
+  "line_end": 409,
+  "security_implications": ""
+}

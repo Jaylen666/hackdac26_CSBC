@@ -1,49 +1,89 @@
 {
   "chunk_id": "kmac_core__always_ff__line_286__001",
-  "summary": "该片段实现了状态错误计数/寄存器 st_err_ct 的异步低有效复位和正常更新通路。",
-  "behavior": "该寄存器块只控制 `st_err_ct`。当 `rst_ni` 被拉低时，`st_err_ct` 被清零为 `'0`；否则 `st_err_ct` 装载下一状态值 `st_err_ct_d`。片段本身不包含保持条件、饱和逻辑或错误检测条件，这些行为若存在应由 `st_err_ct_d` 的生成逻辑决定。",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "st_err_ct"
+    ],
+    "used": [
+      "rst_ni",
+      "st_err_ct_d",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位有效时，`st_err_ct` 被强制清零。",
-      "output_signals": [
-        "st_err_ct"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "st_err_ct is cleared to zero on reset (rst_ni low) and updated with st_err_ct_d on every rising clock edge while rst_ni is high.",
+      "cond": "always on posedge clk_i or negedge rst_ni",
+      "signals": [
+        "st_err_ct",
+        "st_err_ct_d",
+        "clk_i",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:286-288"
-      ]
-    },
-    {
-      "property": "非复位情况下，`st_err_ct` 的寄存值始终跟随 `st_err_ct_d`。",
-      "output_signals": [
-        "st_err_ct"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:287-288"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:286-289"
       ]
     }
   ],
-  "security_implications": "`st_err_ct` 从命名看像是状态错误计数相关寄存器，复位时清零可避免复位后残留错误状态影响后续安全判断。但该片段本身仅实现寄存，是否用于安全告警、错误升级或篡改检测，需要结合 `st_err_ct_d` 的生成与消费逻辑确认。",
   "assumptions": [
     {
-      "constraint": "`st_err_ct_d` 在非复位工作模式下应由上游逻辑产生合法且稳定的下一状态值，以正确表达预期的错误计数/状态更新语义。",
-      "bug_relevance": "如果违反，该寄存器会无条件装载错误的下一状态，导致错误计数失真，进而可能造成误报、漏报或错误恢复流程异常；这属于行为契约问题。",
-      "related_signals": [
-        "st_err_ct_d",
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "st_err_ct_d must be driven with the correct next error count value (e.g., incremented on error events, cleared when appropriate).",
+      "cond": "during normal operation when rst_ni is high",
+      "risk": "st_err_ct may accumulate an incorrect error count, causing failure in error threshold detection or reporting.",
+      "signals": [
+        "st_err_ct_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:288"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "lifecycle",
+      "claim": "rst_ni must be asserted (low) at startup to initialize st_err_ct to zero, as the register value after power-up is unknown.",
+      "cond": "before the first use of st_err_ct value",
+      "risk": "st_err_ct may contain unknown garbage, leading to incorrect error threshold comparisons and potential false alerts or missed errors.",
+      "signals": [
+        "rst_ni",
         "st_err_ct"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:287-288"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:286-289"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The driving logic for st_err_ct_d is not in this chunk; its implementation could mis-handle error counting (under-count, over-count, missing clear), affecting error reporting.",
+      "cond": "when st_err_ct_d is generated in another module/process",
+      "risk": "Could mask error conditions or generate spurious error interrupts, compromising system safety or reliability monitoring.",
+      "signals": [
+        "st_err_ct_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:288"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:286-289"
   ],
-  "uncertain_points": [
-    "`st_err_ct` 的具体语义、位宽以及是否为饱和计数器无法从该片段单独确定；这些取决于 `st_err_ct_d` 的组合生成逻辑和后续使用位置。",
-    "该复位是否在系统层面被视为安全擦除/错误清除的一部分，仅凭本片段无法确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 286,
-  "line_end": 289
+  "line_end": 289,
+  "security_implications": ""
 }

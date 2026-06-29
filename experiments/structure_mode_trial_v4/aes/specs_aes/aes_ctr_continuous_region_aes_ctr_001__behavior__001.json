@@ -1,0 +1,148 @@
+{
+  "chunk_id": "aes_ctr_continuous_region_aes_ctr_001__behavior__001",
+  "header": {
+    "module": "aes_ctr",
+    "block_kind": "declaration",
+    "driven": [
+      "ready_o",
+      "alert_o",
+      "ctr_o",
+      "ctr_we_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "incr_i",
+      "ctr_i"
+    ],
+    "modes": [
+      "sp2v_e",
+      "NumSlicesCtr",
+      "SliceSizeCtr"
+    ],
+    "tags": [
+      "handshake",
+      "parameterization",
+      "alert",
+      "reset"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "lifecycle",
+      "claim": "rst_ni must be asserted (low) for at least one clock cycle to initialize the module's internal state.",
+      "cond": "always after power-up or when reset is triggered",
+      "risk": "Internal state may be undefined, leading to incorrect counter updates or spurious alert assertion.",
+      "signals": [
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "file:12-13"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "incr_i must be driven to a valid sp2v_e encoding (e.g., idle or increment request) to avoid deadlock.",
+      "cond": "when the module is expected to advance the counter",
+      "risk": "The module may stall indefinitely, never asserting ready_o, causing system-level hang.",
+      "signals": [
+        "incr_i"
+      ],
+      "refs": [
+        "file:15"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "width_param_hazard",
+      "claim": "The external dimensions NumSlicesCtr and SliceSizeCtr must match the expected counter width of the connected logic.",
+      "cond": "when interfacing the counter ports ctr_i and ctr_o with other modules",
+      "risk": "Data truncation or zero-extension may lead to incorrect counter values, potentially exposing sensitive plaintext or causing integrity failures.",
+      "signals": [
+        "ctr_i",
+        "ctr_o",
+        "ctr_we_o"
+      ],
+      "refs": [
+        "file:19-21"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact handshake semantics between incr_i and ready_o are not defined in this chunk; it is unknown whether ready_o indicates acceptance of incr_i and when ctr_o becomes valid relative to this handshake.",
+      "cond": "during every incr_i / ready_o transaction",
+      "risk": "Potential functional mismatch if the handshake is misinterpreted, leading to missed increments or duplicated counter values.",
+      "signals": [
+        "incr_i",
+        "ready_o",
+        "ctr_o"
+      ],
+      "refs": [
+        "file:15-16"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The alert_o output is declared but there is no local description of its trigger conditions; it is unclear if it fires on integrity errors, protocol violations, or fatal faults, and whether it is sticky or maskable.",
+      "cond": "whenever an internal error condition is detected",
+      "risk": "If alert_o is not correctly handled externally, a security fault may go unnoticed or be spuriously cleared, compromising system integrity.",
+      "signals": [
+        "alert_o"
+      ],
+      "refs": [
+        "file:17"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The update timing of ctr_o and ctr_we_o relative to incr_i and ready_o is unknown; they could be registered or combinational, possibly causing stale values or race conditions in multi-slice configurations.",
+      "cond": "when incr_i is asserted and multiple slices are updated",
+      "risk": "Incorrect counter values may propagate to downstream AES rounds, breaking confidentiality or data integrity.",
+      "signals": [
+        "ctr_o",
+        "ctr_we_o",
+        "incr_i",
+        "ready_o",
+        "clk_i"
+      ],
+      "refs": [
+        "file:19-21"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "If NumSlicesCtr or SliceSizeCtr is set to 0, the array ports become zero-width, which may cause simulation mismatches or synthesis warnings, and the intended functionality becomes unclear.",
+      "cond": "when parameters are configured to zero",
+      "risk": "The module may be functionally dead or not synthesizable as expected, possibly masking a design error.",
+      "signals": [
+        "ctr_i",
+        "ctr_o",
+        "ctr_we_o"
+      ],
+      "refs": [
+        "file:19-21"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:10-22"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_ctr.sv",
+  "line_start": 10,
+  "line_end": 22,
+  "security_implications": ""
+}

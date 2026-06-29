@@ -1,0 +1,197 @@
+{
+  "chunk_id": "aes_sub_bytes__generate_for__gen_sbox_j__001",
+  "header": {
+    "module": "aes_sub_bytes",
+    "block_kind": "mixed",
+    "driven": [
+      "in_prd",
+      "data_o",
+      "mask_o",
+      "out_prd",
+      "out_req"
+    ],
+    "used": [
+      "out_prd",
+      "prd_i",
+      "aes_rot_int",
+      "clk_i",
+      "rst_ni",
+      "en",
+      "SP2V_HIGH",
+      "out_ack",
+      "op_i",
+      "data_i",
+      "mask_i"
+    ],
+    "modes": [
+      "generate indices i (0..3), j (0..3)",
+      "SecSBoxImpl parameter"
+    ],
+    "tags": [
+      "mask",
+      "entropy",
+      "handshake",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Each (i,j) slice assigns in_prd[i][j] = {out_prd[i][aes_rot_int(j,4)], prd_i[i][j]} combinatorially, concatenating MSBs from rotated out_prd and LSBs from prd_i.",
+      "cond": "always combinational",
+      "signals": [
+        "in_prd",
+        "out_prd",
+        "prd_i",
+        "aes_rot_int"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:74"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "Generates one aes_sbox instance per (i,j) that drives data_o[i][j], mask_o[i][j], out_prd[i][j], out_req[i][j] from the connected inputs and the SecSBoxImpl parameter.",
+      "cond": "always instantiated",
+      "signals": [
+        "data_o",
+        "mask_o",
+        "out_prd",
+        "out_req",
+        "clk_i",
+        "rst_ni",
+        "en_i",
+        "out_ack_i",
+        "op_i",
+        "data_i",
+        "mask_i",
+        "prd_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:76-91"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "Each aes_sbox instance's enable en_i is driven as (en == SP2V_HIGH) and out_ack_i as (out_ack == SP2V_HIGH), making handshake control depend on scalar equality checks.",
+      "cond": "always combinational",
+      "signals": [
+        "en",
+        "SP2V_HIGH",
+        "out_ack",
+        "en_i",
+        "out_ack_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:81:83"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "en and out_ack are single-bit signals, and SP2V_HIGH equals 1'b1, so that the equality comparisons produce the intended enable and acknowledge semantics.",
+      "cond": "whenever the S-Box instances are active",
+      "risk": "If en or out_ack are wider than 1 bit, the comparisons may always be false, permanently disabling all S-Box instances and breaking the masked datapath.",
+      "signals": [
+        "en",
+        "out_ack",
+        "SP2V_HIGH"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:81:83"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "aes_rot_int(j,4) returns a value in [0,3] for j in [0,3] so that out_prd[i][aes_rot_int(j,4)] is a valid index.",
+      "cond": "always",
+      "risk": "An out-of-range index could drive X or undefined values on the MSBs of in_prd, corrupting the PRNG mixing and potentially leaking mask information.",
+      "signals": [
+        "aes_rot_int",
+        "out_prd",
+        "in_prd"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:74"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "out_prd[i][*] signals are driven by the corresponding S-Box instances before being used in the in_prd assignment; the schedule ensures out_prd is stable when sampled.",
+      "cond": "during active operation",
+      "risk": "If out_prd is not yet valid (e.g., due to cross-instance ordering or startup), in_prd receives unstable or X MSBs, breaking the entropy mixing and potentially exposing secrets.",
+      "signals": [
+        "out_prd",
+        "in_prd"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:74"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The in_prd assignment feeds out_prd (output of aes_sbox) back into prd_i of the same instance. If aes_sbox has a combinational path from prd_i to prd_o, this forms a combinational loop; even if registered, the rotation across instances may violate setup/hold or cause data ordering hazards.",
+      "cond": "depends on internal aes_sbox timing",
+      "risk": "Combinational loops cause simulation/synthesis mismatches or silicon oscillation; incorrect ordering breaks mask entropy, threatening side-channel resistance.",
+      "signals": [
+        "in_prd",
+        "out_prd",
+        "prd_i",
+        "prd_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:74:90"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "in_prd uses out_prd[i][aes_rot_int(j,4)] from a different column instance of the same row. The cross-instance dependency requires careful sequencing to ensure the sourced instance has produced a valid out_prd; otherwise MSBs may be X or stale.",
+      "cond": "during enable sequence",
+      "risk": "Invalid or stale entropy MSBs corrupt the masking quality, potentially exposing intermediate state in a security-critical S-Box.",
+      "signals": [
+        "out_prd",
+        "in_prd",
+        "aes_rot_int"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:71-74"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The signals en and out_ack may be wider than one bit in the actual design; the equality (en == SP2V_HIGH) would then reduce to a single-bit comparison that may not reflect the intended per-instance control and could silently disable the S-Boxes.",
+      "cond": "if en or out_ack are not scalar",
+      "risk": "Complete loss of S-Box functionality under a valid multi-bit configuration, hiding bugs and breaking the masked cipher.",
+      "signals": [
+        "en",
+        "out_ack",
+        "SP2V_HIGH"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:81:83"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv:68-93"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_sub_bytes.sv",
+  "line_start": 68,
+  "line_end": 93,
+  "security_implications": ""
+}

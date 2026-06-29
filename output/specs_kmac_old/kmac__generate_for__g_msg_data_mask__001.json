@@ -1,0 +1,51 @@
+{
+  "chunk_id": "kmac__generate_for__g_msg_data_mask__001",
+  "summary": "对每个消息 share 生成同一套按配置使能的静态掩码异或逻辑，得到 masked message 数据。",
+  "behavior": "该 generate-for 循环为每个 `i` 从 0 到 `Share-1` 的消息 share 生成一条组合赋值：`msg_data_masked[i]` 等于 `msg_data[i]` 与一个条件掩码做异或，其中条件掩码为 `({MsgWidth{cfg_msg_mask}} & static_mask)`。因此，当 `cfg_msg_mask` 为 0 时，复制得到的全宽屏蔽向量为 0，`msg_data_masked[i]` 直接等于 `msg_data[i]`；当 `cfg_msg_mask` 为 1 时，`msg_data_masked[i]` 等于 `msg_data[i] ^ static_mask`。注释表明这是“optimized masking scheme”，说明设计意图是对消息数据施加一种可开关的静态掩码；实际 RTL 中该同一个掩码被独立应用到所有 share。",
+  "guarantees": [
+    {
+      "property": "当 `cfg_msg_mask` 为 0 时，所有 `msg_data_masked[i]` 都与对应的 `msg_data[i]` 完全相同。",
+      "output_signals": [
+        "msg_data_masked"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927"
+      ]
+    },
+    {
+      "property": "当 `cfg_msg_mask` 为 1 时，所有 `msg_data_masked[i]` 都等于对应 `msg_data[i]` 与 `static_mask` 的按位异或结果，且各 share 使用相同的 `static_mask`。",
+      "output_signals": [
+        "msg_data_masked"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接参与消息掩码处理。`cfg_msg_mask` 可关闭掩码，此时内部后续逻辑看到的是未掩码的消息 share；开启后则使用同一个 `static_mask` 对所有 share 做按位异或。注释称其为优化的 masking 方案，但仅凭本片段无法确认这种静态、跨 share 共享的掩码是否满足更高层的侧信道防护目标，需结合 `static_mask` 的来源和 share 编码方式进一步确认。",
+  "assumptions": [
+    {
+      "constraint": "`static_mask` 的位宽应与 `MsgWidth` 对齐，并且 `msg_data[i]`/`msg_data_masked[i]` 的每个元素都按 `MsgWidth` 定义；否则该按位与和异或的预期逐位掩码语义将不成立。",
+      "bug_relevance": "如果不满足，会导致掩码覆盖范围或位对齐错误，从而产生错误的消息数据变换；这属于行为契约问题，因为该逻辑功能本身依赖逐位对应关系。",
+      "related_signals": [
+        "static_mask",
+        "msg_data",
+        "msg_data_masked",
+        "MsgWidth"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:925-926"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927"
+  ],
+  "uncertain_points": [
+    "注释称为“optimized masking scheme”，但本片段只显示条件性地将同一个 `static_mask` 异或到每个 share，上下文不足以确认该方案相对于完整 masking 架构的安全性和优化目标。",
+    "无法仅从本片段判断 `static_mask` 是常量、会话内固定值、还是随时间变化的值；这会影响实际安全属性，但不影响此处组合逻辑的功能描述。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 923,
+  "line_end": 927
+}

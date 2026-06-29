@@ -1,0 +1,81 @@
+============================================================
+Pass 0: Signal Dependency Graph (keymgr)
+============================================================
+SignalGraph: 571 signals (510 driven, 316 consumed), 453 A-G pairs to check, 94 specs indexed
+A-G pairs: 453 total -> 453 after filter (100%)
+  Semantic AG: building BGE-M3 pairing ...
+  Semantic AG summary written to /home/smy/rtl_bug_agent/formal_csbc_v2/semantic_ag_shadow_keymgr.json
+  Semantic AG: 1058 pairs, 342 query units, 29 unmatched uncertain → Phase 3
+  Semantic AG batching: mode=single, 342 Channel B calls, 1.0 avg queries/call
+  Uncertain collector: skipped weak-assumption injection because semantic AG handles uncertain points directly
+
+============================================================
+Layer 1 — Channel B: Assumption-Guarantee Pairing
+============================================================
+  Channel B semantic: 342 units from checkpoint, 0 remaining
+  Channel B semantic done: 342 total findings
+
+Channel C: skipped (--channels)
+
+Channel D: skipped (--channels)
+
+Layer 2: skipped (--channels)
+
+============================================================
+Channel F: Property Synthesis for Unpaired Items
+============================================================
+  Channel F done: 51 findings (3 PENDING SVA, 33 gated out)
+
+============================================================
+Pass 3: Fusion + Ranking
+============================================================
+Findings: 53 total  (cross-channel: 11)
+  HIGH:   5
+  MEDIUM: 38
+  LOW:    10
+  Verdicts: {'CONTRADICTION': 11, 'GAP': 32, 'UNCERTAIN': 10}
+
+  [HIGH  ] [B-AG+F-SVA     ]  [B-AG+F-SVA] 设计分区矛盾：规范假设 keymgr 的某连续区域不处理错误信号，但实现中却将 shadowed_update_err_i 连接至 async_err_o，违背了该区域“不包含错误处理逻辑”的假设，可能导致后续集成
+           signals: shadowed_update_err, key_state_ecc_words_d, op_update_i, op_update_o, reg2hw.reseed_interval_shadowed.q
+  [HIGH  ] [B-AG+F-SVA     ]  [B-AG+F-SVA] keymgr_ctrl 的密钥生成部分（信号 kmac_key）未被任何 guarantee 覆盖，缺少对关键数据通路正确性的验证。
+  [HIGH  ] [B-AG+F-SVA     ]  [B-AG+F-SVA] 当 UseOtpSeedsInsteadOfFlash 为真时，硬件未提供对 otp_key_i.owner_seed 有效且稳定的保证。这可能导致 owner 进阶矩阵使用了无效或持续变化的种子，从而派生出错误或
+  [HIGH  ] [B-AG           ]  模块 keymgr_input_checks 未强制 key_chk 在 key_vld_o 有效前稳定且无 X，可能导致 key_vld_o 在 key_chk 未完成检查或包含不定态时被错误断言/去断言，进而引起错误的密钥接受或拒绝。
+           signals: key_chk
+  [HIGH  ] [B-AG           ]  在 StSideloadIdle 状态下发起擦除时，keys_en 信号仍有效，导致密钥在擦除期间可被外部接口访问，造成密钥泄露风险。
+           signals: keys_en
+  [MEDIUM] [B-AG+F-SVA     ]  [B-AG+F-SVA] 当 vld_set 和 out_clr 在同一周期有效时，硬件逻辑通过 ~out_clr 掩码将输出强制清零，违背了 set 优先的规范，可能导致关键状态寄存器错误清除。
+  [MEDIUM] [B-AG+F-SVA     ]  [B-AG+F-SVA] 下游逻辑可能错过 fault_err_req_q 的单周期错误脉冲，导致硬件错误未被处理，影响系统安全状态。
+  [MEDIUM] [B-AG+F-SVA     ]  [B-AG+F-SVA] 当 AdvDataWidth 不能被 32 整除时，AdvLfsrCopies = AdvDataWidth/32（整数除法）会使副本数量少于实际需要（ceil(AdvDataWidth/32)），可能造成 LFS
+  [MEDIUM] [B-AG+F-SVA     ]  [B-AG+F-SVA] adv_dvalid[Owner] is tied high independently of the validity of owner_seed. The chunk does not check any va
+  [MEDIUM] [B-AG+F-SVA     ]  [B-AG+F-SVA] stage_sel drives an array index without a default case or assertion to keep it within {Creator, OwnerInt, O
+  ... and 43 more
+
+============================================================
+Formal Solver: Executing PENDING SVAs
+============================================================
+Formal runner: no PENDING SVAs.
+
+============================================================
+Per-Channel Statistics
+============================================================
+  Channel B           :  224 items
+  Channel C           :    0 items
+  Channel D           :    0 items
+  Layer 2             :    0 items
+  Uncertain (ChB)     :    0 items
+  Uncertain (Ph3)     :   29 items
+  Total findings      :   53 merged
+  Total LLM calls     : 18
+  Total tokens        : 44,416
+  Wall time           : 93s (1.5min)
+
+Phase 3: skipped (Layer 2 required for official claims, but L2 is disabled)
+Wrote /home/smy/rtl_bug_agent/formal_csbc_v2/findings_keymgr.json
+
+============================================================
+Run Statistics
+============================================================
+  LLM calls:  18 (0 errors)
+  Tokens:     44,416 total (24,188 in / 20,228 out)
+  Wall time:  280s (4.7 min)
+  Total wall time: 93s (1.5 min)

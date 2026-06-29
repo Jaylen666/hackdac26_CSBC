@@ -1,0 +1,554 @@
+{
+  "batch": 3,
+  "source_batch": "/home/smy/rtl_bug_agent/formal_csbc_v2/phase3_batches/batch_3_of_3.json",
+  "prompt": "/home/smy/rtl_bug_agent/config/prompts/phase3/verify.md",
+  "rtl_root": "/home/smy/opentitan/hw/ip/keymgr/rtl/",
+  "count": 18,
+  "results": [
+    {
+      "finding_id": "F-0243",
+      "input": {
+        "title": "signal init_o is used in the update_sel mux to drive KeyUpdateRoot but is not defined in this chunk. The condition under",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption 是对 init_o 驱动 KeyUpdateRoot 的潜在风险警告，并未给出明确的功能约束。guarantees 描述了 init_q 的生成逻辑，但未建立 init_o 与 init_q 的直接联系，也未提供 keymgr_ctrl 中 update_sel 如何受 init_o 影响的保护机制。无法判断这一假设是否已被满足，需进一步确认设计和跨模块连接。",
+        "involved_signals": [
+          "init_o"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__int__001",
+          "keymgr_cfg_en__always_ff__line_40__001",
+          "keymgr_cfg_en__continuous_region__keymgr_cfg_en__001"
+        ],
+        "formal_result": {
+          "status": "FAIL",
+          "engine": "sby_z3",
+          "duration_s": 0.33,
+          "trace_file": null,
+          "error_log": null,
+          "sva": "assert property (@(posedge clk_i) disable iff (!rst_ni) ($rose(init_o) |-> $past(init_i) && $past(en_i)));",
+          "verdict": "FAIL"
+        }
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.93,
+        "summary": "The RTL defines `init_o` locally and only asserts it in the dedicated root-key load state. The reported risk of an uncontrolled `KeyUpdateRoot` select does not match the implemented control flow.",
+        "root_cause": "The report treated `init_o` as an undefined chunk-local signal. In `keymgr_ctrl`, `update_sel` uses `init_o` at lines 230-232, `init_o` defaults to `0` at line 499, and it is asserted only in `StCtrlRootKey` at line 555 after the reset->reseed->random sequence at lines 510-558.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "Manual trace shows a single legal root-key update path. `StCtrlReset` accepts only advance and moves to `StCtrlEntropyReseed` and then `StCtrlRandom` (keymgr_ctrl.sv:510-550). `StCtrlRootKey` alone sets `init_o = 1'b1` (keymgr_ctrl.sv:553-558). The actual key update mux then selects `KeyUpdateRoot` only while `init_o` is high (keymgr_ctrl.sv:229-232), and the root-key write itself is guarded by `root_key_valid_q` in `KeyUpdateRoot` (keymgr_ctrl.sv:343-357, 381-400). This is a defined, narrow path rather than an unconstrained mux input.",
+        "additional_findings": [],
+        "formal_alignment": "The formal FAIL does not align with the RTL analysis. The SVA checks `$rose(init_o)` against an `init_i/en_i` condition that does not represent the actual root-key load gating in `keymgr_ctrl`; the real gate is the FSM entering `StCtrlRootKey`."
+      }
+    },
+    {
+      "finding_id": "F-0244",
+      "input": {
+        "title": "The async_err_o output of keymgr_err is left unconnected. It is unclear whether asynchronous errors are intentionally ig",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption 描述的是 async_err_o 在 keymgr_ctrl 中未连接的事实，不确定这是有意忽略还是设计遗漏。Driver 的 guarantee 说明了 async_err_o 在 keymgr_err 内部如何产生，但没有定义该输出在集成层是否必须被连接或处理。由于缺乏关于“异步错误是否必须被响应”的设计规范，无法判断未连接的场景是设计意图还是协议漏洞，因此不能确定 guarantee 是否满足或违背了 assumption。",
+        "involved_signals": [
+          "async_err_o"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+          "keymgr_err__continuous_region__declarations_or_instances__003",
+          "keymgr_err__continuous_region__declarations_or_instances__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.95,
+        "summary": "Leaving the raw `async_err_o` port unconnected in `keymgr_ctrl` does not drop the shadow-update error. The error is already consumed inside `keymgr_err` through `error_o`.",
+        "root_cause": "The report focuses on the unused output pin rather than the actual error path. `keymgr_err` maps `shadowed_update_err_i` to `async_err_o[AsyncErrShadowUpdate]` and then immediately to `error_o[ErrShadowUpdate]` (keymgr_err.sv:89, 132-150). `keymgr_ctrl` consumes `error_o` and `fault_o`, so the open `async_err_o()` connection at instantiation does not remove handling (keymgr_ctrl.sv:835-869).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "In `keymgr_err`, the asynchronous shadow update error is not only exposed on `async_err_o`; it is also folded into `error_o[ErrShadowUpdate]` with no extra dependency on the external port (keymgr_err.sv:88-90, 132-134). `keymgr_ctrl` instantiates `keymgr_err` with `.async_err_o()` left open but still wires `.error_o` and `.fault_o` (keymgr_ctrl.sv:835-869). At top level, those error bits are written into the visible error CSRs (keymgr.sv:672-677). So the raw auxiliary output is unused, but the error itself is not ignored.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0245",
+      "input": {
+        "title": "The assertion SameErrCnt_A relies on parameters SyncFaultLastIdx and AsyncFaultLastIdx that are not locally defined; a m",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption 担心参数独立更新时 SameErrCnt_A 的依赖关系未被检测，guarantee 提供了一个 elaboration 期间的静态检查 FaultCntMatch_A。该检查的有效性强烈依赖于 FaultLastPos 本身的定义方式（是由参数推导出的表达式，还是独立配置的常量）。若 FaultLastPos 被定义为两者之和，该断言恒成立，无法暴露 SameErrCnt_A 的隐藏假设错误；若 FaultLastPos 为独立参数，则可在编译期捕获不一致。当前信息不足以判定具体实现方式，因此无法确定 guarantee 是否真正弥补了 assumption 所指的风险。",
+        "involved_signals": [
+          "AsyncFaultLastIdx"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__keymgr_err_err__001",
+          "keymgr__continuous_region__declarations_or_instances__009"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.94,
+        "summary": "The relevant fault-count constants are package enum terminators, not ad hoc local knobs, and the design contains elaboration-time consistency checks for them. The claimed mismatch hole is not present in this RTL.",
+        "root_cause": "`SyncFaultLastIdx`, `AsyncFaultLastIdx`, and `FaultLastPos` are defined in `keymgr_pkg` as enum endpoints (keymgr_pkg.sv:164-184, 197-213). The top-level and control-level assertions check the register width against those package values (`FaultCntMatch_A` in keymgr.sv:789 and `SameErrCnt_A` in keymgr_ctrl.sv:878-879).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "This is not a runtime signal-path bug. The package defines the sync-fault and async-fault enum spaces and the combined fault-status bit positions in one place (keymgr_pkg.sv:164-184, 197-213). `keymgr.sv` asserts `FaultLastPos == AsyncFaultLastIdx + SyncFaultLastIdx` at elaboration (keymgr.sv:789), and `keymgr_ctrl.sv` separately asserts that the fault-status CSR type width matches the same sum (keymgr_ctrl.sv:878-879). That is exactly the sort of structural check the report claims is missing.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0246",
+      "input": {
+        "title": "adv_state is blocked while op_err is high; if op_err remains asserted after a transaction, the FSM may never advance.",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "(1) 无法确定 adv_state 与 guarantee 中引用的 state / state_d 是否为同一状态机，且假设中的“阻塞”是指完全停止所有状态转换还是仅阻止特定进展路径不明确；(2) 第一个 guarantee 在 StWait→StIdle 转换时未考虑 op_err，若此转换属于 adv_state 的进展则可能违反假设，但缺乏证据；(3) 第三个 guarantee 表明 op_err=1 会阻止 sw_binding_unlock_o 的断言，与该假设部分一致，但未完全覆盖。因此整体判定为不确定。",
+        "involved_signals": [
+          "op_ack"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "keymgr_ctrl__continuous_region__int__001"
+        ],
+        "formal_result": {
+          "status": "FAIL",
+          "engine": "sby_z3",
+          "duration_s": 0.33,
+          "trace_file": null,
+          "error_log": null,
+          "sva": "assert property (@(posedge clk_i) disable iff (!rst_ni) (op_err) |-> $stable(adv_state));",
+          "verdict": "FAIL"
+        }
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.9,
+        "summary": "`op_err` intentionally suppresses a successful stage advance for the current operation, but it does not create a persistent deadlock. A failing operation completes as failed, and later operations can advance normally.",
+        "root_cause": "The report conflates a one-operation failure gate with a stuck FSM. `adv_state` is defined as `op_ack & adv_req & ~op_err` (keymgr_ctrl.sv:456-460), and `op_update_sel` routes failing operations to `KeyUpdateIdle` instead of changing key state (keymgr_ctrl.sv:784-788). `sync_err_q` is cleared on `op_done_i` in `keymgr_err` (keymgr_err.sv:77-86), so `op_err` is not sticky across later operations.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The main control FSM only advances to the next key stage on `adv_state`, which is explicitly a success condition: `op_ack & adv_req & ~op_err` (keymgr_ctrl.sv:456-460, 563-636). When an operation hits a sync error, `op_update_sel` chooses `KeyUpdateIdle` instead of `KeyUpdateKmac`, so the operation finishes without committing a stage change (keymgr_ctrl.sv:784-788). This is consistent with `status_o`, which reports `OpDoneFail` when `error_o` or `fault_o` is set (keymgr_ctrl.sv:739-748). The error latch in `keymgr_err` is cleared on `op_done_i` (keymgr_err.sv:77-86), so the design rejects the bad operation but is not trapped forever.",
+        "additional_findings": [],
+        "formal_alignment": "The formal FAIL does not align with the bug claim. The property checks whether a combinational success qualifier stays stable while `op_err` is high, not whether the stage FSM can make progress after the failing operation completes and the error latch clears."
+      }
+    },
+    {
+      "finding_id": "F-0247",
+      "input": {
+        "title": "adv_en_i is a top-priority signal that aborts even in Idle, directly going to Dis without any data enable. The intended ",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "The assumption describes an expected priority behavior for adv_en_i (aborting and transitioning to Dis state even in Idle) but the intended semantics (advance/disable) are not fully documented and the assumption itself is flagged as uncertain by the LLM. It is unclear whether this scenario represents a legal input or an illegal corner case. The guarantees primarily specify the behavior of the output signal adv_en_o and error detection, but do not explicitly describe how the system should respond",
+        "involved_signals": [
+          "adv_en_i"
+        ],
+        "involved_specs": [
+          "keymgr_data_en_state__always_comb__line_78__001",
+          "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "keymgr_ctrl__continuous_region__keymgr_op_state_ctrl_op_state__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.96,
+        "summary": "The data-enable FSM is explicitly designed to disable data paths during advance operations. The reported behavior is the intended protection, not an abort bug.",
+        "root_cause": "The module comment states that data is enabled only for non-advance operations and that any advance indication forces the path disabled until completion (keymgr_data_en_state.sv:71-77). The Idle and enabled states implement exactly that policy (keymgr_data_en_state.sv:85-118).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "In `StCtrlDataIdle`, `adv_en_i` has priority and sends the FSM to `StCtrlDataDis` immediately (keymgr_data_en_state.sv:85-94). That is consistent with the documented purpose of the block: suppress data-path enable during advance and only assert `data_hw_en_o/data_sw_en_o` for generate or ID operations (keymgr_data_en_state.sv:71-77). The same policy is reinforced in `StCtrlDataHwEn` and `StCtrlDataSwEn`, where any `adv_en_i` causes a transition back to disabled (keymgr_data_en_state.sv:97-118).",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0248",
+      "input": {
+        "title": "无法确定 op_done_i / op_update_i 脉冲宽度异常时硬件行为是否正确，需补充时序约束或防御逻辑。",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "无法确定 op_done_i / op_update_i 脉冲宽度异常时硬件行为是否正确，需补充时序约束或防御逻辑。",
+        "involved_signals": [
+          "op_done_i"
+        ],
+        "involved_specs": [
+          "keymgr_err__always_ff__line_77__001",
+          "keymgr_err__always_ff__line_95__001",
+          "keymgr_err__continuous_region__keymgr_err__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.92,
+        "summary": "`op_done_i` and `op_update_i` are not free external pulses here; they are internal one-cycle control signals generated by the operation FSM, and that FSM makes them mutually exclusive.",
+        "root_cause": "In `keymgr_op_state_ctrl`, `StAdv` emits either `op_ack_o` or `op_update_o` depending on the CDI counter, never both, and `StWait` emits only `op_ack_o` (keymgr_op_state_ctrl.sv:72-97). `keymgr_err` then uses `op_done_i` priority over `op_update_i` as defensive sequencing (keymgr_err.sv:65-66, 77-84, 95-103).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The producer of these signals is local RTL, not an unconstrained environment. In `StAdv`, if `kmac_done_i` arrives on the last CDI, `op_ack_o` is asserted and the FSM returns to `StIdle`; if not on the last CDI, `op_update_o` is asserted and the FSM goes to `StAdvAck` (keymgr_op_state_ctrl.sv:72-81). In `StWait`, only `op_ack_o` is possible (keymgr_op_state_ctrl.sv:89-97). `keymgr_err` uses `err_vld = op_update_i | op_done_i` and clears or captures its latches with explicit precedence (keymgr_err.sv:65-66, 77-84, 95-103). There is no RTL path here that generates an ambiguous simultaneous multi-cycle handshake.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0249",
+      "input": {
+        "title": "无法判定具体硬件错误，因为 sync_fault_o 的行为未在提供的 guarantee 中明确定义，假设本身也只是指出风险，未能形成可对比的断言。",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "无法判定具体硬件错误，因为 sync_fault_o 的行为未在提供的 guarantee 中明确定义，假设本身也只是指出风险，未能形成可对比的断言。",
+        "involved_signals": [
+          "sync_fault_d"
+        ],
+        "involved_specs": [
+          "keymgr_err__continuous_region__batched_small_assigns__001",
+          "keymgr_err__always_ff__line_95__001",
+          "keymgr_ctrl__continuous_region__int__001",
+          "keymgr_err__continuous_region__declarations_or_instances__003"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.97,
+        "summary": "The implementation fully defines `sync_fault_o`: its sources, latch/update behavior, clear condition, and downstream use are all explicit in `keymgr_err`.",
+        "root_cause": "`sync_fault_d` is driven from `kmac_op_err_i`, `invalid_kmac_out_i`, and `sideload_sel_err_i` under `err_vld`; `sync_fault_q` clears on `op_done_i`, captures on `op_update_i`, and `sync_fault_o` is `sync_fault_q | sync_fault_d` (keymgr_err.sv:92-104).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "This report says behavior is undefined, but the RTL is explicit. `err_vld` is `op_update_i | op_done_i` (keymgr_err.sv:65-66). Each sync-fault source is assigned into `sync_fault_d` (keymgr_err.sv:92-94). The registered latch clears on operation completion and updates on intermediate advance rounds (keymgr_err.sv:95-103). The combined result feeds `sync_fault_o` (keymgr_err.sv:104), then `fault_o` and `op_fault_err` downstream (keymgr_err.sv:137-150, keymgr_ctrl.sv:215, 466).",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0250",
+      "input": {
+        "title": "shadowed_update_err_i is either glitch-free or the receiver of async_err_o can tolerate glitches",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "假设要求 shadowed_update_err_i 无毛刺或接收端能容忍毛刺。保证仅说明 error_o 的对应位由 async_err_o 的对应位直接驱动，以及 u_reg 驱动 shadowed_update_err，但未提供信息表明 shadowed_update_err_i 是否即为无毛刺的寄存器输出，也没有说明接收端是否具备毛刺容忍能力。因此无法判断该环境假设是否已被满足。",
+        "involved_signals": [
+          "async_err_o"
+        ],
+        "involved_specs": [
+          "keymgr_err__continuous_region__declarations_or_instances__001",
+          "keymgr_err__continuous_region__declarations_or_instances__003",
+          "keymgr__continuous_region__keymgr__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.88,
+        "summary": "The RTL shows `shadowed_update_err` being generated and consumed inside the same `clk_i` domain. This is not an unconstrained external async receiver path.",
+        "root_cause": "`keymgr_reg_top` is instantiated on `clk_i/rst_ni` and drives `shadowed_update_err` into `keymgr_ctrl` (keymgr.sv:144-155, 279-287). `keymgr_err` then maps that signal directly into `error_o[ErrShadowUpdate]` (keymgr_err.sv:89, 132-134).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "At the top level, `u_reg` produces `shadowed_update_err` and `u_ctrl` consumes it, all under the same module clocking scheme (keymgr.sv:144-155, 279-287). Inside `keymgr_err`, the signal becomes the asynchronous error bit and then the exported recoverable error bit immediately (keymgr_err.sv:88-90, 132-134). The report's premise of an unknown glitch-tolerance boundary is not supported by a cross-domain or externally consumed raw `async_err_o` path in this design.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0251",
+      "input": {
+        "title": "若规范要求跨时钟域错误信号必须同步，则当前组合直连缺失同步器，可能导致下游采样到亚稳态或毛刺，引发误报或逻辑错误。",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "若规范要求跨时钟域错误信号必须同步，则当前组合直连缺失同步器，可能导致下游采样到亚稳态或毛刺，引发误报或逻辑错误。",
+        "involved_signals": [
+          "async_err_o"
+        ],
+        "involved_specs": [
+          "keymgr_err__continuous_region__declarations_or_instances__001",
+          "keymgr_err__continuous_region__declarations_or_instances__003",
+          "keymgr__continuous_region__keymgr__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.89,
+        "summary": "No clock-domain crossing is shown on the `shadowed_update_err` to `async_err_o/error_o` path. The missing-synchronizer claim does not match this RTL.",
+        "root_cause": "`shadowed_update_err` is produced by `keymgr_reg_top` inside the keymgr block and fed directly into `keymgr_ctrl/u_err` on the same `clk_i` domain (keymgr.sv:144-155, 279-287). `keymgr_err` simply forwards it to the error bit (keymgr_err.sv:89, 132-134).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The report is conditional on a CDC requirement, but the inspected path is not CDC in this RTL. `keymgr_reg_top` and `keymgr_ctrl` both live under `clk_i` and are wired directly in `keymgr.sv` (keymgr.sv:144-155, 279-287). `keymgr_err` then translates the signal into the exported recoverable error bit without any inter-clock handoff (keymgr_err.sv:88-90, 132-134). Since the premise of a cross-clock path is absent, the claimed missing synchronizer is a false alarm for this source tree.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0252",
+      "input": {
+        "title": "cmd_chk is forced to 0 in StIdle and StClean, but comment says 'cross check for commands once transaction begins', imply",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "假设描述了在 StIdle/StClean 状态下 cmd_chk 被强制为 0，而代码注释暗示事务开始后应进行交叉检查。提供的三个 guarantee 均描述 keymgr_ctrl 模块中 state_d 的转换逻辑，未涉及 cmd_chk 信号，也未定义事务开始与 StIdle/StClean 的关系。无法确定该强制清零行为是否会在合法事务期间缺失必要的检查，也无法确认 StIdle/StClean 是否本就不应开始事务。信息不足，无法判断此为合法场景下的缺口或防御性设计，故判定为 UNCERTAIN。",
+        "involved_signals": [
+          "state_d"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__always_comb__line_172__001",
+          "keymgr_ctrl__always_comb__line_468__001",
+          "keymgr_data_en_state__always_comb__line_78__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.94,
+        "summary": "`cmd_chk` is disabled only before a transaction starts and after it has completed. It is active during the live transfer/wait portion, which matches the comment.",
+        "root_cause": "`cmd_chk` defaults to `1` (keymgr_kmac_if.sv:189) and is forced low only in `StIdle` and `StClean` (keymgr_kmac_if.sv:193-210, 256-265). The actual consistency check is then applied in the active states through `cmd_consty_err_d = (cmd_chk & (enables_q != enables_d)) | cmd_consty_err_q` (keymgr_kmac_if.sv:360-392).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The state machine enters `StIdle` before any transaction and `StClean` after `done_o` has already been produced while it waits for `start` deassertion (keymgr_kmac_if.sv:193-210, 247-265). In the transfer and operation-wait states, `cmd_chk` remains at its default `1`, and `enables_q` captured on `cnt_set` is compared against the live one-hot command lines to latch any command consistency error (keymgr_kmac_if.sv:189-190, 360-392). That is exactly 'once transaction begins', not a missing check.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0253",
+      "input": {
+        "title": "The sticky-OR behavior (inputs_invalid_d = enable & (new OR old)) latches an error permanently until global clr_err. It ",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "(1) Assumption 描述的错误锁存行为是明确的，但未指明是否需要在成功的无错误操作后自动清除错误标志。软件契约或顶层需求未给出，无法确定该场景是合法的操作后清理需求还是设计上预期的显式全局清除策略。(2) 给出的 guarantees 均未涉及 inputs_invalid 信号的清除条件，因此无法判断它们是否满足了可能的 per‑operation clearing 期待。(3) 由于合法／非法场景无法区分，无法判定是缺口还是防御性设计，故结论为不确定。",
+        "involved_signals": [
+          "gen_en"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__always_comb__line_296__001",
+          "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "keymgr_kmac_if__always_comb__line_330__001",
+          "keymgr__continuous_region__declarations_or_instances__006"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.95,
+        "summary": "The sticky `inputs_invalid` behavior is intentional and scoped to one complete transaction. The module comments and clear logic explicitly describe that design choice.",
+        "root_cause": "`keymgr_kmac_if` states that the input-invalid check stays set until transactions are fully complete (keymgr_kmac_if.sv:294-295). `inputs_invalid_d` latches while `valid` is high and is cleared only by `clr_err`, which is asserted in `StClean` once `start` deasserts (keymgr_kmac_if.sv:256-264, 296-315).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The code and comment agree. During a transaction, the module OR-latches per-operation invalid-input indications so a transient error cannot disappear before the transaction completes (keymgr_kmac_if.sv:296-309). `inputs_invalid_o` is immediately asserted from that latched state (keymgr_kmac_if.sv:313-314), and data output is forced to `decoy_data` while the error is present (keymgr_kmac_if.sv:330-340). The clear point is also explicit: in `StClean`, once `start` goes low, `clr_err` is raised and the FSM returns to `StIdle` (keymgr_kmac_if.sv:256-265).",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0254",
+      "input": {
+        "title": "The decoy value is only a replication of two single entropy bits, which may not provide sufficient switching factor to m",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption 表达了一个安全担忧：decoy 值仅由两个熵位复制生成，可能导致输出总线切换因子不足，无法有效掩蔽跳变。提供的 guarantee 仅描述了 decoy 值的生成方式（通过 perm_data 对 entropy_i[1] 进行位置换），并未承诺或保证输出具有足够的随机性/切换因子。不存在 guarantee 声称输出数据总线在 decoy 模式下有高熵或足够的翻转率，因此该担忧未被解决，但也无直接的协议矛盾（即没有说“切换因子足够”的保证遭到违反）。这个担忧属于安全指标层面的潜在弱点，而非明确的功能性假设-保证冲突，因此在当前 RTL 功能验证范畴内无法判定为确定的 bug。",
+        "involved_signals": [
+          "data_i"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+          "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "keymgr_pkg__function_task__perm_data__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "UNCERTAIN",
+        "confidence": 0.6,
+        "summary": "The RTL does generate decoy traffic from a permuted entropy word that is then replicated across the wider bus. Whether that is an insufficient switching factor is a side-channel requirement question, not something the RTL alone resolves.",
+        "root_cause": "The files inspected define how decoy data is formed, but they do not define a required minimum toggling rate or leakage target. `data_o` and `kmac_data_o.data` use replicated decoy patterns when real output should be suppressed (keymgr_kmac_if.sv:287-292, 318-320, 330-340).",
+        "trigger_condition": "",
+        "security_impact": "Potential side-channel leakage only if the implementation or threat model requires stronger decoy bus activity than this RTL provides.",
+        "software_visible": false,
+        "reasoning": "The implementation is clear: `decoy_entropy` is `perm_data(entropy_i[1], RndCnstRandPerm)` and `decoy_data` is `{DecoyCopies{decoy_entropy}}` (keymgr_kmac_if.sv:318-320). When the real digest should not be exposed, `data_o` and `kmac_data_o.data` fall back to replicated decoy values (keymgr_kmac_if.sv:287-292, 330-340). What the code does not provide is any architectural requirement saying this amount of toggling is sufficient or insufficient. That makes the security claim plausible but unprovable from RTL semantics alone.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0255",
+      "input": {
+        "title": "If cnt exceeds LastAdvRound, LastIdRound, or LastGenRound, the subtraction wraps and produces out‑of‑range select values",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption描述的是cnt超出预定轮次限制时的潜在wrap行为，但无法从现有信息判断这种超出是合法操作（例如允许的配置范围）还是非法场景（软件不应配置的值）。保证仅覆盖cnt小于CDIs-1的正常路径，未提供越界处理或安全回退，也未声明cnt永远不超过限制。因此无法确定该假设是否构成真实冲突或缺口，需要进一步设计文档或规范说明cnt的合法取值范围。",
+        "involved_signals": [
+          "cnt"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__003",
+          "keymgr_op_state_ctrl__always_comb__line_50__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.91,
+        "summary": "There is no normal RTL path that lets `cnt` exceed the selected last-round value. The counter is initialized from the chosen round count, only decremented on accepted beats, and counter faults force an error state.",
+        "root_cause": "On transaction start, `rounds` is set from `LastAdvRound`, `LastIdRound`, or `LastGenRound` and loaded into `u_cnt` (keymgr_kmac_if.sv:199-210, 141-159). `adv_sel/id_sel/gen_sel` are then derived from that controlled down-counter (keymgr_kmac_if.sv:322-325). If the redundant counter flags `cnt_err`, the FSM goes to `StError` immediately (keymgr_kmac_if.sv:277-284).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The wraparound scenario assumes a bad counter value appears without any local containment. That does not match the implementation. `u_cnt` is loaded from `rounds` when a transaction starts and only decremented when KMAC accepts a beat (keymgr_kmac_if.sv:141-159, 199-224). The select values are simple `Last*Round - cnt` transforms of that controlled down-count (keymgr_kmac_if.sv:322-325). Separately, a counter integrity failure drives `cnt_err`, which forces `StError`, asserts `fsm_error_o`, and ends the transaction (keymgr_kmac_if.sv:277-284).",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0256",
+      "input": {
+        "title": "参数 MaxAdvDataWidth 允许外部覆盖，但缺少参数有效范围的硬件检查或配套文档约束，可能导致集成时使用不支持的宽度而引入隐蔽的功能错误。",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "参数 MaxAdvDataWidth 允许外部覆盖，但缺少参数有效范围的硬件检查或配套文档约束，可能导致集成时使用不支持的宽度而引入隐蔽的功能错误。",
+        "involved_signals": [
+          "adv_data_i"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__keymgr_kmac_if__001",
+          "keymgr_kmac_if__continuous_region__int__001",
+          "keymgr_kmac_if__always_comb__line_330__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.84,
+        "summary": "As instantiated in this keymgr design, `keymgr_kmac_if` uses the default advance width and the top-level design constrains the payload widths. The reported unsafe override is not exercised in this RTL.",
+        "root_cause": "`keymgr_kmac_if` exposes `MaxAdvDataWidth` as a parameter (keymgr_kmac_if.sv:12-20), but `keymgr.sv` instantiates it without overriding that parameter (keymgr.sv:560-583). The integrated design also asserts `AdvDataWidth <= KDFMaxWidth` and related width constraints at top level (keymgr.sv:80-83).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The report is about hypothetical reuse, not the shipped wiring. In this source tree, the top-level keymgr instance uses the default `AdvDataWidth` and checks global payload constraints (`AdvDataWidth_A`, `IdDataWidth_A`, `GenDataWidth_A`, and divisibility by the KMAC interface width) at elaboration (keymgr.sv:80-83). `keymgr_kmac_if` then derives its round counts and padding from that configured width (keymgr_kmac_if.sv:82-108). I do not see a concrete failing integration in this assigned RTL root.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0257",
+      "input": {
+        "title": "The parameter CDIs is used in comparisons (CDIs-1). If CDIs is set to 0, the condition cnt_i == CDIs-1 becomes cnt_i == ",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "无法确定参数 CDIs=0 是否属于合法配置。假设指出若 CDIs=0，cnt_i 与 CDIs-1 的比较将因无符号环绕而失效，可能导致状态机 StAdv 永久卡死。提供的保证仅描述了 cnt 的驱动、使能和数据通路，未对 CDIs 的允许取值范围或 CDIs=0 时的安全行为做出任何声明。由于缺少 CDIs 合法性的规范，不能判定这是真正的协议矛盾、覆盖缺口还是针对非法输入的防御性行为。",
+        "involved_signals": [
+          "cnt"
+        ],
+        "involved_specs": [
+          "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+          "keymgr_kmac_if__always_comb__line_172__001",
+          "keymgr_kmac_if__continuous_region__int__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.95,
+        "summary": "The `CDIs=0` scenario does not apply to this RTL. The package fixes `CDIs` to 2, and the instantiated design does not override it.",
+        "root_cause": "`keymgr_pkg` defines `parameter int CDIs = 2` and sizes `CdiWidth` from it (keymgr_pkg.sv:10-12). The operation-state comparisons use that package constant (keymgr_op_state_ctrl.sv:75-78), and no instance in this RTL root overrides it.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "This is a hypothetical invalid reparameterization, not a bug in the current source tree. `CDIs` is set in the package to 2 (keymgr_pkg.sv:10-12), and the control/data paths are built around that configuration, including `cnt_i == CDIs-1` and `cnt_i < CDIs-1` in the advance FSM (keymgr_op_state_ctrl.sv:75-78). Since the integrated design does not override `CDIs`, the claimed `CDIs=0` hang is not reachable in the assigned RTL.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0258",
+      "input": {
+        "title": "After StAdvAck, state_d = StAdv re-asserts adv_en_o in the next cycle for only one cycle low. It is unclear whether kmac",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption 描述了状态机在 StAdvAck 之后重新断言 adv_en_o，中间仅有一个周期的低电平，同时质疑 kmac 接口是否要求低电平持续更长时间或等待 kmac_done_i 解断言。Guarantees 来自 keymgr_data_en_state 模块，描述了 adv_en_i 如何触发状态转换，但未涉及 adv_en_o 的低电平持续时间或与 kmac_done_i 的关系。由于缺少 kmac 接口协议规范，无法判断这是否构成覆盖缺口或协议错误，因此判定为 UNCERTAIN。",
+        "involved_signals": [
+          "adv_en_o"
+        ],
+        "involved_specs": [
+          "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "keymgr_data_en_state__always_comb__line_78__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.93,
+        "summary": "The one-cycle drop in `adv_en_o` during `StAdvAck` is the intended handshake gap between successive CDI rounds. It is matched by the KMAC-interface FSM behavior.",
+        "root_cause": "`StAdvAck` exists specifically to drop `adv_en_o` for one cycle before returning to `StAdv` (keymgr_op_state_ctrl.sv:84-87). `keymgr_kmac_if` uses that low `start` cycle in `StClean` to assert `clr_err` and return to `StIdle` before the next round begins (keymgr_kmac_if.sv:256-265).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "For multi-CDI advance, `StAdv` emits `op_update_o` and transitions to `StAdvAck` when `kmac_done_i` arrives before the last CDI (keymgr_op_state_ctrl.sv:72-81). In `StAdvAck`, `adv_en_o` is deasserted for exactly one cycle and the FSM immediately returns to `StAdv` (keymgr_op_state_ctrl.sv:84-87). That gap is not arbitrary: `keymgr_kmac_if` stays in `StClean` with `done_o` asserted until `start` goes low, then it clears per-operation error state and returns to `StIdle` (keymgr_kmac_if.sv:256-265, 296-315). The next `adv_en_o` pulse therefore starts a fresh legal round.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0259",
+      "input": {
+        "title": "若重叠请求被无声忽略且外部未要求重试，可能导致密钥管理器错过重新播种时机；但也可能为预期设计。",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "若重叠请求被无声忽略且外部未要求重试，可能导致密钥管理器错过重新播种时机；但也可能为预期设计。",
+        "involved_signals": [
+          "local_req"
+        ],
+        "involved_specs": [
+          "keymgr_reseed_ctrl__always_ff__line_48__001",
+          "keymgr_reseed_ctrl__continuous_region__keymgr_reseed_ctrl__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.9,
+        "summary": "The overlapping-request scenario does not lose the shipped request sources. Both the local threshold request and the control-FSM request are level-based until the EDN transaction is serviced.",
+        "root_cause": "`local_req` is `reseed_cnt >= reseed_interval_i`, so it remains asserted until `edn_done` clears the counter (keymgr_reseed_ctrl.sv:45-56, 93-109). The explicit reseed request from `keymgr_ctrl` is held high in `StCtrlEntropyReseed` until `prng_reseed_ack_i` arrives (keymgr_ctrl.sv:529-536).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "While `edn_req` is already high, the always_ff block does not launch a second request, but the meaningful request sources are not one-cycle pulses here. `local_req` is a level comparison against the counter and stays true once the threshold is reached until `edn_done` clears `reseed_cnt` (keymgr_reseed_ctrl.sv:45-56, 93-109). The explicit control-side request is also a level signal: in `StCtrlEntropyReseed`, `prng_reseed_req_o` remains `1` until the acknowledge is seen (keymgr_ctrl.sv:529-536). So the reported silent loss is not borne out by the actual request protocol.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0260",
+      "input": {
+        "title": "The reseed_cnt generation logic (not present in this chunk) directly determines local_req; if the counter does not incre",
+        "severity": "LOW",
+        "verdict": "UNCERTAIN",
+        "contradiction": "Assumption 指出 local_req 的产生依赖于 reseed_cnt，若计数器行为异常则可能在不正确时间断言，属于对潜在设计漏洞的提示，而非明确的合法/非法约束。Guarantee 仅描述了 local_req 如何触发 edn_req，并未覆盖 local_req 本身的正确性，也未提供错误条件下的防御行为。由于无法确定该错误场景是否属于规范禁止的输入，无法判断为矛盾或缺口。",
+        "involved_signals": [
+          "local_req"
+        ],
+        "involved_specs": [
+          "keymgr_reseed_ctrl__continuous_region__keymgr_reseed_ctrl__001",
+          "keymgr_reseed_ctrl__always_ff__line_48__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.93,
+        "summary": "The reseed counter logic is present in the RTL and is not just an omitted dependency. `local_req` is driven from a redundant counter with explicit increment, clear, and error signaling.",
+        "root_cause": "`reseed_cnt` is implemented by `u_reseed_cnt` and increments on `cnt_en & lfsr_en_i`, clears on `edn_done`, and raises `cnt_err_o` on counter integrity failure (keymgr_reseed_ctrl.sv:81-109). `local_req` is the direct comparison `reseed_cnt >= reseed_interval_i` (keymgr_reseed_ctrl.sv:45-46).",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "This finding says the decisive logic is outside the chunk, but in the RTL root it is present and explicit. `cnt_en` is suppressed until the first reseed completes, then the redundant `prim_count` instance tracks reseed spacing while the LFSR is advancing (keymgr_reseed_ctrl.sv:81-109). `local_req` is then a simple threshold comparison on that counter (keymgr_reseed_ctrl.sv:45-46), and `cnt_err_o` provides a fault path if the counter integrity check trips.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    }
+  ],
+  "summary": {
+    "CONFIRMED": 0,
+    "FALSE_ALARM": 17,
+    "NEEDS_MORE_CONTEXT": 0,
+    "UNCERTAIN": 1
+  }
+}

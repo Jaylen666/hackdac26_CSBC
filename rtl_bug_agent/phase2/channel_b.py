@@ -19,7 +19,14 @@ from typing import Any
 
 from rtl_bug_agent.llm.client import OpenAICompatibleClient
 from rtl_bug_agent.phase2 import semantic_ag
+from rtl_bug_agent.phase2.formal_sketch import (
+    sketch_to_prompt_text,
+    summarise_formal_context,
+    validate_signal_names,
+)
 from rtl_bug_agent.phase2.signal_graph import SignalGraph
+from rtl_bug_agent.phase2.structural_facts import compact_structural_fact
+from rtl_bug_agent.phase2.trace import append_trace
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase2/channel_b_ag_pairing.md"
@@ -43,9 +50,10 @@ def run_channel_b(
     graph: SignalGraph,
     client: OpenAICompatibleClient,
     prompt_path: str | Path = DEFAULT_PROMPT,
-    max_tokens: int = 2500,
+    max_tokens: int = 10000,
     workers: int = 4,
     checkpoint_path: str | None = None,
+    trace_sink: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Run the A-G pairing channel across all signals in *graph*.
 
@@ -93,6 +101,7 @@ def run_channel_b(
         if findings is not None:
             for f in findings:
                 f["_signal"] = signal
+                _trace_channel_b_legacy(f, signal, trace_sink)
             # Always write a checkpoint line — even empty findings
             # must be recorded so the signal isn't re-processed.
             if ckpt:
@@ -152,10 +161,11 @@ def run_channel_b_semantic(
     graph: SignalGraph,
     client: OpenAICompatibleClient,
     prompt_path: str | Path = DEFAULT_PROMPT,
-    max_tokens: int = 2500,
+    max_tokens: int = 10000,
     workers: int = 4,
     checkpoint_path: str | None = None,
     batch_config: semantic_ag.SemanticBatchConfig | None = None,
+    trace_sink: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Run Channel B over semantic query units.
 
@@ -196,6 +206,7 @@ def run_channel_b_semantic(
             max_tokens,
             workers,
             batch_cfg,
+            trace_sink=trace_sink,
         )
     if batch_cfg.mode != "single":
         raise ValueError(f"unsupported semantic batch mode: {batch_cfg.mode}")
@@ -209,6 +220,7 @@ def run_channel_b_semantic(
             for f in findings:
                 f["_semantic_unit"] = unit["unit_id"]
                 f["_semantic_query_kind"] = unit["query"].get("kind", "")
+                _trace_channel_b(f, unit, trace_sink)
             if ckpt:
                 ckpt.append_all(findings or [{"_semantic_unit": unit["unit_id"], "_empty": True}])
         return findings, unit
@@ -269,6 +281,7 @@ def _run_channel_b_semantic_batched(
     max_tokens: int,
     workers: int,
     batch_config: semantic_ag.SemanticBatchConfig,
+    trace_sink: Any | None = None,
 ) -> list[dict[str, Any]]:
     batches = semantic_ag.make_batches(remaining_units, batch_config)
     summary = semantic_ag.summarise_batches(batches)
@@ -284,7 +297,14 @@ def _run_channel_b_semantic_batched(
             attempts=3,
         )
         if findings is not None:
+            unit_by_id = {u["unit_id"]: u for u in batch["units"]}
             finding_units = {str(f.get("_semantic_unit", "")) for f in findings}
+            for f in findings:
+                if f.get("_empty"):
+                    continue
+                unit = unit_by_id.get(str(f.get("_semantic_unit", "")))
+                if unit is not None:
+                    _trace_channel_b(f, unit, trace_sink)
             for unit in batch["units"]:
                 uid = unit["unit_id"]
                 if uid not in finding_units:
@@ -400,12 +420,15 @@ def _check_signal(
         a_key = f"{pair['consumer_spec']}::{a_text[:80]}"
         if a_key not in seen_assumptions:
             seen_assumptions.add(a_key)
+            formal_sketch = pair["assumption"].get("formal_sketch", {})
             assumptions.append(
                 {
                     "spec_id": pair["consumer_spec"],
                     "constraint": a_text,
                     "bug_relevance": pair["assumption"].get("bug_relevance", ""),
                     "related_signals": pair["assumption"].get("related_signals", []),
+                    "formal_sketch": formal_sketch,
+                    "formal_sketch_text": sketch_to_prompt_text(formal_sketch),
                 }
             )
 
@@ -415,6 +438,7 @@ def _check_signal(
             g_key = f"{dg['spec_id']}::{g_text[:80]}"
             if g_key not in seen_guarantees:
                 seen_guarantees.add(g_key)
+                formal_sketch = dg["guarantee"].get("formal_sketch", {})
                 guarantees.append(
                     {
                         "spec_id": dg["spec_id"],
@@ -422,6 +446,8 @@ def _check_signal(
                         "output_signals": dg["guarantee"].get(
                             "output_signals", []
                         ),
+                        "formal_sketch": formal_sketch,
+                        "formal_sketch_text": sketch_to_prompt_text(formal_sketch),
                     }
                 )
 
@@ -431,11 +457,18 @@ def _check_signal(
         for driver_id in graph.get_drivers(signal):
             spec = graph.specs.get(driver_id)
             if spec:
+                formal_sketch = {}
+                if spec.get("guarantees"):
+                    first_g = spec["guarantees"][0]
+                    if isinstance(first_g, dict):
+                        formal_sketch = first_g.get("formal_sketch", {})
                 guarantees.append(
                     {
                         "spec_id": driver_id,
                         "property": "[implicit from behavior]",
                         "behavior_excerpt": spec.get("behavior", "")[:400],
+                        "formal_sketch": formal_sketch,
+                        "formal_sketch_text": sketch_to_prompt_text(formal_sketch),
                     }
                 )
 
@@ -456,7 +489,8 @@ def _check_signal(
     )
 
     parsed = _parse_llm_response(content)
-    return parsed.get("findings", [])
+    decorated = _decorate_signal_findings(parsed.get("findings", []), assumptions, guarantees)
+    return [normalise_formal_property(f, graph=graph) for f in decorated]
 
 
 def _check_semantic_unit(
@@ -480,6 +514,8 @@ def _check_semantic_unit(
             ),
             "related_signals": query.get("signals", []),
             "source_kind": query.get("kind", ""),
+            "formal_sketch": query.get("formal_sketch", {}),
+            "formal_sketch_text": sketch_to_prompt_text(query.get("formal_sketch", {})),
         }
     ]
     guarantees = [
@@ -491,8 +527,14 @@ def _check_semantic_unit(
             "score": match.get("score"),
             "pair_type": match.get("pair_type"),
             "shared_signals": match.get("shared_signals", []),
+            "formal_sketch": match.get("formal_sketch", {}),
+            "formal_sketch_text": sketch_to_prompt_text(match.get("formal_sketch", {})),
         }
         for match in matches
+    ]
+    structural_facts = [
+        compact_structural_fact(fact, query.get("signals", []))
+        for fact in graph.get_structural_facts(query.get("signals", []), limit=3)
     ]
     context = {
         "signal": signal,
@@ -505,6 +547,7 @@ def _check_semantic_unit(
         },
         "assumptions": assumptions,
         "guarantees": guarantees,
+        "structural_facts": structural_facts,
     }
     content = client.chat(
         messages=[
@@ -514,7 +557,25 @@ def _check_semantic_unit(
         max_tokens=max_tokens,
     )
     parsed = _parse_llm_response(content)
-    return parsed.get("findings", [])
+    findings = parsed.get("findings", [])
+    if not isinstance(findings, list):
+        return []
+    unit = {"query": query, "matches": matches}
+    return [
+        normalise_formal_property(
+            _annotate_semantic_finding(
+                finding,
+                query.get("atom_id", ""),
+                unit,
+                None,
+                None,
+                None,
+            ),
+            graph=graph,
+        )
+        for finding in findings
+        if isinstance(finding, dict)
+    ]
 
 
 def _check_semantic_batch(
@@ -556,6 +617,8 @@ def _check_semantic_batch(
                         ),
                         "related_signals": query.get("signals", []),
                         "source_kind": query.get("kind", ""),
+                        "formal_sketch": query.get("formal_sketch", {}),
+                        "formal_sketch_text": sketch_to_prompt_text(query.get("formal_sketch", {})),
                     }
                 ],
                 "guarantees": [
@@ -567,8 +630,14 @@ def _check_semantic_batch(
                         "score": match.get("score"),
                         "pair_type": match.get("pair_type"),
                         "shared_signals": match.get("shared_signals", []),
+                        "formal_sketch": match.get("formal_sketch", {}),
+                        "formal_sketch_text": sketch_to_prompt_text(match.get("formal_sketch", {})),
                     }
                     for match in matches
+                ],
+                "structural_facts": [
+                    compact_structural_fact(fact, query.get("signals", []))
+                    for fact in graph.get_structural_facts(query.get("signals", []), limit=3)
                 ],
             }
         )
@@ -609,7 +678,8 @@ def _check_semantic_batch(
         max_tokens=max_tokens,
     )
     parsed = _parse_llm_response(content)
-    return _flatten_semantic_batch_findings(parsed, unit_by_id, batch["batch_id"])
+    flattened = _flatten_semantic_batch_findings(parsed, unit_by_id, batch["batch_id"])
+    return [normalise_formal_property(f, graph=graph) for f in flattened]
 
 
 def _flatten_semantic_batch_findings(
@@ -670,7 +740,7 @@ def _annotate_semantic_finding(
     finding: dict[str, Any],
     uid: str,
     unit: dict[str, Any] | None,
-    batch_id: int,
+    batch_id: int | None,
     cross_used: Any,
     cross_ids: Any,
 ) -> dict[str, Any]:
@@ -678,27 +748,58 @@ def _annotate_semantic_finding(
     if unit is not None:
         query = unit["query"]
         matches = unit["matches"]
-        item.setdefault("signal", _semantic_unit_signal(query, matches))
-        item.setdefault(
-            "assumption",
-            {
+        assumption = item.get("assumption")
+        if not isinstance(assumption, dict):
+            assumption = {
                 "spec_id": query.get("spec_id", ""),
                 "constraint": query.get("text", ""),
-            },
+            }
+        assumption = _attach_formal_meta(
+            assumption,
+            query.get("formal_sketch", {}),
+            query.get("text", ""),
         )
-        item.setdefault(
-            "relevant_guarantees",
-            [
-                {
-                    "spec_id": match.get("spec_id", ""),
-                    "property": match.get("text", ""),
-                }
-                for match in matches
-            ],
-        )
+        guarantees: list[dict[str, Any]] = []
+        raw_guarantees = item.get("relevant_guarantees", [])
+        if isinstance(raw_guarantees, list) and raw_guarantees:
+            for idx, match in enumerate(raw_guarantees):
+                if not isinstance(match, dict):
+                    continue
+                src = matches[idx] if idx < len(matches) else {}
+                guarantees.append(
+                    _attach_formal_meta(
+                        match,
+                        src.get("formal_sketch", {}),
+                        match.get("property", match.get("constraint", "")),
+                    )
+                )
+        else:
+            for match in matches:
+                guarantees.append(
+                    _attach_formal_meta(
+                        {
+                            "spec_id": match.get("spec_id", ""),
+                            "property": match.get("text", ""),
+                        },
+                        match.get("formal_sketch", {}),
+                        match.get("text", ""),
+                    )
+                )
+        item.setdefault("signal", _semantic_unit_signal(query, matches))
+        item["assumption"] = assumption
+        item["relevant_guarantees"] = guarantees
         item["_semantic_query_kind"] = query.get("kind", "")
+        summary = summarise_formal_context(
+            [assumption, *guarantees] if assumption else guarantees
+        )
+        item["formal_verdict"] = summary["formal_verdict"]
+        item["formal_confidence"] = summary["formal_confidence"]
+    elif "formal_verdict" not in item or "formal_confidence" not in item:
+        item["formal_verdict"] = "NONE"
+        item["formal_confidence"] = 0.0
     item["_semantic_unit"] = uid
-    item["_semantic_batch"] = batch_id
+    if batch_id is not None:
+        item["_semantic_batch"] = batch_id
     item["cross_item_context_used"] = bool(cross_used)
     item["cross_item_context_ids"] = cross_ids if isinstance(cross_ids, list) else []
     return item
@@ -750,3 +851,281 @@ def _parse_llm_response(content: str) -> dict[str, Any]:
         if not match:
             raise
         return json.loads(match.group(0))
+
+
+def _decorate_signal_findings(
+    findings: list[dict[str, Any]] | Any,
+    assumptions: list[dict[str, Any]],
+    guarantees: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(findings, list):
+        return []
+    assumption_index = _build_formal_index(assumptions, ("constraint", "claim", "property"))
+    guarantee_index = _build_formal_index(guarantees, ("property", "claim", "behavior_excerpt"))
+    out: list[dict[str, Any]] = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        item = dict(finding)
+        assumption = item.get("assumption")
+        if not isinstance(assumption, dict):
+            assumption = {}
+        item["assumption"] = _attach_formal_meta(
+            assumption,
+            _lookup_formal_sketch(assumption, assumption_index, ("constraint", "claim", "property")),
+            assumption.get("constraint", assumption.get("claim", assumption.get("property", ""))),
+        )
+
+        relevant: list[dict[str, Any]] = []
+        raw_guarantees = item.get("relevant_guarantees", [])
+        if isinstance(raw_guarantees, list) and raw_guarantees:
+            for guarantee in raw_guarantees:
+                if not isinstance(guarantee, dict):
+                    continue
+                relevant.append(
+                    _attach_formal_meta(
+                        guarantee,
+                        _lookup_formal_sketch(guarantee, guarantee_index, ("property", "claim", "behavior_excerpt")),
+                        guarantee.get("property", guarantee.get("claim", guarantee.get("behavior_excerpt", ""))),
+                    )
+                )
+        else:
+            relevant = [
+                _attach_formal_meta(
+                    {
+                        "spec_id": item.get("spec_id", ""),
+                        "property": g.get("property", g.get("claim", "")),
+                    },
+                    _lookup_formal_sketch(g, guarantee_index, ("property", "claim", "behavior_excerpt")),
+                    g.get("property", g.get("claim", "")),
+                )
+                for g in guarantees
+            ]
+        item["relevant_guarantees"] = relevant
+        summary = summarise_formal_context(
+            [item["assumption"], *relevant] if item["assumption"] else relevant
+        )
+        item["formal_verdict"] = summary["formal_verdict"]
+        item["formal_confidence"] = summary["formal_confidence"]
+        out.append(item)
+    return out
+
+
+def _build_formal_index(
+    items: list[dict[str, Any]],
+    text_keys: tuple[str, ...],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        spec_id = str(item.get("spec_id", "")).strip()
+        sketch = item.get("formal_sketch", {})
+        if not isinstance(sketch, dict):
+            sketch = {}
+        for key in text_keys:
+            text = _normalise_text(item.get(key, ""))
+            if spec_id and text:
+                out[(spec_id, text)] = sketch
+    return out
+
+
+def _lookup_formal_sketch(
+    item: dict[str, Any],
+    index: dict[tuple[str, str], dict[str, Any]],
+    text_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    spec_id = str(item.get("spec_id", "")).strip()
+    if not spec_id:
+        return {}
+    for key in text_keys:
+        text = _normalise_text(item.get(key, ""))
+        if text:
+            sketch = index.get((spec_id, text))
+            if sketch:
+                return sketch
+    sketch = item.get("formal_sketch", {})
+    return sketch if isinstance(sketch, dict) else {}
+
+
+def _attach_formal_meta(
+    item: dict[str, Any],
+    sketch: dict[str, Any],
+    default_text: str,
+) -> dict[str, Any]:
+    out = dict(item)
+    if sketch:
+        out.setdefault("formal_sketch", sketch)
+        out.setdefault("formal_sketch_text", sketch_to_prompt_text(sketch))
+    elif "formal_sketch" not in out:
+        out["formal_sketch"] = {}
+        out["formal_sketch_text"] = ""
+    if not out.get("constraint") and default_text and "constraint" in out:
+        out["constraint"] = default_text
+    if not out.get("property") and default_text and "property" in out:
+        out["property"] = default_text
+    return out
+
+
+def _normalise_text(text: Any) -> str:
+    return " ".join(str(text or "").split())
+
+
+# Verdicts for which an SVA is wanted (v2.0 §3.3). SATISFIED/DEFENSIVE → no property.
+_SVA_VERDICTS = frozenset({"CONTRADICTION", "GAP", "UNCERTAIN", "VIOLATION", "RACE"})
+
+
+def _emit_channel_b_trace(
+    finding: dict[str, Any],
+    *,
+    sink: Any | None,
+    trace_id: str,
+    spec_id: str = "",
+    signals: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    kind: str = "",
+    formalizability: str = "",
+) -> None:
+    """Low-level chunk/atom/channel_b trace emission, keyed by *trace_id*.
+
+    Shared by all three Channel B paths (legacy / semantic / guarded). No-op
+    when *sink* is None or *trace_id* is empty.
+    """
+    if sink is None or not trace_id:
+        return
+    append_trace(
+        finding, "chunk", sink=sink, finding_id=trace_id,
+        id=spec_id, signals=signals or [], source_refs=source_refs or [],
+    )
+    append_trace(
+        finding, "atom", sink=sink, finding_id=trace_id,
+        kind=kind, formalizability=formalizability,
+    )
+    formal = finding.get("formal", {}) or {}
+    append_trace(
+        finding, "channel_b", sink=sink, finding_id=trace_id,
+        verdict=str(finding.get("verdict", "") or ""),
+        sva_emitted=bool(formal.get("sva")),
+        formal_status=formal.get("status", ""),
+        unknown_signals=formal.get("unknown_signals", []),
+    )
+
+
+def _trace_channel_b(finding: dict[str, Any], unit: dict[str, Any], sink: Any | None) -> None:
+    """Semantic-path trace: key by the query's atom id (pre-fusion).
+
+    ``trace_report`` bridges atom-id-keyed records to the fused finding id via
+    shared specs/signals (Step 8). No-op when *sink* is None.
+    """
+    if sink is None:
+        return
+    query = unit.get("query", {})
+    atom_id = str(query.get("atom_id") or unit.get("unit_id") or "")
+    _emit_channel_b_trace(
+        finding,
+        sink=sink,
+        trace_id=atom_id,
+        spec_id=query.get("spec_id", ""),
+        signals=query.get("signals", []),
+        source_refs=query.get("source_refs", []),
+        kind=query.get("kind", ""),
+        formalizability=(query.get("formal_sketch", {}) or {}).get("formalizability", ""),
+    )
+
+
+def _trace_channel_b_legacy(finding: dict[str, Any], signal: str, sink: Any | None) -> None:
+    """Legacy signal-grouped path trace.
+
+    Pre-fusion legacy findings key on the assumption spec id (falling back to
+    the signal), mirroring how the semantic path keys on atom id.
+    """
+    if sink is None:
+        return
+    assumption = finding.get("assumption", {})
+    spec_id = str(assumption.get("spec_id", "") if isinstance(assumption, dict) else "")
+    trace_id = spec_id or f"signal:{signal}"
+    sketch = assumption.get("formal_sketch", {}) if isinstance(assumption, dict) else {}
+    _emit_channel_b_trace(
+        finding,
+        sink=sink,
+        trace_id=trace_id,
+        spec_id=spec_id,
+        signals=finding.get("involved_signals", []) or [signal],
+        kind="assumption",
+        formalizability=(sketch or {}).get("formalizability", ""),
+    )
+
+
+def normalise_formal_property(
+    finding: dict[str, Any],
+    *,
+    graph: SignalGraph | None = None,
+    sva_source: str = "channel_b",
+) -> dict[str, Any]:
+    """Normalise an LLM-emitted ``formal_property`` into ``finding["formal"]``.
+
+    Sets a conservative ``status``:
+    - ``NO_PROPERTY``    : verdict does not warrant a property, or none given.
+    - ``NAME_UNVERIFIED``: SVA references signals not found in the graph.
+    - ``PENDING``        : SVA looks usable and all names check out → ready for
+                           the formal runner (Step 6).
+
+    Deterministic; does not call an LLM. Mutates and returns *finding*.
+    """
+    verdict = str(finding.get("verdict", "") or "").upper()
+    raw = finding.get("formal_property")
+    if not isinstance(raw, dict):
+        raw = {}
+    sva = str(raw.get("sva", "") or "").strip()
+
+    formal: dict[str, Any] = {
+        "sva": sva,
+        "sva_source": sva_source,
+        "clock": str(raw.get("clock", "") or "").strip(),
+        "reset": str(raw.get("reset", "") or "").strip(),
+        "bind_module": str(raw.get("bind_module", "") or "").strip(),
+        "bind_signals": [str(s) for s in raw.get("bind_signals", []) or []],
+        "formalizability": str(raw.get("formalizability", "") or "").strip().lower(),
+        "unknown_signals": [],
+    }
+
+    if verdict not in _SVA_VERDICTS or not sva:
+        formal["status"] = "NO_PROPERTY"
+        finding["formal"] = formal
+        return finding
+
+    # Solver-readiness gate (v2.4 semantics: PENDING == ready for the runner).
+    # A property the runner can actually build requires a target module and a
+    # clock, and must not be self-declared non-formalizable.
+    missing: list[str] = []
+    if not formal["bind_module"]:
+        missing.append("bind_module")
+    if not formal["clock"]:
+        missing.append("clock")
+    if formal["formalizability"] == "none":
+        missing.append("formalizability=none")
+    if missing:
+        formal["status"] = "INCOMPLETE"
+        formal["incomplete_reason"] = missing
+        finding["formal"] = formal
+        return finding
+
+    # Deterministic signal-name check against the real RTL signal set.
+    if graph is not None:
+        sketch = {
+            "clock": formal["clock"],
+            "reset": formal["reset"],
+            "signals": formal["bind_signals"],
+            "antecedent": sva,  # validate over the whole assertion text
+            "consequent": "",
+        }
+        result = validate_signal_names(sketch, graph)
+        formal["unknown_signals"] = result["unknown_signals"]
+        formal["status"] = "PENDING" if result["ok"] else "NAME_UNVERIFIED"
+    else:
+        # No graph to check against — keep it but mark unverified, not PENDING,
+        # so the runner does not trust unvalidated names.
+        formal["status"] = "NAME_UNVERIFIED"
+
+    finding["formal"] = formal
+    return finding

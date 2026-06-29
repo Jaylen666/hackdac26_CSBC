@@ -1,0 +1,124 @@
+{
+  "chunk_id": "kmac_entropy__always_ff__line_272__001",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "timer_expired"
+    ],
+    "used": [
+      "timer_update",
+      "timer_enable",
+      "timer_value",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "timer",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On asynchronous reset (negedge rst_ni) or when timer_update is high at posedge clk_i, timer_expired is set to 1'b0.",
+      "cond": "rst_ni == 0 or (timer_update == 1)",
+      "signals": [
+        "timer_expired",
+        "rst_ni",
+        "timer_update",
+        "clk_i"
+      ],
+      "refs": [
+        "272:273-274",
+        "275-276"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When timer_enable is high and timer_value equals all zeros at posedge clk_i, timer_expired is set to 1'b1.",
+      "cond": "timer_enable && (timer_value == '0)",
+      "signals": [
+        "timer_expired",
+        "timer_enable",
+        "timer_value",
+        "clk_i"
+      ],
+      "refs": [
+        "277-278"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "hold_behavior",
+      "claim": "When none of the above conditions are true, timer_expired holds its previous value.",
+      "cond": "not (rst_ni == 0 or timer_update or (timer_enable && timer_value == '0))",
+      "signals": [
+        "timer_expired"
+      ],
+      "refs": [
+        "272-280"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "External logic must assert timer_update to clear timer_expired after the timer expires; otherwise timer_expired remains asserted indefinitely.",
+      "cond": "After timer_expired has become 1",
+      "risk": "Repeated consumption of the same expiration event, leading to over-sampling of entropy or protocol deadlock.",
+      "signals": [
+        "timer_update",
+        "timer_expired"
+      ],
+      "refs": [
+        "276"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The compile‑time context indicates a generate if (!rst_ni) guard, suggesting the always_ff block may be conditionally instantiated by a parameter named rst_ni, while the block itself uses rst_ni as an active‑low reset signal. This conflict must be verified.",
+      "cond": "If the generate condition is parameter‑based and the parameter equals 1",
+      "risk": "The whole block would be omitted, leaving timer_expired undriven (potentially X), breaking downstream entropy/security logic.",
+      "signals": [
+        "timer_expired",
+        "rst_ni"
+      ],
+      "refs": [
+        "272 (block start)"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "timer_expired is only set on (timer_enable && timer_value == 0) and is not automatically cleared when timer_value becomes non‑zero while enabled. If the timer is restarted without an explicit timer_update, the expired flag remains asserted, falsely indicating expiration.",
+      "cond": "timer_value transitions from 0 to non‑zero while timer_enable = 1 and timer_update = 0",
+      "risk": "Spurious expiration signal may cause incorrect entropy sampling or state‑machine errors.",
+      "signals": [
+        "timer_expired",
+        "timer_value",
+        "timer_enable",
+        "timer_update"
+      ],
+      "refs": [
+        "277-278"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "272-280"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
+  "line_start": 272,
+  "line_end": 280,
+  "security_implications": ""
+}

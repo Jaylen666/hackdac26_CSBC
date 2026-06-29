@@ -1,34 +1,100 @@
 {
   "chunk_id": "uart_core__always_ff__line_303__001",
-  "summary": "复位或使能时更新16位移位寄存器，用于对UART接收线进行16倍过采样",
-  "behavior": "此 always_ff 块实现一个 16 位移位寄存器 rx_val_q。异步复位 rst_ni 为低时，寄存器清零。非复位状态下，当波特率过采样脉冲 tick_baud_x16 有效时，寄存器左移一位，并将当前 rx_in 值移入最低位，即 rx_val_q <= {rx_val_q[14:0], rx_in}；否则保持原值。该行为用于在每个过采样点捕获串行接收数据，供后续判决逻辑使用。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "rx_val_q"
+    ],
+    "used": [
+      "rst_ni",
+      "tick_baud_x16",
+      "rx_in",
+      "rx_val_q"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位释放后 rx_val_q 一定为 16'h0",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (asynchronous reset), rx_val_q is set to 16'h0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "rx_val_q"
       ],
-      "source_refs": [
-        "uart_core.sv:304"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:303-306"
       ]
     },
     {
-      "property": "当 tick_baud_x16 无效时，rx_val_q 保持不变",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When tick_baud_x16 is high and not in reset, rx_val_q is left-shifted by 1 position and the new LSB is assigned rx_in.",
+      "cond": "tick_baud_x16 == 1",
+      "signals": [
+        "tick_baud_x16",
+        "rx_val_q",
+        "rx_in"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:305-305"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When tick_baud_x16 is low and not in reset, rx_val_q retains its previous value.",
+      "cond": "tick_baud_x16 == 0",
+      "signals": [
+        "tick_baud_x16",
         "rx_val_q"
       ],
-      "source_refs": [
-        "uart_core.sv:305"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:303-306"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "uart_core.sv:303-306"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "tick_baud_x16 must be a single-cycle pulse synchronous to clk_i; it must not remain high for multiple consecutive cycles.",
+      "cond": "always",
+      "risk": "If tick_baud_x16 stays high for multiple cycles, rx_val_q will oversample rx_in multiple times per baud interval, corrupting the captured bit stream and leading to framing errors.",
+      "signals": [
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:305-305"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "rx_in must be stable when tick_baud_x16 is asserted, or its value must be synchronized externally to avoid metastability.",
+      "cond": "when tick_baud_x16 is high",
+      "risk": "If rx_in changes near the sampling edge, a metastable value may be captured in rx_val_q, leading to indeterminate bits and potential UART data corruption.",
+      "signals": [
+        "rx_in",
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:305-305"
+      ]
+    }
   ],
   "uncertain_points": [],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:303-306"
+  ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 303,
-  "line_end": 306
+  "line_end": 306,
+  "security_implications": ""
 }

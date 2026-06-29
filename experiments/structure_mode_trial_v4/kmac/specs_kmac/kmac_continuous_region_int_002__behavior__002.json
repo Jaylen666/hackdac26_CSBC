@@ -1,0 +1,183 @@
+{
+  "chunk_id": "kmac_continuous_region_int_002__behavior__002",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "cmd_buf_empty",
+      "counting_d",
+      "count_d",
+      "cmd_update"
+    ],
+    "used": [
+      "cmd_buf_q",
+      "CmdNone",
+      "reg2hw.cmd.cmd.qe",
+      "cmd_update",
+      "cmd_buf_empty",
+      "counting_q",
+      "count_q",
+      "cmd_q",
+      "CmdManualRun",
+      "SecCmdDelay",
+      "WidthCounter"
+    ],
+    "modes": [
+      "CmdManualRun"
+    ],
+    "tags": [
+      "counter",
+      "handshake",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "cmd_buf_empty is combinational and asserted exactly when cmd_buf_q equals CmdNone.",
+      "cond": "always",
+      "signals": [
+        "cmd_buf_q",
+        "CmdNone"
+      ],
+      "refs": [
+        "kmac.sv:364"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "counting_d is set to 1 when reg2hw.cmd.cmd.qe is 1, to 0 when cmd_update is 1 and cmd_buf_empty is 1, and holds counting_q otherwise.",
+      "cond": "always",
+      "signals": [
+        "reg2hw.cmd.cmd.qe",
+        "cmd_update",
+        "cmd_buf_empty",
+        "counting_q"
+      ],
+      "refs": [
+        "kmac.sv:368-369"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "count_d clears to 0 on reg2hw.cmd.cmd.qe or cmd_update, increments count_q when counting_q is 1, and holds current count_q otherwise.",
+      "cond": "always",
+      "signals": [
+        "reg2hw.cmd.cmd.qe",
+        "cmd_update",
+        "counting_q",
+        "count_q"
+      ],
+      "refs": [
+        "kmac.sv:372-374"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "cmd_update asserts when cmd_q equals CmdManualRun or when count_q reaches the sliced SecCmdDelay value, otherwise remains 0.",
+      "cond": "always",
+      "signals": [
+        "cmd_q",
+        "CmdManualRun",
+        "count_q",
+        "SecCmdDelay",
+        "WidthCounter"
+      ],
+      "refs": [
+        "kmac.sv:379-380"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "reg2hw.cmd.cmd.qe is expected to be a single-cycle pulse on a new command write.",
+      "cond": "when a new command is written",
+      "risk": "If qe stays high for multiple cycles, count_d will be continuously cleared, preventing the counter from reaching the configured delay and potentially blocking command execution.",
+      "signals": [
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "kmac.sv:372"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The counter width (WidthCounter) must be large enough to hold the maximum SecCmdDelay without overflow.",
+      "cond": "when SecCmdDelay is configured",
+      "risk": "If the counter overflows before reaching the delay value, count_q may never equal SecCmdDelay, and cmd_update may never be asserted by the delay condition, stalling the command indefinitely.",
+      "signals": [
+        "WidthCounter",
+        "SecCmdDelay",
+        "count_q"
+      ],
+      "refs": [
+        "kmac.sv:380"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "cmd_buf_q must accurately reflect the command buffer state and be updated in coordination with the counting logic.",
+      "cond": "for correct counting stop behavior",
+      "risk": "Mismatch between cmd_buf_q and the actual issued command may cause counting_d to stop prematurely or fail to stop, leading to missed or doubled command executions.",
+      "signals": [
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "kmac.sv:369"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The relationship between cmd_q and cmd_buf_q is unclear. When a manual run command is pending, cmd_update fires immediately, but counting_d stops only when cmd_buf_empty is also true. It is unclear if counting is meant to continue while the buffer is not empty even after immediate trigger.",
+      "cond": "cmd_q == CmdManualRun and cmd_buf_q != CmdNone",
+      "risk": "If the buffer is not empty, the counter continues incrementing, potentially causing an unexpected second cmd_update when the delay is reached, or preventing state machine from reaching idle, leading to command sequencing bugs.",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q",
+        "cmd_buf_empty",
+        "counting_d",
+        "cmd_update"
+      ],
+      "refs": [
+        "kmac.sv:368-369",
+        "kmac.sv:379-380"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "A new write to the command register (reg2hw.cmd.cmd.qe) clears count_d and sets counting_d to 1, restarting the delay. It is unclear whether software expects the previous pending command to be cancelled in this case.",
+      "cond": "reg2hw.cmd.cmd.qe asserted while counting_q is active",
+      "risk": "If the previous command's delay is not completed and its execution is silently discarded, software assumptions about command ordering could be violated.",
+      "signals": [
+        "reg2hw.cmd.cmd.qe",
+        "count_d",
+        "counting_d"
+      ],
+      "refs": [
+        "kmac.sv:368-369",
+        "kmac.sv:372-374"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:362-380"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 362,
+  "line_end": 380,
+  "security_implications": ""
+}

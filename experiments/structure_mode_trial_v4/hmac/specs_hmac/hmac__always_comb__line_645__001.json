@@ -1,0 +1,191 @@
+{
+  "chunk_id": "hmac__always_comb__line_645__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "message_length_d"
+    ],
+    "used": [
+      "message_length",
+      "cfg_block",
+      "reg2hw.msg_length_lower.qe",
+      "reg2hw.msg_length_lower.q",
+      "reg2hw.msg_length_upper.qe",
+      "reg2hw.msg_length_upper.q",
+      "hash_start",
+      "msg_write",
+      "sha_en",
+      "packer_ready",
+      "wmask_ones"
+    ],
+    "modes": [
+      "cfg_block=false"
+    ],
+    "tags": [
+      "counter",
+      "csr",
+      "handshake",
+      "integrity"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "message_length_d defaults to the current message_length.",
+      "cond": "always (first statement in always_comb)",
+      "signals": [
+        "message_length_d",
+        "message_length"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:646"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When hash_start is active, message_length_d is forced to all zeros, overriding any CSR write or message-write increment.",
+      "cond": "hash_start == 1'b1",
+      "signals": [
+        "hash_start",
+        "message_length_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:656-657"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When hash_start is inactive and msg_write, sha_en, packer_ready are all active, message_length_d is set to message_length plus wmask_ones sign-extended to 64 bits, overriding CSR writes.",
+      "cond": "!hash_start and msg_write and sha_en and packer_ready",
+      "signals": [
+        "message_length_d",
+        "message_length",
+        "wmask_ones",
+        "msg_write",
+        "sha_en",
+        "packer_ready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:658-659"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When hash_start is inactive and the message-write condition is false, the lower 32 bits of message_length_d can be updated from reg2hw.msg_length_lower.q if its qe is set, and the upper 32 bits from reg2hw.msg_length_upper.q if its qe is set. These updates occur on top of the default message_length value and can happen simultaneously.",
+      "cond": "!hash_start and !(msg_write && sha_en && packer_ready)",
+      "signals": [
+        "message_length_d",
+        "reg2hw.msg_length_lower.qe",
+        "reg2hw.msg_length_lower.q",
+        "reg2hw.msg_length_upper.qe",
+        "reg2hw.msg_length_upper.q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:647-653"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "wmask_ones correctly encodes the number of bytes written in the current cycle (e.g., the popcount of a write byte-enable).",
+      "cond": "when msg_write, sha_en, packer_ready are active (increment path)",
+      "risk": "If wmask_ones is inaccurate, the message length counter will be corrupted, leading to incorrect HMAC tag computation or length-related attacks.",
+      "signals": [
+        "wmask_ones",
+        "message_length_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:659"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "msg_write, sha_en, and packer_ready are mutually coherent and only asserted when a valid data word is being written and the HMAC engine is ready.",
+      "cond": "any cycle where the increment path may fire",
+      "risk": "Spurious or incorrect assertions could cause erroneous length updates or missed counts.",
+      "signals": [
+        "msg_write",
+        "sha_en",
+        "packer_ready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:658"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "CSR writes to msg_length_lower/upper are only performed when the HMAC is idle (i.e., hash_start and the message-write condition are both false), so the stable CSR update window is respected.",
+      "cond": "when the chunk is not updating length via hash_start or msg_write",
+      "risk": "If a CSR write occurs simultaneously with a message write or near a hash_start, the length could be corrupted or an intermediate mixed value could be latched.",
+      "signals": [
+        "reg2hw.msg_length_lower.qe",
+        "reg2hw.msg_length_upper.qe",
+        "hash_start",
+        "msg_write"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:648-653,656-660"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "lifecycle",
+      "claim": "hash_start is asserted only at the very beginning of a new hash operation and is deasserted before any msg_write can occur, so the zeroing of message_length_d does not interfere with active counting.",
+      "cond": "during hash operation initiation",
+      "risk": "If hash_start is pulsed during a message stream, the length counter would reset and subsequent increments would be off, breaking HMAC integrity.",
+      "signals": [
+        "hash_start"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:656-657"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The definition of wmask_ones is not in this chunk. It must equal the exact byte count of the write data. If generated from a write strobe or byte mask, its width and encoding must be verified to match the 64-bit addition.",
+      "cond": "whenever the increment path is taken",
+      "risk": "Mismatch could cause cumulative length error, leading to wrong HMAC tag.",
+      "signals": [
+        "wmask_ones"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:659"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The chunk's guard_context lists 'generate if: reg2hw.msg_length_lower.qe' and 'generate if: reg2hw.msg_length_upper.qe', which are run-time signals, not compile-time constants. This may be a tool artifact or indicate a mis-captured generate condition. If real, it would mean this block only exists when those qe signals are statically true, making the internal if checks redundant.",
+      "cond": "chunk instantiation context unknown",
+      "risk": "Could lead to confusion about whether the CSR update path is always available in all configurations; misuse could break length programming.",
+      "signals": [
+        "reg2hw.msg_length_lower.qe",
+        "reg2hw.msg_length_upper.qe"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:648,651"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:645-661"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 645,
+  "line_end": 661,
+  "security_implications": ""
+}

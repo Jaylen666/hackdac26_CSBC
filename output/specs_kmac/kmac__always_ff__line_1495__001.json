@@ -1,49 +1,93 @@
 {
   "chunk_id": "kmac__always_ff__line_1495__001",
-  "summary": "该寄存器块对本地告警位 alerts[0] 做一级寄存，用于打断本地升级路径的组合链路，并在复位时清零。",
-  "behavior": "该片段只更新 alerts_q[0]。异步低有效复位时，alerts_q[0] 被清为 0；其余情况下，alerts_q[0] 直接锁存当前的 alerts[0] 值，从而为告警 0 提供一个寄存后的副本。注释表明其设计意图是打断 local escalation 的组合路径；同时注释还说明该告警属于“可恢复告警”，因此这里不做粘滞保持，而是允许随着 alerts[0] 的清除而被清除，仅简单跟随锁存输入值。该片段未涉及 alerts_q 的其他位。 ",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "alerts_q[0]"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "alerts[0]"
+    ],
+    "modes": [],
+    "tags": [
+      "alert",
+      "reset",
+      "synchronization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位有效时，alerts_q[0] 保证为 0。",
-      "output_signals": [
-        "alerts_q"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, alerts_q[0] is asynchronously set to 1'b0.",
+      "cond": "always while rst_ni is low",
+      "signals": [
+        "alerts_q[0]",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1497-1499"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
       ]
     },
     {
-      "property": "在非复位状态下，alerts_q[0] 保证保存 alerts[0] 的寄存后值，而不是粘滞置位。",
-      "output_signals": [
-        "alerts_q"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On rising edge of clk_i when rst_ni is high, alerts_q[0] samples alerts[0].",
+      "cond": "rst_ni is high and posedge clk_i",
+      "signals": [
+        "alerts_q[0]",
+        "alerts[0]",
+        "clk_i",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1500-1501"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
       ]
     }
   ],
-  "security_implications": "该片段涉及告警通路。它通过对 alerts[0] 增加一级寄存来打断本地升级的组合路径，可能有助于降低组合反馈/时序路径风险。由于该告警被注释为“recoverable alerts can be cleared”，因此 alerts_q[0] 不会自保持，一旦上游 alerts[0] 清除，该寄存副本也会随之清除；若系统安全策略要求某些错误必须粘滞直到软件处置，则需要依赖片段外逻辑保证 alerts[0] 的生成与清除策略正确。",
   "assumptions": [
     {
-      "constraint": "alerts[0] 必须准确代表可恢复告警的当前状态；该寄存器块不会自行将告警保持为粘滞状态。",
-      "bug_relevance": "如果上游过早清除或错误驱动 alerts[0]，则 alerts_q[0] 也会随之被清除，可能导致告警传播时间不足或错误被过早认为已恢复。这属于行为契约问题。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "alerts[0] must meet setup and hold timing relative to clk_i to avoid metastability in alerts_q[0].",
+      "cond": "every posedge clk_i when rst_ni is high",
+      "risk": "Metastability could cause downstream logic to see an undefined value, potentially missing or falsely reporting the alert.",
+      "signals": [
         "alerts[0]",
+        "clk_i",
         "alerts_q[0]"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1500-1501"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "A single flop samples alerts[0], which may be asynchronous; a transition near clk_i edge can cause metastability in alerts_q[0] on the first clock cycle.",
+      "cond": "alerts[0] transition close to clk_i rising edge, with no further synchronization stages visible in this chunk",
+      "risk": "Metastable state could be interpreted as a valid high/low, leading to missed alert escalation or spurious security response.",
+      "signals": [
+        "alerts[0]",
+        "alerts_q[0]",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
   ],
-  "uncertain_points": [
-    "注释称该寄存器用于“break up the combinatorial path for local escalation”，但仅凭该片段无法确认 alerts_q[0] 在后续升级/告警网络中的具体使用位置与是否只服务于 local escalation 路径。",
-    "注释称 alerts[0] 对应“recoverable alert”，但仅凭该片段无法确认 alerts 总线各位的具体告警类型映射，也无法确认 alerts[0] 是否始终仅用于可恢复场景。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1495,
-  "line_end": 1503
+  "line_end": 1503,
+  "security_implications": ""
 }

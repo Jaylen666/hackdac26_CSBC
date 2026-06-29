@@ -1,0 +1,230 @@
+{
+  "chunk_id": "aes_key_expand__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "aes_key_expand",
+    "block_kind": "mixed",
+    "driven": [
+      "unused_cfg_valid",
+      "rnd",
+      "use_rot_word",
+      "rcon_we",
+      "unused_prd_we",
+      "rcon_add_in",
+      "rcon_add_out",
+      "rcon_added",
+      "en"
+    ],
+    "used": [
+      "cfg_valid_i",
+      "round_i",
+      "key_len_i",
+      "AES_256",
+      "rnd",
+      "clear_i",
+      "use_rcon",
+      "en",
+      "out_req_o",
+      "out_ack",
+      "prd_we",
+      "sub_word_out",
+      "rcon_q",
+      "en_raw"
+    ],
+    "modes": [
+      "AES_256 key length (key_len_i == AES_256)",
+      "round parity via rnd[0]",
+      "gen_prd_buffer parameterization"
+    ],
+    "tags": [
+      "aes",
+      "key_expand",
+      "handshake",
+      "rcon",
+      "sub_word",
+      "integrity",
+      "key_schedule"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When key_len_i equals AES_256 and the least significant bit of round_i (via rnd) is 0, use_rot_word is 0; otherwise use_rot_word is 1.",
+      "cond": "always",
+      "signals": [
+        "use_rot_word",
+        "key_len_i",
+        "AES_256",
+        "rnd",
+        "round_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:20"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "rcon_we is asserted when clear_i is active, or when use_rcon is active and en, out_req_o, out_ack are all at SP2V_HIGH.",
+      "cond": "always",
+      "signals": [
+        "rcon_we",
+        "clear_i",
+        "use_rcon",
+        "en",
+        "out_req_o",
+        "out_ack"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:22-23"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "Inside gen_prd_buffer: rcon_add_in gets sub_word_out[7:0]; rcon_add_out is rcon_add_in XOR rcon_q; rcon_added replaces the low byte of sub_word_out with rcon_add_out.",
+      "cond": "gen_prd_buffer is active (parameter dependent)",
+      "signals": [
+        "rcon_add_in",
+        "rcon_add_out",
+        "rcon_added",
+        "sub_word_out",
+        "rcon_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:29-31"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "en is a continuous assignment of en_raw cast to sp2v_e type.",
+      "cond": "always",
+      "signals": [
+        "en",
+        "en_raw"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:33"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "When use_rcon is asserted and clear_i is deasserted, en, out_req_o and out_ack must all reach SP2V_HIGH simultaneously and deassert together to avoid spurious glitches on rcon_we.",
+      "cond": "use_rcon == 1 and clear_i == 0",
+      "risk": "Temporal mismatch could cause a glitch on rcon_we, unintentionally updating the rcon register and corrupting the key schedule.",
+      "signals": [
+        "use_rcon",
+        "clear_i",
+        "en",
+        "out_req_o",
+        "out_ack",
+        "rcon_we"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:22-23"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "round_i must correctly reflect the current round number.",
+      "cond": "always during key expansion",
+      "risk": "An incorrect round_i leads to wrong use_rot_word value, breaking the AES‑256 key schedule for specific rounds.",
+      "signals": [
+        "round_i",
+        "rnd",
+        "use_rot_word"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:18,20"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "sub_word_out and rcon_q are valid (non‑X) when the rcon_add data path is used.",
+      "cond": "gen_prd_buffer active and rcon_add path evaluated",
+      "risk": "Invalid or X data would propagate to rcon_added, producing a wrong round constant byte replacement and a corrupted expanded key.",
+      "signals": [
+        "sub_word_out",
+        "rcon_q",
+        "rcon_add_in",
+        "rcon_add_out",
+        "rcon_added"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:29-31"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The rcon_add_in/out/added assignments are inside an else branch (gen_prd_buffer) whose controlling generate condition is not shown. If that else branch is not taken when the key expander needs to compute rcon_add, those signals may be undriven.",
+      "cond": "Unknown generate condition",
+      "risk": "Undriven rcon_add signals could cause X‑propagation into the key expansion data path, silently corrupting the round key and breaking AES correctness.",
+      "signals": [
+        "rcon_add_in",
+        "rcon_add_out",
+        "rcon_added"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:27-31"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "cfg_valid_i is tied to an unused wire (unused_cfg_valid) and prd_we is tied to unused_prd_we, suggesting these external inputs are intentionally ignored. A missing functional connection could mean important configuration or pseudo‑random data is dropped.",
+      "cond": "always (design choice)",
+      "risk": "If cfg_valid_i or prd_we are meant to gate or seed key expansion, ignoring them could lead to incorrect key material or missed coverage of fault scenarios.",
+      "signals": [
+        "cfg_valid_i",
+        "unused_cfg_valid",
+        "prd_we",
+        "unused_prd_we"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:15,25"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The rcon_we expression uses == SP2V_HIGH comparisons on handshake signals (en, out_req_o, out_ack). If any signal carries an X during simulation, the equality test may suppress the X, hiding a reachable X‑state that could indicate a real bug.",
+      "cond": "when any of en, out_req_o, out_ack is X",
+      "risk": "Bugs that cause Xs in the handshake may not be detected, leading to silent incorrect rcon writes in silicon.",
+      "signals": [
+        "en",
+        "out_req_o",
+        "out_ack",
+        "rcon_we"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:22-23"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:7-14",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:15",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:18",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:20",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:22-23",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:25",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:27-31",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv:33"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_key_expand.sv",
+  "line_start": 7,
+  "line_end": 461,
+  "security_implications": ""
+}

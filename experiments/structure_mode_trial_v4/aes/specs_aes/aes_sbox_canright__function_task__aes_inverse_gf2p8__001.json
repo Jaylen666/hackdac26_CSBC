@@ -1,0 +1,103 @@
+{
+  "chunk_id": "aes_sbox_canright__function_task__aes_inverse_gf2p8__001",
+  "header": {
+    "module": "aes_sbox_canright",
+    "block_kind": "always_comb",
+    "driven": [
+      "delta"
+    ],
+    "used": [
+      "gamma"
+    ],
+    "modes": [],
+    "tags": [
+      "integrity"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "delta is continuously assigned as the result of the composite GF(2^8) inversion algorithm: upper nibble = aes_mul_gf2p4(d, gamma[3:0]); lower nibble = aes_mul_gf2p4(d, gamma[7:4]), with intermediate a, b, c, d calculated as specified in the function.",
+      "cond": "always",
+      "signals": [
+        "gamma",
+        "delta",
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "refs": [
+        "aes_sbox_canright.sv:42-47"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The helper functions aes_mul_gf2p4, aes_square_scale_gf2p4_gf2p2, and aes_inverse_gf2p4 correctly implement GF(2^4) arithmetic (multiplication, square-scale, and inversion) consistent with the composite-field representation and return valid logic values for all inputs.",
+      "cond": "always",
+      "risk": "If any helper returns an incorrect value, the computed inverse will be wrong, corrupting the S-box output and potentially breaking encryption/decryption correctness or enabling side-channel attacks.",
+      "signals": [
+        "gamma",
+        "delta"
+      ],
+      "refs": [
+        "aes_sbox_canright.sv:43-45"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Input gamma is a well-defined 8-bit logic value (no X/Z) during functional operation.",
+      "cond": "during normal operation",
+      "risk": "If gamma contains X/Z, the function may propagate X/Z to the output, causing simulation mismatches or synthesis warnings.",
+      "signals": [
+        "gamma"
+      ],
+      "refs": [
+        "aes_sbox_canright.sv:39"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The function relies on aes_inverse_gf2p4 to correctly handle input zero (return zero) to produce the correct AES inverse for gamma=0. Need to verify that aes_inverse_gf2p4 implements the AES convention that inv(0)=0.",
+      "cond": "when gamma == 8'h00, then c ^ b == 4'h0, which is fed to aes_inverse_gf2p4",
+      "risk": "If aes_inverse_gf2p4 does not return zero for zero input, the S-box entry for 0x00 will be wrong, breaking AES correctness and potentially creating an observable bias.",
+      "signals": [
+        "gamma",
+        "c",
+        "b",
+        "d"
+      ],
+      "refs": [
+        "aes_sbox_canright.sv:42-45"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The composite-field arithmetic must be consistent with the AES irreducible polynomial (x^8+x^4+x^3+x+1) and the chosen subfield decomposition. Need to verify that all sub-functions (aes_mul_gf2p4, aes_square_scale_gf2p4_gf2p2, aes_inverse_gf2p4) are defined using the same polynomial and basis conversions.",
+      "cond": "always",
+      "risk": "A mismatch in polynomial or basis will result in a functionally incorrect S-box, compromising the entire cipher.",
+      "signals": [],
+      "refs": [
+        "aes_sbox_canright.sv:43-45"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_sbox_canright.sv:39-49"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_sbox_canright.sv",
+  "line_start": 39,
+  "line_end": 49,
+  "security_implications": ""
+}

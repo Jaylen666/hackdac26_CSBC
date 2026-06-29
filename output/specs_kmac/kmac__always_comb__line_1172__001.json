@@ -1,50 +1,79 @@
 {
   "chunk_id": "kmac__always_comb__line_1172__001",
-  "summary": "根据有效位选择是否将内部状态按 share 逐路透传到 reg_state_tl，无效时强制清零。",
-  "behavior": "该组合逻辑对 `i=0` 到 `Share-1` 的每一路 `reg_state_tl[i]` 统一赋值：当 `reg_state_valid` 为真时，`reg_state_tl[i]` 直接等于对应的 `reg_state[i]`；当 `reg_state_valid` 为假时，`reg_state_tl[i]` 被置为全 0（`'b0`）。因此该片段实现了一个由 `reg_state_valid` 控制的逐 share 输出门控，避免在状态无效时向后续逻辑暴露 `reg_state` 内容。源码未显示对 `reg_state_tl` 其他索引或位段的特殊处理，所有 share 行为一致。[/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1172-1176]",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_comb",
+    "driven": [
+      "reg_state_tl"
+    ],
+    "used": [
+      "reg_state_valid",
+      "reg_state"
+    ],
+    "modes": [
+      "parameter_Share"
+    ],
+    "tags": [
+      "state",
+      "zeroization",
+      "parameterization",
+      "secret"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `reg_state_valid` 为 0 时，所有 `reg_state_tl[i]`（`0 <= i < Share`）均被驱动为全 0。",
-      "output_signals": [
-        "reg_state_tl"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For all i from 0 to Share-1, reg_state_tl[i] = reg_state_valid ? reg_state[i] : 'b0. This is a combinational pass-through or zeroing.",
+      "cond": "always",
+      "signals": [
+        "reg_state_tl",
+        "reg_state_valid",
+        "reg_state"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1173-1174"
-      ]
-    },
-    {
-      "property": "当 `reg_state_valid` 为 1 时，所有 `reg_state_tl[i]`（`0 <= i < Share`）与对应的 `reg_state[i]` 保持一致。",
-      "output_signals": [
-        "reg_state_tl"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1173-1174"
+      "refs": [
+        "kmac.sv:1172-1176"
       ]
     }
   ],
-  "security_implications": "该片段对内部状态输出实施有效位门控：`reg_state_valid` 失效时强制输出清零，有助于避免无效或未授权时暴露 `reg_state` 内容。若 `reg_state` 含有敏感摘要/中间状态，这种清零行为可降低信息泄露风险。[/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1173-1174]",
   "assumptions": [
     {
-      "constraint": "`reg_state_valid` 应准确表示 `reg_state` 当前是否可被外部/后续逻辑使用；若设计意图是在状态无效时屏蔽内容，则该有效位不应错误拉高。",
-      "bug_relevance": "这是行为契约；若 `reg_state_valid` 在 `reg_state` 无效或不应暴露时被错误置 1，`reg_state_tl` 会直接输出对应状态，可能导致功能错误或信息泄露。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "When reg_state_valid=1, reg_state contains correct internal state (not corrupted, held from previous valid cycle if needed).",
+      "cond": "reg_state_valid asserted",
+      "risk": "Corrupted or stale state in reg_state propagates directly to reg_state_tl, breaking MAC computation and potentially leaking sensitive data.",
+      "signals": [
         "reg_state_valid",
-        "reg_state",
-        "reg_state_tl"
+        "reg_state"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1173-1174"
+      "refs": [
+        "kmac.sv:1172-1176"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "When reg_state_valid=0, reg_state_tl is driven to all zeros. Is this a deliberate security wipe, and is zero the correct wipe value (e.g., vs. random mask)? Potential for unintentional state exposure if zeroing is insufficient or not gated by a secure clear sequence.",
+      "cond": "reg_state_valid deasserted",
+      "risk": "Incomplete or incorrect wipe could leave residual secret state in downstream logic, violating zeroization requirements and enabling data leakage.",
+      "signals": [
+        "reg_state_tl",
+        "reg_state_valid"
+      ],
+      "refs": [
+        "kmac.sv:1172-1176"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1172-1176"
-  ],
-  "uncertain_points": [
-    "仅从该片段无法确认 `reg_state_tl` 是否最终连接到寄存器接口、测试逻辑或内部旁路路径，因此其可见范围和安全敏感度需要结合上下文确认。",
-    "代码实际在 `reg_state_valid` 为假时输出全 0，但没有注释说明这是否仅用于防止无效数据传播，还是明确的安全擦除/隐藏策略。"
+    "kmac.sv:1172-1176"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1172,
-  "line_end": 1176
+  "line_end": 1176,
+  "security_implications": ""
 }

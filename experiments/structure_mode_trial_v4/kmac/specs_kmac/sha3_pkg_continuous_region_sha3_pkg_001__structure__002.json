@@ -1,0 +1,138 @@
+{
+  "chunk_id": "sha3_pkg_continuous_region_sha3_pkg_001__structure__002",
+  "header": {
+    "module": "sha3_pkg",
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [
+      "NSRegisterSizePre",
+      "PrefixSize",
+      "MsgWidth"
+    ],
+    "modes": [
+      "Sha3",
+      "Shake",
+      "CShake",
+      "L128",
+      "L224",
+      "L256",
+      "L384",
+      "L512"
+    ],
+    "tags": [
+      "digest",
+      "parameterization",
+      "security"
+    ]
+  },
+  "guarantees": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The MsgWidth parameter must remain 64 because downstream modules (keccak_round, sha3pad, kmac core) assume a fixed 64-bit datapath and do not re-parameterize for other widths.",
+      "cond": "Always; the design is non-parametric for this value.",
+      "risk": "Changing MsgWidth would cause datapath width mismatches, truncation, and mux misalignment, leading to functional failure of the hash accelerator.",
+      "signals": [
+        "MsgWidth"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:52-53",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:42-51"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "Software must set sha3_mode to Shake when the customization strings N and S are both empty, even if a cSHAKE operation is intended, because the hardware does not detect empty strings.",
+      "cond": "When performing a cSHAKE operation with empty N and S.",
+      "risk": "If software selects CShake mode with empty strings, the padding logic will apply bytepad encoding on empty data, deviating from the cSHAKE standard and possibly generating a non-standard hash output that could be exploited in authentication or integrity checks.",
+      "signals": [
+        "sha3_mode_e"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:65-66"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The 2-bit enum sha3_mode_e leaves the value 2'b01 undefined, creating an illegal state that could be reached via erroneous or malicious input to mode selection logic.",
+      "cond": "If the sha3_mode signal is driven to 2'b01 through a glitch or untrusted interface.",
+      "risk": "Downstream case or mux logic may map 2'b01 to an unintended mode (e.g., Sha3) or produce undefined behavior, potentially compromising hash correctness.",
+      "signals": [
+        "sha3_mode_e"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:67-71"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "low",
+      "claim": "The 3-bit enum keccak_strength_e defines only 5 of 8 possible values, leaving encodings 3'b101, 3'b110, 3'b111 undefined.",
+      "cond": "If the keccak_strength signal takes one of these unused values.",
+      "risk": "The downstream logic may use an invalid rate/capacity mapping, affecting Keccak round behavior and potentially weakening security or causing a hang.",
+      "signals": [
+        "keccak_strength_e"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:77-83"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The KeccakRate array initialization is not fully visible; the exact mapping of rates to strengths must be verified against the standard Keccak rates to ensure capacity is correctly derived.",
+      "cond": "Always, at compile time.",
+      "risk": "An incorrect rate value in any entry would change the effective capacity, reducing collision resistance and compromising the security level of the hash function.",
+      "signals": [
+        "KeccakRate"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:85-85"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The design relies on software to select SHAKE mode when N and S strings are empty, but hardware provides no enforcement (e.g., automatically overriding mode), leaving a silent security gap.",
+      "cond": "When SW sets mode to CShake with empty N/S.",
+      "risk": "A software bug or attack could cause the hardware to produce non-standard hashes, potentially bypassing protocol integrity checks or enabling signature forgeries.",
+      "signals": [
+        "sha3_mode_e"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:65-66"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The comment indicates that cSHAKE bytepad uses 168 bytes for L128 and 136 for L256, but it is unclear if the padding logic in sha3pad correctly applies these to all keccak strengths (L128, L224, L256, L384, L512).",
+      "cond": "When strengths other than L128/L256 are used in cSHAKE mode.",
+      "risk": "The padding length may be wrong for those strengths, causing non-standard hash outputs and interoperability issues.",
+      "signals": [
+        "keccak_strength_e"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:33-36",
+        "74-76"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv:31-85"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3_pkg.sv",
+  "line_start": 31,
+  "line_end": 85,
+  "security_implications": ""
+}

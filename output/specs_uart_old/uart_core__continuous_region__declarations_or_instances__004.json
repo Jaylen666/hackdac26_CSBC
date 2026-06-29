@@ -1,0 +1,63 @@
+{
+  "chunk_id": "uart_core__continuous_region__declarations_or_instances__004",
+  "summary": "对同步后的 RX 输入进行可选噪声滤波与回环选择，将最终信号送入 UART 接收逻辑，并仅把无错误的接收字节写入同步接收 FIFO。",
+  "behavior": "rx_sync 与它的两级延迟 rx_sync_q1、rx_sync_q2 经过多数表决（三取二）得到 rx_in_maj（257-259 行）。若使能噪声滤波（rxnf_enable=1），rx_in_mx 取多数表决结果，否则直通 rx_sync（260 行）。系统回环时 rx_in 选择 tx_out，线路回环时强制为 1（上拉），否则选用 rx_in_mx（262-264 行）。rx_in 连接到 uart_rx 实例的 rx 输入（278 行）。uart_rx 内部完成采样、帧解析和奇偶校验，输出 rx_valid、rx_fifo_data、event_rx_frame_err、event_rx_parity_err 等（266-280 行）。只有当 rx_valid 有效且同时无帧错误和奇偶校验错误时，rx_fifo_wvalid 才被置 1，数据 rx_fifo_data 写入同步 FIFO（282 行）。FIFO 通过 prim_fifo_sync 实现，深度 RxFifoDepth，支持 clr_i（uart_fifo_rxrst）清零，读出由 reg2hw.rdata.re 控制（284-301 行）。",
+  "guarantees": [
+    {
+      "property": "当 line_loopback 有效时，rx_in 恒为 1，不会受外部 RX 引脚状态影响",
+      "output_signals": [
+        "rx_in"
+      ],
+      "source_refs": [
+        "uart_core.sv:262-264"
+      ]
+    },
+    {
+      "property": "仅当 rx_valid 有效且 event_rx_frame_err 和 event_rx_parity_err 同时为 0 时，rx_fifo_wvalid 才有效，向 FIFO 写入 rx_fifo_data",
+      "output_signals": [
+        "rx_fifo_wvalid"
+      ],
+      "source_refs": [
+        "uart_core.sv:282"
+      ]
+    }
+  ],
+  "security_implications": "帧错误或奇偶校验错误的字节被过滤，不会进入接收 FIFO，防止软件读到被破坏的数据，提高了通信可靠性。FIFO 的 clr_i（uart_fifo_rxrst）可用于清除可能的残留敏感数据。",
+  "assumptions": [
+    {
+      "constraint": "当 rxnf_enable 有效时，rx_sync、rx_sync_q1、rx_sync_q2 需来自同一时钟域且满足建立/保持时间要求，以保证多数表决正确采样",
+      "bug_relevance": "若不满足，噪声滤波可能误判输入电平，但错判结果仍为合法逻辑值，不会导致硬件故障；设计上 rxnf_enable 通常只在需要滤波时使用，此时应确保信号质量",
+      "related_signals": [
+        "rx_sync",
+        "rx_sync_q1",
+        "rx_sync_q2",
+        "rxnf_enable"
+      ],
+      "source_refs": [
+        "uart_core.sv:257-260"
+      ]
+    },
+    {
+      "constraint": "线路回环（line_loopback）有效时，rx_in 被强制为 1，此时外部 RX 引脚状态应被忽略",
+      "bug_relevance": "这是一种防御性设计，防止 RX 线条浮空或外部噪声引起误接收；若 line_loopback 意外使能，rx_in 将保持高电平，UART 接收无法看到真实 RX 信号，此为可预期的功能模式而非硬件错误",
+      "related_signals": [
+        "line_loopback",
+        "rx_in"
+      ],
+      "source_refs": [
+        "uart_core.sv:262-264"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_core.sv:257-301"
+  ],
+  "uncertain_points": [
+    "rx_fifo_wready 输出未连接，若 FIFO 已满而 rx_fifo_wvalid 仍有效时数据会丢失，设计可能依赖系统保证 FIFO 不会溢出，需结合 uart_rx 行为的反压机制确认",
+    "uart_fifo_rxrst 的来源未在本段显示，应为寄存器或顶层端口，需确认其驱动逻辑",
+    "prim_fifo_sync 的 Pass 参数为 0 的含义需查阅该模块文档（可能表示非旁路模式），影响 FIFO 行为"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
+  "line_start": 257,
+  "line_end": 301
+}

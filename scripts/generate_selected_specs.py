@@ -19,6 +19,11 @@ def main() -> None:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--env", default="/home/smy/.env")
     parser.add_argument("--provider", default="GUOCHUANG")
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Optional spec prompt path; defaults to the extractor's current prompt",
+    )
     parser.add_argument("chunk_ids", nargs="+")
     args = parser.parse_args()
 
@@ -31,7 +36,7 @@ def main() -> None:
 
     for chunk_id in args.chunk_ids:
         chunk = get_chunk(chunks, chunk_id)
-        spec = generate_chunk_spec(chunk, client)
+        spec = generate_chunk_spec(chunk, client, prompt_path=args.prompt or None)
         out_path = out_dir / f"{chunk_id}.json"
         out_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"wrote {out_path}")

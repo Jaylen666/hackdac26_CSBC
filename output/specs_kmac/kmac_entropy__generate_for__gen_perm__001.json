@@ -1,41 +1,62 @@
 {
   "chunk_id": "kmac_entropy__generate_for__gen_perm__001",
-  "summary": "将 PRNG 输出按固定置换表逐位重排，生成 permuted 版本的数据总线。",
-  "behavior": "该 generate-for 为 `prng_data_permuted` 的每一位建立一个独立的组合连接：对任意索引 `i`，`prng_data_permuted[i]` 直接取自 `prng_data[RndCnstLfsrPerm[i]]`。因此整个输出总线是对 `prng_data` 按常量映射 `RndCnstLfsrPerm` 进行逐位重排，而不是运算、压缩或扩展；片段本身不包含默认分支或越界保护，实际行为依赖置换常量在每个 `i` 上都给出有效索引。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "generate",
+    "driven": [
+      "prng_data_permuted"
+    ],
+    "used": [
+      "prng_data",
+      "RndCnstLfsrPerm",
+      "EntropyOutputW"
+    ],
+    "modes": [],
+    "tags": [
+      "entropy",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对每个位索引 `i`，输出 `prng_data_permuted[i]` 必定等于输入 `prng_data[RndCnstLfsrPerm[i]]`。",
-      "output_signals": [
-        "prng_data_permuted"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "prng_data_permuted is assigned as a bit-permutation of prng_data according to the constant index array RndCnstLfsrPerm.",
+      "cond": "always",
+      "signals": [
+        "prng_data_permuted",
+        "prng_data",
+        "RndCnstLfsrPerm"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:384-386"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:385-385"
       ]
     }
   ],
-  "security_implications": "该片段位于熵/PRNG 数据路径上，作用是对 PRNG 输出执行固定比特置换。它不会引入新熵，只改变位位置；若置换常量配置错误，可能导致位重复、位丢失或偏离预期的内部扰动/扩散效果，从而影响后续安全相关随机数据处理。",
-  "assumptions": [
+  "assumptions": [],
+  "uncertain_points": [
     {
-      "constraint": "`RndCnstLfsrPerm[i]` 对所有 `i in [0, EntropyOutputW-1]` 都应是 `prng_data` 的合法位索引；设计上通常还应满足该映射符合预期置换关系。",
-      "bug_relevance": "如果索引越界，仿真/综合行为可能异常或与预期不符；如果映射不是设计期望的置换，即使仍可综合，也可能造成随机数据位重复、遗漏或错误重排，影响功能和安全性质。",
-      "related_signals": [
-        "RndCnstLfsrPerm",
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If any entry in RndCnstLfsrPerm is greater than or equal to the bit width of prng_data, then the corresponding prng_data_permuted bit becomes X due to out-of-bounds selection.",
+      "cond": "When RndCnstLfsrPerm is legally set to such an index.",
+      "risk": "X propagation in the entropy permutation output can weaken or invalidate the random number quality, impacting downstream security functions.",
+      "signals": [
         "prng_data",
+        "RndCnstLfsrPerm",
         "prng_data_permuted"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:384-386"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:385-385"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:384-386"
   ],
-  "uncertain_points": [
-    "仅从该片段无法确认 `RndCnstLfsrPerm` 是否构成一一对应的完整置换，还是允许重复/未覆盖索引；注释和上下文若有更强约束需结合其他代码确认。",
-    "无法仅凭该片段判断此重排的具体设计意图是实现安全扩散、打散 LFSR 位相关性，还是仅满足下游接口位序要求。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 384,
-  "line_end": 386
+  "line_end": 386,
+  "security_implications": ""
 }

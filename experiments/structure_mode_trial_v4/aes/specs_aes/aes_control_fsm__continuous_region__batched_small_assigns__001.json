@@ -1,0 +1,123 @@
+{
+  "chunk_id": "aes_control_fsm__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "aes_control_fsm",
+    "block_kind": "mixed",
+    "driven": [
+      "block_ctr_expr",
+      "aes_ctrl_cs",
+      "aes_ctrl_e",
+      "u_state_regs"
+    ],
+    "used": [
+      "aes_ctrl_ns",
+      "CTRL_IDLE"
+    ],
+    "modes": [
+      "CTRL_IDLE",
+      "gen_no_block_ctr"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "error_detection",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When the generate block gen_no_block_ctr is active, block_ctr_expr is stuck at logic 0.",
+      "cond": "gen_no_block_ctr branch taken",
+      "signals": [
+        "block_ctr_expr"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:636"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "PRIM_FLOP_SPARSE_FSM macro instance connects u_state_regs as state register, aes_ctrl_ns as next state, outputs aes_ctrl_cs (current state) and aes_ctrl_e (error), and uses CTRL_IDLE as idle state encoding; thereby the block contains a sparse‑encoded FSM with error detection.",
+      "cond": "always",
+      "signals": [
+        "u_state_regs",
+        "aes_ctrl_ns",
+        "aes_ctrl_cs",
+        "aes_ctrl_e",
+        "CTRL_IDLE"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:633"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Downstream logic that reads block_ctr_expr must not rely on a dynamic block counter when gen_no_block_ctr is active; it must accept a constant‑0 value.",
+      "cond": "gen_no_block_ctr active",
+      "risk": "If a consumer expects a functional block counter, the AES block counter context will be incorrect, potentially breaking cipher operations or exposing state.",
+      "signals": [
+        "block_ctr_expr"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:636"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "The sparse‑FSM macro PRIM_FLOP_SPARSE_FSM requires that CTRL_IDLE is a legal, reachable, and sparse‑encoded state value consistent with the FSM encoding scheme; additionally, the FSM must have a mechanism to recover or alert when an invalid state is detected.",
+      "cond": "any invalid state transition occurs",
+      "risk": "If CTRL_IDLE is mis‑encoded or the macro’s error output (aes_ctrl_e) is not properly handled, an attacker could force the FSM into a hidden state, bypassing security checks.",
+      "signals": [
+        "CTRL_IDLE",
+        "aes_ctrl_e"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:633"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The exact error‑detection and recovery behavior of PRIM_FLOP_SPARSE_FSM is not visible in this chunk; we need the macro definition to confirm whether it merely flags an error or also forces a safe state/wipe/reset.",
+      "cond": "when aes_ctrl_e is asserted",
+      "risk": "If the macro does not force a safe state and downstream logic ignores aes_ctrl_e, an FSM glitch could persist, leaking key material or bypassing encryption controls.",
+      "signals": [
+        "aes_ctrl_e",
+        "aes_ctrl_cs"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:633"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal unused_prng_reseed_rate is declared but never assigned; it is intended to tie off an unused signal, but any accidental read would see an unknown value (if not tied elsewhere).",
+      "cond": "unknown",
+      "risk": "If this signal is inadvertently read by logic expecting a valid reseed rate, the PRNG reseeding schedule could be corrupted, reducing entropy quality.",
+      "signals": [
+        "unused_prng_reseed_rate"
+      ],
+      "refs": [
+        "aes_control_fsm.sv:640"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_control_fsm.sv:632-640"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv",
+  "line_start": 632,
+  "line_end": 832,
+  "security_implications": ""
+}

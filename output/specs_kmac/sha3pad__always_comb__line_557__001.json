@@ -1,49 +1,76 @@
 {
   "chunk_id": "sha3pad__always_comb__line_557__001",
-  "summary": "根据模式选择 5 位函数填充值；未识别模式时退化为仅输出基础的 pad10*1 形式对应值。",
-  "behavior": "该组合逻辑对 `mode_i` 进行 `unique case` 解码并驱动 5 位信号 `funcpad`。当模式为 `Sha3` 时，`funcpad` 取 `5'b00110`；为 `Shake` 时取 `5'b11111`；为 `CShake` 时取 `5'b00100`。对于其他未匹配模式，代码按注释所述走回退路径，输出 `5'b00001`，意图是“不加入函数专用 padding，仅保留 pad10*1”。因此该片段本质上是在不同 SHA-3 相关模式下选择域分离/功能填充值，并对非法或未支持模式提供安全回退而不是传播未知值。`unique case` 还表达了设计期望：这些模式应当互斥且通常只命中一个分支。",
+  "header": {
+    "module": "sha3pad",
+    "block_kind": "always_comb",
+    "driven": [
+      "funcpad"
+    ],
+    "used": [
+      "mode_i"
+    ],
+    "modes": [
+      "Sha3",
+      "Shake",
+      "CShake"
+    ],
+    "tags": [
+      "mode_config",
+      "fault"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 `mode_i` 为 `Sha3`、`Shake` 或 `CShake` 时，`funcpad` 分别稳定取 `00110`、`11111`、`00100`，不会落入默认回退值。",
-      "output_signals": [
-        "funcpad"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "funcpad is assigned 5'b00110 when mode_i is Sha3, 5'b11111 when Shake, 5'b00100 when CShake, and 5'b00001 for any other mode_i value (default).",
+      "cond": "always",
+      "signals": [
+        "funcpad",
+        "mode_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:558-561"
-      ]
-    },
-    {
-      "property": "当 `mode_i` 不匹配任何已列出的模式时，`funcpad` 被强制为 `00001` 作为默认回退值。",
-      "output_signals": [
-        "funcpad"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:563-566"
+      "refs": [
+        "sha3pad.sv:559-565"
       ]
     }
   ],
-  "security_implications": "该逻辑属于 SHA-3/KMAC 填充选择的一部分，直接影响不同模式下的域分离位型。已识别模式会生成固定的模式相关填充值；未识别模式不会产生 X/悬空，而是回退到注释所述的基础 pad10*1 值。这种回退有助于降低非法模式导致不可预测输出的风险，但如果上游本应严格禁止非法模式，回退也可能掩盖配置错误，使摘要结果与预期模式不符。",
   "assumptions": [
     {
-      "constraint": "在需要符合标准 `Sha3`/`Shake`/`CShake` 填充语义的合法工作场景中，`mode_i` 应只取这三个已定义枚举之一。",
-      "bug_relevance": "如果违反该约束，硬件会进入默认分支并输出 `00001`；这是一种设计上的安全回退，但会导致实际填充不再对应期望模式，从而得到错误或不可互操作的摘要结果。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "mode_i must be one of the three enumerated values (Sha3, Shake, CShake) for correct pad type operation. Any other value causes an unintentional pad selection (5'b00001) that may not match the actual functional mode.",
+      "cond": "whenever mode_i is not one of the three defined modes",
+      "risk": "Incorrect padding could lead to interoperability or security protocol failures (e.g., data may be processed silently with wrong padding).",
+      "signals": [
+        "mode_i"
+      ],
+      "refs": [
+        "sha3pad.sv:558-566"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When mode_i takes an invalid or unexpected value, the block assigns a default pad type (5'b00001) without asserting any error, alert, or status indication. A fault that corrupts mode_i will be silently masked, causing the core to proceed with potentially incorrect padding.",
+      "cond": "mode_i is an undefined or corrupted value",
+      "risk": "Undetected incorrect operation may compromise data integrity or protocol correctness (e.g., a SHA-3 mode may end up with SHAKE padding), with no downstream indication of the mismatch.",
+      "signals": [
         "mode_i",
         "funcpad"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:558-566"
+      "refs": [
+        "sha3pad.sv:563-566"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:557-568"
-  ],
-  "uncertain_points": [
-    "注释称默认分支“Just create non-padding but pad10*1 only”，但仅从本片段无法确认 `funcpad=5'b00001` 与完整 pad10*1 机制在后续拼接中的精确对应关系，需要结合 `funcpad` 的消费逻辑确认。",
-    "`unique case` 表明模式值应互斥且覆盖设计期望输入，但若 `mode_i` 含 X/Z 或非法编码时仿真/综合工具对唯一性检查的具体处理，不由本片段单独确定。"
+    "sha3pad.sv:557-568"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
   "line_start": 557,
-  "line_end": 568
+  "line_end": 568,
+  "security_implications": ""
 }

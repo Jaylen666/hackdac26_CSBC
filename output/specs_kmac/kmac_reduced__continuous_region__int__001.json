@@ -1,59 +1,56 @@
 {
   "chunk_id": "kmac_reduced__continuous_region__int__001",
-  "summary": "该片段将消息掩码使能、生命周期升级同步、SHA3/熵子模块实例化及其错误汇总连接起来，形成 kmac_reduced 的核心数据与错误接口。",
-  "behavior": "`msg_mask_en` 只在外部请求开启掩码且消息输入发生有效握手时置位，即 `msg_mask_en_i & msg_valid & msg_ready`，因此消息掩码生成仅在被 SHA3 实际接收消息的周期触发，而不是仅凭 `msg_valid` 或配置位单独触发 [166-166]。生命周期升级输入 `lc_escalate_en_i` 先经 `prim_lc_sync` 同步后复制成两路 `lc_escalate_en`，分别送入 SHA3 和熵模块，表明这两个子模块都受同步后的 LC 升级控制 [174-185,245-245,302-303]。错误输出 `err_o` 是多个内部错误源的按位或归并：包括 SHA3 模块错误总线及其状态机/计数器/存储复位错误，以及熵模块错误总线及其状态机/哈希计数错误；任一来源报错都会拉高顶层错误输出 [187-194]。SHA3 实例接收消息握手接口 `msg_valid/msg_ready/msg_masked/msg_strb_i`、模式/强度配置、N/S 前缀、启动/处理/运行/完成控制，并输出吸收完成、squeezing、块处理、FSM 状态以及 `state_valid_o/state_o`；其随机性输入完全来自下方熵模块，且 `run_ack_i` 被常量 1 绑定，因此本片段中不存在对 SHA3 处理请求的人为背压 [199-252]。熵模块实例负责向 SHA3 提供 `sha3_rand_valid/early/data/aux`，接收 SHA3 的 `rand_update` 与 `rand_consumed` 反馈，还根据 `msg_mask_en` 生成消息掩码 `msg_mask`；同时它连接外部 EDN/entropy 接口、重播种控制、等待计时参数、哈希计数与配置状态输出，并受第二路 LC 升级控制 [257-310]。整体上，该片段主要定义了两个子模块之间的接口粘连关系：SHA3 消耗消息和熵，熵模块既服务 SHA3 随机需求也服务消息掩码，并将各自错误上卷到 `err_o`。",
+  "header": {
+    "module": "kmac_reduced",
+    "block_kind": "mixed",
+    "driven": [
+      "msg_mask_en",
+      "err_o",
+      "state_valid_o",
+      "state_o",
+      "sha3_err",
+      "entropy_err",
+      "entropy_configured_o"
+    ],
+    "used": [
+      "msg_mask_en_i",
+      "msg_valid",
+      "msg_ready",
+      "lc_escalate_en_i",
+      "sha3_err",
+      "sha3_state_error",
+      "sha3_count_error",
+      "sha3_storage_rst_error",
+      "entropy_err",
+      "entropy_state_error",
+      "entropy_hash_counter_error"
+    ],
+    "modes": [
+      "EnMasking",
+      "RndCnstLfsrPerm",
+      "RndCnstLfsrSeed",
+      "RndCnstBufferLfsrSeed",
+      "NumLcSyncCopies"
+    ],
+    "tags": [
+      "mask",
+      "entropy",
+      "error",
+      "fault",
+      "handshake",
+      "lifecycle",
+      "reset",
+      "sparse_fsm",
+      "security"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当任一 SHA3 或熵相关错误信号为 1 时，`err_o` 必为 1。",
-      "output_signals": [
-        "err_o"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:193-194"
-      ]
-    },
-    {
-      "property": "`msg_mask_en` 仅在 `msg_mask_en_i`、`msg_valid` 和 `msg_ready` 同时为 1 时才为 1。",
-      "output_signals": [
-        "msg_mask_en"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:166-166"
-      ]
-    },
-    {
-      "property": "SHA3 的处理许可不会被本片段阻塞，因为 `run_ack_i` 被固定为 `1'b1`。",
-      "output_signals": [
-        "state_valid_o",
-        "state_o"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:240-242",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:236-238"
-      ]
-    }
-  ],
-  "security_implications": "该片段涉及两类安全相关连接。其一，消息掩码仅在真实消息握手时触发 [166]，有助于避免掩码生成与未消费数据错位。其二，生命周期升级信号经同步后分别送入 SHA3 和熵模块 [177-185,245,302-303]，说明安全升级/失效机制会同时影响计算核心与随机源。另有统一错误汇总 `err_o` [193-194]，可供上层在检测到状态机、计数器或熵路径异常时采取防护动作。",
-  "assumptions": [
-    {
-      "constraint": "`msg_valid` 与 `msg_ready` 的握手语义应表示当前消息字确实被 SHA3 接收；`msg_mask_en` 的使用依赖这一契约来与 `msg_mask` 消费对齐。",
-      "bug_relevance": "若违反该契约，可能在未实际消费消息时触发掩码更新，或在已消费消息时未触发，导致消息数据与掩码错位，造成功能错误；这属于行为契约。",
-      "related_signals": [
-        "msg_valid",
-        "msg_ready",
-        "msg_mask_en_i",
-        "msg_mask_en"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:166-166",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:205-210",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:278-280"
-      ]
-    },
-    {
-      "constraint": "外部错误处理逻辑应把 `err_o` 视为所有已汇总子错误的统一告警，而不依赖未在本片段中单独导出的某个内部错误源。",
-      "bug_relevance": "若上层忽略 `err_o` 或错误地假定某些内部错误会通过其他路径独立暴露，可能漏检 SHA3/熵状态机或计数异常；这属于行为契约。",
-      "related_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "err_o is the bitwise OR reduction of sha3_err, sha3_state_error, sha3_count_error, sha3_storage_rst_error, entropy_err, entropy_state_error, and entropy_hash_counter_error.",
+      "cond": "always",
+      "signals": [
         "err_o",
         "sha3_err",
         "sha3_state_error",
@@ -63,24 +60,217 @@
         "entropy_state_error",
         "entropy_hash_counter_error"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:187-194"
+      "refs": [
+        "file:193-194"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "msg_mask_en is asserted only when msg_mask_en_i, msg_valid, and msg_ready are all high.",
+      "cond": "always",
+      "signals": [
+        "msg_mask_en",
+        "msg_mask_en_i",
+        "msg_valid",
+        "msg_ready"
+      ],
+      "refs": [
+        "file:166"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "instance",
+      "claim": "The prim_lc_sync instance synchronizes lc_escalate_en_i into two lc_tx_t copies (lc_escalate_en[0] and [1]) with NumCopies=2.",
+      "cond": "while clk_i toggles and rst_ni is deasserted",
+      "signals": [
+        "lc_escalate_en_i",
+        "lc_escalate_en"
+      ],
+      "refs": [
+        "file:178-185"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "The sha3 instance's run_ack_i is permanently tied to 1'b1, guaranteeing that any run_req_o (if used) is immediately acknowledged without wait states.",
+      "cond": "always",
+      "signals": [
+        "run_ack_i",
+        "run_req_o"
+      ],
+      "refs": [
+        "file:242"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "instance",
+      "claim": "kmac_entropy's rand_valid_o, rand_early_o, rand_data_o, rand_aux_o are connected to sha3's corresponding inputs, and sha3's rand_update_o/rand_consumed_o are fed back to entropy.",
+      "cond": "always",
+      "signals": [
+        "sha3_rand_valid",
+        "sha3_rand_early",
+        "sha3_rand_data",
+        "sha3_rand_aux",
+        "sha3_rand_update",
+        "sha3_rand_consumed"
+      ],
+      "refs": [
+        "file:212-217",
+        "file:271-276"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "instance",
+      "claim": "kmac_entropy's msg_mask_en_i is driven by the locally combined msg_mask_en, enabling mask generation only during valid masked transfers.",
+      "cond": "always",
+      "signals": [
+        "msg_mask_en",
+        "msg_mask_en_i",
+        "msg_mask_o"
+      ],
+      "refs": [
+        "file:279-280"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "msg_mask_en_i must remain stable while msg_valid and msg_ready are both high to prevent glitches on msg_mask_en.",
+      "cond": "when msg_valid & msg_ready == 1",
+      "risk": "Transient mask enabling/disabling could corrupt message masking and leak secret data or digest integrity.",
+      "signals": [
+        "msg_mask_en_i",
+        "msg_valid",
+        "msg_ready",
+        "msg_mask_en"
+      ],
+      "refs": [
+        "file:166"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "lc_escalate_en_i must be a stable, correctly timed lc_ctrl_pkg::lc_tx_t signal, sustained long enough for synchronization and free of glitches.",
+      "cond": "at all times",
+      "risk": "If lc_escalate_en_i glitches or is asynchronous beyond metastability resolution, the two synchronized copies may disagree, causing one submodule to escalate while the other continues operation, potentially leaving secret data accessible.",
+      "signals": [
+        "lc_escalate_en_i",
+        "lc_escalate_en"
+      ],
+      "refs": [
+        "file:178-185",
+        "file:245",
+        "file:303"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The run_ack_i tie-off to 1'b1 permanently bypasses the REQ/ACK interface meant to avoid power spikes (as commented). Does the design intend to intentionally disable power side-channel mitigation?",
+      "cond": "always",
+      "risk": "Uncontrolled processing may cause power variations that leak secret internal state.",
+      "signals": [
+        "run_req_o",
+        "run_ack_i"
+      ],
+      "refs": [
+        "file:241-242"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "msg_mask_en_i may change during a valid message transfer when msg_valid and msg_ready are high, causing a glitch on msg_mask_en that momentarily enables or disables the mask.",
+      "cond": "when msg_mask_en_i toggles while msg_valid & msg_ready == 1",
+      "risk": "Masked data may be partially corrupted, potentially exposing secret key/digest bits.",
+      "signals": [
+        "msg_mask_en_i",
+        "msg_valid",
+        "msg_ready",
+        "msg_mask_en"
+      ],
+      "refs": [
+        "file:166"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The entropy module's err_processed_i input is connected but its driver is outside this region. How is err_processed_i managed to clear entropy errors, and could a missing pulse leave err_o stuck high?",
+      "cond": "when an entropy error is asserted",
+      "risk": "System may lock in error state, preventing further operation.",
+      "signals": [
+        "err_processed_i",
+        "entropy_err",
+        "err_o"
+      ],
+      "refs": [
+        "file:309",
+        "file:193-194"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "A single glitch or metastable event on lc_escalate_en_i could cause the two synchronized copies (lc_escalate_en[0] and [1]) to differ, leading to incomplete escalation across the sha3 and entropy security domains.",
+      "cond": "during a life cycle escalation event",
+      "risk": "One submodule may fail to enter zeroization/secure state, allowing secret data to remain accessible while the other is locked down.",
+      "signals": [
+        "lc_escalate_en_i",
+        "lc_escalate_en"
+      ],
+      "refs": [
+        "file:178-185",
+        "file:245",
+        "file:303"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The aggregated err_o does not include any lc_escalate_en signal. Should a life cycle escalation also assert err_o for system-level monitoring?",
+      "cond": "when lc_escalate_en is asserted",
+      "risk": "A fatal security escalation may go unnoticed by error monitors, delaying response.",
+      "signals": [
+        "lc_escalate_en",
+        "err_o"
+      ],
+      "refs": [
+        "file:193-194",
+        "file:245",
+        "file:303"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:166-166",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:174-185",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:187-194",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:199-252",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:257-310"
-  ],
-  "uncertain_points": [
-    "`msg_masked` 与 `msg_mask` 的具体组合关系不在该片段中出现，因此这里只能确认 `kmac_entropy` 产生 `msg_mask` 且 SHA3 接收 `msg_masked`，无法仅凭本片段证明两者如何对应。",
-    "`lc_escalate_en` 在送入 SHA3/熵模块后具体会触发何种降级、清零或停止行为取决于子模块内部实现，本片段只能确认同步并分发了该控制。",
-    "`sha3_rand_early`、`sha3_rand_update`、`sha3_rand_consumed` 的精确握手时序语义依赖 `sha3` 与 `kmac_entropy` 子模块定义，本片段只能确认两者已互连。"
+    "file:166",
+    "file:178-185",
+    "file:193-194",
+    "file:212-217",
+    "file:241-242",
+    "file:245",
+    "file:271-276",
+    "file:279-280",
+    "file:303",
+    "file:309"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 166,
-  "line_end": 312
+  "line_end": 312,
+  "security_implications": ""
 }

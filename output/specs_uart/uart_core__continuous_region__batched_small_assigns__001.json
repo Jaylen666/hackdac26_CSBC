@@ -1,55 +1,133 @@
 {
   "chunk_id": "uart_core__continuous_region__batched_small_assigns__001",
-  "summary": "生成 UART 发送/接收 FIFO 状态及错误事件的组合信号，并声明未使用的发送/接收阈值信号与告警测试异或逻辑。",
-  "behavior": "该区域由组合逻辑生成 4 个事件信号：event_tx_empty 在发送 FIFO 深度为零时置 1（第 315 行）；event_tx_done 在发送 FIFO 无有效数据且发送器由忙转闲时置 1（第 317 行，~tx_fifo_rvalid & ~tx_uart_idle_q & tx_uart_idle）；event_rx_overflow 在接收 FIFO 写请求有效但未就绪时置 1（第 321 行）；event_rx_break_err 在 break_err 有效且断帧状态机处于 BRK_CHK 状态时置 1（第 322 行）。另外声明了 tx_watermark_thresh（第 313 行）和 rx_thresh_val（第 319 行），但未在片段内赋值或使用；unused_reg 被赋值为 reg2hw.alert_test 所有位的异或结果且未连接（第 325 行），常用于防止综合工具优化无关寄存器。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "assign",
+    "driven": [
+      "event_tx_empty",
+      "event_tx_done",
+      "event_rx_overflow",
+      "event_rx_break_err",
+      "unused_reg"
+    ],
+    "used": [
+      "tx_fifo_depth",
+      "tx_fifo_rvalid",
+      "tx_uart_idle_q",
+      "tx_uart_idle",
+      "rx_fifo_wvalid",
+      "rx_fifo_wready",
+      "break_err",
+      "break_st_q",
+      "BRK_CHK",
+      "reg2hw.alert_test"
+    ],
+    "modes": [
+      "BRK_CHK"
+    ],
+    "tags": [
+      "alert",
+      "event",
+      "error",
+      "fifo",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "event_tx_empty 严格等于 tx_fifo_depth 为全零的布尔值（高有效表示 FIFO 空）。",
-      "output_signals": [
-        "event_tx_empty"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "event_tx_empty is high when tx_fifo_depth equals zero.",
+      "cond": "always",
+      "signals": [
+        "event_tx_empty",
+        "tx_fifo_depth"
       ],
-      "source_refs": [
+      "refs": [
         "uart_core.sv:315"
       ]
     },
     {
-      "property": "event_tx_done 仅当 tx_fifo_rvalid 为低、tx_uart_idle_q 为低且 tx_uart_idle 为高时置 1，其他情况为 0，表示发送完成的一次上升沿事件。",
-      "output_signals": [
-        "event_tx_done"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "event_tx_done is high when tx_fifo_rvalid is low, tx_uart_idle_q is low, and tx_uart_idle is high (indicating a rising edge of idle while no new data is pending).",
+      "cond": "always",
+      "signals": [
+        "event_tx_done",
+        "tx_fifo_rvalid",
+        "tx_uart_idle_q",
+        "tx_uart_idle"
       ],
-      "source_refs": [
+      "refs": [
         "uart_core.sv:317"
       ]
     },
     {
-      "property": "event_rx_overflow 严格等于 rx_fifo_wvalid 为高且 rx_fifo_wready 为低时的组合逻辑值，标识接收 FIFO 溢出。",
-      "output_signals": [
-        "event_rx_overflow"
+      "id": "G3",
+      "type": "assignment",
+      "claim": "event_rx_overflow is high when rx_fifo_wvalid is high and rx_fifo_wready is low (a FIFO write is attempted but the FIFO is not ready).",
+      "cond": "always",
+      "signals": [
+        "event_rx_overflow",
+        "rx_fifo_wvalid",
+        "rx_fifo_wready"
       ],
-      "source_refs": [
+      "refs": [
         "uart_core.sv:321"
       ]
     },
     {
-      "property": "event_rx_break_err 仅在 break_err 为高且 break_st_q 等于 BRK_CHK 时置 1，其余时刻为 0。",
-      "output_signals": [
-        "event_rx_break_err"
+      "id": "G4",
+      "type": "assignment",
+      "claim": "event_rx_break_err is high when break_err is high and break_st_q equals BRK_CHK state.",
+      "cond": "always",
+      "signals": [
+        "event_rx_break_err",
+        "break_err",
+        "break_st_q",
+        "BRK_CHK"
       ],
-      "source_refs": [
+      "refs": [
         "uart_core.sv:322"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "unused_reg is driven with the XOR reduction of reg2hw.alert_test (a tie-off to avoid lint warnings).",
+      "cond": "always",
+      "signals": [
+        "unused_reg",
+        "reg2hw.alert_test"
+      ],
+      "refs": [
+        "uart_core.sv:325"
       ]
     }
   ],
-  "security_implications": "",
   "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "reg2hw.alert_test is XOR-reduced and assigned to a signal named unused_reg, which is likely an unused tie-off. This suggests that the alert test vector is not connected to any actual alert logic.",
+      "cond": "unknown",
+      "risk": "Alert test functionality may be non-functional, preventing verification of alert signalling (e.g., error responses, fatal alerts) and masking security-critical bugs.",
+      "signals": [
+        "unused_reg",
+        "reg2hw.alert_test"
+      ],
+      "refs": [
+        "uart_core.sv:324-325"
+      ]
+    }
+  ],
   "evidence_refs": [
     "uart_core.sv:312-327"
   ],
-  "uncertain_points": [
-    "tx_watermark_thresh 和 rx_thresh_val 的声明意图不明，可能在其他未包含的 always 块中赋值使用，但本片段未体现。",
-    "unused_reg 显式未使用，可能仅用于避免 lint 或综合优化丢弃 reg2hw.alert_test，但其确切目的需结合上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 312,
-  "line_end": 527
+  "line_end": 527,
+  "security_implications": ""
 }

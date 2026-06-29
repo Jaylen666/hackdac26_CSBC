@@ -1,0 +1,62 @@
+{
+  "chunk_id": "sha3pad__always_comb__line_156__001",
+  "summary": "根据输入的哈希强度选择对应的 Keccak rate，并将其转换为 block_addr_limit；非法或未覆盖强度时回退为 0。",
+  "behavior": "该组合逻辑对 strength_i 做 unique case 译码：当 strength_i 分别为 L128、L224、L256、L384、L512 时，block_addr_limit 被赋值为对应的 KeccakRate[该强度]，并显式转换到 KeccakCountW 位宽；如果 strength_i 不属于这些已枚举值，则 block_addr_limit 置 0。注释未给出额外语义，但从命名看该信号意图上是当前强度对应的数据块地址上限；实际 RTL 对非法输入采取安全回退为 0，而不是保持原值或报错。",
+  "guarantees": [
+    {
+      "property": "当 strength_i 为 L128、L224、L256、L384 或 L512 之一时，block_addr_limit 一定等于对应的 KeccakRate 项并被转换为 KeccakCountW 位宽。",
+      "output_signals": [
+        "block_addr_limit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:157-162"
+      ]
+    },
+    {
+      "property": "当 strength_i 不匹配任何已列出的强度编码时，block_addr_limit 一定为 0。",
+      "output_signals": [
+        "block_addr_limit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:164-164"
+      ]
+    }
+  ],
+  "security_implications": "该片段位于 KMAC/SHA3 填充路径中，按强度选择参数属于安全相关配置派生逻辑。对未识别的 strength_i 回退为 0，降低了非法编码传播出随机或残留参数的风险；但若上游错误地给出非法强度，后续可能得到零上限并导致拒绝服务或错误填充行为，是否会进一步触发错误处理需结合后续逻辑确认。",
+  "assumptions": [
+    {
+      "constraint": "正常功能依赖 strength_i 只取 L128、L224、L256、L384、L512 这些合法编码之一。",
+      "bug_relevance": "如果违反，硬件会按设计回退为 block_addr_limit=0；这属于防御性回退，但该场景设计上不应发生，后续若依赖非零上限则可能导致消息分块/填充行为错误或功能停滞。",
+      "related_signals": [
+        "strength_i",
+        "block_addr_limit"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:157-165"
+      ]
+    },
+    {
+      "constraint": "KeccakRate 中针对各合法强度的条目应正确实现该模式期望的 rate，并可被转换到 KeccakCountW 而不丢失关键数值语义。",
+      "bug_relevance": "如果这些常量定义错误或位宽转换截断了有效值，则即使 strength_i 合法，block_addr_limit 也会错误，进而破坏后续基于块上限的地址/填充处理；这更可能构成功能性 bug。",
+      "related_signals": [
+        "KeccakRate",
+        "KeccakCountW",
+        "block_addr_limit",
+        "strength_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:158-162"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:156-166"
+  ],
+  "uncertain_points": [
+    "仅凭该片段无法确认 block_addr_limit 表示的是字节数、字数还是地址最大值；其精确单位和是否需要减 1 需依赖其他代码上下文。",
+    "unique case 暗示设计期望 strength_i 为互斥且完备的编码，但该片段本身不能确认仿真时对 X/Z 或重复匹配的检查策略是否被依赖。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 156,
+  "line_end": 166
+}

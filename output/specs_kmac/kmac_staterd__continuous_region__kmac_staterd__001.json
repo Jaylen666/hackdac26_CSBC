@@ -1,75 +1,247 @@
 {
   "chunk_id": "kmac_staterd__continuous_region__kmac_staterd__001",
-  "summary": "该片段实例化一个 TL-UL 到 SRAM 风格接口的适配器，把外部 TL-UL 访问转换为内部 32 位字宽、单笔 outstanding 的状态读接口，并显式将该端口配置为只读且不支持取指/读回。",
-  "behavior": "模块参数化了地址宽度 AddrW 以及是否启用掩码的 Share 数；注释说明 AddrW 设计上应大于状态空间所需地址位数，且启用 masking 时状态份数变为 2，否则为 1 [7-20]。片段中定义了用于 TL-UL 适配的内部 SRAM 风格握手与返回信号，包括请求、写使能、按字寻址地址、读数据、读有效和错误码等 [41-52]。核心行为是实例化 tlul_adapter_sram，将 tl_i/tl_o 转换为内部接口：输出请求 tlram_req、地址 tlram_addr、写标志 tlram_we，以及接收内部返回的 tlram_rdata、tlram_rvalid、tlram_rerror [53-85]。适配器被配置为 32 位数据宽、地址宽为 AddrW-2、最多 1 笔 outstanding，并允许 byte access [54-60]。同时它被明确配置为写操作报错而非执行写入（ErrOnWrite=1），读操作本身不因适配器策略报错（ErrOnRead=0），禁用取指接口 en_ifetch_i 和读回功能 readback_en_i，且固定声明无写冲突、无写挂起 [59-60, 67, 81, 83-84]。因此从该片段可见，此接口意图上是一个面向状态读取的 TL-UL 只读窗口；虽然适配器仍会导出 tlram_we 和写数据/掩码端口，但这些写数据信号在本片段中被标记为 unused，表明本模块不打算消费写数据 [44, 46-47, 59, 73-74]。",
+  "header": {
+    "module": "kmac_staterd",
+    "block_kind": "mixed",
+    "driven": [
+      "tl_o",
+      "tlram_req",
+      "tlram_we",
+      "tlram_addr",
+      "unused_tlram_wdata",
+      "unused_tlram_wmask"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "tl_i",
+      "prim_mubi_pkg::MuBi4False",
+      "tlram_gnt",
+      "tlram_rdata",
+      "tlram_rvalid",
+      "tlram_rerror"
+    ],
+    "modes": [
+      "AddrW",
+      "EnMasking",
+      "Share",
+      "StateAddrW",
+      "SelAddrW"
+    ],
+    "tags": [
+      "handshake",
+      "reset",
+      "parameterization",
+      "tlul_adapter",
+      "sram",
+      "integrity",
+      "fault_containment",
+      "unused_signals"
+    ]
+  },
   "guarantees": [
     {
-      "property": "该模块对 TL-UL 侧不支持通过此接口成功执行写访问；适配器被配置为对写访问返回错误。",
-      "output_signals": [
-        "tl_o"
+      "id": "G1",
+      "type": "instance_param",
+      "claim": "The TL-UL adapter is instantiated with SramAw = AddrW-2, SramDw = 32, Outstanding = 1, ByteAccess = 1, ErrOnWrite = 1, ErrOnRead = 0, defining a 32-bit read-only SRAM interface with single outstanding, byte access, write errors, and no read errors.",
+      "cond": "always",
+      "signals": [
+        "AddrW"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-60",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:65-66"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-60"
       ]
     },
     {
-      "property": "内部 SRAM 风格接口始终以 32 位数据宽、按字地址和最多 1 笔 outstanding 事务的形式对外呈现。",
-      "output_signals": [
-        "tlram_req",
-        "tlram_we",
-        "tlram_addr"
+      "id": "G2",
+      "type": "constant_connection",
+      "claim": "The adapter inputs en_ifetch_i and readback_en_i are tied to MuBi4False, permanently disabling instruction fetch and readback features.",
+      "cond": "always",
+      "signals": [
+        "en_ifetch_i",
+        "readback_en_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:45",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-58",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:68-72"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:67,81"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "constant_connection",
+      "claim": "The adapter inputs wr_collision_i and write_pending_i are tied to 1'b0, indicating no write collision and no pending writes.",
+      "cond": "always",
+      "signals": [
+        "wr_collision_i",
+        "write_pending_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:83-84"
       ]
     }
   ],
-  "security_implications": "该片段与安全相关之处在于它把 KMAC 内部状态访问端口配置成只读窗口：写访问被适配器拒绝并报错，从而降低通过 TL-UL 篡改内部状态的风险 [54-60]。此外取指与读回功能被关闭 [67, 81]，减少该接口被当作可执行或额外调试/旁路通道使用的可能性。注释还表明 EnMasking 会改变 state_i 的 share 数 [16-20, 28]，但本片段尚未展示这些 share 如何映射到可读地址空间，因此无法仅凭本段判断是否会暴露掩码后的全部状态或单个 share。",
   "assumptions": [
     {
-      "constraint": "AddrW 需要足以覆盖状态读地址空间；源码注释给出的设计约束是 AddrW 应大于状态空间所需地址位数（与 Share 相关）。",
-      "bug_relevance": "如果该约束不满足，部分状态字可能无法被寻址，或不同状态位置发生地址别名，导致通过 TL-UL 读取到错误状态。这属于行为契约，违反会直接造成功能错误。",
-      "related_signals": [
-        "AddrW",
-        "state_i"
+      "id": "A1",
+      "type": "handshake",
+      "claim": "External SRAM logic must drive tlram_gnt in response to tlram_req and provide tlram_rdata with tlram_rvalid=1 while honoring tlram_rerror, following the TL-UL adapter's read protocol.",
+      "cond": "when tlram_req is asserted",
+      "risk": "Read transactions will stall or return corrupt data, leading to incorrect state reads over TL-UL.",
+      "signals": [
+        "tlram_gnt",
+        "tlram_rdata",
+        "tlram_rvalid",
+        "tlram_rerror"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:12-19",
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:70,77-79"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "Parameter AddrW must be >=2 to ensure SramAw = AddrW-2 is a valid non-negative bus width.",
+      "cond": "always",
+      "risk": "If AddrW < 2, SramAw becomes negative, causing an illegal parameter value that can break synthesis/simulation.",
+      "signals": [
+        "AddrW",
+        "SramAw"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-55"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "Parameter AddrW must be large enough so that the derived StateAddrW does not exceed AddrW-2, i.e., SelAddrW = AddrW-2-StateAddrW >= 0, to allow full state addressability (although SelAddrW is not used in this chunk).",
+      "cond": "always",
+      "risk": "Parts of the state array may become unmappable in the TL-UL address space.",
+      "signals": [
+        "AddrW",
+        "StateW",
+        "StateAddrW",
+        "SelAddrW"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:34-35"
       ]
     },
     {
-      "constraint": "连接到适配器下游的内部读通路需要在读请求发生时正确驱动 tlram_gnt、tlram_rdata、tlram_rvalid 和 tlram_rerror，以满足 tlul_adapter_sram 的握手预期。",
-      "bug_relevance": "如果下游未按协议返回授予或读响应，TL-UL 主机可能遭遇挂起、错误响应不一致或读取数据无效。这属于行为契约，违反会导致总线访问功能错误。",
-      "related_signals": [
-        "tlram_gnt",
-        "tlram_rdata",
-        "tlram_rvalid",
-        "tlram_rerror",
-        "tlram_req"
+      "id": "A4",
+      "type": "lifecycle",
+      "claim": "The module requires an active-low reset rst_ni to properly initialize the TL-UL adapter and associated logic.",
+      "cond": "during startup or reset events",
+      "risk": "Without proper reset, the adapter may be uninitialized, leading to TL-UL protocol violations or hangs.",
+      "signals": [
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:42-50",
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:68-79"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:22,63"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The adapter integrity error output intg_error_o and readback error output readback_error_o are left unconnected, causing any TL-UL integrity errors to be silently ignored.",
+      "cond": "when the adapter detects an integrity or readback error",
+      "risk": "Corrupted data may be passed to the keccak round via tlram_rdata without detection, breaking data integrity for security-critical state.",
+      "signals": [
+        "intg_error_o",
+        "readback_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:75,82"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The parameter SramAw is assigned AddrW-2; if AddrW is set to 1, SramAw becomes -1, an illegal negative width.",
+      "cond": "when AddrW = 1",
+      "risk": "Synthesis or simulation failure, undefined behavior.",
+      "signals": [
+        "AddrW",
+        "SramAw"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-55"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The wiring from the TL-UL adapter (tlram_* signals) to the state memory (including state_i, endian_swap_i, and Share) is outside this chunk; the mapping is critical for correct state reads.",
+      "cond": "during a TL-UL read transaction",
+      "risk": "Miswiring could return wrong state data to the consumer, corrupting digest operations.",
+      "signals": [
+        "tlram_req",
+        "tlram_addr",
+        "tlram_rdata",
+        "state_i",
+        "endian_swap_i",
+        "Share"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:28,31,42-51"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "unused_tlram_wdata and unused_tlram_wmask are connected to adapter write outputs but never used; while ErrOnWrite=1 normally prevents writes, a malfunction could silently write to the state memory.",
+      "cond": "if a write request occurs",
+      "risk": "Potential undetected write corruption if the write-error behavior is bypassed.",
+      "signals": [
+        "unused_tlram_wdata",
+        "unused_tlram_wmask"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:46-47,73-74"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "Localparam SelAddrW = AddrW-2-StateAddrW is declared but never referenced in this chunk; its intended use in address decoding is unclear.",
+      "cond": "always",
+      "risk": "If the rest of the module does not correctly use it, state address mapping may be incorrect.",
+      "signals": [
+        "SelAddrW",
+        "AddrW",
+        "StateAddrW"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:35"
+      ]
+    },
+    {
+      "id": "U6",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The adapter uses Outstanding=1 and expects tlram_gnt to be asserted; no timeout mechanism is present to recover from a stuck memory that never asserts gnt.",
+      "cond": "if external memory does not respond",
+      "risk": "TL-UL bus may be stalled indefinitely, causing a denial-of-service.",
+      "signals": [
+        "tlram_req",
+        "tlram_gnt"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:57,70"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:12-20",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:24-31",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:34-35",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:41-52",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:54-85"
-  ],
-  "uncertain_points": [
-    "本片段只展示了 TL 适配器实例化，未展示 tlram_gnt、tlram_rdata、tlram_rvalid、tlram_rerror 如何生成，因此无法确认读请求的具体地址译码、返回时机和错误条件。",
-    "声明了 tlram_rdata_endian 和输入 endian_swap_i，但本片段中尚未使用，说明后续可能存在字节序变换；仅凭此段不能确认读出数据是否实际进行了 endian swap。",
-    "state_i[Share] 和 EnMasking/Share 的关系已声明，但本片段未显示状态数组如何映射到 tlram_addr，因此无法确认 masking 模式下地址空间布局以及是否允许读取全部 share。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:7-85"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv",
   "line_start": 7,
-  "line_end": 85
+  "line_end": 85,
+  "security_implications": ""
 }

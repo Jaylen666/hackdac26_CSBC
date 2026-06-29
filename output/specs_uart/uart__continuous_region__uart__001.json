@@ -1,52 +1,228 @@
 {
   "chunk_id": "uart__continuous_region__uart__001",
-  "summary": "UART 顶层模块，实例化寄存器块和核心逻辑，连接总线接口与中断信号，并生成警报测试用组合逻辑。",
-  "behavior": "该模块为 UART IP 的顶层，通过实例化 uart_reg_top 提供 TileLink UL 总线到寄存器的桥接，输出 reg2hw 配置结构体并接收 hw2reg 状态回读。uart_core 实例接收 reg2hw 配置与串行输入 cio_rx_i，产生串行输出 cio_tx_o、所有中断信号（tx_watermark 等）以及 lsio_trigger_o，同时将硬件状态写入 hw2reg。寄存器块的完整性错误输出 intg_err_o 作为 alerts[0]，用于总线传输完整性保护（行 69 注释 SEC_CM: BUS.INTEGRITY）。组合信号 alert_test 的每一位由对应 reg2hw.alert_test.q 与 reg2hw.alert_test.qe 按位与生成（行 95-98），用于软件触发警报测试。RACL 访问控制参数 EnableRacl、RaclErrorRsp、RaclPolicySelVec 被传递给 uart_reg_top，控制寄存器读写的权限策略。",
+  "header": {
+    "module": "uart",
+    "block_kind": "mixed",
+    "driven": [
+      "tl_o",
+      "alert_test",
+      "alerts[0]",
+      "racl_error_o",
+      "lsio_trigger_o",
+      "cio_tx_o",
+      "intr_tx_watermark_o",
+      "intr_tx_empty_o",
+      "intr_rx_watermark_o",
+      "intr_tx_done_o",
+      "intr_rx_overflow_o",
+      "intr_rx_frame_err_o",
+      "intr_rx_break_err_o",
+      "intr_rx_timeout_o",
+      "intr_rx_parity_err_o"
+    ],
+    "used": [
+      "reg2hw",
+      "tl_i",
+      "racl_policies_i",
+      "cio_rx_i"
+    ],
+    "modes": [
+      "AlertAsyncOn",
+      "EnableRacl",
+      "RaclErrorRsp",
+      "RaclPolicySelVec"
+    ],
+    "tags": [
+      "alert",
+      "integrity",
+      "access_control",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "alerts[0] 直接由 uart_reg_top 的总线完整性错误信号 intg_err_o 驱动，任何导致完整性校验失败的 TL-UL 传输都会反映在该信号上。",
-      "output_signals": [
-        "alerts[0]"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "alert_test is driven by the bitwise AND of reg2hw.alert_test.q and reg2hw.alert_test.qe, wrapped in a single-element concatenation.",
+      "cond": "always",
+      "signals": [
+        "alert_test",
+        "reg2hw.alert_test.q",
+        "reg2hw.alert_test.qe"
       ],
-      "source_refs": [
-        "uart.sv:69"
+      "refs": [
+        "file:95-98"
       ]
     },
     {
-      "property": "alert_test 的每一位等于 reg2hw.alert_test.q[i] & reg2hw.alert_test.qe[i]，当对应位的配置与使能均为高时，该位有效，用于测试警报通路。",
-      "output_signals": [
-        "alert_test"
+      "id": "G2",
+      "type": "instance",
+      "claim": "tl_o output is directly connected to the uart_reg_top instance's tl_o, reflecting the bus response from the register block.",
+      "cond": "always",
+      "signals": [
+        "tl_o",
+        "u_reg.tl_o"
       ],
-      "source_refs": [
-        "uart.sv:95-98"
+      "refs": [
+        "file:63"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "instance",
+      "claim": "All interrupt outputs (intr_tx_watermark_o, intr_tx_empty_o, intr_rx_watermark_o, intr_tx_done_o, intr_rx_overflow_o, intr_rx_frame_err_o, intr_rx_break_err_o, intr_rx_timeout_o, intr_rx_parity_err_o) are driven directly by the corresponding uart_core instance ports.",
+      "cond": "always",
+      "signals": [
+        "intr_tx_watermark_o",
+        "intr_tx_empty_o",
+        "intr_rx_watermark_o",
+        "intr_tx_done_o",
+        "intr_rx_overflow_o",
+        "intr_rx_frame_err_o",
+        "intr_rx_break_err_o",
+        "intr_rx_timeout_o",
+        "intr_rx_parity_err_o"
+      ],
+      "refs": [
+        "file:83-91"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "instance",
+      "claim": "cio_tx_o is driven by the uart_core's tx output.",
+      "cond": "always",
+      "signals": [
+        "cio_tx_o"
+      ],
+      "refs": [
+        "file:79"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "instance",
+      "claim": "racl_error_o is driven directly by the uart_reg_top instance's racl_error_o.",
+      "cond": "always",
+      "signals": [
+        "racl_error_o",
+        "u_reg.racl_error_o"
+      ],
+      "refs": [
+        "file:67"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "instance",
+      "claim": "lsio_trigger_o is driven directly by the uart_core instance's lsio_trigger_o.",
+      "cond": "always",
+      "signals": [
+        "lsio_trigger_o"
+      ],
+      "refs": [
+        "file:81"
       ]
     }
   ],
-  "security_implications": "该片段实例化了带 RACL 访问控制的寄存器顶层，并暴露了总线完整性错误警报（alerts[0]）。RACL 参数控制对不同寄存器的访问权限，若外部策略配置错误，可能导致非法读取或写入安全关键寄存器。此外，alert_test 提供软件控制警报触发机制，可用于安全验证或攻击面探索，需配合正确的警报处理逻辑使用。",
   "assumptions": [
     {
-      "constraint": "当 EnableRacl 为 1 时，输入 racl_policies_i 必须提供有效的 RACL 策略向量，且 RaclPolicySelVec 参数必须与策略设计一致，以确保寄存器访问权限正确执行。",
-      "bug_relevance": "若违反，uart_reg_top 可能错误地允许非法寄存器访问或拒绝合法请求，导致功能错误或安全旁路。",
-      "related_signals": [
-        "racl_policies_i",
-        "EnableRacl",
-        "RaclPolicySelVec"
+      "id": "A1",
+      "type": "handshake",
+      "claim": "tl_i must be driven by a valid TL-UL host compliant with the protocol, synchronous to clk_i and respecting reset deassertion timing.",
+      "cond": "when register accesses are performed",
+      "risk": "u_reg may decode invalid transactions, leading to unintended register writes, bus integrity errors, or hanging the bus.",
+      "signals": [
+        "tl_i",
+        "clk_i",
+        "rst_ni"
       ],
-      "source_refs": [
-        "uart.sv:29",
-        "uart.sv:55-58"
+      "refs": [
+        "file:21-22",
+        "file:62"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "When EnableRacl is set, racl_policies_i must be valid and aligned with the current bus access address.",
+      "cond": "EnableRacl == 1'b1",
+      "risk": "Access control checks may pass incorrectly or produce spurious errors, potentially allowing unauthorized register access or reporting false RACL faults.",
+      "signals": [
+        "racl_policies_i",
+        "EnableRacl"
+      ],
+      "refs": [
+        "file:29",
+        "file:56",
+        "file:66"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Output `cio_tx_en_o` is declared as output logic but has no driver assignment within this continuous region.",
+      "cond": "outside of this chunk",
+      "risk": "If left undriven in the full module, the output would float, potentially disabling the external driver or causing contention.",
+      "signals": [
+        "cio_tx_en_o"
+      ],
+      "refs": [
+        "file:37"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The assignment `alert_test = { reg2hw.alert_test.q & reg2hw.alert_test.qe }` uses a single-element concatenation, possibly leftover from a wider multi-bit alert test scheme; intent is unclear.",
+      "cond": "when NumAlerts > 1",
+      "risk": "The design may rely on the concatenation for bus width expansion, but it is functionally equivalent to a direct assignment and no functional bug is indicated.",
+      "signals": [
+        "alert_test"
+      ],
+      "refs": [
+        "file:95-98"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Internal signal `alerts` is a multi-bit vector, but only `alerts[0]` is driven (by u_reg's intg_err_o). The remaining bits are undriven in this chunk.",
+      "cond": "NumAlerts > 1",
+      "risk": "Unassigned bits may drive X values if not connected later, corrupting any downstream alert logic that reads the full vector.",
+      "signals": [
+        "alerts"
+      ],
+      "refs": [
+        "file:51",
+        "file:69"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Parameter `AlertAsyncOn` is declared but not referenced in any instance or logic within this chunk.",
+      "cond": "always (within this chunk)",
+      "risk": "It may be used elsewhere for alert synchronization, but its absence here suggests a cross-chunk dependency that requires Phase3 verification.",
+      "signals": [
+        "AlertAsyncOn"
+      ],
+      "refs": [
+        "file:12"
       ]
     }
   ],
   "evidence_refs": [
-    "uart.sv:7-98"
-  ],
-  "uncertain_points": [
-    "顶层端口 cio_tx_en_o 在 uart_core 实例化中未显式连接（行 72-92），且在片段内无其他驱动源，需确认该信号的实际驱动位置（可能在 uart_core 内部或其他模块）。",
-    "alert_test 组合信号后续如何接入实际警报发送器（如异步处理、脉冲扩展等）未在本片段体现，其使用方式与同步要求待确认。",
-    "RaclPolicySelVec 参数默认值全 0，若实际设计需要更精细的策略，需外部重写，但本片段无相关约束说明。"
+    "file:7-98"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv",
   "line_start": 7,
-  "line_end": 98
+  "line_end": 98,
+  "security_implications": ""
 }

@@ -1,0 +1,154 @@
+{
+  "chunk_id": "aes_reg_status__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "aes_reg_status",
+    "block_kind": "assign",
+    "driven": [
+      "we_d",
+      "armed_d"
+    ],
+    "used": [
+      "clear_i",
+      "use_i",
+      "armed_q",
+      "we_i",
+      "we_q",
+      "arm_i"
+    ],
+    "modes": [
+      "armed"
+    ],
+    "tags": [
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "When clear_i or use_i is asserted, we_d is forced to all-zero; else when armed_q is set and we_i has any bit set, we_d is driven with we_i; otherwise, we_d equals we_q OR we_i.",
+      "cond": "combinational evaluation",
+      "signals": [
+        "clear_i",
+        "use_i",
+        "armed_q",
+        "we_i",
+        "we_q",
+        "we_d"
+      ],
+      "refs": [
+        "aes_reg_status.sv:34-35"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When clear_i or use_i is asserted, armed_d is forced to 0; else when armed_q is set and we_i has any bit set, armed_d is forced to 0; otherwise, armed_d equals armed_q OR arm_i.",
+      "cond": "combinational evaluation",
+      "signals": [
+        "clear_i",
+        "use_i",
+        "armed_q",
+        "we_i",
+        "arm_i",
+        "armed_d"
+      ],
+      "refs": [
+        "aes_reg_status.sv:36-37"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "clear_i and use_i must not be asserted during a write cycle that uses the armed mechanism (when armed_q=1 and we_i is non-zero), else we_d is forced to zero and armed_d cleared, causing a lost write.",
+      "cond": "armed_q=1 and we_i has any bit set",
+      "risk": "loss of a critical configuration or key write, potentially causing security state inconsistency",
+      "signals": [
+        "clear_i",
+        "use_i",
+        "armed_q",
+        "we_i",
+        "we_d",
+        "armed_d"
+      ],
+      "refs": [
+        "aes_reg_status.sv:34-37"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "arm_i must be held asserted until it is captured (armed_q becomes 1) when neither clear_i nor use_i is active, otherwise the arm request may be missed, preventing the module from becoming armed.",
+      "cond": "clear_i=0 and use_i=0",
+      "risk": "the module never arms, blocking subsequent write operations",
+      "signals": [
+        "arm_i",
+        "clear_i",
+        "use_i",
+        "armed_q"
+      ],
+      "refs": [
+        "aes_reg_status.sv:36-37"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When armed_q=1 and we_i has some but not all bits set, we_d passes the partial we_i value to the write strobe, allowing partial register writes. Is the design intent to allow partial writes, or should we_i be all-one to ensure atomic write?",
+      "cond": "armed_q=1 and we_i != '1 and |we_i",
+      "risk": "partial configuration updates may lead to inconsistent control register state",
+      "signals": [
+        "armed_q",
+        "we_i",
+        "we_d"
+      ],
+      "refs": [
+        "aes_reg_status.sv:34-35"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "armed_d is a combinational function of we_i: if we_i is glitchy or delayed relative to clock, a transient non-zero pulse while armed_q=1 will cause armed_d to go low, potentially being sampled and disarming the module prematurely, even if we_i returns to zero before the cycle.",
+      "cond": "armed_q=1 and we_i sees a glitch",
+      "risk": "spurious disarm may cause a write operation to be missed or split, compromising operation integrity",
+      "signals": [
+        "we_i",
+        "armed_q",
+        "armed_d"
+      ],
+      "refs": [
+        "aes_reg_status.sv:36-37"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "The meaning and source of use_i are not apparent from this chunk; it forces clear of armed state. Need to confirm that use_i assertion cannot be maliciously triggered and that it correctly indicates operation completion without leaving a stale armed state.",
+      "cond": "use_i asserted",
+      "risk": "incorrect use_i could prematurely disarm or interfere with the security mechanism",
+      "signals": [
+        "use_i",
+        "armed_d",
+        "armed_q"
+      ],
+      "refs": [
+        "aes_reg_status.sv:34-37"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_reg_status.sv:33-37"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_reg_status.sv",
+  "line_start": 33,
+  "line_end": 36,
+  "security_implications": ""
+}

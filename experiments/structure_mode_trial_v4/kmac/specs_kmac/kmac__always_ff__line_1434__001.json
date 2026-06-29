@@ -1,0 +1,110 @@
+{
+  "chunk_id": "kmac__always_ff__line_1434__001",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "status_alert_recov_ctrl_update_err"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "alert_recov_operation",
+      "err_processed"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "alert",
+      "status",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On posedge clk_i with rst_ni=1, status_alert_recov_ctrl_update_err is set to 1 when alert_recov_operation is high, cleared to 0 when err_processed is high and alert_recov_operation is low, and holds its previous value otherwise. On asynchronous negation of rst_ni the register is forced to 0.",
+      "cond": "always_ff event triggers",
+      "signals": [
+        "status_alert_recov_ctrl_update_err",
+        "alert_recov_operation",
+        "err_processed",
+        "rst_ni"
+      ],
+      "refs": [
+        "kmac.sv:1434-1442"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "err_processed must be asserted only when alert_recov_operation is low if the intent is to successfully clear the error flag and not immediately re-assert it.",
+      "cond": "when err_processed is high",
+      "risk": "If both signals are high simultaneously, the priority of alert_recov_operation over err_processed leaves status_alert_recov_ctrl_update_err set or re-sets it, causing the processing attempt to be ineffective and the error to persist.",
+      "signals": [
+        "alert_recov_operation",
+        "err_processed"
+      ],
+      "refs": [
+        "kmac.sv:1437-1440"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "lifecycle",
+      "claim": "rst_ni must be externally asserted low for adequate duration to ensure the register initializes to 0 before normal operation.",
+      "cond": "power-up or system reset",
+      "risk": "Without proper reset, status_alert_recov_ctrl_update_err may start with an unknown value, leading to spurious error indication.",
+      "signals": [
+        "rst_ni"
+      ],
+      "refs": [
+        "kmac.sv:1435-1436"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The priority of alert_recov_operation over err_processed means that if both are high in the same cycle, the error flag stays high. This may override a deliberate clear attempt, potentially blocking error recovery or signalling a false ongoing error.",
+      "cond": "coincident assertion of alert_recov_operation and err_processed",
+      "risk": "Could cause the system to believe an error condition persists when it was actually processed, leading to repeated handling attempts or deadlock in the alert recovery flow.",
+      "signals": [
+        "alert_recov_operation",
+        "err_processed",
+        "status_alert_recov_ctrl_update_err"
+      ],
+      "refs": [
+        "kmac.sv:1437-1440"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact purpose of alert_recov_operation and err_processed, and what constitutes an 'update error', depends on the larger alert recovery FSM. The unconditional set of the error flag on alert_recov_operation may be appropriate only if that signal itself encodes an error condition; otherwise a data-path error condition may be missing.",
+      "cond": "unknown design intent",
+      "risk": "The flag may not accurately reflect a real update error, leading to false alarms or missed real errors.",
+      "signals": [
+        "alert_recov_operation",
+        "err_processed",
+        "status_alert_recov_ctrl_update_err"
+      ],
+      "refs": [
+        "kmac.sv:1434-1442"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:1434-1442"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 1434,
+  "line_end": 1442,
+  "security_implications": ""
+}

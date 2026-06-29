@@ -1,0 +1,56 @@
+{
+  "chunk_id": "sha3pad__continuous_region__sha3pad__001",
+  "summary": "该片段定义了 sha3pad 模块的接口与关键参数，表明其职责是在消息 FIFO、可选 cSHAKE 前缀输入、Keccak 数据通路与控制握手之间实现填充/吸收控制，并暴露故障与生命周期相关接口。",
+  "behavior": "该连续区域本身不包含具体组合赋值或状态更新逻辑，实际体现的是模块边界行为与设计意图。模块支持可配置掩码共享：参数 EnMasking 决定 Share 为 2 或 1，从而使消息输入 msg_data_i 和输出 keccak_data_o 以单份或双份 share 形式存在，而 msg_strb_i 在注释中说明为“one strobe for shares”，表示所有 share 共享同一字节使能信息。接口层面，模块从消息 FIFO 接收 msg_valid_i/msg_data_i/msg_strb_i，并通过 msg_ready_o 回压；向 keccak_round 输出 keccak_valid_o、keccak_addr_o 和 keccak_data_o，并接收 keccak_ready_i 握手。除消息通路外，模块还接收 start_i、process_i、done_i 作为控制输入：注释表明 start_i 用于启动 padding 逻辑并在 pad 模块中触发向 keccak_round 发送前缀，process_i 用于停止继续接收 MSG_FIFO 数据并附加 SHA3 标准规定的尾部填充位，done_i 用于清除内部变量并返回 Idle 以准备下一次散列。模块还接收 mode_i 与 strength_i，其中注释明确 strength_i 用于 cSHAKE 的 bytepad 操作，而 SHA3/SHAKE 不使用 encode_N,S；ns_data_i 也仅在 cSHAKE 模式下使用。输出 keccak_run_o/输入 keccak_complete_i 组成对 keccak_round 的处理控制接口，注释说明 run 用于启动一次完整 keccak_f 处理，而 complete 指示当前 keccak_f 完成。absorbed_o 则用于向软件或外部控制逻辑指示海绵吸收阶段已经完成，可以继续请求更多摘要或通过 done_i 结束。最后，接口显式包含生命周期升级输入 lc_escalate_en_i 以及 sparse_fsm_error_o、msg_count_error_o 两类错误指示，说明后续逻辑预计包含安全/健壮性相关的状态机编码检查与计数器故障检测，但本片段尚未给出其驱动方式。",
+  "guarantees": [],
+  "security_implications": "该接口暴露了多项安全相关机制：可选 masking share 数据通路（EnMasking/Share）、生命周期升级输入 lc_escalate_en_i、以及 sparse_fsm_error_o 和 msg_count_error_o 故障指示，这表明后续实现预期具有抗故障/抗泄露设计与错误检测能力。此外 done_i 和 absorbed_o 使用 mubi4_t，而非普通单比特，暗示控制完成类信号可能采用多比特稳健编码以降低单点故障影响；但本片段仅显示接口类型，未显示具体校验或安全响应行为。",
+  "assumptions": [
+    {
+      "constraint": "当 EnMasking=1 时，外部必须为 msg_data_i 和 keccak_data_o 的两个 share 提供/消费一致的协议语义，并使用同一个 msg_strb_i 作为所有 share 的字节使能。",
+      "bug_relevance": "如果违反该契约，不同 share 的有效字节范围不一致，可能导致掩码实现失配、功能输出错误，甚至削弱侧信道防护。",
+      "related_signals": [
+        "EnMasking",
+        "Share",
+        "msg_data_i",
+        "msg_strb_i",
+        "keccak_data_o"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:12-13",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:20-21",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:30"
+      ]
+    },
+    {
+      "constraint": "在 cSHAKE 相关使用场景下，外部需要提供与 mode_i/strength_i 相匹配的 ns_data_i 和 strength_i；而在 SHA3/SHAKE 模式下不应依赖 encode_N,S 或 bytepad 前缀行为。",
+      "bug_relevance": "如果模式与这些配置不匹配，可能导致前缀编码或 bytepad 行为错误，进而产生错误的吸收消息流和摘要结果。",
+      "related_signals": [
+        "mode_i",
+        "strength_i",
+        "ns_data_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:24-26",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:41-44"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:12-13",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:18-22",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:24-31",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:33-38",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:40-44",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:46-63",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv:65-72"
+  ],
+  "uncertain_points": [
+    "该片段只有模块头与注释，没有具体 assign/always 逻辑，因此 msg_ready_o、keccak_valid_o、keccak_addr_o、keccak_data_o、keccak_run_o、absorbed_o、sparse_fsm_error_o、msg_count_error_o 的实际驱动条件和边界行为无法从本片段单独确认。",
+    "注释说明 done_i 用于清除内部变量并返回 Idle，但又注明“done_i may not needed if sw controls the keccak_round directly”；实际 done_i 是否总被使用、以及在某些模式下是否可忽略，需要后续实现确认。",
+    "done_i 和 absorbed_o 使用 mubi4_t 类型，表明可能存在多比特真值判定规则，但本片段未说明采用何种 mubi 合法值检查或容错策略。",
+    "lc_escalate_en_i、sparse_fsm_error_o 和 msg_count_error_o 显示存在生命周期升级与故障检测机制，但具体在升级时是否停机、清零、报错或锁死，需查看后续逻辑。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 7,
+  "line_end": 73
+}

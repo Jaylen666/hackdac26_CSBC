@@ -1,38 +1,166 @@
 {
   "chunk_id": "kmac__always_ff__line_489__001",
-  "summary": "在引擎稳定时将软件写入的 key_share0 分段收集到内部密钥寄存器 sw_key_data_reg[0]，复位时清零。",
-  "behavior": "该时序块只驱动 sw_key_data_reg[0]。复位有效时，sw_key_data_reg[0] 被整体清零 [489-492]。正常工作时，只有在 engine_stable 为真时才允许更新；此时遍历 key_share0 的每个 32-bit 字段，若对应的 reg2hw.key_share0[j].qe 置位，则用 reg2hw.key_share0[j].q 覆盖 sw_key_data_reg[0] 中对应的 32-bit 切片 [492-497]。未被 qe 选中的分段保持原值；当 engine_stable 为假时，整个 sw_key_data_reg[0] 保持不变 [492-498]。代码体现出按字写入、可部分更新的软件密钥影子寄存器装载行为，并以 engine_stable 作为写入门控 [492-497]。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "sw_key_data_reg[0]"
+    ],
+    "used": [
+      "rst_ni",
+      "engine_stable",
+      "reg2hw.key_share0[*].qe",
+      "reg2hw.key_share0[*].q",
+      "MaxKeyLen",
+      "clk_i"
+    ],
+    "modes": [
+      "engine_stable",
+      "MaxKeyLen"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "handshake",
+      "parameterization",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位期间 sw_key_data_reg[0] 一定被清零。",
-      "output_signals": [
-        "sw_key_data_reg"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "Reset (rst_ni low) asynchronously clears sw_key_data_reg[0] to zero.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
+        "sw_key_data_reg[0]"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-492"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:490-491"
       ]
     },
     {
-      "property": "当 engine_stable 为真且 reg2hw.key_share0[j].qe 为 1 时，sw_key_data_reg[0] 的对应 32-bit 分段会被写成 reg2hw.key_share0[j].q；其余未选中的分段不会在该块中被修改。",
-      "output_signals": [
-        "sw_key_data_reg"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When engine_stable is high, for each j in 0..MaxKeyLen/32-1, if key_share0[j].qe is true, sw_key_data_reg[0][32*j+:32] is updated with key_share0[j].q.",
+      "cond": "engine_stable & key_share0[j].qe",
+      "signals": [
+        "engine_stable",
+        "key_share0",
+        "qe",
+        "q",
+        "sw_key_data_reg[0]",
+        "MaxKeyLen"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:492-497"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When not in reset and (engine_stable is low or key_share0[j].qe is low), sw_key_data_reg[0][32*j+:32] retains its previous value.",
+      "cond": "!rst_ni & (!engine_stable | !key_share0[j].qe)",
+      "signals": [
+        "rst_ni",
+        "engine_stable",
+        "key_share0",
+        "sw_key_data_reg[0]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-499"
       ]
     }
   ],
-  "security_implications": "该片段处理软件提供的密钥 share0，并通过 engine_stable 门控其装载，降低在引擎不稳定阶段意外改写密钥寄存器的风险 [492-497]。复位时清零也有助于避免残留密钥值继续留存在该寄存器中 [490-492]。不过该片段本身只覆盖 share0，是否存在完整的双份密钥保护、擦除或访问控制还需结合其他代码确认。",
   "assumptions": [
     {
-      "constraint": "reg2hw.key_share0[j].qe 应只在软件确实要提交对应 32-bit 密钥字段且 engine_stable 允许接收时拉高；否则该字段会保持旧值，这是安全回退但设计上通常不应作为正常更新流程。",
-      "bug_relevance": "若不满足则可能出现部分字段未更新、内部密钥混合新旧字的情况；虽然硬件会保持旧值而非写入未知值，但这通常不是期望的密钥编程行为。",
-      "related_signals": [
-        "reg2hw.key_share0",
-        "engine_stable",
-        "sw_key_data_reg"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "MaxKeyLen is a multiple of 32 and does not exceed the bit-width of sw_key_data_reg[0] or the depth of the key_share0 array.",
+      "cond": "always",
+      "risk": "Out-of-bounds indexing could corrupt adjacent storage or cause synthesis/simulation mismatch, potentially exposing or corrupting key material.",
+      "signals": [
+        "MaxKeyLen",
+        "key_share0",
+        "sw_key_data_reg[0]"
       ],
-      "source_refs": [
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:493"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "engine_stable remains high and stable for the entire duration of the key update transaction to ensure atomic write of all key words that have qe set.",
+      "cond": "when key update transaction occurs (engine_stable high and any qe active)",
+      "risk": "If engine_stable deasserts mid-update, partial key may be written, resulting in a corrupted key that compromises cryptographic security.",
+      "signals": [
+        "engine_stable",
+        "key_share0"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:492-498"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If MaxKeyLen is not a multiple of 32, the for-loop may miss updating the tail bits of sw_key_data_reg[0], leaving potential key bits uninitialized or stale.",
+      "cond": "MaxKeyLen not a multiple of 32",
+      "risk": "Uninitialized or stale key bits can cause unpredictable cryptographic operations and may leak side-channel information.",
+      "signals": [
+        "MaxKeyLen",
+        "sw_key_data_reg[0]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:493"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "engine_stable source and timing must be verified to be glitch-free and asserted only when the cryptographic engine is truly idle and not in the middle of a key-consuming operation.",
+      "cond": "always",
+      "risk": "A glitch on engine_stable could trigger unintended key updates, corrupting the key and potentially causing security failures.",
+      "signals": [
+        "engine_stable"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:492"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "sw_key_data_reg[0] is cleared only at reset; there is no explicit mechanism to zeroize the key after use, which may leave residual key material exposed.",
+      "cond": "after cryptographic operation completes and engine_stable deasserts",
+      "risk": "Residual key could be extracted via later read paths, faults, or debug access, violating secret-key confidentiality.",
+      "signals": [
+        "sw_key_data_reg[0]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:490-491"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The key update is not guaranteed to be atomic: if engine_stable spans multiple clock cycles and qe bits are asserted at different times, sw_key_data_reg[0] can be partially updated with a mix of old and new key words.",
+      "cond": "engine_stable high over multiple clock cycles with different qe patterns",
+      "risk": "Non-atomic key loading could produce a key never intended by software, leading to incorrect MAC outputs and potential security bypass.",
+      "signals": [
+        "engine_stable",
+        "key_share0",
+        "sw_key_data_reg[0]"
+      ],
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:492-497"
       ]
     }
@@ -40,12 +168,8 @@
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-499"
   ],
-  "uncertain_points": [
-    "代码只更新 sw_key_data_reg[0]，推测对应 key_share0，但 sw_key_data_reg 的完整结构以及 share1 是否由相邻块对称处理，需要上下文确认。",
-    "engine_stable 的具体语义未在该片段内定义；这里只能确认它是密钥装载的门控条件，无法仅凭该片段判断其是否表示空闲、未吸收数据或其他稳定状态。",
-    "若同一编程事务中仅部分 j 的 qe 置位，寄存器会保留其余旧字段；这是代码的实际行为，但是否与上层软件协议一致需要结合寄存器接口规范确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 489,
-  "line_end": 499
+  "line_end": 499,
+  "security_implications": ""
 }

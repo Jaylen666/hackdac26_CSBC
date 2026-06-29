@@ -1,0 +1,171 @@
+{
+  "chunk_id": "aes_cipher_core_continuous_region_declarations_or_instances_004__structure__001",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "instance",
+    "driven": [
+      "sub_bytes_out_req",
+      "sub_bytes_out",
+      "sb_out_mask",
+      "sub_bytes_err"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "sub_bytes_en",
+      "sub_bytes_out_ack",
+      "op_i",
+      "state_q[0]",
+      "sb_in_mask",
+      "prd_sub_bytes_q"
+    ],
+    "modes": [
+      "SecSBoxImpl"
+    ],
+    "tags": [
+      "secret",
+      "mask",
+      "entropy",
+      "error",
+      "handshake",
+      "side_channel"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "The instance u_aes_sub_bytes continuously connects sub_bytes_en to en_i, sub_bytes_out_ack to out_ack_i, op_i to op_i, state_q[0] to data_i, sb_in_mask to mask_i, prd_sub_bytes_q to prd_i, and drives sub_bytes_out_req, sub_bytes_out, sb_out_mask, sub_bytes_err from the instance outputs out_req_o, data_o, mask_o, err_o respectively.",
+      "cond": "always",
+      "signals": [
+        "sub_bytes_en",
+        "sub_bytes_out_ack",
+        "op_i",
+        "state_q[0]",
+        "sb_in_mask",
+        "prd_sub_bytes_q",
+        "sub_bytes_out_req",
+        "sub_bytes_out",
+        "sb_out_mask",
+        "sub_bytes_err"
+      ],
+      "refs": [
+        "file:380-395"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "The parent logic must properly handshake with sub_bytes_out_req: acknowledge it with sub_bytes_out_ack while the output is valid, and avoid de‑asserting ack before the next data cycle.",
+      "cond": "when sub_bytes_en is active and sub_bytes_out_req is asserted",
+      "risk": "Sub‑bytes pipeline stalls indefinitely; output data may be lost or mis‑sampled.",
+      "signals": [
+        "sub_bytes_out_req",
+        "sub_bytes_out_ack"
+      ],
+      "refs": [
+        "file:386-387"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "sb_in_mask and prd_sub_bytes_q must supply fresh, unpredictable mask/prd values each time sub_bytes_en is asserted to maintain side‑channel resistance.",
+      "cond": "always when sub_bytes_en is active",
+      "risk": "Repeated or predictable masks expose side‑channel leakage, compromising secret state.",
+      "signals": [
+        "sb_in_mask",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "file:390-391"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "clk_i must be a stable clock and rst_ni must be asserted low for a sufficient duration before sub_bytes_en is asserted.",
+      "cond": "during normal operation",
+      "risk": "Incorrect or glitched outputs, register corruption inside sub‑bytes.",
+      "signals": [
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:383-384"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Only state_q[0] is connected to data_i. A full AES SubBytes operation requires all 16 state bytes. This instance may be part of a multi‑cycle loop or replicated; missing the other bytes would produce an incorrect round result.",
+      "cond": "any AES round when SubBytes is enabled",
+      "risk": "Incomplete SubBytes transformation, ciphertext corruption.",
+      "signals": [
+        "state_q[0]",
+        "sub_bytes_en"
+      ],
+      "refs": [
+        "file:389"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Mask signals sb_in_mask and sb_out_mask are connected, but the correctness and non‑leakage of the masked SubBytes implementation cannot be verified from this instantiation alone. The internal masking scheme must be inspected in aes_sub_bytes.",
+      "cond": "always when the sub‑bytes module operates",
+      "risk": "Side‑channel leakage or mask arithmetic errors compromise the confidentiality of the cipher state.",
+      "signals": [
+        "sb_in_mask",
+        "sb_out_mask",
+        "sub_bytes_out"
+      ],
+      "refs": [
+        "file:390,393"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "sub_bytes_err is driven by the instance but its handling in the parent is not visible. If the parent ignores this error, an injected fault in SubBytes could propagate undetected.",
+      "cond": "when a fault is detected inside sub_bytes",
+      "risk": "Faulty ciphertext is output and no alarm is raised, defeating integrity or error‑reporting mechanisms.",
+      "signals": [
+        "sub_bytes_err"
+      ],
+      "refs": [
+        "file:394"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The exact timing of the out_req/out_ack handshake (e.g., required cycles between ack and the next enable) is unspecified in this chunk. Mis‑timing could lead to stale outputs being sampled.",
+      "cond": "when sub_bytes_en toggles rapidly or out_ack is delayed",
+      "risk": "Data validity window is missed, causing the parent to capture incorrect SubBytes results.",
+      "signals": [
+        "sub_bytes_en",
+        "sub_bytes_out_req",
+        "sub_bytes_out_ack"
+      ],
+      "refs": [
+        "file:385-387"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:380-395"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
+  "line_start": 380,
+  "line_end": 395,
+  "security_implications": ""
+}

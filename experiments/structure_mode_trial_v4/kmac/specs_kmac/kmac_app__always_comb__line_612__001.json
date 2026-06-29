@@ -1,0 +1,225 @@
+{
+  "chunk_id": "kmac_app__always_comb__line_612__001",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_comb",
+    "driven": [
+      "app_data_ready",
+      "sw_ready_o",
+      "kmac_valid_o",
+      "kmac_data_o",
+      "kmac_mask_o"
+    ],
+    "used": [
+      "mux_sel_buf_kmac",
+      "app_i[app_id].valid",
+      "app_i[app_id].data",
+      "app_i[app_id].strb",
+      "app_id",
+      "kmac_ready_i",
+      "encoded_outlen",
+      "encoded_outlen_mask",
+      "sw_valid_i",
+      "sw_data_i",
+      "sw_mask_i",
+      "MsgWidth"
+    ],
+    "modes": [
+      "SelApp",
+      "SelOutLen",
+      "SelSw",
+      "SelNone",
+      "MsgWidth"
+    ],
+    "tags": [
+      "mask",
+      "handshake",
+      "sparse_fsm"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When mux_sel_buf_kmac is not SelApp, SelOutLen, or SelSw (including SelNone), kmac_valid_o=0, kmac_data_o=0, kmac_mask_o=0, app_data_ready=0, and sw_ready_o=1.",
+      "cond": "mux_sel_buf_kmac ∈ {SelNone, others}",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_data_o",
+        "kmac_mask_o",
+        "app_data_ready",
+        "sw_ready_o"
+      ],
+      "refs": [
+        "612:613-614",
+        "616-618",
+        "646-650"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "In SelApp mode, kmac_valid_o = app_i[app_id].valid, kmac_data_o = app_i[app_id].data, kmac_mask_o byte lanes are all-1 for each set bit in app_i[app_id].strb, and app_data_ready = kmac_ready_i.",
+      "cond": "mux_sel_buf_kmac == SelApp",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_data_o",
+        "kmac_mask_o",
+        "app_i[app_id].valid",
+        "app_i[app_id].data",
+        "app_i[app_id].strb",
+        "app_data_ready",
+        "kmac_ready_i"
+      ],
+      "refs": [
+        "623-629"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "In SelOutLen mode, kmac_valid_o is always 1, kmac_data_o = MsgWidth'(encoded_outlen), kmac_mask_o = MsgWidth'(encoded_outlen_mask).",
+      "cond": "mux_sel_buf_kmac == SelOutLen",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_data_o",
+        "kmac_mask_o",
+        "encoded_outlen",
+        "encoded_outlen_mask"
+      ],
+      "refs": [
+        "634-636"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "In SelSw mode, kmac_valid_o = sw_valid_i, kmac_data_o = sw_data_i, kmac_mask_o = sw_mask_i, and sw_ready_o = kmac_ready_i.",
+      "cond": "mux_sel_buf_kmac == SelSw",
+      "signals": [
+        "kmac_valid_o",
+        "kmac_data_o",
+        "kmac_mask_o",
+        "sw_valid_i",
+        "sw_data_i",
+        "sw_mask_i",
+        "sw_ready_o",
+        "kmac_ready_i"
+      ],
+      "refs": [
+        "640-643"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "In SelApp, each group of 8 bits of kmac_mask_o starting at bit 8*i is set to 8'hFF if app_i[app_id].strb[i] is 1, else 8'h00.",
+      "cond": "mux_sel_buf_kmac == SelApp",
+      "signals": [
+        "kmac_mask_o",
+        "app_i[app_id].strb"
+      ],
+      "refs": [
+        "626-628"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "sw_ready_o is held at 1 when mux_sel_buf_kmac is not SelSw, including SelApp and SelOutLen cases.",
+      "cond": "mux_sel_buf_kmac != SelSw",
+      "signals": [
+        "sw_ready_o"
+      ],
+      "refs": [
+        "614",
+        "652"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "mux_sel_buf_kmac must be one-hot, i.e., exactly one of SelApp, SelOutLen, SelSw active at a time.",
+      "cond": "always",
+      "risk": "Multiple active select bits may cause simulation-synthesis mismatch, output glitches, or unintended data transmission.",
+      "signals": [
+        "mux_sel_buf_kmac"
+      ],
+      "refs": [
+        "620"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "app_id must be a legal index into the app_i array.",
+      "cond": "mux_sel_buf_kmac == SelApp",
+      "risk": "Out-of-bounds read returns X or garbage, potentially leaking secret/corrupt data into kmac_data_o/kmac_mask_o.",
+      "signals": [
+        "app_id",
+        "app_i"
+      ],
+      "refs": [
+        "623-627"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "app_id is used directly to index app_i without range checking; an invalid app_id can read out-of-bounds data into the KMAC output path.",
+      "cond": "When mux_sel_buf_kmac selects SelApp and app_id is out of range.",
+      "risk": "Secret or random memory contents may be written to kmac_data_o/mask_o, bypassing data origin security.",
+      "signals": [
+        "app_id",
+        "app_i"
+      ],
+      "refs": [
+        "623",
+        "625-627"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "encoded_outlen is cast to MsgWidth'(encoded_outlen); if encoded_outlen bit-width exceeds MsgWidth, high-order bits are truncated.",
+      "cond": "When mux_sel_buf_kmac == SelOutLen and encoded_outlen width > MsgWidth.",
+      "risk": "Output length specifier may be incorrect, leading to wrong digest length or protocol error.",
+      "signals": [
+        "encoded_outlen",
+        "MsgWidth"
+      ],
+      "refs": [
+        "635"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "kmac_mask_o byte-expansion loop writes to kmac_mask_o[8*i+:8]; if MsgWidth (the width of kmac_mask_o) is less than 8*$bits(strb), the assignment writes beyond the signal width.",
+      "cond": "When mux_sel_buf_kmac == SelApp and 8*$bits(app_i[app_id].strb) > MsgWidth.",
+      "risk": "Out-of-bounds write truncates high bytes of mask, possibly unmasking bytes that should have been masked, leading to data corruption or security bypass.",
+      "signals": [
+        "kmac_mask_o",
+        "app_i[app_id].strb",
+        "MsgWidth"
+      ],
+      "refs": [
+        "626-628"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "612-653"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
+  "line_start": 612,
+  "line_end": 653,
+  "security_implications": ""
+}

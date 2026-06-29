@@ -1,0 +1,195 @@
+{
+  "chunk_id": "kmac_continuous_region_declarations_or_instances_013__structure__001",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "errchecker_err",
+      "kmac_errchk_state_error",
+      "tl_win_d2h[WinState]"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "tl_win_h2d[WinState]",
+      "reg_state_tl",
+      "reg2hw.cfg_shadowed.state_endianness.q",
+      "reg_sha3_mode",
+      "reg_keccak_strength",
+      "reg_kmac_en",
+      "reg_ns_prefix[47:0]",
+      "cfg_en_unsupported_modestrength",
+      "entropy_ready",
+      "sw_cmd",
+      "app_active",
+      "sha3_absorbed",
+      "sha3_block_processed",
+      "lc_escalate_en[4]",
+      "err_processed",
+      "clear_after_error"
+    ],
+    "modes": [
+      "EnMasking",
+      "AddrW=9"
+    ],
+    "tags": [
+      "error",
+      "lifecycle",
+      "entropy",
+      "masking",
+      "configuration"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "instance_connection",
+      "claim": "The kmac_errchk instance u_errchk continuously drives errchecker_err from its error_o output and kmac_errchk_state_error from its sparse_fsm_error_o output.",
+      "cond": "always",
+      "signals": [
+        "errchecker_err",
+        "kmac_errchk_state_error",
+        "u_errchk.error_o",
+        "u_errchk.sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1229-1230"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "The kmac_staterd instance u_staterd drives tl_win_d2h[WinState] from its tl_o output, forwarding the state register read response.",
+      "cond": "always",
+      "signals": [
+        "tl_win_d2h[WinState]",
+        "u_staterd.tl_o",
+        "WinState"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1187"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The kmac_errchk module parameter EnMasking matches the top‑level KMAC masking configuration and the module correctly implements error detection logic.",
+      "cond": "when EnMasking or error inputs change",
+      "risk": "Mismatched masking or incorrect error logic could mask real errors or generate false error flags.",
+      "signals": [
+        "EnMasking"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1196-1197"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The static parameter AddrW=9 passed to kmac_staterd corresponds to the actual depth of the state register file (reg_state_tl), i.e. 512 entries.",
+      "cond": "any state access",
+      "risk": "If the state register file depth differs, TL-UL reads/writes could address the wrong locations or wrap incorrectly.",
+      "signals": [
+        "AddrW",
+        "reg_state_tl"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1180"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "The bit index lc_escalate_en[4] corresponds to the KMAC‑specific life‑cycle escalation enable, as defined by the system‑wide LC controller.",
+      "cond": "when a life‑cycle escalation condition is active",
+      "risk": "Connecting the wrong bit may fail to escalate during an LC event, potentially allowing continued operation in a degraded state and exposing secrets.",
+      "signals": [
+        "lc_escalate_en[4]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1224"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "The entropy_ready signal is a single‑cycle pulse that satisfies the timing expectation of kmac_errchk’s entropy_ready_pulse_i input.",
+      "cond": "each entropy request",
+      "risk": "A multi‑cycle or asynchronous level may cause missed or duplicated entropy captures, undermining randomness quality and security.",
+      "signals": [
+        "entropy_ready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1210"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "value_domain",
+      "claim": "reg_ns_prefix[47:0] provides exactly the first 6 bytes of the KMAC PREFIX value, aligned and stable when the error checker samples it.",
+      "cond": "during error checking",
+      "risk": "Misalignment or instability could cause false error assertions, blocking legitimate operations or masking real prefix errors.",
+      "signals": [
+        "reg_ns_prefix[47:0]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1206"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The cfg_en_unsupported_modestrength_i input allows enabling SHA‑3 mode/strength combinations that are normally unsupported; the error checker’s behaviour in this mode is unclear and may weaken or bypass strength checks.",
+      "cond": "when cfg_en_unsupported_modestrength is asserted",
+      "risk": "An attacker could force the engine into a weak or non‑standard configuration, compromising output security/fault detection.",
+      "signals": [
+        "cfg_en_unsupported_modestrength",
+        "reg2hw.cfg_shadowed"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1208"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The hardcoded bit index [4] of lc_escalate_en depends on the global LC controller’s assignment; a mismatch would break escalation for this checker.",
+      "cond": "when the LC controller re‑assigns bit mapping",
+      "risk": "The KMAC error checker would not react to life‑cycle escalation, potentially allowing continued processing containing secret material.",
+      "signals": [
+        "lc_escalate_en[4]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1224"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The prefix checker receives cfg_prefix_6B_i from reg_ns_prefix[47:0], but if the overall PREFIX length is less than 6 bytes the upper bytes of reg_ns_prefix may be undefined, potentially causing spurious errors or false accepts.",
+      "cond": "when the configured PREFIX length is < 6 bytes",
+      "risk": "The error checker could block correct operations due to garbage prefix bytes or incorrectly allow a malformed short prefix, affecting integrity/security.",
+      "signals": [
+        "reg_ns_prefix[47:0]",
+        "cfg_prefix_6B_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1206"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1179-1233"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 1179,
+  "line_end": 1233,
+  "security_implications": ""
+}

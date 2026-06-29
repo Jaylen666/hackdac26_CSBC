@@ -1,28 +1,79 @@
 {
   "chunk_id": "uart_core__always_ff__line_391__001",
-  "summary": "寄存器块，复位时清零 rx_timeout_count_q 和 rx_fifo_depth_prev_q，正常运行则在每个时钟上升沿更新这两个寄存器。",
-  "behavior": "在复位 (rst_ni 为低) 时，rx_timeout_count_q 和 rx_fifo_depth_prev_q 被异步清零。复位释放后，每个 clk_i 上升沿，rx_timeout_count_q 被赋予组合逻辑计算结果 rx_timeout_count_d，rx_fifo_depth_prev_q 被赋予当前的 rx_fifo_depth 值。该块为下游逻辑提供稳定的一拍延迟后的控制信号。",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "rx_timeout_count_q",
+      "rx_fifo_depth_prev_q"
+    ],
+    "used": [
+      "rst_ni",
+      "clk_i",
+      "rx_timeout_count_d",
+      "rx_fifo_depth"
+    ],
+    "modes": [],
+    "tags": [
+      "reset",
+      "fifo"
+    ]
+  },
   "guarantees": [
     {
-      "property": "rx_fifo_depth_prev_q 始终等于上一个时钟周期的 rx_fifo_depth 值（复位后为零）。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On reset (rst_ni low), both rx_timeout_count_q and rx_fifo_depth_prev_q are synchronously assigned to 0 immediately after the clock edge where reset is sampled low.",
+      "cond": "negedge rst_ni or activelow",
+      "signals": [
+        "rst_ni",
+        "rx_timeout_count_q",
         "rx_fifo_depth_prev_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:391-399"
+      "refs": [
+        "uart_core.sv:391-399"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On every positive clock edge when not in reset, rx_timeout_count_q updates to the value of rx_timeout_count_d and rx_fifo_depth_prev_q updates to the value of rx_fifo_depth.",
+      "cond": "posedge clk_i && rst_ni",
+      "signals": [
+        "rx_timeout_count_q",
+        "rx_timeout_count_d",
+        "rx_fifo_depth_prev_q",
+        "rx_fifo_depth"
+      ],
+      "refs": [
+        "uart_core.sv:391-399"
       ]
     }
   ],
-  "security_implications": "",
   "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:391-399"
-  ],
   "uncertain_points": [
-    "rx_timeout_count_d 的具体组合逻辑来源未在此块内定义，需确认其值含义以及是否在复位后自动清零。",
-    "rx_fifo_depth 采样是否与 FIFO 读/写操作同步，以及其位宽与 rx_fifo_depth_prev_q 的宽度是否完全匹配，未在片段中体现。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "rx_fifo_depth is captured directly without any synchronization; if it comes from a different clock domain (e.g., from rx_fifo in a separate clock), metastability may corrupt rx_fifo_depth_prev_q and could propagate to dependent timeout logic.",
+      "cond": "if rx_fifo_depth is asynchronous to clk_i",
+      "risk": "If rx_fifo_depth is asynchronous, glitches or metastability could cause incorrect timeout detection or FIFO depth tracking, leading to unexpected UART receive behavior.",
+      "signals": [
+        "rx_fifo_depth",
+        "rx_fifo_depth_prev_q",
+        "clk_i"
+      ],
+      "refs": [
+        "uart_core.sv:391-399"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "uart_core.sv:391-399"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 391,
-  "line_end": 399
+  "line_end": 399,
+  "security_implications": ""
 }

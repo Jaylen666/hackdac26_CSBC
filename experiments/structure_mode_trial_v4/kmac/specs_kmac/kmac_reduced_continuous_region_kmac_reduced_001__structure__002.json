@@ -1,0 +1,175 @@
+{
+  "chunk_id": "kmac_reduced_continuous_region_kmac_reduced_001__structure__002",
+  "header": {
+    "module": "kmac_reduced",
+    "block_kind": "mixed",
+    "driven": [
+      "msg[0]",
+      "msg[1]",
+      "msg_valid_shares[0]",
+      "msg_valid_shares[1]",
+      "msg_ready_shares[0]",
+      "msg_ready_shares[1]"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "msg_valid_i",
+      "msg_i[0]",
+      "msg_i[1]",
+      "msg_ready"
+    ],
+    "modes": [
+      "MsgLen",
+      "sha3_pkg::MsgWidth",
+      "NumShares"
+    ],
+    "tags": [
+      "fifo",
+      "handshake",
+      "mask",
+      "secret",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "Both u_msg_unpacker_share0 and share1 instances receive the same input valid msg_valid_i and output ready msg_ready, so they are pushed and popped simultaneously, ensuring per‑read delivery of both shares together.",
+      "cond": "when msg_valid_i is asserted for push, and when msg_ready is asserted for pop",
+      "signals": [
+        "msg_valid_i",
+        "msg_ready",
+        "msg[0]",
+        "msg[1]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:114",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:119",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:131",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:136"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The clr_i inputs of both packer FIFOs are hardwired to 1'b0, so the FIFO state can be cleared only by reset (rst_ni) or by the internal ClearOnRead mechanism; there is no other external clear.",
+      "cond": "always",
+      "signals": [
+        "clr_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:113",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:130"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The upstream logic must assert msg_valid_i only when both msg_i[0] and msg_i[1] contain valid share data, so that the two packer FIFOs stay synchronized.",
+      "cond": "when msg_valid_i is high",
+      "risk": "De‑synchronized shares could allow one share to be read ahead of the other, breaking masking and potentially leaking secret‑dependent information.",
+      "signals": [
+        "msg_valid_i",
+        "msg_i[0]",
+        "msg_i[1]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:114",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:115",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:131",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:132"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The parameter MsgLen must be less than or equal to sha3_pkg::MsgWidth for the packer to function correctly; otherwise the InW/OutW widths may violate the packer requirements and cause data corruption.",
+      "cond": "always",
+      "risk": "Data corruption or truncation inside the packer, leading to incorrect message packing.",
+      "signals": [
+        "MsgLen",
+        "sha3_pkg::MsgWidth"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:107-108",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:124-125"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The clr_i of both FIFOs is tied to 0, so a security event (e.g., key wipe, alert) cannot flush the FIFO contents; sensitive share data may persist until read.",
+      "cond": "when a clear event is required but not handled",
+      "risk": "Residual sensitive data could be exposed or reused in violation of security properties.",
+      "signals": [
+        "clr_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:113",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:130"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The reduction logic that combines msg_valid_shares[0] and [1] into msg_valid (and similarly for ready) is not present in this chunk; it must be verified that the combination never asserts msg_valid when only one share has valid data.",
+      "cond": "when per‑share valid signals differ",
+      "risk": "A single‑share valid indication could propagate, breaking the masked‑data invariant and enabling side‑channel leakage.",
+      "signals": [
+        "msg_valid_shares",
+        "msg_valid",
+        "msg_ready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:104",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:140"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The depth_o output of both packer FIFOs is left unconnected; if depth information is used for flow control or monitoring elsewhere, the lack of connection may hide faults.",
+      "cond": "always",
+      "risk": "Undetected FIFO state (e.g., full/empty) could lead to silent data loss or stall.",
+      "signals": [
+        "depth_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:120",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:137"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "No assertion enforces that MsgLen <= sha3_pkg::MsgWidth. If a legal configuration sets MsgLen > MsgWidth, the packer may function incorrectly.",
+      "cond": "when MsgLen > MsgWidth",
+      "risk": "Data corruption or truncation in the packed message, affecting KMAC operation.",
+      "signals": [
+        "MsgLen",
+        "sha3_pkg::MsgWidth"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:107-108",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:124-125"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:101-140"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
+  "line_start": 101,
+  "line_end": 140,
+  "security_implications": ""
+}

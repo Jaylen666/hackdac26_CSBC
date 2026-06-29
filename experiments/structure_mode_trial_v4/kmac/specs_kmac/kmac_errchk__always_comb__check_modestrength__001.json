@@ -1,0 +1,148 @@
+{
+  "chunk_id": "kmac_errchk__always_comb__check_modestrength__001",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "always_comb",
+    "driven": [
+      "err_modestrength"
+    ],
+    "used": [
+      "st",
+      "st_d",
+      "cfg_mode_i",
+      "cfg_strength_i"
+    ],
+    "modes": [
+      "StIdle",
+      "StMsgFeed",
+      "Sha3",
+      "Shake",
+      "CShake",
+      "L128",
+      "L224",
+      "L256",
+      "L384",
+      "L512"
+    ],
+    "tags": [
+      "error",
+      "handshake",
+      "fault"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "error_detection",
+      "claim": "err_modestrength is 1 when st == StIdle and st_d == StMsgFeed and the (cfg_mode_i, cfg_strength_i) pair is not (Sha3 and strength inside {L224,L256,L384,L512}) nor (Shake or CShake and strength inside {L128,L256}); otherwise 0.",
+      "cond": "always (combinational)",
+      "signals": [
+        "err_modestrength",
+        "st",
+        "st_d",
+        "cfg_mode_i",
+        "cfg_strength_i"
+      ],
+      "refs": [
+        "file:249-261"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "st and st_d correctly reflect the current and next FSM state.",
+      "cond": "when st == StIdle && st_d == StMsgFeed",
+      "risk": "Incorrect state values could cause err_modestrength to be 0 for illegal config or 1 for valid config.",
+      "signals": [
+        "st",
+        "st_d"
+      ],
+      "refs": [
+        "file:252"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "cfg_mode_i and cfg_strength_i are stable and valid during the StIdle→StMsgFeed transition.",
+      "cond": "when st == StIdle && st_d == StMsgFeed",
+      "risk": "Transient changes may trigger a false error or mask a true illegal configuration.",
+      "signals": [
+        "cfg_mode_i",
+        "cfg_strength_i"
+      ],
+      "refs": [
+        "file:252"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "The StIdle→StMsgFeed transition is the only entry path into StMsgFeed where configuration must be checked.",
+      "cond": "when entering StMsgFeed",
+      "risk": "Other state transitions into StMsgFeed would bypass this check, allowing an invalid mode/strength combination.",
+      "signals": [
+        "st",
+        "st_d"
+      ],
+      "refs": [
+        "file:252"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If the FSM can enter StMsgFeed without passing through StIdle (e.g., via reset, recovery, or parallel paths), the config validity check is skipped.",
+      "cond": "when entering StMsgFeed not via StIdle",
+      "risk": "Invalid mode/strength combination may be used, causing functional misbehavior or security weakness.",
+      "signals": [
+        "st",
+        "st_d"
+      ],
+      "refs": [
+        "file:252"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "err_modestrength is a combinational pulse that may be transient; if downstream logic does not latch or gate operation on it, the error can be ignored.",
+      "cond": "when err_modestrength is asserted",
+      "risk": "An illegal configuration can propagate and be used before any remedial action.",
+      "signals": [
+        "err_modestrength"
+      ],
+      "refs": [
+        "file:258"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Chunk context indicates a generate if (st == StIdle && st_d == StMsgFeed) enclosing this block; if that generate condition is resolved at compile time, the block might be removed.",
+      "cond": "unknown generate condition",
+      "risk": "Complete removal of the strength/mode check in some build variants, leaving illegal config undetected.",
+      "signals": [
+        "st",
+        "st_d"
+      ],
+      "refs": [
+        "file:249-261 (compile_time_context)"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:249-261"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
+  "line_start": 249,
+  "line_end": 261,
+  "security_implications": ""
+}

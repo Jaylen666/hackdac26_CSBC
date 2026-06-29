@@ -1,42 +1,139 @@
 {
   "chunk_id": "keccak_round__continuous_region__batched_small_assigns__001",
-  "summary": "该片段提供两个直接连接：将 DOM 低位输入取反得到低位输出中间信号，并将内部存储状态直接导出为模块状态输出；同时声明了仅在掩码配置分支中出现的控制/错误相关层级与信号。",
-  "behavior": "片段中实际可见的组合行为只有两处。第一，`dom_out_low_d` 始终等于 `dom_in_low_d` 的按位取反，用于形成对应的低位 DOM 输出中间信号，没有额外使能或条件控制【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408-408】。第二，模块输出 `state_o` 始终直接反映内部 `storage` 的当前值，即该片段未对输出增加变换、屏蔽或选择逻辑【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:414-414】。另外，代码显示这些语句位于 `EnMasking` 和 `!ForceRandExt` 的生成分支上下文附近，并声明了 `rst_storage_error` 信号【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410-412,416-416】；但仅凭本片段无法确认这些生成条件是否直接约束上述赋值的存在范围，还是只是源码邻近上下文的一部分。",
+  "header": {
+    "module": "keccak_round",
+    "block_kind": "mixed",
+    "driven": [
+      "dom_out_low_d",
+      "state_o"
+    ],
+    "used": [
+      "dom_in_low_d",
+      "storage",
+      "EnMasking",
+      "ForceRandExt"
+    ],
+    "modes": [
+      "EnMasking",
+      "ForceRandExt"
+    ],
+    "tags": [
+      "mask",
+      "fault",
+      "lifecycle",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`dom_out_low_d` 在所有可见输入组合下都等于 `~dom_in_low_d`。",
-      "output_signals": [
-        "dom_out_low_d"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "dom_out_low_d is driven as the bitwise complement of dom_in_low_d.",
+      "cond": "always",
+      "signals": [
+        "dom_out_low_d",
+        "dom_in_low_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408-408"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408"
       ]
     },
     {
-      "property": "`state_o` 直接导出内部 `storage`，因此该片段不会对输出状态做额外编码、清零或多路选择。",
-      "output_signals": [
-        "state_o"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "state_o is driven directly by storage.",
+      "cond": "always",
+      "signals": [
+        "state_o",
+        "storage"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:414-414"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:414"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "generate_param",
+      "claim": "Block gen_regs_dom_ctrl is instantiated only when parameter EnMasking is true.",
+      "cond": "EnMasking is true",
+      "signals": [
+        "EnMasking"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "Block gen_reg_dom_in_rand_ext is instantiated only when EnMasking is true and ForceRandExt is false.",
+      "cond": "EnMasking is true && ForceRandExt is false",
+      "signals": [
+        "EnMasking",
+        "ForceRandExt"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:412"
       ]
     }
   ],
-  "security_implications": "该片段与掩码/DOM 相关：`dom_out_low_d` 是 `dom_in_low_d` 的直接反相，若该信号参与域分离掩码路径，则其正确极性可能影响掩码组合关系【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408-408】。同时 `state_o` 直接暴露内部 `storage`【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:414-414】；若 `storage` 含有敏感中间状态，则其安全性取决于更大范围设计如何限制该输出的可观察性。`rst_storage_error` 的声明暗示可能存在存储复位/一致性错误检测，但本片段未展示其使用方式【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:416-416】。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408-408",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410-412",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:414-414",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:416-416"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "dom_in_low_d is assumed to be a stable valid logic value (0 or 1), not X, during operation to ensure dom_out_low_d provides correct complement for masking.",
+      "cond": "when masking logic is active",
+      "risk": "If dom_in_low_d is X, dom_out_low_d becomes X, compromising the dual-rail masking and potentially leaking secret state through side-channels.",
+      "signals": [
+        "dom_in_low_d",
+        "dom_out_low_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408"
+      ]
+    }
   ],
   "uncertain_points": [
-    "片段经过 batched 提取，`EnMasking` 与 `!ForceRandExt` 生成条件【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410-412】是否包围 `dom_out_low_d` 或 `state_o` 的赋值，无法仅凭该片段确定。",
-    "`dom_out_low_d` 是最终对外输出、内部中间节点，还是后续还会被别处覆盖/组合，当前片段无法确认。",
-    "`storage` 的具体语义、位宽以及是否包含掩码份额或敏感 Keccak 中间状态，本片段未给出。",
-    "`rst_storage_error` 仅见声明【/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:416-416】，其触发条件、用途及是否为安全告警路径需要更多上下文。"
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "rst_storage_error is declared but no driver is visible in this chunk, and its usage is unclear. If it remains undriven, it could disable storage error handling.",
+      "cond": "unknown",
+      "risk": "If rst_storage_error is intended to reset storage on error, an undriven signal would leave the storage state uncleared upon fault, potentially propagating corrupted data.",
+      "signals": [
+        "rst_storage_error"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:416"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "Generate blocks gen_regs_dom_ctrl and gen_reg_dom_in_rand_ext are conditionally instantiated but contain no visible logic (empty bodies in this region). This may be a placeholder or missing implementation for domain control registers.",
+      "cond": "when EnMasking is true (and ForceRandExt is false for inner block)",
+      "risk": "If these blocks are meant to implement masking control or random extension, their emptiness means no such logic is present, undermining the security countermeasure.",
+      "signals": [
+        "EnMasking",
+        "ForceRandExt"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410-412"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:408",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:410",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:412",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:414",
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv:416"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_round.sv",
   "line_start": 407,
-  "line_end": 504
+  "line_end": 504,
+  "security_implications": ""
 }

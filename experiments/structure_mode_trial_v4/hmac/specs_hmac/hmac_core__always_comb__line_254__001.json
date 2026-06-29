@@ -1,0 +1,178 @@
+{
+  "chunk_id": "hmac_core__always_comb__line_254__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "txcount_d"
+    ],
+    "used": [
+      "txcount",
+      "clr_txcount",
+      "load_txcount",
+      "digest_size_i",
+      "message_length_i",
+      "inc_txcount",
+      "BlockSizeSHA256in64",
+      "BlockSizeSHA512in64"
+    ],
+    "modes": [
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512",
+      "default"
+    ],
+    "tags": [
+      "security",
+      "counter",
+      "hmac",
+      "handshake"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "txcount_d holds its previous value (txcount) when no control signal (clr_txcount, load_txcount, inc_txcount) is asserted.",
+      "cond": "!clr_txcount && !load_txcount && !inc_txcount",
+      "signals": [
+        "txcount_d",
+        "txcount",
+        "clr_txcount",
+        "load_txcount",
+        "inc_txcount"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:255"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "txcount_d is cleared to zero when clr_txcount is asserted.",
+      "cond": "clr_txcount",
+      "signals": [
+        "txcount_d",
+        "clr_txcount"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:256-257"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "On load_txcount (and not clr_txcount), txcount_d is set to message_length_i plus a digest-dependent block size constant: BlockSizeSHA256in64 for SHA2_256, BlockSizeSHA512in64 for SHA2_384 and SHA2_512, and zero for any other digest_size_i.",
+      "cond": "load_txcount && !clr_txcount",
+      "signals": [
+        "txcount_d",
+        "load_txcount",
+        "digest_size_i",
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:258-266"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When inc_txcount is asserted (and neither clr nor load), bits [63:5] of txcount_d are incremented by 1, effectively adding 32 to the full txcount.",
+      "cond": "inc_txcount && !clr_txcount && !load_txcount",
+      "signals": [
+        "txcount_d",
+        "txcount",
+        "inc_txcount"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:267-268"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The constants BlockSizeSHA256in64 and BlockSizeSHA512in64 are correctly defined as the block sizes in 64-bit words (8 and 16 respectively).",
+      "cond": "load_txcount enabled",
+      "risk": "Incorrect constant would cause wrong HMAC block length tracking, breaking message authentication.",
+      "signals": [
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:262-264"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "digest_size_i is stable and valid when load_txcount is asserted.",
+      "cond": "load_txcount enabled",
+      "risk": "If digest_size_i changes during load, the added block size may be stale, causing incorrect txcount_d and potential HMAC failure.",
+      "signals": [
+        "digest_size_i",
+        "load_txcount"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:261-266"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "message_length_i is expressed in the same unit (64-bit words) as the block size constants.",
+      "cond": "load_txcount enabled",
+      "risk": "Unit mismatch would produce a meaningless txcount_d, breaking the HMAC length tracking and security.",
+      "signals": [
+        "message_length_i",
+        "txcount_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:262-264"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The default case in the digest_size_i unique case (line 265) sets txcount_d = message_length_i + 0. It is unclear whether digest_size_i can legally take values other than the three SHA-2 variants. If an invalid or corrupted value occurs, the block size addition is omitted, potentially undermining HMAC integrity.",
+      "cond": "load_txcount asserted with an unspecified digest_size_i",
+      "risk": "HMAC message tracking may be incorrect, allowing forgeries or data manipulation.",
+      "signals": [
+        "digest_size_i",
+        "txcount_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:261-266"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "It is not locally verified that message_length_i and the block size constants (BlockSizeSHA256in64, BlockSizeSHA512in64) share the same unit (64-bit words). If message_length_i is in bytes, the addition will be wrong, causing undetected HMAC length mismatch.",
+      "cond": "load_txcount",
+      "risk": "Systematic unit mismatch could invalidate HMAC tag calculation for all messages.",
+      "signals": [
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:262-264"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:254-270"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 254,
+  "line_end": 270,
+  "security_implications": ""
+}

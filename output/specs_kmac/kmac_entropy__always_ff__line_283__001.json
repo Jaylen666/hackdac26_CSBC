@@ -1,60 +1,175 @@
 {
   "chunk_id": "kmac_entropy__always_ff__line_283__001",
-  "summary": "该寄存器过程维护一个预分频计数器：复位清零，收到更新请求时装载配置值；在计时使能下计数器为零时重装，否则持续递减。",
-  "behavior": "该片段实现 `prescaler_cnt` 的装载/递减控制。复位有效时，`prescaler_cnt` 被清零 [kmac_entropy.sv:284-285]。正常工作时，`timer_update` 具有最高优先级，会直接把 `wait_timer_prescaler_i` 装入 `prescaler_cnt`，覆盖其他计数行为 [kmac_entropy.sv:286-287]。若没有更新请求且 `timer_enable` 为真，当 `prescaler_cnt == '0` 时，计数器不会继续下溢，而是装入 `wait_timer_prescaler_d` [kmac_entropy.sv:288-289]；当 `prescaler_cnt` 非零时则递减 1 [kmac_entropy.sv:290-291]。若 `timer_enable` 为假且无复位/更新，请求，则该块没有赋值，`prescaler_cnt` 保持原值。整体上这是一个可被显式重载的循环倒计时预分频器，零值被用作重装触发点而非继续递减。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "prescaler_cnt"
+    ],
+    "used": [
+      "timer_update",
+      "timer_enable",
+      "wait_timer_prescaler_i",
+      "wait_timer_prescaler_d",
+      "prescaler_cnt"
+    ],
+    "modes": [],
+    "tags": [
+      "counter",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位期间 `prescaler_cnt` 一定为 0。",
-      "output_signals": [
-        "prescaler_cnt"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, prescaler_cnt is cleared to 0.",
+      "cond": "reset active (rst_ni=0)",
+      "signals": [
+        "prescaler_cnt",
+        "rst_ni"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:284-285"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:283-285"
       ]
     },
     {
-      "property": "当 `timer_update` 为真时，`prescaler_cnt` 一定装载 `wait_timer_prescaler_i`，且该装载优先于 `timer_enable` 下的重装或递减行为。",
-      "output_signals": [
-        "prescaler_cnt"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When timer_update is high, prescaler_cnt is loaded with wait_timer_prescaler_i.",
+      "cond": "timer_update asserted",
+      "signals": [
+        "prescaler_cnt",
+        "timer_update",
+        "wait_timer_prescaler_i"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:286-287"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:286-287"
       ]
     },
     {
-      "property": "在 `timer_enable` 为真且没有 `timer_update` 时，`prescaler_cnt` 为 0 会重装为 `wait_timer_prescaler_d`，非 0 时会减 1，因此不会在该分支发生从 0 向下溢出的递减。",
-      "output_signals": [
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When timer_enable is high and prescaler_cnt equals 0, prescaler_cnt is loaded with wait_timer_prescaler_d.",
+      "cond": "timer_enable && prescaler_cnt == 0",
+      "signals": [
+        "prescaler_cnt",
+        "timer_enable",
+        "wait_timer_prescaler_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:288-289"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When timer_enable is high and prescaler_cnt is not 0, prescaler_cnt decrements by 1.",
+      "cond": "timer_enable && prescaler_cnt != 0",
+      "signals": [
+        "prescaler_cnt",
+        "timer_enable"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:290-291"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When none of the condition sets (reset, timer_update, timer_enable) are true, prescaler_cnt retains its previous value.",
+      "cond": "otherwise",
+      "signals": [
         "prescaler_cnt"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:288-291"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:283-293"
       ]
     }
   ],
-  "security_implications": "该片段控制等待计时/预分频节奏，可能间接影响熵相关操作的时间行为，但本段本身未体现密钥、权限、擦除或错误告警等直接安全策略。若预分频装载值异常，可能改变等待窗口长度，从而影响上层熵获取流程的时序鲁棒性。",
   "assumptions": [
     {
-      "constraint": "`wait_timer_prescaler_i` 和 `wait_timer_prescaler_d` 应在被装载时提供有效、符合预期范围的预分频值；特别是若设计期望存在非零等待周期，则相关输入不应错误地长期为 0。",
-      "bug_relevance": "如果违反该约束，计数器会按代码仍然安全地装载这些值并运行，但等待周期可能退化为每次到零立即再次装载，造成节拍过快或与预期定时不符；这更像上层配置错误而非本块内部 bug。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "wait_timer_prescaler_i must be stable and valid at the rising edge of clk_i when timer_update is asserted.",
+      "cond": "timer_update high",
+      "risk": "Incorrect prescaler value loaded, leading to timer misbehavior.",
+      "signals": [
         "wait_timer_prescaler_i",
+        "timer_update"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:286-287"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "wait_timer_prescaler_d must be stable and valid at the rising edge of clk_i when timer_enable is high and prescaler_cnt == 0.",
+      "cond": "timer_enable && prescaler_cnt == 0",
+      "risk": "Incorrect prescaler reload value, corrupting timer interval.",
+      "signals": [
         "wait_timer_prescaler_d",
-        "timer_update",
+        "timer_enable",
+        "prescaler_cnt"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:288-289"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "wait_timer_prescaler_d and wait_timer_prescaler_i must be non-zero to avoid a continuous reload loop.",
+      "cond": "always",
+      "risk": "Timer permanently stuck in reload, never decrementing, breaking entropy timing.",
+      "signals": [
+        "wait_timer_prescaler_d",
+        "wait_timer_prescaler_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:288-289"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "If wait_timer_prescaler_d (or wait_timer_prescaler_i during timer_update) is zero, prescaler_cnt will continuously reload zero and never decrement.",
+      "cond": "wait_timer_prescaler_d == 0 or (timer_update && wait_timer_prescaler_i == 0)",
+      "risk": "Timer hangs, no entropy sample events generated, possible DoS or stale entropy.",
+      "signals": [
+        "wait_timer_prescaler_d",
+        "wait_timer_prescaler_i",
+        "prescaler_cnt"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:288-289",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:286-287"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "If timer_enable is not glitch-free, spurious assertions could cause unintended decrements.",
+      "cond": "glitch on timer_enable",
+      "risk": "Incorrect prescaler countdown, early timer expiry.",
+      "signals": [
         "timer_enable"
       ],
-      "source_refs": [
-        "kmac_entropy.sv:286-291"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:290-291"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_entropy.sv:283-293"
-  ],
-  "uncertain_points": [
-    "仅从该片段无法确定 `wait_timer_prescaler_i` 与 `wait_timer_prescaler_d` 的语义差别：前者看起来像直接配置输入，后者像经组合处理后的默认重装值，但需结合其他代码确认。",
-    "仅从本段无法确定 `prescaler_cnt == '0` 是否在系统级被解释为“计时到期”脉冲，还是只是内部重装条件的一部分。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:283-293"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 283,
-  "line_end": 293
+  "line_end": 293,
+  "security_implications": ""
 }

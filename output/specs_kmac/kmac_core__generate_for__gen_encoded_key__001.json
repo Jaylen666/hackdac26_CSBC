@@ -1,63 +1,207 @@
 {
   "chunk_id": "kmac_core__generate_for__gen_encoded_key__001",
-  "summary": "对每个 share，根据配置的密钥长度将对应宽度的 key 数据与编码后的 key 长度拼接成 encoded_key，并对较短密钥做高位零填充。",
-  "behavior": "该 generate-for 为每个 share 独立生成一段组合逻辑，根据全局的 key_len_i 选择 encoded_key[i] 的拼接格式。Key128 和 Key192 情况下，encoded_key[i] 由额外的高位零填充、key_data_i[i] 的低 128/192 位，以及 encode_keylen[i] 的低 MaxEncodedKeyLenSize 位组成；注释说明这是因为这两种长度只使用 encode_keylen 的低位，因此相对 MaxKeyLen-keylen 还需要额外 8 位填充。Key256 和 Key384 情况下，encoded_key[i] 由高位零填充、key_data_i[i] 的低 256/384 位和完整的 encode_keylen[i] 组成。Key512 情况下不再填充零，直接拼接 key_data_i[i] 的低 512 位和 encode_keylen[i]，且注释表明设计假定 512 位就是 MaxKeyLen。若 key_len_i 不匹配任何列举值，则该 share 的 encoded_key[i] 被置零作为安全回退。整个行为对所有 i=0..Share-1 并行适用，且各 share 仅使用各自的 key_data_i[i] 和 encode_keylen[i]，共享同一个 key_len_i 选择条件。 ",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "generate_for",
+    "driven": [
+      "encoded_key"
+    ],
+    "used": [
+      "key_len_i",
+      "key_data_i",
+      "encode_keylen",
+      "MaxKeyLen",
+      "MaxEncodedKeyLenSize",
+      "Share"
+    ],
+    "modes": [
+      "Key128",
+      "Key192",
+      "Key256",
+      "Key384",
+      "Key512"
+    ],
+    "tags": [
+      "key",
+      "secret",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 key_len_i 为 Key128、Key192、Key256、Key384 或 Key512 时，每个 encoded_key[i] 都只拼接该长度对应的 key_data_i[i] 低位片段与规定范围的 encode_keylen[i]，其余高位用零补齐。",
-      "output_signals": [
-        "encoded_key"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When key_len_i equals Key128, encoded_key[i] is assigned the concatenation of zero-padding (8+MaxKeyLen-128 bits), key_data_i[i][0+:128], and encode_keylen[i][0+:MaxEncodedKeyLenSize].",
+      "cond": "key_len_i == Key128",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i",
+        "key_data_i[i]",
+        "encode_keylen[i]"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:351-372"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:354-356"
       ]
     },
     {
-      "property": "当 key_len_i 不属于列举的密钥长度编码时，每个 encoded_key[i] 一定为全零。",
-      "output_signals": [
-        "encoded_key"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When key_len_i equals Key192, encoded_key[i] is assigned the concatenation of zero-padding (8+MaxKeyLen-192 bits), key_data_i[i][0+:192], and encode_keylen[i][0+:MaxEncodedKeyLenSize].",
+      "cond": "key_len_i == Key192",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i",
+        "key_data_i[i]",
+        "encode_keylen[i]"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:374-374"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:358-360"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When key_len_i equals Key256, encoded_key[i] is assigned the concatenation of zero-padding (MaxKeyLen-256 bits), key_data_i[i][0+:256], and the full encode_keylen[i].",
+      "cond": "key_len_i == Key256",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i",
+        "key_data_i[i]",
+        "encode_keylen[i]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:362-364"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When key_len_i equals Key384, encoded_key[i] is assigned the concatenation of zero-padding (MaxKeyLen-384 bits), key_data_i[i][0+:384], and the full encode_keylen[i].",
+      "cond": "key_len_i == Key384",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i",
+        "key_data_i[i]",
+        "encode_keylen[i]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:366-368"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "When key_len_i equals Key512, encoded_key[i] is assigned the concatenation of key_data_i[i][0+:512] and the full encode_keylen[i], with no zero-padding.",
+      "cond": "key_len_i == Key512",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i",
+        "key_data_i[i]",
+        "encode_keylen[i]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:371-372"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "When key_len_i is not one of the defined enum members (Key128..Key512), encoded_key[i] is forced to all zeros.",
+      "cond": "key_len_i ∉ {Key128, Key192, Key256, Key384, Key512}",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:374"
       ]
     }
   ],
-  "security_implications": "该逻辑直接参与密钥材料的格式化：它按声明的密钥长度只选取 key_data_i 的低位有效部分，并对未使用高位清零，避免较短密钥路径把更高位残留数据带入后续运算。同时，非法 key_len_i 会把 encoded_key 强制清零，提供保守回退。不过该安全性依赖 key_len_i 与 key_data_i/encode_keylen 的一致性；若上游给出错误长度，可能导致实际使用的密钥位数与预期不符。",
   "assumptions": [
     {
-      "constraint": "当 key_len_i 取合法值时，key_data_i[i] 的低 key_len_i 位必须承载该 share 的真实密钥，高于所选长度的位应被视为无效且不会被本逻辑使用。",
-      "bug_relevance": "若上游将有效密钥放在非低位位置，或期望高位也参与编码，则本逻辑会截断密钥并导致后续 KMAC 使用错误的密钥材料；这属于行为契约问题。",
-      "related_signals": [
-        "key_len_i",
-        "key_data_i",
-        "encoded_key"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The parameter MaxKeyLen must be at least 512, and key_data_i[i] for each share must be at least 512 bits wide, otherwise the partial‑select key_data_i[i][0+:512] in the Key512 case would reference out‑of‑range bits.",
+      "cond": "when key_len_i == Key512 (or if synthesis checks widths for all branches)",
+      "risk": "Synthesis warning, X propagation, or non‑synthesizable code if MaxKeyLen < 512 or key_data_i[i] is narrower than 512.",
+      "signals": [
+        "MaxKeyLen",
+        "key_data_i[i]"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:354-371"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:371-372"
       ]
     },
     {
-      "constraint": "设计意图假定 Key512 对应 MaxKeyLen；若 MaxKeyLen 不是 512，则 Key512 分支的拼接宽度与注释意图可能不一致。",
-      "bug_relevance": "若该假定不成立，encoded_key 的位宽布局可能错误，进而破坏后续吸收的密钥编码。这更像实现配置前提；正常设计上不应违反。",
-      "related_signals": [
-        "MaxKeyLen",
-        "key_len_i",
-        "encoded_key"
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The signal encode_keylen[i] must be wide enough to supply the full slice encode_keylen[i][0+:MaxEncodedKeyLenSize] in Key128/Key192 cases; otherwise the partial select would be out of bounds.",
+      "cond": "when key_len_i is Key128 or Key192",
+      "risk": "Out‑of‑range partial select causes X propagation or synthesis error.",
+      "signals": [
+        "encode_keylen[i]",
+        "MaxEncodedKeyLenSize"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:370-372"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:354-356",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:358-360"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The Key128 and Key192 encodings include an extra 8‑bit zero padding (8+MaxKeyLen‑128, 8+MaxKeyLen‑192) not present in the other key lengths; the purpose of these 8 bits is unclear and may reflect a protocol‑specific encoding requirement or a potential off‑by‑one error.",
+      "cond": "when key_len_i is Key128 or Key192",
+      "risk": "If the 8‑bit padding is erroneous, the resulting encoded key may deviate from the expected SHA‑3 block‑message format, possibly leading to interoperability issues or security vulnerability if used as HMAC key material.",
+      "signals": [
+        "encoded_key[i]",
+        "key_len_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:352-356"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "An invalid key_len_i (not matching any defined enum) silently forces encoded_key[i] to all zeros via the default branch, with no error alert or fatal stop; a zero secret may then be consumed downstream in the SHA‑3 core.",
+      "cond": "when a fault or misconfiguration drives key_len_i outside the enumerated values",
+      "risk": "If a zero key is used for MAC/hash operations, it could leak information or produce predictable tags, violating integrity/confidentiality requirements. The design intent (secure silence vs. alert) must be verified.",
+      "signals": [
+        "key_len_i",
+        "encoded_key[i]"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:374"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The width parameters MaxKeyLen, MaxEncodedKeyLenSize, and the actual widths of key_data_i and encode_keylen are defined elsewhere; need to inspect the declarations and parameter bindings to confirm that the partial‑select ranges (0+:N) never exceed the declared widths for any legal parameterization.",
+      "cond": "always during synthesis/elaboration",
+      "risk": "If any declared width is smaller than the slice width, a synthesis/elaboration error or X propagation occurs, potentially leading to an undetected hardware bug.",
+      "signals": [
+        "MaxKeyLen",
+        "MaxEncodedKeyLenSize",
+        "key_data_i",
+        "encode_keylen"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:349-377"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:349-377"
   ],
-  "uncertain_points": [
-    "注释称 Key128/Key192 只使用 encode_keylen 信号的低位，并因此需要比 MaxKeyLen-keylen 多 8 位的填充，但仅从该片段无法独立确认 encode_keylen[i] 的总宽度及这 8 位的编码来源；需要查看 encode_keylen 的定义与生成逻辑。",
-    "Key512 分支依赖注释“Assume 512bit is the MaxKeyLen”；该假设是否由参数定义全局保证，无法仅凭本片段确认。",
-    "default 分支将 encoded_key[i] 置零是保守回退还是协议上永不应发生的非法状态处理，需结合 key_len_i 的上游约束确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 349,
-  "line_end": 377
+  "line_end": 377,
+  "security_implications": ""
 }

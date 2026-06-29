@@ -1,0 +1,585 @@
+{
+  "batch": 1,
+  "source_batch": "/home/smy/rtl_bug_agent/formal_csbc_v2/phase3_batches/batch_1_of_3.json",
+  "prompt": "/home/smy/rtl_bug_agent/config/prompts/phase3/verify.md",
+  "rtl_root": "/home/smy/opentitan/hw/ip/keymgr/rtl/",
+  "count": 19,
+  "results": [
+    {
+      "finding_id": "F-0001",
+      "input": {
+        "title": "ECC 保护位的生成逻辑缺失：key_state_ecc_words_d 被错误地直连到 key_state_d，而没有经过 SECDED 编码模块。导致每次密钥更新后，内部状态 (key_state_q, key_state_ecc_q) 违反有效 ECC 字假设，ECC 校验逻辑将持续报错，可能引发错误的密钥失效或拒绝服务。",
+        "severity": "HIGH",
+        "verdict": "CONTRADICTION",
+        "contradiction": "ECC 保护位的生成逻辑缺失：key_state_ecc_words_d 被错误地直连到 key_state_d，而没有经过 SECDED 编码模块。导致每次密钥更新后，内部状态 (key_state_q, key_state_ecc_q) 违反有效 ECC 字假设，ECC 校验逻辑将持续报错，可能引发错误的密钥失效或拒绝服务。",
+        "involved_signals": [
+          "key_state_d"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+          "keymgr_ctrl__continuous_region__batched_small_assigns__001",
+          "keymgr_ctrl__always_ff__line_304__001",
+          "keymgr_ctrl__always_comb__line_363__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "CONFIRMED",
+        "confidence": 0.98,
+        "summary": "The key-state ECC path is broken, but not because ECC encoding is bypassed. `key_state_ecc_q` is encoded from `key_state_d`, while `key_state_q` is never updated after reset, so the decoder checks a stale data word against ECC bits for new data and reports errors after non-zero updates.",
+        "root_cause": "In `keymgr_ctrl.sv:303-317`, `key_state_ecc_words_d` is assigned from `key_state_d` and `key_state_ecc_q` is re-encoded every cycle, but there is no matching `key_state_q <= key_state_d` assignment. The decoder in `keymgr_ctrl.sv:320-331` then checks `{key_state_ecc_q, key_state_q}` and sees mismatched pairs.",
+        "trigger_condition": "Any update that makes `key_state_d` non-zero or otherwise different from the reset value, including `KeyUpdateRandom`, valid/invalid `KeyUpdateRoot`, `KeyUpdateWipe`, and KMAC-driven CDI updates.",
+        "security_impact": "Persistent ECC faulting can force fault handling and wipe behavior, causing denial of service and making key manager state unusable. The resulting fault condition is software-visible through the fault path.",
+        "software_visible": true,
+        "reasoning": "The report's exact mechanism is wrong: ECC encoding does happen in `keymgr_ctrl.sv:312-313`. However, the same signal path is genuinely broken. After reset, `key_state_q` is set to zero in `keymgr_ctrl.sv:305-307` and is never assigned again anywhere in the module. Separately, `key_state_ecc_q` is refreshed from `key_state_d` on every cycle in `keymgr_ctrl.sv:308-314`. The decoder in `keymgr_ctrl.sv:325-331` consumes `{key_state_ecc_q[i][j][k], key_state_q[i][j][k]}`. Once `key_state_d` changes, ECC corresponds to the new word while `key_state_q` still holds zero, so `ecc_errs` will assert. Under the rubric, this is CONFIRMED because the flagged path is indeed defective even though the generated explanation identified the wrong failure mode.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0002",
+      "input": {
+        "title": "Assumption 指出 key_chk 缺少赋值逻辑，但 Guarantee 显示 key_chk 在 generate 块中被赋值。这可能是 RTL 分析不完整造成的冲突，也可能反映出设计规约的不一致：消费者认为 key_chk 应为未驱动状态，而生产者实际驱动它，将导致预期的无驱动假设与真实驱动产生多驱动或未初始化行为。",
+        "severity": "HIGH",
+        "verdict": "CONTRADICTION",
+        "contradiction": "Assumption 指出 key_chk 缺少赋值逻辑，但 Guarantee 显示 key_chk 在 generate 块中被赋值。这可能是 RTL 分析不完整造成的冲突，也可能反映出设计规约的不一致：消费者认为 key_chk 应为未驱动状态，而生产者实际驱动它，将导致预期的无驱动假设与真实驱动产生多驱动或未初始化行为。",
+        "involved_signals": [
+          "key_chk"
+        ],
+        "involved_specs": [
+          "keymgr_input_checks__continuous_region__declarations_or_instances__001",
+          "keymgr_input_checks__generate_for__gen_key_chk__001",
+          "keymgr_input_checks__continuous_region__batched_small_assigns__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.99,
+        "summary": "`key_chk` is explicitly driven in the RTL and there is no multi-driver or uninitialized behavior on this path.",
+        "root_cause": "The report is based on an incomplete read of the module. In `keymgr_input_checks.sv:83-99`, `key_chk` is declared with fixed width and each bit is assigned in the `gen_key_chk` loop before `key_vld_o` reduces it.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The relevant logic is straightforward. `KeyShares` is defined as `KmacEnMasking ? Shares : 1` in `keymgr_input_checks.sv:83`, so the vector is never absent under this RTL. `key_chk` is declared in `keymgr_input_checks.sv:85`, each element is assigned by `assign key_chk[i] = valid_chk(key_padded[i]);` in `keymgr_input_checks.sv:87-97`, and `key_vld_o` is `&key_chk` in `keymgr_input_checks.sv:99`. There is no second driver and no missing assignment. This is a pure false alarm from chunk-level analysis.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0030",
+      "input": {
+        "title": "max_key_versions 中可能未使用的索引被清零的行为没有文档化，可能存在安全未定义或未验证的风险。",
+        "severity": "MEDIUM",
+        "verdict": "UNCERTAIN",
+        "contradiction": "max_key_versions 中可能未使用的索引被清零的行为没有文档化，可能存在安全未定义或未验证的风险。",
+        "involved_signals": [
+          "max_key_versions"
+        ],
+        "involved_specs": [
+          "keymgr__generate_for__gen_key_version_fill__001",
+          "keymgr__continuous_region__declarations_or_instances__006"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.79,
+        "summary": "The RTL explicitly zeroes unused `max_key_versions` slots and only assigns real CSR-backed values to the three valid stages. That is a defined implementation choice, not a security defect in the code.",
+        "root_cause": "The claim is about missing documentation rather than broken RTL. In `keymgr.sv:496-502`, indices from `KeyMgrStages` upward are intentionally zeroed, and `cur_max_key_version` is selected from that array in `keymgr.sv:504-505`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The array is sized to `2**StageWidth` in `keymgr.sv:386`, then explicitly initialized for unused indices in `keymgr.sv:496-498`. Valid stage entries are bound to CSRs in `keymgr.sv:500-502`. This matches the stage encoding style used elsewhere in the module: the implementation reserves encoded space beyond the three active stages. There is no RTL evidence that software or hardware can accidentally consume an uninitialized version slot; the code uses a deliberate zero fill. Without a contradictory design requirement, this is not a bug.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0031",
+      "input": {
+        "title": "若故意无效常量（share0=0, share1=all-1）碰巧为合法 ECC 码字，则 ecc_errs 不会报错，下游逻辑可能将无效 root key 误作有效数据处理。",
+        "severity": "MEDIUM",
+        "verdict": "UNCERTAIN",
+        "contradiction": "若故意无效常量（share0=0, share1=all-1）碰巧为合法 ECC 码字，则 ecc_errs 不会报错，下游逻辑可能将无效 root key 误作有效数据处理。",
+        "involved_signals": [
+          "key_state_d"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__always_comb__line_363__001",
+          "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.88,
+        "summary": "The specific silent-acceptance scenario is not supported by the RTL. On the implemented path, invalid-root-key loading does not become a quiet valid state; it participates in the broader key-state/ECC mismatch defect instead.",
+        "root_cause": "When `root_key_valid_q` is false, `key_state_d[i][0]` is set to zero and `key_state_d[i][1]` to all ones in `keymgr_ctrl.sv:393-398`. But the decoder does not evaluate `key_state_d` directly; it evaluates `{key_state_ecc_q, key_state_q}` in `keymgr_ctrl.sv:325-331`, and `key_state_q` is never updated after reset.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The hypothesis depends on the deliberate invalid constant accidentally forming a valid SECDED word and then flowing downstream undetected. That is not what this RTL does. First, encoding is generated from `key_state_d` in `keymgr_ctrl.sv:303-314`, so the report's premise about a raw data/ECC pairing is already off. Second, because `key_state_q` remains stale while `key_state_ecc_q` is refreshed, the implemented failure mode is an ECC mismatch on updated state, not silent acceptance. For the invalid-root-key case specifically, share1 becomes all ones in `keymgr_ctrl.sv:397`, while the decoder still observes stale zero data in `key_state_q`, so the observed behavior is faulting, not treating the value as valid. This makes the stated issue a false alarm, though it is adjacent to the real defect on the same path.",
+        "additional_findings": [
+          "Separate real defect: `key_state_q` is reset in `keymgr_ctrl.sv:305-307` but never updated afterward, which causes ECC/data inconsistency on key-state updates."
+        ],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0032",
+      "input": {
+        "title": "The assignment key_state_ecc_words_d = key_state_d may bypass intended ECC encoding if key_state_ecc_words_d is meant to",
+        "severity": "MEDIUM",
+        "verdict": "UNCERTAIN",
+        "contradiction": "(1) The assumption describes a possible design flaw where key_state_ecc_words_d receives a raw copy of key_state_d, potentially bypassing ECC encoding. It is unclear whether this assignment is intended (e.g., key_state_d already carries ECC) or a bug. (2) The guarantees deal with ECC error detection on registered outputs (key_state_ecc_q, key_state_q) and reset initialization, but none of them guarantee or enforce that the combinational path from key_state_d to key_state_ecc_words_d performs ECC",
+        "involved_signals": [
+          "key_state_d"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__batched_small_assigns__001",
+          "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
+          "keymgr_ctrl__always_ff__line_304__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "CONFIRMED",
+        "confidence": 0.96,
+        "summary": "This path is genuinely broken, but the defect is not skipped encoding. The RTL does encode `key_state_d` into `key_state_ecc_q`; the real failure is that `key_state_q` never captures the updated data, so the registered data/ECC pair is inconsistent.",
+        "root_cause": "In `keymgr_ctrl.sv:303-317`, `key_state_ecc_q` is regenerated from `key_state_d`, but there is no assignment that updates `key_state_q` from `key_state_d`. The decoder in `keymgr_ctrl.sv:320-331` therefore checks stale data against fresh ECC bits.",
+        "trigger_condition": "Any non-reset update of `key_state_d`, especially randomization, root-key load, wipe, or KMAC-driven CDI update.",
+        "security_impact": "The broken state/ECC pairing can raise persistent key-state ECC faults and drive wipe or failure handling, reducing availability and making software-visible status unreliable.",
+        "software_visible": true,
+        "reasoning": "The reported uncertainty is resolved by the RTL. `assign key_state_ecc_words_d = key_state_d;` in `keymgr_ctrl.sv:303` does not bypass encoding by itself, because `prim_secded_pkg::prim_secded_inv_72_64_enc(...)` is applied in `keymgr_ctrl.sv:312-313`. However, `key_state_q` is only reset in `keymgr_ctrl.sv:305-307` and never updated after that. Since the decoder at `keymgr_ctrl.sv:325-331` uses both `key_state_ecc_q` and `key_state_q`, the registered codeword becomes invalid after updates. Under the rubric, this is a confirmed defect on the same signal path even though the generated hypothesis named the wrong mechanism.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0033",
+      "input": {
+        "title": "若设计允许 key_chk 宽度为零（例如通过参数控制校验位数），则 key_chk 的全 AND 缩减将恒为 1，使 key_vld_o 永久有效，失去校验作用。",
+        "severity": "MEDIUM",
+        "verdict": "UNCERTAIN",
+        "contradiction": "若设计允许 key_chk 宽度为零（例如通过参数控制校验位数），则 key_chk 的全 AND 缩减将恒为 1，使 key_vld_o 永久有效，失去校验作用。",
+        "involved_signals": [
+          "key_chk"
+        ],
+        "involved_specs": [
+          "keymgr_input_checks__continuous_region__batched_small_assigns__001",
+          "keymgr_input_checks__generate_for__gen_key_chk__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.96,
+        "summary": "The zero-width scenario cannot occur in this RTL. `key_chk` always has width 1 or 2.",
+        "root_cause": "In `keymgr_input_checks.sv:83-85`, `KeyShares` is defined as `KmacEnMasking ? Shares : 1`, and `Shares` is 2 in `keymgr_pkg.sv:18`. That makes `key_chk` a non-empty vector.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "This report depends on an impossible parameterization. `Shares` is fixed to 2 in `keymgr_pkg.sv:18`. The local parameter `KeyShares` in `keymgr_input_checks.sv:83` can therefore only be 2 or 1. `key_chk` is declared as `logic [KeyShares-1:0] key_chk;` in `keymgr_input_checks.sv:85`, and the generate loop in `keymgr_input_checks.sv:87-97` assigns every bit. The AND reduction in `keymgr_input_checks.sv:99` therefore never operates on a zero-width signal.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0034",
+      "input": {
+        "title": "The truncation to KeyWidth bits may discard high-order bits of the key shares. It is unclear whether this is the intende",
+        "severity": "MEDIUM",
+        "verdict": "UNCERTAIN",
+        "contradiction": "The assumption expresses uncertainty about whether discarding high-order bits via truncation to KeyWidth is correct or not; it does not assert a definite legal/illegal scenario. The guarantee states the actual hardware behavior (always taking lower KeyWidth bits). Without a clear specification of the intended behavior (full share width vs. truncated width), we cannot determine if the guarantee contradicts or satisfies the assumption.",
+        "involved_signals": [
+          "KeyWidth"
+        ],
+        "involved_specs": [
+          "keymgr_sideload_key_ctrl__generate_for__gen_truncate_data__001",
+          "keymgr__generate_for__gen_truncate_data__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.76,
+        "summary": "The truncation behavior is explicit and internally consistent in the RTL. There is no evidence here that discarding upper bits is accidental.",
+        "root_cause": "Both truncation sites are deliberate: `keymgr.sv:273-275` truncates KMAC digest shares to `KeyWidth`, and `keymgr_sideload_key_ctrl.sv:68-72` truncates incoming sideload data to `KeyWidth` for the 256-bit destinations.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The report itself states uncertainty rather than a concrete contradiction. In the top-level module, `kmac_data_truncated[i] = kmac_data[i][KeyWidth-1:0];` at `keymgr.sv:273-275`. In the sideload controller, `data_truncated[i] = data_i[i][KeyWidth-1:0];` at `keymgr_sideload_key_ctrl.sv:68-72`, while the OTBN path explicitly preserves the wider `data_i` in `keymgr_sideload_key_ctrl.sv:161-173`. That split strongly suggests intentional width adaptation by destination. Without a contrary requirement in the RTL, this is not a defect.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0036",
+      "input": {
+        "title": "硬件实现中 data_rand 来源于 LFSR，是一款可预测的伪随机源，而消费者假设其为来自 TRNG 的强随机数据。这可能导致擦除操作中密钥残留泄露或禁用输出时的固定模式可探测，违反安全目标。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "硬件实现中 data_rand 来源于 LFSR，是一款可预测的伪随机源，而消费者假设其为来自 TRNG 的强随机数据。这可能导致擦除操作中密钥残留泄露或禁用输出时的固定模式可探测，违反安全目标。",
+        "involved_signals": [
+          "data_rand"
+        ],
+        "involved_specs": [
+          "keymgr__generate_for__gen_sw_assigns__001",
+          "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+          "keymgr__generate_for__gen_adv_matrix_fill__001",
+          "keymgr__generate_for__gen_id_matrix_fill__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.74,
+        "summary": "The RTL does not support the claim that `data_rand` is just a fixed predictable source standing in for TRNG output. It is derived from an internal LFSR that is reseeded from EDN.",
+        "root_cause": "The report conflates the LFSR's internal `entropy_i('0)` input with the actual reseeding path. `keymgr.sv:194-229` shows the LFSR is seeded from `seed`, and `keymgr_reseed_ctrl.sv:45-61,95-109` shows that seed comes from EDN transactions.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The top level instantiates `keymgr_reseed_ctrl` in `keymgr.sv:194-209`, then feeds its `seed_o` and `seed_en_o` into `prim_lfsr` in `keymgr.sv:215-229`. `data_rand` is derived from the resulting `lfsr` state in `keymgr.sv:240-241`. So while the local `prim_lfsr` port `entropy_i` is tied to zero, the state is still reseeded from EDN-provided entropy through `seed_i`. The claim that consumers assume direct TRNG output is not grounded in the RTL. This implementation may be pseudorandom rather than raw-TRNG-per-use, but that is an architectural choice, not a defect proved by these files.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0037",
+      "input": {
+        "title": "CdiWidth is a parameter that may be set larger than the actual width of cnt, causing an out-of-range bit-select on cdi_c",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "无法确定参数 CdiWidth 大于 cnt 位宽是合法配置还是非法配置。guarantee 描述运行时状态机逻辑，不涉及参数合法性约束，因此该假设既未被满足也未被防御性设计覆盖。由于缺少参数合法性的明确规范，无法判定为 CONTRADICTION 或 GAP。",
+        "involved_signals": [
+          "cnt"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__declarations_or_instances__004",
+          "keymgr_op_state_ctrl__always_comb__line_50__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.98,
+        "summary": "The out-of-range slice cannot happen under this parameterization. `CntWidth` is chosen so it is never smaller than `CdiWidth`.",
+        "root_cause": "In `keymgr_pkg.sv:12`, `CdiWidth` is derived from `CDIs`. In `keymgr_ctrl.sv:78`, `CntWidth` is set to `EntropyRndWidth` when that is larger than `CDIs`, otherwise to `CdiWidth` itself. The slice in `keymgr_ctrl.sv:361` is therefore safe.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The report posits a parameter mismatch that the RTL definition excludes. `CdiWidth = prim_util_pkg::vbits(CDIs)` in `keymgr_pkg.sv:12`. `CntWidth = EntropyRounds > CDIs ? EntropyRndWidth : CdiWidth;` in `keymgr_ctrl.sv:78`. That means `CntWidth >= CdiWidth` by construction. The derived signal `cdi_cnt = op_req ? cnt[CdiWidth-1:0] : '0;` in `keymgr_ctrl.sv:361` cannot select out of range.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0038",
+      "input": {
+        "title": "async_fault 被错误地参与 op_fault_err 的计算，导致异步错误（如 FSM 完整性错误）阻止 sw_binding_unlock_o，而根据设计注释异步错误不应影响操作结果，可能造成正常操作被意外封锁。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "async_fault 被错误地参与 op_fault_err 的计算，导致异步错误（如 FSM 完整性错误）阻止 sw_binding_unlock_o，而根据设计注释异步错误不应影响操作结果，可能造成正常操作被意外封锁。",
+        "involved_signals": [
+          "async_fault"
+        ],
+        "involved_specs": [
+          "keymgr_ctrl__continuous_region__int__001",
+          "keymgr_err__continuous_region__declarations_or_instances__003"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.93,
+        "summary": "The RTL comment excludes async errors from operation results; it does not say async faults should be ignored. Blocking `sw_binding_unlock_o` on fatal async faults is consistent with the implementation.",
+        "root_cause": "In `keymgr_ctrl.sv:211-215`, `op_err` is derived only from `sync_err`, while `op_fault_err` deliberately includes `sync_fault` and `async_fault`. `sw_binding_unlock_o` then requires both error and fault free completion in `keymgr_ctrl.sv:202`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The key distinction is between error and fault classes. The comment at `keymgr_ctrl.sv:211-212` refers to async errors, and the code honors that by defining `op_err = |sync_err;` in `keymgr_ctrl.sv:213`. Fatal faults are handled separately: `op_fault_err = |{sync_fault, async_fault};` in `keymgr_ctrl.sv:215`. `keymgr_err.sv:106-150` shows that `async_fault` collects serious integrity and control failures. Preventing `sw_binding_unlock_o` from asserting in the presence of those faults is consistent with the RTL's fail-safe behavior, not a contradiction.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0039",
+      "input": {
+        "title": "硬件在 state_q 进入非法编码时立即通过 working_state_o 输出 StInvalid 错误状态，导致上层依赖静默恢复的错误处理机制无法正常工作，错误信息被意外泄露，可能引发虚假的错误中断或不安全的状态机行为。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "硬件在 state_q 进入非法编码时立即通过 working_state_o 输出 StInvalid 错误状态，导致上层依赖静默恢复的错误处理机制无法正常工作，错误信息被意外泄露，可能引发虚假的错误中断或不安全的状态机行为。",
+        "involved_signals": [
+          "state_q"
+        ],
+        "involved_specs": [
+          "keymgr_data_en_state__continuous_region__int__001",
+          "keymgr_ctrl__always_comb__line_703__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.84,
+        "summary": "`working_state_o` does not immediately collapse to `StInvalid` during the wipe/recovery path. The RTL preserves the last working state while wiping and only reports `StInvalid` in the explicit invalid/default states.",
+        "root_cause": "In `keymgr_ctrl.sv:703-736`, `StCtrlWipe` drives `working_state_o = last_working_st`, and only `StCtrlInvalid` or the default case drive `StInvalid`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The finding mixes assumptions from `keymgr_data_en_state` with the actual `working_state_o` implementation in `keymgr_ctrl`. The relevant logic is in `keymgr_ctrl.sv:695-736`. `last_working_st` is captured in `keymgr_ctrl.sv:695-700`, and during `StCtrlWipe`, the output intentionally holds that previous state in `keymgr_ctrl.sv:726-728`. Only `StCtrlInvalid` and the default clause map to `StInvalid` in `keymgr_ctrl.sv:731-735`. There is no evidence in the RTL of a promised silent recovery mechanism being broken here.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0040",
+      "input": {
+        "title": "keymgr_ctrl 可能在 op_done_o 为高时同时置位 op_update_o，违反对端 keymgr_err 的输入约束，导致同步故障位 sync_fault_q 被错误清除，从而丢失本应记录的硬件错误。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "keymgr_ctrl 可能在 op_done_o 为高时同时置位 op_update_o，违反对端 keymgr_err 的输入约束，导致同步故障位 sync_fault_q 被错误清除，从而丢失本应记录的硬件错误。",
+        "involved_signals": [
+          "op_done_i / op_update_i"
+        ],
+        "involved_specs": [
+          "keymgr_err__always_ff__line_95__001",
+          "keymgr_ctrl__continuous_region__prim_mubi4_sender_hw_sel__001",
+          "keymgr_ctrl__continuous_region__int__001 (invalid_kmac_out)"
+        ],
+        "formal_result": {
+          "status": "FAIL",
+          "engine": "sby_z3",
+          "duration_s": 0.32,
+          "trace_file": null,
+          "error_log": null,
+          "sva": "assert property (@(posedge clk_i) disable iff (!rst_ni) !(op_done_o && op_update_o));",
+          "verdict": "FAIL"
+        }
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.86,
+        "summary": "Manual RTL review does not support a real overlap between `op_done_o` and `op_update_o` on the implemented handshake path. The formal failure is not aligned with the actual control structure.",
+        "root_cause": "In `keymgr_op_state_ctrl.sv:75-80`, `kmac_done_i` drives either `op_ack_o` or `op_update_o` in mutually exclusive branches. In `keymgr_ctrl.sv:448-449`, `op_done_o` is derived from `op_ack` whenever `op_req` is active, which is the case during live operation handling.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The key operational path runs through `u_op_state` in `keymgr_ctrl.sv:757-773`. In `keymgr_op_state_ctrl.sv:72-81`, when the FSM is in `StAdv`, `kmac_done_i` causes `op_ack_o` if `cnt_i == CDIs-1`, else `op_update_o` if `cnt_i < CDIs-1`. Those are mutually exclusive conditions. `keymgr_ctrl.sv:448-449` then defines `op_done_o = op_req ? op_ack : (init_o | invalid_op);`, so during active operation sequencing `op_done_o` follows `op_ack`, not `op_update`. I do not see an RTL path here that would clear sync faults incorrectly by asserting both. The provided formal FAIL therefore appears to be a property/model mismatch rather than a faithful defect witness.",
+        "additional_findings": [],
+        "formal_alignment": "Formal FAIL does not align with manual RTL analysis. The implemented `op_ack` and `op_update` generation is mutually exclusive on the operation FSM path, so the asserted overlap property appears mis-specified or insufficiently constrained."
+      }
+    },
+    {
+      "finding_id": "F-0041",
+      "input": {
+        "title": "LFSR 重新播种控制器将 entropy_i 硬连线到 0，而 keymgr_kmac_if 的 decoy 输出路径要求该信号提供随机掩码。结果诱饵输出将变为恒定模式，丧失侧信道防护能力，可能泄露密钥处理状态。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "LFSR 重新播种控制器将 entropy_i 硬连线到 0，而 keymgr_kmac_if 的 decoy 输出路径要求该信号提供随机掩码。结果诱饵输出将变为恒定模式，丧失侧信道防护能力，可能泄露密钥处理状态。",
+        "involved_signals": [
+          "entropy_i"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__002",
+          "keymgr__continuous_region__keymgr_reseed_ctrl_reseed_ctrl__001",
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__003"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.96,
+        "summary": "The report confuses two different `entropy_i` signals. The decoy path in `keymgr_kmac_if` is fed by `data_rand` from the top-level LFSR state, not by the local `prim_lfsr` port tied to zero.",
+        "root_cause": "The top-level module passes `data_rand` into `keymgr_kmac_if` at `keymgr.sv:560-579`. `data_rand` is derived from `lfsr` in `keymgr.sv:240-241`. The tied-off `entropy_i('0)` is only the internal input of `prim_lfsr` in `keymgr.sv:228`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The KMAC interface module uses `entropy_i` for decoy output construction in `keymgr_kmac_if.sv:287-320`. At the integration point, that port is connected to `data_rand` in `keymgr.sv:578`. `data_rand` comes from the live `lfsr` state in `keymgr.sv:240-241`, and that LFSR is reseeded from EDN through `keymgr_reseed_ctrl` as shown in `keymgr.sv:194-229` and `keymgr_reseed_ctrl.sv:45-61`. So the decoy path is not stuck at zero, and the claim is based on signal-name confusion across module boundaries.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0042",
+      "input": {
+        "title": "enables_sub 被硬连线为 enables_d - 1，当 enables_d 为非 one‑hot 时（例如有多位为 1），enables_d & enables_sub 仍可能表现为 one‑hot，导致 one‑hot 检查器漏报多比特置位错误，破坏安全对策。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "enables_sub 被硬连线为 enables_d - 1，当 enables_d 为非 one‑hot 时（例如有多位为 1），enables_d & enables_sub 仍可能表现为 one‑hot，导致 one‑hot 检查器漏报多比特置位错误，破坏安全对策。",
+        "involved_signals": [
+          "enables_sub"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__004"
+        ],
+        "formal_result": {
+          "status": "FAIL",
+          "engine": "sby_z3",
+          "duration_s": 0.32,
+          "trace_file": null,
+          "error_log": null,
+          "sva": "assert property (@(posedge clk_i) disable iff (!rst_ni) (enables_sub == enables_d - 1) |-> $onehot0(enables_d & enables_sub));",
+          "verdict": "FAIL"
+        }
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.98,
+        "summary": "The one-hot checker is implemented correctly. It only needs `enables_d & (enables_d - 1)` to be nonzero on multi-bit cases, which is exactly what the RTL tests.",
+        "root_cause": "In `keymgr_kmac_if.sv:356-377`, `enables_sub = enables_d - 1'b1` and `one_hot_err_d = |(enables_d & enables_sub) | one_hot_err_q;`. That is the standard multi-hot detection idiom.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "For a one-hot or zero value, `x & (x - 1)` is zero. For any value with more than one bit set, `x & (x - 1)` is nonzero. The RTL uses exactly that property in `keymgr_kmac_if.sv:356-377`, and then OR-reduces the result to a sticky error. The report's objection that the intermediate value might itself look one-hot is irrelevant because the hardware never requires it to be one-hot; it only tests whether it is zero or nonzero. The supplied formal property asks for `$onehot0(enables_d & enables_sub)`, which is the wrong property for this implementation and therefore its FAIL is not bug evidence.",
+        "additional_findings": [],
+        "formal_alignment": "Formal FAIL does not align. The SVA checks the wrong property; the RTL intentionally uses nonzero detection on `x & (x - 1)` rather than requiring that intermediate value to be `$onehot0`."
+      }
+    },
+    {
+      "finding_id": "F-0043",
+      "input": {
+        "title": "错误状态寄存器 cmd_consty_err_q 被实现为非 sticky 的跟随逻辑（复位清零且正常操作下立即响应 d 变化），而顶层设计预期其 sticky。这可能导致已发生的错误被意外清除，软件轮询时错过错误信息，造成错误漏检。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "错误状态寄存器 cmd_consty_err_q 被实现为非 sticky 的跟随逻辑（复位清零且正常操作下立即响应 d 变化），而顶层设计预期其 sticky。这可能导致已发生的错误被意外清除，软件轮询时错过错误信息，造成错误漏检。",
+        "involved_signals": [
+          "cmd_consty_err_q"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
+          "keymgr_kmac_if__always_ff__line_379__001"
+        ],
+        "formal_result": {
+          "status": "FAIL",
+          "engine": "sby_z3",
+          "duration_s": 0.33,
+          "trace_file": null,
+          "error_log": null,
+          "sva": "assert property (@(posedge clk_i) disable iff (!rst_ni) (cmd_consty_err_q) |=> cmd_consty_err_q);",
+          "verdict": "FAIL"
+        }
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.98,
+        "summary": "`cmd_consty_err_q` is sticky in the RTL. Once asserted, it remains asserted until reset.",
+        "root_cause": "In `keymgr_kmac_if.sv:370-387`, `cmd_consty_err_d` ORs the current mismatch condition with `cmd_consty_err_q`, and the flop then loads that value each cycle.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "The sticky behavior is explicit. `cmd_consty_err_d = (cmd_chk & (enables_q != enables_d)) | cmd_consty_err_q;` in `keymgr_kmac_if.sv:370-371`. The state register update in `keymgr_kmac_if.sv:379-388` assigns `cmd_consty_err_q <= cmd_consty_err_d;`. Once `cmd_consty_err_q` becomes 1, the OR with itself keeps `cmd_consty_err_d` at 1 until reset. That is the opposite of a non-sticky follower. The formal FAIL therefore does not match the actual RTL logic.",
+        "additional_findings": [],
+        "formal_alignment": "Formal FAIL does not align. Manual RTL analysis shows `cmd_consty_err_q` is self-latching through `cmd_consty_err_d` and therefore sticky until reset."
+      }
+    },
+    {
+      "finding_id": "F-0044",
+      "input": {
+        "title": "cnt_err 信号在设计意图中被列为未处理，但 keymgr_err 模块却将其作为 async_fault_d 的输入源，这会引入意外的异步故障标志行为，可能导致错误的报警或状态机误触发。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "cnt_err 信号在设计意图中被列为未处理，但 keymgr_err 模块却将其作为 async_fault_d 的输入源，这会引入意外的异步故障标志行为，可能导致错误的报警或状态机误触发。",
+        "involved_signals": [
+          "cnt_err"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__int__001",
+          "keymgr_err__continuous_region__declarations_or_instances__003"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.94,
+        "summary": "`cnt_err` is not unhandled. The error-collection module explicitly records it as an async fault bit.",
+        "root_cause": "The assumption came from a partial chunk. `keymgr_err.sv:124-150` drives `async_fault_d[AsyncFaultCntErr] = cnt_err_i` and exports it to `fault_o[FaultCtrlCnt]`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": true,
+        "reasoning": "Nothing in the RTL suggests accidental or surprising wiring here. `keymgr_err` is the module responsible for collecting integrity and counter faults. It latches async faults through `async_fault_q` in `keymgr_err.sv:107-128`, and it exposes the counter fault through `fault_o[FaultCtrlCnt]` in `keymgr_err.sv:146-149`. That is a normal handling path, not a contradiction.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0045",
+      "input": {
+        "title": "设计假设要求 continuous region 不包含驱动 kmac_data_o 的逻辑，但实际实现在该区域放置了连续赋值，导致协议矛盾。可能引入多驱动冲突或覆盖外部驱动，违反模块划分约定。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "设计假设要求 continuous region 不包含驱动 kmac_data_o 的逻辑，但实际实现在该区域放置了连续赋值，导致协议矛盾。可能引入多驱动冲突或覆盖外部驱动，违反模块划分约定。",
+        "involved_signals": [
+          "kmac_data_o"
+        ],
+        "involved_specs": [
+          "keymgr_kmac_if__continuous_region__keymgr_kmac_if__001",
+          "keymgr_kmac_if__continuous_region__declarations_or_instances__004"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.95,
+        "summary": "`kmac_data_o` is intentionally driven inside `keymgr_kmac_if`, and there is no second driver in the RTL shown.",
+        "root_cause": "The hypothesis is a chunk-boundary artifact. `keymgr_kmac_if.sv:330-345` drives `kmac_data_o.data`, `kmac_data_o.valid`, `kmac_data_o.last`, and `kmac_data_o.strb` as the module's output logic.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "Outputs must be driven somewhere, and this module drives them in one place. The data mux is in `keymgr_kmac_if.sv:330-341`, and the handshake fields are continuously assigned in `keymgr_kmac_if.sv:343-345`. I found no competing assignment in the file. The claim of a protocol contradiction is therefore unsupported by the RTL.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0046",
+      "input": {
+        "title": "keymgr_kmac_if 中的计数器 u_cnt 被配置为递减（decr_en_i=cnt_en, incr_en_i=0），导致其输出的 cnt 信号会随 cnt_en 递减；而 keymgr_op_state_ctrl 模块假设输入 cnt_i 单调递增。递减行为使 StAdv 状态下的序列无法正确递增，可能造成状态机永久卡死。",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "keymgr_kmac_if 中的计数器 u_cnt 被配置为递减（decr_en_i=cnt_en, incr_en_i=0），导致其输出的 cnt 信号会随 cnt_en 递减；而 keymgr_op_state_ctrl 模块假设输入 cnt_i 单调递增。递减行为使 StAdv 状态下的序列无法正确递增，可能造成状态机永久卡死。",
+        "involved_signals": [
+          "cnt"
+        ],
+        "involved_specs": [
+          "keymgr_op_state_ctrl__always_comb__line_50__001",
+          "keymgr_kmac_if__continuous_region__int__001",
+          "keymgr_kmac_if__always_comb__line_172__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.99,
+        "summary": "The report conflates two different counters from two different modules. The down-counter in `keymgr_kmac_if` is unrelated to the incrementing CDI counter consumed by `keymgr_op_state_ctrl`.",
+        "root_cause": "The KMAC beat counter is the local `u_cnt` in `keymgr_kmac_if.sv:143-158`. The operation FSM receives `cnt_i(cdi_cnt)` from `keymgr_ctrl.sv:757-768`, and that `cdi_cnt` comes from the separate incrementing counter in `keymgr_ctrl.sv:420-435`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "The top-level wiring settles this. `keymgr_op_state_ctrl` uses `cnt_i` only to count completed CDI rounds in `keymgr_op_state_ctrl.sv:75-80`. In the instantiation at `keymgr_ctrl.sv:757-768`, that input is connected to `cdi_cnt`, which is sliced from `keymgr_ctrl`'s own counter. That counter increments via `.incr_en_i(op_update | random_req)` and `.decr_en_i(1'b0)` in `keymgr_ctrl.sv:420-435`. By contrast, `keymgr_kmac_if` uses a private down-counter to choose which 64-bit beat of a message to send, as shown in `keymgr_kmac_if.sv:143-158` and `keymgr_kmac_if.sv:322-339`. There is no shared signal and no deadlock from mixed count directions.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    },
+    {
+      "finding_id": "F-0047",
+      "input": {
+        "title": "The combinational generation of gen_req (and consequently gen_req_i) can produce glitches or asynchronous transitions on the input assumed to be synchronous and glitch-free, risking spurious pulses on",
+        "severity": "MEDIUM",
+        "verdict": "CONTRADICTION",
+        "contradiction": "The combinational generation of gen_req (and consequently gen_req_i) can produce glitches or asynchronous transitions on the input assumed to be synchronous and glitch-free, risking spurious pulses on internal enable signals (e.g. gen_en_o) and unwanted key operations.",
+        "involved_signals": [
+          "gen_req_i"
+        ],
+        "involved_specs": [
+          "keymgr_op_state_ctrl__continuous_region__keymgr_op_state_ctrl__001",
+          "keymgr_ctrl__continuous_region__int__001"
+        ]
+      },
+      "phase3": {
+        "verdict": "FALSE_ALARM",
+        "confidence": 0.82,
+        "summary": "The RTL shows ordinary same-clock combinational request decode, not an asynchronous or CDC hazard.",
+        "root_cause": "`gen_req` is formed as `op_req & (gen_sw_op | gen_hw_op)` in `keymgr_ctrl.sv:184-188`, and it is consumed synchronously by `keymgr_op_state_ctrl` in `keymgr_ctrl.sv:757-768`.",
+        "trigger_condition": "",
+        "security_impact": "",
+        "software_visible": false,
+        "reasoning": "Nothing on this path comes from another clock domain. `op_req` is generated inside `keymgr_ctrl`'s main combinational FSM, and `gen_sw_op`/`gen_hw_op` are decodes of the software-controlled operation enum in `keymgr_ctrl.sv:150-160`. The resulting `gen_req` is passed directly into `keymgr_op_state_ctrl`, which samples and uses it as part of synchronous state transitions in `keymgr_op_state_ctrl.sv:50-107`. A generic concern about combinational glitches is not enough to establish a bug here; the RTL does not show an asynchronous boundary or pulse-sensitive latch that would make this dangerous.",
+        "additional_findings": [],
+        "formal_alignment": "N/A"
+      }
+    }
+  ],
+  "summary": {
+    "CONFIRMED": 2,
+    "FALSE_ALARM": 17,
+    "NEEDS_MORE_CONTEXT": 0,
+    "UNCERTAIN": 0
+  }
+}

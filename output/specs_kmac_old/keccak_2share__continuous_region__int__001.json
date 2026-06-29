@@ -1,0 +1,61 @@
+{
+  "chunk_id": "keccak_2share__continuous_region__int__001",
+  "summary": "该片段将 phase1 输出直接连接到 pi_data，并在可选掩码配置下选择单 share 或双 share 的 Iota 注入方式，其中轮常数只异或到一个 share 上。",
+  "behavior": "片段首先将 phase1_out 组合地直接驱动为 pi_data，没有额外变换或选择逻辑。随后根据参数/生成条件 EnMasking 选择 Iota 的 share 处理方式：当启用 masking 时，iota_data[0] 由 iota(chi_data[0], rnd_i) 计算，而 iota_data[1] 直接透传 chi_data[1]，对应注释所述“Round Constants 只应异或到一个 share”；当未启用 masking 时，仅驱动 iota_data[0] 为 iota(chi_data[0], rnd_i)。此外，在启用 masking 的 chi 生成块内，代码声明了用于 Domain-Oriented Masking 实现的局部常量 WSheetHalf=$bits(sheet_t)/2，以及 5 路 in_prd/out_prd 中间信号，但本片段中尚未展示这些信号的具体组合关系或输出驱动。",
+  "guarantees": [
+    {
+      "property": "phase1_out 始终等于 pi_data。",
+      "output_signals": [
+        "phase1_out"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:136-136"
+      ]
+    },
+    {
+      "property": "在 EnMasking 启用时，iota_data 的第 0 个 share 包含 iota(chi_data[0], rnd_i)，第 1 个 share保持为 chi_data[1]，因此轮常数不会被同时注入两个 share。",
+      "output_signals": [
+        "iota_data"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:138-144"
+      ]
+    },
+    {
+      "property": "在 EnMasking 关闭时，iota_data[0] 等于 iota(chi_data[0], rnd_i)。",
+      "output_signals": [
+        "iota_data"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:142-144"
+      ]
+    }
+  ],
+  "security_implications": "该片段直接涉及掩码实现的安全属性。注释和逻辑都表明 Iota 的轮常数只注入一个 share，这符合共享掩码电路中常量处理的常见要求；若错误地对两个 share 都注入相同常量，可能破坏 share 的语义或削弱掩码方案。片段还表明后续 chi 在 EnMasking 模式下采用 Domain-Oriented Masking 结构，这是抗侧信道实现相关的安全机制，但其具体安全性依赖未展示的后续逻辑。",
+  "assumptions": [
+    {
+      "constraint": "当 EnMasking 为 1 时，外部/上游逻辑应将 chi_data[0] 与 chi_data[1] 作为有效的双 share 编码输入使用；本片段仅对第 0 个 share 注入轮常数，第 1 个 share保持不变。",
+      "bug_relevance": "如果上游未按双 share 语义提供 chi_data，两路 share 的组合值可能不再表示预期状态，导致功能错误；该约束属于行为契约。",
+      "related_signals": [
+        "EnMasking",
+        "chi_data",
+        "iota_data",
+        "rnd_i"
+      ],
+      "source_refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:138-144"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:136-151"
+  ],
+  "uncertain_points": [
+    "在 EnMasking 关闭时，本片段只展示了 iota_data[0] 的赋值，iota_data 其余元素是否不存在、未使用，或在别处被处理，需要结合完整类型定义和后续代码确认。",
+    "g_2share_chi 块只展示了局部参数和中间信号声明，未展示 chi 的具体 Domain-Oriented Masking 计算过程，因此无法从本片段单独确认 in_prd/out_prd 如何影响最终输出。",
+    "EnMasking 看起来是生成时常量/参数条件而非运行时输入，但仅凭本片段无法完全确认其定义形式。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
+  "line_start": 136,
+  "line_end": 151
+}

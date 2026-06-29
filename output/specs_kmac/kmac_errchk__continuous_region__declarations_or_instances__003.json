@@ -1,50 +1,103 @@
 {
   "chunk_id": "kmac_errchk__continuous_region__declarations_or_instances__003",
-  "summary": "在未生成伪随机熵检查逻辑的配置下，本分支将熵就绪相关信号固定为无错误且始终就绪。",
-  "behavior": "该 generate 分支对应注释所述的 `EnMasking` 关闭场景，此时熵模块未被生成，因此将 `err_entropy_ready` 直接固定为 `0`，表示不会上报熵就绪错误；同时将 `cfg_entropy_ready` 固定为 `1`，表示配置视角下熵始终可用。局部信号 `unused_cfg_entropy_ready` 被赋值为 `cfg_entropy_ready`，看起来仅用于消除未使用信号/分支带来的告警，不影响对外功能。代码行为与注释一致，但 `EnMasking` 与该 generate 条件 `g_pseudo_entropy_chk` 的精确对应关系需要依赖片段外上下文确认。",
+  "header": {
+    "module": "kmac_errchk",
+    "block_kind": "generate",
+    "driven": [
+      "err_entropy_ready",
+      "cfg_entropy_ready",
+      "unused_cfg_entropy_ready"
+    ],
+    "used": [
+      "cfg_entropy_ready"
+    ],
+    "modes": [
+      "EnMasking==0"
+    ],
+    "tags": [
+      "mask",
+      "entropy",
+      "error",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在该 generate 分支激活时，`err_entropy_ready` 始终为 0，不会由本分支报告熵就绪错误。",
-      "output_signals": [
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When EnMasking==0, err_entropy_ready is tied to 1'b0.",
+      "cond": "always (this generate branch is active)",
+      "signals": [
         "err_entropy_ready"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:297-299"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:299"
       ]
     },
     {
-      "property": "在该 generate 分支激活时，`cfg_entropy_ready` 始终为 1，外部逻辑可将其视为恒定就绪。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When EnMasking==0, cfg_entropy_ready is tied to 1'b1.",
+      "cond": "always",
+      "signals": [
         "cfg_entropy_ready"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:301-304"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:301"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "unused_cfg_entropy_ready is driven continuously equal to cfg_entropy_ready (hence always 1) when EnMasking==0.",
+      "cond": "always",
+      "signals": [
+        "unused_cfg_entropy_ready",
+        "cfg_entropy_ready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:303-304"
       ]
     }
   ],
-  "security_implications": "该片段与掩码/熵相关配置有关：当注释所述的 `EnMasking` 关闭时，设计不实例化熵模块，并将熵就绪错误关闭、就绪状态固定为可用。这意味着在该配置下，下游不能依赖 `err_entropy_ready` 来发现熵源缺失；这种行为本身看起来是有意的配置裁剪，而非运行时检测机制。",
   "assumptions": [
     {
-      "constraint": "只有在对应的 generate 条件确实表示“不使用熵模块/关闭 masking”时，才应采用本恒值分支。",
-      "bug_relevance": "若该分支在实际仍需要真实熵握手或错误检测的配置下被选中，则 `cfg_entropy_ready` 会被错误地固定为就绪，且 `err_entropy_ready` 永远无法反映实际熵故障，可能导致功能错误或掩盖安全相关异常。",
-      "related_signals": [
-        "cfg_entropy_ready",
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "External logic correctly interprets err_entropy_ready=0 as 'no entropy ready error' and cfg_entropy_ready=1 as 'entropy source always ready' when EnMasking=0.",
+      "cond": "When EnMasking=0 and these outputs are consumed elsewhere in the design.",
+      "risk": "If misinterpreted, false error handling or incorrect handshake may occur.",
+      "signals": [
         "err_entropy_ready",
-        "g_pseudo_entropy_chk"
+        "cfg_entropy_ready"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:295-301"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:299",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:301"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal unused_cfg_entropy_ready is declared and assigned but has no further usage in this chunk; its purpose (lint workaround, future placeholder, or accidental dead code) is unclear.",
+      "cond": "EnMasking==0 branch active.",
+      "risk": "If it is dead code, no functional risk but it may obscure intent. If it was intended as a stub for a port later consumed, missing connection could lead to an undriven net elsewhere.",
+      "signals": [
+        "unused_cfg_entropy_ready"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:303-304"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:295-306"
   ],
-  "uncertain_points": [
-    "注释说明该分支用于 `EnMasking` 为 0、熵模块未生成的情况，但片段中实际可见的 generate 标签为 `g_pseudo_entropy_chk`；两者的精确条件映射需要结合片段外的 generate 条件确认。",
-    "`unused_cfg_entropy_ready` 似乎仅用于避免未使用告警，但其是否还服务于 lint/综合约束需依赖上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv",
   "line_start": 295,
-  "line_end": 306
+  "line_end": 306,
+  "security_implications": ""
 }

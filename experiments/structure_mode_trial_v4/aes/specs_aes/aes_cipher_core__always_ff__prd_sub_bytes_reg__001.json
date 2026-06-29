@@ -1,0 +1,124 @@
+{
+  "chunk_id": "aes_cipher_core__always_ff__prd_sub_bytes_reg__001",
+  "header": {
+    "module": "aes_cipher_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "prd_sub_bytes_q"
+    ],
+    "used": [
+      "rst_ni",
+      "state_we",
+      "SP2V_HIGH",
+      "prd_sub_bytes_d",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "secret",
+      "cipher",
+      "data_register"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, prd_sub_bytes_q is asynchronously cleared to zero.",
+      "cond": "rst_ni == 1'b0",
+      "signals": [
+        "rst_ni",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:336-337"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On each rising edge of clk_i with rst_ni high, if state_we equals SP2V_HIGH, prd_sub_bytes_q is updated to prd_sub_bytes_d; otherwise, prd_sub_bytes_q holds its current value.",
+      "cond": "posedge clk_i & rst_ni",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "state_we",
+        "SP2V_HIGH",
+        "prd_sub_bytes_d",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:338-340"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "prd_sub_bytes_d must be stable and valid at the active clock edge when state_we equals SP2V_HIGH.",
+      "cond": "state_we == SP2V_HIGH at posedge clk_i",
+      "risk": "Incorrect or glitched data will be latched into prd_sub_bytes_q, corrupting the AES sub-byte computation.",
+      "signals": [
+        "prd_sub_bytes_d",
+        "state_we",
+        "SP2V_HIGH"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:339"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "state_we must be exactly equal to SP2V_HIGH only when this specific pipeline register should be updated, and no other legal enable value exists for this register.",
+      "cond": "any clock cycle with update intention",
+      "risk": "If state_we can assume a different value that also logically means 'update' but is not SP2V_HIGH, the register will miss the update, leading to a stall or data corruption in the cipher pipeline.",
+      "signals": [
+        "state_we",
+        "SP2V_HIGH"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:338"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "prd_sub_bytes_q holds AES intermediate state (key-dependent) and is only cleared by global reset. There is no operational wipe on abort, completion, or error.",
+      "cond": "After any AES operation where the pipeline is halted or an error occurs before reset",
+      "risk": "Stale secret intermediate data may be retained and potentially accessed by a later process or via fault injection, violating zeroisation requirements.",
+      "signals": [
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:335-341"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The update condition `state_we == SP2V_HIGH` depends on the encoding of state_we and the definition of SP2V_HIGH from an external package or parameter block.",
+      "cond": "Always",
+      "risk": "If SP2V_HIGH is misdefined or if state_we can legitimately take other 'enable' values, this register may fail to capture data when expected, breaking the AES round pipeline.",
+      "signals": [
+        "state_we",
+        "SP2V_HIGH"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:338"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:335-341"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
+  "line_start": 335,
+  "line_end": 341,
+  "security_implications": ""
+}

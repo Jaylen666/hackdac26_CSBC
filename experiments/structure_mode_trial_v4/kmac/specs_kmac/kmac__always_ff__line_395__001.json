@@ -1,0 +1,216 @@
+{
+  "chunk_id": "kmac__always_ff__line_395__001",
+  "header": {
+    "module": "kmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "cmd_q",
+      "cmd_buf_q"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "reg2hw.cmd.cmd.qe",
+      "cmd_update",
+      "reg2hw.cmd.cmd.q",
+      "counting_q"
+    ],
+    "modes": [
+      "CmdNone"
+    ],
+    "tags": [
+      "csr",
+      "handshake",
+      "reset",
+      "counter"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "When rst_ni is low, cmd_q and cmd_buf_q are both set to CmdNone.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "397-398"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When reg2hw.cmd.cmd.qe and cmd_update are both true, cmd_q is updated with the previous cmd_buf_q value, and cmd_buf_q is updated with the new command from reg2hw.cmd.cmd.q.",
+      "cond": "reg2hw.cmd.cmd.qe && cmd_update",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q"
+      ],
+      "refs": [
+        "400-403"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When reg2hw.cmd.cmd.qe is true, cmd_update is false, and counting_q is low, cmd_q is directly assigned the new command from reg2hw.cmd.cmd.q.",
+      "cond": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q == 1'b0",
+      "signals": [
+        "cmd_q",
+        "reg2hw.cmd.cmd.q"
+      ],
+      "refs": [
+        "405-408"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When reg2hw.cmd.cmd.qe is true, cmd_update is false, and counting_q is high, cmd_buf_q is assigned the new command from reg2hw.cmd.cmd.q, while cmd_q retains its current value.",
+      "cond": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q == 1'b1",
+      "signals": [
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q",
+        "cmd_q"
+      ],
+      "refs": [
+        "409-410"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "When cmd_update is true and reg2hw.cmd.cmd.qe is false, cmd_q is assigned the current cmd_buf_q, and cmd_buf_q is set to CmdNone.",
+      "cond": "cmd_update && !reg2hw.cmd.cmd.qe",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "413-416"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "When none of the above conditions are true (no reg2hw.cmd.cmd.qe and no cmd_update), both cmd_q and cmd_buf_q hold their previous values.",
+      "cond": "!(reg2hw.cmd.cmd.qe || cmd_update)",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "400-418"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "cmd_update is a single-cycle pulse per expiration event. If it remains high for multiple consecutive cycles, a second cycle would assign cmd_q with the newly cleared cmd_buf_q (CmdNone), losing the active command.",
+      "cond": "cmd_update asserted for more than one clock cycle",
+      "risk": "Loss of active command due to spurious clear to CmdNone.",
+      "signals": [
+        "cmd_update",
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "413-416"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "reg2hw.cmd.cmd.q must be limited to valid kmac_cmd_e enumerated values. The cast kmac_cmd_e'() does not check for out-of-range values.",
+      "cond": "Whenever reg2hw.cmd.cmd.qe is true",
+      "risk": "An illegal command value could propagate to cmd_q/cmd_buf_q and bypass downstream security checks or cause undefined behavior.",
+      "signals": [
+        "reg2hw.cmd.cmd.q",
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "403",
+        "408",
+        "410"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "cmd_update must be asserted only when cmd_buf_q holds a valid command intended for promotion, or when it is safe to clear cmd_q to CmdNone.",
+      "cond": "cmd_update is asserted",
+      "risk": "Spurious assertion of cmd_update when no command is buffered will overwrite cmd_q with CmdNone, potentially discarding an active command.",
+      "signals": [
+        "cmd_update",
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "413-416"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When counting_q=1, a second write (qe) will overwrite any previously buffered command in cmd_buf_q. The design intent for handling multiple writes while a command is already pending is unclear.",
+      "cond": "reg2hw.cmd.cmd.qe && counting_q==1 while cmd_buf_q already holds a non-CmdNone value",
+      "risk": "Commands can be silently lost if software issues a new command before the previous buffered command is promoted.",
+      "signals": [
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q"
+      ],
+      "refs": [
+        "409-410"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The cast kmac_cmd_e'(reg2hw.cmd.cmd.q) does not include an in-range check. An illegal software write could produce an invalid enum that propagates to command execution, potentially bypassing cryptographic access controls.",
+      "cond": "reg2hw.cmd.cmd.qe asserted with an out-of-range q value",
+      "risk": "Security bypass or unexpected behavior in KMAC command processing, possibly exposing keys or data.",
+      "signals": [
+        "reg2hw.cmd.cmd.q",
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "403",
+        "408",
+        "410"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "When neither qe nor cmd_update is active, cmd_q retains its current value indefinitely. If the external logic stops generating cmd_update pulses, the active command may never be cleared or progressed, leading to a hang.",
+      "cond": "System stall where cmd_update ceases to be generated",
+      "risk": "Command pipeline could become permanently stuck, potentially blocking further operations.",
+      "signals": [
+        "cmd_q",
+        "cmd_update"
+      ],
+      "refs": [
+        "400-418"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "395-419"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 395,
+  "line_end": 419,
+  "security_implications": ""
+}

@@ -1,0 +1,179 @@
+{
+  "chunk_id": "aes_ctr__generate_for__gen_fsm__001",
+  "header": {
+    "module": "aes_ctr",
+    "block_kind": "generate_for",
+    "driven": [
+      "sp_ready (bits [Sp2VWidth-1:0] driven by ready_o or ready_no)",
+      "mr_alert (bits [Sp2VWidth-1:0] driven by alert_o)",
+      "mr_ctr_slice_idx (bits [Sp2VWidth-1:0] driven by ctr_slice_idx_o)",
+      "mr_ctr_o_slice (bits [Sp2VWidth-1:0] driven by ctr_slice_o)",
+      "sp_ctr_we (bits [Sp2VWidth-1:0] driven by ctr_we_o or ctr_we_no)"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "sp_incr",
+      "incr_err",
+      "mr_err",
+      "ctr_i_slice"
+    ],
+    "modes": [
+      "SP2V_LOGIC_HIGH (bitmask per slice index)"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "handshake",
+      "error",
+      "alert",
+      "fault",
+      "counter",
+      "security"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "For every i in 0..Sp2VWidth-1, an instance of aes_ctr_fsm_p (if SP2V_LOGIC_HIGH[i]==1) or aes_ctr_fsm_n (otherwise) is instantiated and its outputs directly drive sp_ready[i], mr_alert[i], mr_ctr_slice_idx[i], mr_ctr_o_slice[i], and sp_ctr_we[i].",
+      "cond": "always during elaboration",
+      "signals": [
+        "SP2V_LOGIC_HIGH[i]",
+        "sp_ready[i]",
+        "mr_alert[i]",
+        "mr_ctr_slice_idx[i]",
+        "mr_ctr_o_slice[i]",
+        "sp_ctr_we[i]"
+      ],
+      "refs": [
+        "aes_ctr.sv:108-142"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "Every FSM instance receives clk_i, rst_ni, sp_incr[i], incr_err, mr_err, and ctr_i_slice; the connectivity is fixed at elaboration.",
+      "cond": "always",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "sp_incr[i]",
+        "incr_err",
+        "mr_err",
+        "ctr_i_slice"
+      ],
+      "refs": [
+        "aes_ctr.sv:110-123",
+        "aes_ctr.sv:126-139"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The outputs mr_alert[i], mr_ctr_slice_idx[i], and mr_ctr_o_slice[i] from all i must be OR-combined externally to produce the final single-bit or single-slice signals.",
+      "cond": "when any FSM asserts alert or outputs slice index/data",
+      "risk": "If OR combination is not performed, a single instance's signal may be taken as the final value, missing alerts or misrouting control data from other slices.",
+      "signals": [
+        "mr_alert",
+        "mr_ctr_slice_idx",
+        "mr_ctr_o_slice"
+      ],
+      "refs": [
+        "aes_ctr.sv:118",
+        "aes_ctr.sv:120",
+        "aes_ctr.sv:122"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "SP2V_LOGIC_HIGH must be a bitvector of width Sp2VWidth with each bit either 1'b1 or 1'b0, matching the compilation scope.",
+      "cond": "during elaboration",
+      "risk": "Mismatch would cause a compilation error; if passed, partially uninstantiated bits would leave outputs undriven.",
+      "signals": [
+        "SP2V_LOGIC_HIGH",
+        "Sp2VWidth"
+      ],
+      "refs": [
+        "aes_ctr.sv:108-109"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "The sparsified signals sp_incr and sp_ctr_we respect the encoding where SP2V_LOGIC_HIGH[i]==1 indicates the 'positive' instance and 0 the 'negative' instance; the rest of the design must maintain this convention.",
+      "cond": "always",
+      "risk": "If the mapping is inverted relative to other sparsity logic, the redundant FSM instances may not detect faults correctly, degrading security.",
+      "signals": [
+        "sp_incr",
+        "sp_ctr_we",
+        "SP2V_LOGIC_HIGH"
+      ],
+      "refs": [
+        "aes_ctr.sv:114",
+        "aes_ctr.sv:123"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The OR-combination of mr_alert, mr_ctr_slice_idx, and mr_ctr_o_slice across all i is not implemented in this chunk; verify that the parent module correctly OR-reduces these per-bit signals.",
+      "cond": "when any mr_alert[i] is asserted",
+      "risk": "An alert or critical slice identifier from one slice could be missed, allowing a fault to propagate unhandled.",
+      "signals": [
+        "mr_alert",
+        "mr_ctr_slice_idx",
+        "mr_ctr_o_slice"
+      ],
+      "refs": [
+        "aes_ctr.sv:118",
+        "aes_ctr.sv:120",
+        "aes_ctr.sv:122"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The internal logic of aes_ctr_fsm_p vs aes_ctr_fsm_n is not visible; verify that the two modules are exact functional complements under sparsity so that any divergence (e.g., in error handling) is detectable via OR-combine.",
+      "cond": "during any operation",
+      "risk": "If the modules contain mismatched error logic, a fault may not be flagged consistently, potentially allowing undetected counter manipulation.",
+      "signals": [
+        "aes_ctr_fsm_p",
+        "aes_ctr_fsm_n"
+      ],
+      "refs": [
+        "aes_ctr.sv:110",
+        "aes_ctr.sv:126"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "The inputs incr_err and mr_err are connected identically to all instances; confirm they are toggled under fault conditions and that the FSM instances use them (otherwise errors may be silently ignored).",
+      "cond": "when an increment or masking error occurs",
+      "risk": "If these error signals are tied low or unused inside the FSM, real errors would not generate alerts.",
+      "signals": [
+        "incr_err",
+        "mr_err"
+      ],
+      "refs": [
+        "aes_ctr.sv:116-117",
+        "aes_ctr.sv:132-133"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_ctr.sv:108-142"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_ctr.sv",
+  "line_start": 108,
+  "line_end": 142,
+  "security_implications": ""
+}

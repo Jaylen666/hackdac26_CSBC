@@ -1,0 +1,204 @@
+{
+  "chunk_id": "hmac_core__always_comb__line_254__001",
+  "header": {
+    "module": "hmac_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "txcount_d"
+    ],
+    "used": [
+      "txcount",
+      "clr_txcount",
+      "load_txcount",
+      "digest_size_i",
+      "message_length_i",
+      "BlockSizeSHA256in64",
+      "BlockSizeSHA512in64",
+      "inc_txcount"
+    ],
+    "modes": [
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512"
+    ],
+    "tags": [
+      "counter",
+      "integrity"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When clr_txcount, load_txcount, and inc_txcount are all false, txcount_d equals txcount unchanged.",
+      "cond": "!clr_txcount && !load_txcount && !inc_txcount",
+      "signals": [
+        "txcount_d",
+        "txcount"
+      ],
+      "refs": [
+        "file:255"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "If clr_txcount is true, txcount_d is forced to zero, overriding load_txcount and inc_txcount.",
+      "cond": "clr_txcount == 1",
+      "signals": [
+        "txcount_d",
+        "clr_txcount"
+      ],
+      "refs": [
+        "file:256-257"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "If clr_txcount is false and load_txcount true, txcount_d = message_length_i + block size constant selected by digest_size_i; for SHA2_256 uses BlockSizeSHA256in64, for SHA2_384/SHA2_512 uses BlockSizeSHA512in64, and for any other value adds zero.",
+      "cond": "!clr_txcount && load_txcount",
+      "signals": [
+        "txcount_d",
+        "load_txcount",
+        "digest_size_i",
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "file:258-266"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "If clr_txcount and load_txcount are false but inc_txcount is true, txcount_d bits [63:5] are incremented by 1 (adding 32) while lower 5 bits remain as in txcount.",
+      "cond": "!clr_txcount && !load_txcount && inc_txcount",
+      "signals": [
+        "txcount_d",
+        "txcount",
+        "inc_txcount"
+      ],
+      "refs": [
+        "file:267-269"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "When inc_txcount is asserted, txcount[4:0] must be zero so that adding 1 to bits [63:5] faithfully implements a +32 increment without carry from lower bits.",
+      "cond": "inc_txcount == 1",
+      "risk": "If txcount[4:0] ≠ 0, the result may not be a multiple of 32, corrupting the byte/word count used for SHA padding and leading to an incorrect HMAC digest.",
+      "signals": [
+        "txcount",
+        "inc_txcount"
+      ],
+      "refs": [
+        "file:268"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "When load_txcount is true, message_length_i plus the selected block-size constant (BlockSizeSHA256in64 or BlockSizeSHA512in64) must not overflow the 64-bit txcount_d register.",
+      "cond": "load_txcount == 1",
+      "risk": "Overflow wraps the counter, miscomputing the total message length fed to the SHA core, which can break HMAC authentication.",
+      "signals": [
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "file:262-264"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "digest_size_i must be stable and represent a valid SHA2 variant during the entire assertion of load_txcount.",
+      "cond": "load_txcount == 1",
+      "risk": "A glitch or invalid value could cause the default case (addition of zero) to be taken, omitting the inner-pad key block from the length and producing a wrong HMAC.",
+      "signals": [
+        "digest_size_i",
+        "load_txcount"
+      ],
+      "refs": [
+        "file:261-266"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The load_txcount default case (digest_size_i not SHA2_256/384/512) adds zero block size. It is unclear whether other legal SHA2 digest sizes exist in the environment, and if so, their block sizes would be missed, leading to an incorrect message length for HMAC.",
+      "cond": "load_txcount and digest_size_i ∉ {SHA2_256, SHA2_384, SHA2_512}",
+      "risk": "HMAC integrity failure because the inner-pad key block is not accounted for in the hash length.",
+      "signals": [
+        "digest_size_i",
+        "load_txcount"
+      ],
+      "refs": [
+        "file:261-266"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "inc_txcount only adds 1 to txcount[63:5] and leaves txcount[4:0] untouched. It must be verified that the lower 5 bits of txcount are always zero when inc_txcount is asserted; otherwise the addition is not +32 but +32 + residual, misaligning the count.",
+      "cond": "inc_txcount and txcount[4:0] != 0",
+      "risk": "The SHA padding length would be wrong, breaking HMAC correctness.",
+      "signals": [
+        "inc_txcount",
+        "txcount"
+      ],
+      "refs": [
+        "file:268"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The addition of message_length_i and block-size constant may exceed 64 bits if the message length is allowed to be very large. No overflow detection is present.",
+      "cond": "load_txcount and (message_length_i + constant) > 64'hFFFF_FFFF_FFFF_FFFF",
+      "risk": "Counter wrap could cause an undetected error in HMAC length computation.",
+      "signals": [
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "file:262-264"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The units of message_length_i vs. BlockSizeSHA256in64/BlockSizeSHA512in64 are ambiguous. The comment implies the block size constant is in '64-bit words', but message_length_i might be in bits or bytes. A mismatch would grossly miscompute the loaded txcount.",
+      "cond": "load_txcount is asserted",
+      "risk": "If units differ, HMAC message length is severely wrong, completely breaking authentication.",
+      "signals": [
+        "message_length_i",
+        "BlockSizeSHA256in64",
+        "BlockSizeSHA512in64"
+      ],
+      "refs": [
+        "file:259-264"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:254-270"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
+  "line_start": 254,
+  "line_end": 270,
+  "security_implications": ""
+}

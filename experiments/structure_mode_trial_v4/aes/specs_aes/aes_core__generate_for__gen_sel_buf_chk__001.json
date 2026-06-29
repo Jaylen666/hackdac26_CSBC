@@ -1,0 +1,139 @@
+{
+  "chunk_id": "aes_core__generate_for__gen_sel_buf_chk__001",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "generate",
+    "driven": [
+      "sp2v_sig_chk_raw",
+      "sp2v_sig_err",
+      "sp2v_sig_chk"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "sp2v_sig",
+      "Sp2VNum",
+      "Sp2VWidth",
+      "Sp2VEnSecBuf"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "integrity",
+      "security",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "generate_param",
+      "claim": "For each i, an aes_sel_buf_chk instance is instantiated, connecting sel_i = sp2v_sig[i] and driving sel_o = sp2v_sig_chk_raw[i] and err_o = sp2v_sig_err[i].",
+      "cond": "always",
+      "signals": [
+        "sp2v_sig",
+        "sp2v_sig_chk_raw",
+        "sp2v_sig_err"
+      ],
+      "refs": [
+        "aes_core.sv:828-838"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "For each i, sp2v_sig_chk_raw[i] is cast to type sp2v_e and assigned to sp2v_sig_chk[i].",
+      "cond": "always",
+      "signals": [
+        "sp2v_sig_chk_raw",
+        "sp2v_sig_chk"
+      ],
+      "refs": [
+        "aes_core.sv:839"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "External logic must monitor sp2v_sig_err[i] and take corrective action (e.g., alarm, reset) when an error is asserted.",
+      "cond": "When sp2v_sig_err[i] is asserted",
+      "risk": "If the error is ignored, an illegal selection value may propagate and corrupt the encryption/decryption data path, potentially leading to data integrity loss or information leakage.",
+      "signals": [
+        "sp2v_sig_err"
+      ],
+      "refs": [
+        "aes_core.sv:837"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "The Sp2VEnSecBuf[i] configuration must correctly reflect the security requirements of each channel, enabling or disabling the check inside aes_sel_buf_chk accordingly.",
+      "cond": "At configuration time",
+      "risk": "If the check is wrongly disabled (EnSecBuf[i] = 0) when required, illegal sp2v_sig[i] values may go undetected, bypassing the buffer-check mechanism.",
+      "signals": [
+        "Sp2VEnSecBuf"
+      ],
+      "refs": [
+        "aes_core.sv:831"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "It is unclear whether the sp2v_sig_err[i] output is actually used by the parent module to trigger a security response.",
+      "cond": "If the error signal is left unconnected or ignored",
+      "risk": "An illegal selection event would be silently ignored, and the corrupted sp2v_sig_chk output could be used in the cipher data path, violating integrity or confidentiality.",
+      "signals": [
+        "sp2v_sig_err"
+      ],
+      "refs": [
+        "aes_core.sv:837"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "The Sp2VWidth parameter must match the bit-width of the sp2v_e type; a mismatch could cause truncation or sign-extension during the cast.",
+      "cond": "When Sp2VWidth != $bits(sp2v_e)",
+      "risk": "Mismatched widths may silently truncate high bits or incorrectly sign-extend sp2v_sig_chk_raw, causing wrong selection values.",
+      "signals": [
+        "Sp2VWidth",
+        "sp2v_sig_chk",
+        "sp2v_e"
+      ],
+      "refs": [
+        "aes_core.sv:830",
+        "aes_core.sv:839"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "When EnSecBuf[i] is disabled, the behavior of sp2v_sig_chk_raw[i] from aes_sel_buf_chk must be verified; it may pass through the input unchanged or produce an undefined output.",
+      "cond": "EnSecBuf[i] == 0",
+      "risk": "If the output is undefined or unfiltered, an illegal sp2v_sig[i] value could directly affect the cipher core, potentially exposing key material or internal state.",
+      "signals": [
+        "sp2v_sig_chk_raw",
+        "EnSecBuf"
+      ],
+      "refs": [
+        "aes_core.sv:831"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes_core.sv:827-840"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
+  "line_start": 827,
+  "line_end": 840,
+  "security_implications": ""
+}

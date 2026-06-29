@@ -1,65 +1,366 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__005",
-  "summary": "This region maps software-visible KMAC configuration and command registers into internal key, entropy, and message-mask control signals, with compile-time handling for masked versus unmasked software key input.",
-  "behavior": "If the build configuration does not include a registered key_share1 path in the surrounding generate context, the RTL intentionally reduces `reg2hw.key_share1` into `unused_key_share1` to consume the signal and avoid it being left unused, without affecting functional outputs [kmac.sv:513-516]. For software key handling, when masking is enabled or software keys are not expected to be double-shared (`EnMasking || !SwKeyMasked`), the internal `sw_key_data` is simply forwarded from `sw_key_data_reg` unchanged [kmac.sv:518-520]. Otherwise, the design assumes software still provides two shares while masking is disabled, and reconstructs an unmasked key by XORing share 0 and share 1 into `sw_key_data[0]`; no other `sw_key_data` element is assigned in this branch within the shown code [kmac.sv:521-525]. The software-programmed key length is cast from the register field into the internal `key_len_e` type [kmac.sv:527].\n\nThe entropy-related register fields are exposed directly to internal control wires: `wait_timer_prescaler` and `wait_timer_limit` come from `entropy_period`, `entropy_refresh_req` asserts only when both the `entropy_req` data bit and its write-enable pulse are high, `entropy_seed_update` reflects a write-enable on `entropy_seed`, and `entropy_seed_data` forwards the seed register contents [kmac.sv:529-536]. The refresh threshold register is forwarded as `entropy_hash_threshold`, and the hardware register interface is continuously driven so that `hw2reg.entropy_refresh_hash_cnt` is always updated with the current `entropy_hash_cnt` value and marked valid through `de=1` [kmac.sv:537-539]. Separately, `entropy_hash_clr` becomes true only on a qualified write of `cmd.hash_cnt_clr` with value 1 [kmac.sv:541-542].\n\nFor entropy configuration, `entropy_ready` is asserted only when both the shadowed configuration bit and its qualified-enable are high, so the design treats the configuration as active only on a successful/qualified register update rather than the stored bit alone [kmac.sv:544-546]. `entropy_mode` is type-cast from the shadowed register field, and `entropy_fast_process` directly reflects its configuration bit [kmac.sv:547-548]. Message masking control is also derived from shadowed configuration: `cfg_msg_mask` mirrors `cfg_shadowed.msg_mask.q`, and `msg_mask_en` only enables the message LFSR when message masking is configured and the message interface is simultaneously valid and ready [kmac.sv:550-552]. Finally, `cfg_en_unsupported_modestrength` directly reflects the corresponding shadowed configuration bit, enabling unsupported mode/strength combinations when software sets it [kmac.sv:554-556].",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "unused_key_share1",
+      "sw_key_data",
+      "sw_key_len",
+      "wait_timer_prescaler",
+      "wait_timer_limit",
+      "entropy_refresh_req",
+      "entropy_seed_update",
+      "entropy_seed_data",
+      "entropy_hash_threshold",
+      "hw2reg.entropy_refresh_hash_cnt.de",
+      "hw2reg.entropy_refresh_hash_cnt.d",
+      "entropy_hash_clr",
+      "entropy_ready",
+      "entropy_mode",
+      "entropy_fast_process",
+      "cfg_msg_mask",
+      "msg_mask_en",
+      "cfg_en_unsupported_modestrength"
+    ],
+    "used": [
+      "reg2hw.key_share1",
+      "sw_key_data_reg",
+      "reg2hw.key_len.q",
+      "reg2hw.entropy_period.prescaler.q",
+      "reg2hw.entropy_period.wait_timer.q",
+      "reg2hw.cmd.entropy_req.q/.qe",
+      "reg2hw.entropy_seed.q/.qe",
+      "reg2hw.entropy_refresh_threshold_shadowed.q",
+      "entropy_hash_cnt",
+      "reg2hw.cmd.hash_cnt_clr.q/.qe",
+      "reg2hw.cfg_shadowed.entropy_ready.q/.qe",
+      "reg2hw.cfg_shadowed.entropy_mode.q",
+      "reg2hw.cfg_shadowed.entropy_fast_process.q",
+      "reg2hw.cfg_shadowed.msg_mask.q",
+      "reg2hw.cfg_shadowed.en_unsupported_modestrength.q",
+      "msg_valid",
+      "msg_ready"
+    ],
+    "modes": [
+      "EnMasking",
+      "SwKeyMasked",
+      "entropy_mode_e"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "mask",
+      "entropy",
+      "csr",
+      "handshake",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`entropy_refresh_req` is asserted only for a qualified software command write in which both `reg2hw.cmd.entropy_req.q` and `reg2hw.cmd.entropy_req.qe` are high.",
-      "output_signals": [
-        "entropy_refresh_req"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "In the generate block gen_no_key_share1_reg, unused_key_share1 is driven by XOR reduction of reg2hw.key_share1.",
+      "cond": "when the enclosing generate condition (not visible) selects this block",
+      "signals": [
+        "unused_key_share1",
+        "reg2hw.key_share1"
       ],
-      "source_refs": [
+      "refs": [
+        "kmac.sv:514-515"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "When EnMasking is true or SwKeyMasked is false, sw_key_data is assigned the full value of sw_key_data_reg (forwarded as is).",
+      "cond": "EnMasking || !SwKeyMasked",
+      "signals": [
+        "sw_key_data",
+        "sw_key_data_reg"
+      ],
+      "refs": [
+        "kmac.sv:518-520"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "generate_param",
+      "claim": "When EnMasking is false and SwKeyMasked is true, sw_key_data[0] is assigned sw_key_data_reg[0] XOR sw_key_data_reg[1]; sw_key_data[1] is left undriven.",
+      "cond": "!EnMasking && SwKeyMasked",
+      "signals": [
+        "sw_key_data",
+        "sw_key_data_reg"
+      ],
+      "refs": [
+        "kmac.sv:521-524"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "sw_key_len is set to key_len_e'(reg2hw.key_len.q).",
+      "cond": "always",
+      "signals": [
+        "sw_key_len",
+        "reg2hw.key_len.q"
+      ],
+      "refs": [
+        "kmac.sv:527"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "wait_timer_prescaler and wait_timer_limit are driven by CSR fields entropy_period.prescaler.q and entropy_period.wait_timer.q respectively.",
+      "cond": "always",
+      "signals": [
+        "wait_timer_prescaler",
+        "wait_timer_limit",
+        "reg2hw.entropy_period"
+      ],
+      "refs": [
+        "kmac.sv:530-531"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "entropy_refresh_req is asserted only when cmd.entropy_req.q and its qualifier .qe are both high.",
+      "cond": "always",
+      "signals": [
+        "entropy_refresh_req",
+        "reg2hw.cmd.entropy_req"
+      ],
+      "refs": [
         "kmac.sv:532-533"
       ]
     },
     {
-      "property": "`hw2reg.entropy_refresh_hash_cnt` is continuously driven with `de=1` and `d=entropy_hash_cnt`, so the exposed hardware register value always reflects the current internal entropy hash count.",
-      "output_signals": [
-        "hw2reg.entropy_refresh_hash_cnt.de",
-        "hw2reg.entropy_refresh_hash_cnt.d"
+      "id": "G7",
+      "type": "assignment",
+      "claim": "entropy_seed_update is driven by cmd.entropy_seed.qe; entropy_seed_data is driven by cmd.entropy_seed.q.",
+      "cond": "always",
+      "signals": [
+        "entropy_seed_update",
+        "entropy_seed_data",
+        "reg2hw.entropy_seed"
       ],
-      "source_refs": [
-        "kmac.sv:537-539"
+      "refs": [
+        "kmac.sv:534-535"
       ]
     },
     {
-      "property": "`msg_mask_en` can only be high when message masking is configured and the message channel is simultaneously valid and ready.",
-      "output_signals": [
+      "id": "G8",
+      "type": "assignment",
+      "claim": "entropy_hash_threshold is driven by the shadowed register field entropy_refresh_threshold_shadowed.q.",
+      "cond": "always",
+      "signals": [
+        "entropy_hash_threshold",
+        "reg2hw.entropy_refresh_threshold_shadowed.q"
+      ],
+      "refs": [
+        "kmac.sv:537"
+      ]
+    },
+    {
+      "id": "G9",
+      "type": "assignment",
+      "claim": "hw2reg.entropy_refresh_hash_cnt.de is tied to 1'b1; .d is continuously driven by entropy_hash_cnt.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.entropy_refresh_hash_cnt",
+        "entropy_hash_cnt"
+      ],
+      "refs": [
+        "kmac.sv:538-539"
+      ]
+    },
+    {
+      "id": "G10",
+      "type": "assignment",
+      "claim": "entropy_hash_clr is asserted when cmd.hash_cnt_clr.qe and .q are both high.",
+      "cond": "always",
+      "signals": [
+        "entropy_hash_clr",
+        "reg2hw.cmd.hash_cnt_clr"
+      ],
+      "refs": [
+        "kmac.sv:541-542"
+      ]
+    },
+    {
+      "id": "G11",
+      "type": "assignment",
+      "claim": "entropy_ready is high only when cfg_shadowed.entropy_ready.q and its qualifier .qe are both high.",
+      "cond": "always",
+      "signals": [
+        "entropy_ready",
+        "reg2hw.cfg_shadowed.entropy_ready"
+      ],
+      "refs": [
+        "kmac.sv:545-546"
+      ]
+    },
+    {
+      "id": "G12",
+      "type": "assignment",
+      "claim": "entropy_mode is driven by type-cast of cfg_shadowed.entropy_mode.q; entropy_fast_process is driven by cfg_shadowed.entropy_fast_process.q.",
+      "cond": "always",
+      "signals": [
+        "entropy_mode",
+        "entropy_fast_process",
+        "reg2hw.cfg_shadowed"
+      ],
+      "refs": [
+        "kmac.sv:547-548"
+      ]
+    },
+    {
+      "id": "G13",
+      "type": "assignment",
+      "claim": "cfg_msg_mask is driven by cfg_shadowed.msg_mask.q; msg_mask_en is asserted when cfg_msg_mask, msg_valid, and msg_ready are all high.",
+      "cond": "always",
+      "signals": [
+        "cfg_msg_mask",
+        "msg_mask_en",
+        "msg_valid",
+        "msg_ready"
+      ],
+      "refs": [
+        "kmac.sv:551-552"
+      ]
+    },
+    {
+      "id": "G14",
+      "type": "assignment",
+      "claim": "cfg_en_unsupported_modestrength is driven by the corresponding shadowed register field.",
+      "cond": "always",
+      "signals": [
+        "cfg_en_unsupported_modestrength",
+        "reg2hw.cfg_shadowed.en_unsupported_modestrength"
+      ],
+      "refs": [
+        "kmac.sv:555-556"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "reg2hw fields .q and .qe follow the expected CSR ownership and shadowing protocol without glitches.",
+      "cond": "when a field’s qe is used as a qualifier",
+      "risk": "If .qe is asserted spuriously (e.g., due to CSR write timing), qualified signals like entropy_refresh_req or entropy_ready may falsely trigger operations leading to incorrect entropy injection or state change.",
+      "signals": [
+        "reg2hw.*.qe",
+        "reg2hw.*.q"
+      ],
+      "refs": [
+        "kmac.sv:532-533",
+        "kmac.sv:541-542",
+        "kmac.sv:545-546"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "msg_valid and msg_ready signals are properly driven by the message interface and are deasserted during non-data phases.",
+      "cond": "when cfg_msg_mask is 1",
+      "risk": "If msg_valid or msg_ready glitches or is stuck high, msg_mask_en could be asserted unintentionally, enabling the message LFSR at wrong times and corrupting mask generation.",
+      "signals": [
+        "msg_valid",
+        "msg_ready",
         "msg_mask_en"
       ],
-      "source_refs": [
+      "refs": [
+        "kmac.sv:551-552"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "entropy_hash_cnt is a valid counter that can be sampled every cycle without missing updates or metadata hazards.",
+      "cond": "always",
+      "risk": "If the counter is not glitch-free or has downstream dependencies (e.g., synchronized to a different clock), the continuously sampled register may capture intermediate or spurious values, causing SW to read an invalid hash count.",
+      "signals": [
+        "entropy_hash_cnt",
+        "hw2reg.entropy_refresh_hash_cnt"
+      ],
+      "refs": [
+        "kmac.sv:538-539"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "unused_key_share1 is generated by XOR reduction of reg2hw.key_share1 in the gen_no_key_share1_reg block, but no consumer of this signal is visible in the chunk.",
+      "cond": "when the enclosing parameter condition activates gen_no_key_share1_reg",
+      "risk": "If the signal truly has no user, it may be left dangling, causing synthesis warnings or unintended removal; if used elsewhere, the missing connection could indicate a missing binding or hidden dependency.",
+      "signals": [
+        "unused_key_share1",
+        "reg2hw.key_share1"
+      ],
+      "refs": [
+        "kmac.sv:514-515"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "In the gen_key_unmask branch (EnMasking=0, SwKeyMasked=1), only sw_key_data[0] is assigned, leaving sw_key_data[1] undriven.",
+      "cond": "when masking disabled and key is provided in two shares",
+      "risk": "Downstream logic expecting a fully driven key bus (both share elements) may read X or stale values from sw_key_data[1], potentially leading to key corruption, incorrect digest, or security vulnerability if the second share is used as a blinding factor elsewhere.",
+      "signals": [
+        "sw_key_data",
+        "sw_key_data_reg"
+      ],
+      "refs": [
+        "kmac.sv:521-524"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "hw2reg.entropy_refresh_hash_cnt.de is tied to 1, causing the register to sample entropy_hash_cnt on every cycle without any SW write protection or read-side handshake.",
+      "cond": "always",
+      "risk": "If SW reads the register while the counter is being updated, the read could return a partially updated value (depending on bus width) or a value that is inconsistent with the actual hash state, leading to erroneous entropy monitoring decisions.",
+      "signals": [
+        "hw2reg.entropy_refresh_hash_cnt",
+        "entropy_hash_cnt"
+      ],
+      "refs": [
+        "kmac.sv:538-539"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "msg_mask_en depends on external signals msg_valid and msg_ready whose mutual timing and deassertion protocol are not enforced within this chunk.",
+      "cond": "when cfg_msg_mask=1",
+      "risk": "If the upstream handshake protocol allows msg_valid to remain high after message transfer or msg_ready to stay high during idle, msg_mask_en could be spuriously active, causing the LFSR to run outside the intended data window and possibly injecting undesired mask values into the pipeline.",
+      "signals": [
+        "msg_valid",
+        "msg_ready",
+        "msg_mask_en"
+      ],
+      "refs": [
         "kmac.sv:551-552"
       ]
     }
   ],
-  "security_implications": "This region participates in security-sensitive key and entropy control. The key path conditionally forwards software-provided key shares directly or XOR-recombines two shares into an unmasked key when masking is disabled but software still provides split shares [kmac.sv:518-525]. Entropy refresh, seed update, and readiness are all gated by qualified register-write signals or shadowed configuration fields, which helps tie entropy-related state changes to explicit software actions [kmac.sv:532-548]. The `cfg_en_unsupported_modestrength` signal exposes a software-controlled override for otherwise unsupported mode/strength combinations, which may weaken configuration safety if enabled deliberately or erroneously [kmac.sv:554-556].",
-  "assumptions": [
-    {
-      "constraint": "When the `gen_key_unmask` branch is selected, downstream logic must either consume only `sw_key_data[0]` or otherwise define safe values for any other `sw_key_data` elements not assigned in this branch.",
-      "bug_relevance": "If other shares/elements of `sw_key_data` are expected to be valid in this configuration, they may be left unspecified by this snippet and could cause incorrect key processing. This is a behavior-contract assumption, not merely defensive hardening.",
-      "related_signals": [
-        "sw_key_data",
-        "sw_key_data_reg",
-        "EnMasking",
-        "SwKeyMasked"
-      ],
-      "source_refs": [
-        "kmac.sv:518-525"
-      ]
-    }
-  ],
   "evidence_refs": [
-    "kmac.sv:513-516",
-    "kmac.sv:518-525",
-    "kmac.sv:527-552",
-    "kmac.sv:554-556"
-  ],
-  "uncertain_points": [
-    "The snippet shows only `sw_key_data[0]` assigned in the `gen_key_unmask` branch [kmac.sv:524], so it is unclear from this region alone whether `sw_key_data` is intentionally single-share in that configuration, whether other elements are assigned elsewhere, or whether this is a partial view of a packed/unpacked structure.",
-    "Using `qe` as part of `entropy_refresh_req`, `entropy_seed_update`, and `entropy_ready` suggests these signals may be intended as qualified write/update strobes rather than simple reflections of stored register state, but the exact semantics of `q` versus `qe` depend on the `reg2hw` interface definition outside this snippet [kmac.sv:532-546].",
-    "The comment says `msg_mask_en` turns on the message LFSR when KMAC is enabled [kmac.sv:550], but the actual logic gates only on `cfg_msg_mask & msg_valid & msg_ready` and does not explicitly reference a KMAC-enable signal in this snippet; whether message validity/ready implies KMAC enabled requires external context."
+    "kmac.sv:513-556"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 513,
-  "line_end": 556
+  "line_end": 556,
+  "security_implications": ""
 }

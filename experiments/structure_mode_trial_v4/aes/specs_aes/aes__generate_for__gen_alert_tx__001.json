@@ -1,0 +1,127 @@
+{
+  "chunk_id": "aes__generate_for__gen_alert_tx__001",
+  "header": {
+    "module": "aes",
+    "block_kind": "generate",
+    "driven": [
+      "alert_tx_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "alert_test",
+      "alert",
+      "alert_rx_i"
+    ],
+    "modes": [
+      "i",
+      "NumAlerts",
+      "AlertAsyncOn",
+      "IsFatal"
+    ],
+    "tags": [
+      "alert",
+      "fatal",
+      "handshake",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each alert index i, prim_alert_sender instance drives alert_tx_o[i] via its alert_tx_o output port.",
+      "cond": "always (structural)",
+      "signals": [
+        "alert_tx_o"
+      ],
+      "refs": [
+        "aes.sv:228-240"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "The alert_ack_o and alert_state_o outputs of each prim_alert_sender instance are explicitly left unconnected, so they are not used by the parent module.",
+      "cond": "always",
+      "signals": [
+        "alert_ack_o",
+        "alert_state_o"
+      ],
+      "refs": [
+        "aes.sv:236-237"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The alert[i] and alert_test[i] inputs and alert_rx_i[i] must be valid, synchronous signals for the alert sender to operate correctly.",
+      "cond": "while the AES module is active",
+      "risk": "If alert[i] is stuck or undriven, the alert_tx_o may not reflect correct alert state, potentially missing a critical alert or causing spurious transmission.",
+      "signals": [
+        "alert",
+        "alert_test",
+        "alert_rx_i"
+      ],
+      "refs": [
+        "aes.sv:234-238"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The prim_alert_sender module must tolerate the alert_ack_o output being unconnected, i.e., it must internally deassert alert_req without external acknowledgment, or the system design accounts for it elsewhere.",
+      "cond": "when an alert is triggered",
+      "risk": "If prim_alert_sender waits indefinitely for an ack, the alert will remain asserted, preventing recovery and potentially blocking normal operation.",
+      "signals": [
+        "alert_ack_o",
+        "alert_req_i"
+      ],
+      "refs": [
+        "aes.sv:236"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "Leaving alert_ack_o unconnected may cause a stuck alert if the prim_alert_sender requires an acknowledgment to clear the alert request. It is unknown if internal timeout or other mechanism handles this.",
+      "cond": "alert_req_i asserted",
+      "risk": "Stuck alert output leading to unhandled safety response.",
+      "signals": [
+        "alert_ack_o",
+        "alert_req_i",
+        "alert_tx_o"
+      ],
+      "refs": [
+        "aes.sv:236"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The IsFatal parameter is set to i (loop index). This maps alert[0] to non-fatal and alert[1] to fatal (if NumAlerts=2). If NumAlerts were >2, alerts beyond index 1 would also be fatal. The intended mapping and whether NumAlerts is strictly 2 is unclear.",
+      "cond": "NumAlerts > 2",
+      "risk": "Unintended fatal classification for alerts, or inconsistency with system-level alert handling.",
+      "signals": [
+        "IsFatal",
+        "i"
+      ],
+      "refs": [
+        "aes.sv:230"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "aes.sv:227-241"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv",
+  "line_start": 227,
+  "line_end": 241,
+  "security_implications": ""
+}

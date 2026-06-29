@@ -1,0 +1,227 @@
+{
+  "chunk_id": "hmac__always_ff__line_375__001",
+  "header": {
+    "module": "hmac",
+    "block_kind": "always_ff",
+    "driven": [
+      "cfg_reg"
+    ],
+    "used": [
+      "rst_ni",
+      "cfg_block",
+      "reg2hw.cfg.hmac_en.qe",
+      "reg2hw.cfg"
+    ],
+    "modes": [
+      "reset",
+      "hold",
+      "update"
+    ],
+    "tags": [
+      "csr",
+      "configuration",
+      "reset",
+      "security",
+      "key_length",
+      "digest_size",
+      "swap"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "On negedge rst_ni, cfg_reg is set to known reset values: hmac_en and sha_en disabled (q=0, qe=0), endian_swap, digest_swap, key_swap, digest_size, key_length set to respective HMAC_CFG_*_RESVAL parameters, and all other fields zeroed via 'default:'0', with all qe bits 0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
+        "cfg_reg",
+        "HMAC_CFG_ENDIAN_SWAP_RESVAL",
+        "HMAC_CFG_DIGEST_SWAP_RESVAL",
+        "HMAC_CFG_KEY_SWAP_RESVAL",
+        "HMAC_CFG_DIGEST_SIZE_RESVAL",
+        "HMAC_CFG_KEY_LENGTH_RESVAL"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:376-407"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not in reset and cfg_block is low and reg2hw.cfg.hmac_en.qe is high, cfg_reg is overwritten with the entire reg2hw.cfg struct.",
+      "cond": "posedge clk_i, rst_ni==1, cfg_block==0, reg2hw.cfg.hmac_en.qe==1",
+      "signals": [
+        "cfg_reg",
+        "reg2hw.cfg",
+        "reg2hw.cfg.hmac_en.qe",
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408-409"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "Outside reset and when the update condition is not satisfied, cfg_reg holds its previous value.",
+      "cond": "posedge clk_i, rst_ni==1 and not (cfg_block==0 && reg2hw.cfg.hmac_en.qe==1)",
+      "signals": [
+        "cfg_reg"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408-411 (inferred hold)"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "reg2hw.cfg must be stable and valid at the rising clock edge when reg2hw.cfg.hmac_en.qe is asserted and cfg_block is low.",
+      "cond": "during cfg update window",
+      "risk": "If reg2hw.cfg changes simultaneously, cfg_reg may latch corrupted values, leading to incorrect HMAC parameters (digest size, key length, swaps) and potential security bypass.",
+      "signals": [
+        "reg2hw.cfg",
+        "reg2hw.cfg.hmac_en.qe"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408-409"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "cfg_block must be correctly controlled to allow configuration updates only when safe; it must not be stuck in assertion.",
+      "cond": "when configuration changes are required or prohibited",
+      "risk": "If cfg_block is stuck high, configuration becomes frozen, potentially using stale or unsafe settings. If stuck low during sensitive operation, updates could corrupt HMAC state.",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "HMAC_CFG_ENDIAN_SWAP_RESVAL, HMAC_CFG_DIGEST_SWAP_RESVAL, HMAC_CFG_KEY_SWAP_RESVAL, HMAC_CFG_DIGEST_SIZE_RESVAL, HMAC_CFG_KEY_LENGTH_RESVAL must be set to legal values consistent with the HMAC/SHA engine capabilities.",
+      "cond": "during reset",
+      "risk": "Illegal parameter values (e.g., unsupported digest size, out-of-range key length) could cause HMAC to malfunction, produce incorrect MACs, or create security weaknesses.",
+      "signals": [
+        "HMAC_CFG_DIGEST_SIZE_RESVAL",
+        "HMAC_CFG_KEY_LENGTH_RESVAL",
+        "cfg_reg.digest_size.q",
+        "cfg_reg.key_length.q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:386-405"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "reg2hw.cfg.hmac_en.qe is a single-cycle pulse aligned with clk_i.",
+      "cond": "during register write",
+      "risk": "A glitch or multi-cycle pulse could cause multiple unexpected updates or metastability on cfg_reg.",
+      "signals": [
+        "reg2hw.cfg.hmac_en.qe"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "cfg_reg update is triggered only by reg2hw.cfg.hmac_en.qe; writes to other fields (sha_en, endian_swap, etc.) do not independently cause an update. It is unclear whether this enforces atomic configuration or is an oversight.",
+      "cond": "when software writes to any cfg field other than hmac_en without also writing hmac_en",
+      "risk": "If partitions of the configuration are expected to be written separately, those writes would not take effect, causing a mismatch between register values and hardware state that could lead to incorrect HMAC operation.",
+      "signals": [
+        "reg2hw.cfg.sha_en.qe",
+        "reg2hw.cfg.endian_swap.qe",
+        "reg2hw.cfg.digest_swap.qe",
+        "reg2hw.cfg.key_swap.qe",
+        "reg2hw.cfg.digest_size.qe",
+        "reg2hw.cfg.key_length.qe"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "medium",
+      "claim": "The reset assignment uses 'default:'0' for all struct fields not explicitly listed; if there are unmapped fields that should hold a non-zero default for security, this zeroing could be wrong.",
+      "cond": "during reset",
+      "risk": "Reserved or hidden fields (e.g., internal control bits) could be erroneously cleared, compromising the HMAC's security or correct reset behavior.",
+      "signals": [
+        "cfg_reg"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:406"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "cfg_block is used as an update gate, but the block contains no mechanism to recover if cfg_block becomes stuck high; the configuration would be permanently frozen.",
+      "cond": "if cfg_block is permanently asserted due to a fault",
+      "risk": "A stuck-at fault on cfg_block could cause denial of service by preventing any configuration changes, and the HMAC might operate with outdated or unknown parameters.",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The reset values for digest_size and key_length are taken directly from parameters HMAC_CFG_DIGEST_SIZE_RESVAL and HMAC_CFG_KEY_LENGTH_RESVAL without any range check; an out-of-range parameter could set illegal values.",
+      "cond": "if the parameters are configured to an unsupported value",
+      "risk": "Illegal digest_size could cause SHA engine to fail or produce incorrect hash length; illegal key_length could break HMAC key handling, potentially allowing weak keys or protocol violations.",
+      "signals": [
+        "HMAC_CFG_DIGEST_SIZE_RESVAL",
+        "HMAC_CFG_KEY_LENGTH_RESVAL",
+        "cfg_reg.digest_size.q",
+        "cfg_reg.key_length.q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:398-405"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The qe bits of reg2hw.cfg for fields other than hmac_en are not read in this update block; they may be unused elsewhere.",
+      "cond": "always",
+      "risk": "If these signals are entirely unused, they represent dead logic or wasted fanout, but do not directly cause incorrect behavior. However, if they were intended to gate separate updates, their absence leads to the spec gap in U1.",
+      "signals": [
+        "reg2hw.cfg.sha_en.qe",
+        "reg2hw.cfg.endian_swap.qe",
+        "reg2hw.cfg.digest_swap.qe",
+        "reg2hw.cfg.key_swap.qe",
+        "reg2hw.cfg.digest_size.qe",
+        "reg2hw.cfg.key_length.qe"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:375-411"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
+  "line_start": 375,
+  "line_end": 411,
+  "security_implications": ""
+}

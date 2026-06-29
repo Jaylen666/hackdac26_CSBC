@@ -1,61 +1,149 @@
 {
   "chunk_id": "kmac_core__always_ff__line_275__001",
-  "summary": "该寄存器在一次处理请求开始时置位，并在处理已对外可见或底层完成指示到来时清零，用于记住尚未完成传播的 process 请求。",
-  "behavior": "该时序块维护寄存器 process_latched。复位时该寄存器清零 [kmac_core.sv:275-278]。正常工作时，当 process_i 为真且 process_o 还未为真时，寄存器被置 1，用来锁存一个已发起但尚未由 process_o 反映出来的处理请求 [kmac_core.sv:278-279]。随后，当 process_o 为真，或 done_i 通过 mubi4_test_true_strict 被严格判定为真时，寄存器被清零 [kmac_core.sv:280-282]。若上述条件都不满足，则寄存器保持原值。代码体现出清零条件优先于保持，但低于前面的置位分支；因此在同一拍中若同时满足 process_i && !process_o，则优先置位而不是因 done_i 真而清零 [kmac_core.sv:278-282]。",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "always_ff",
+    "driven": [
+      "process_latched"
+    ],
+    "used": [
+      "process_i",
+      "process_o",
+      "done_i",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "reset",
+      "fault",
+      "mubi4"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位激活时，process_latched 一定被清零。",
-      "output_signals": [
-        "process_latched"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, process_latched is cleared to 0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "process_latched",
+        "rst_ni"
       ],
-      "source_refs": [
-        "kmac_core.sv:275-278"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:276-277"
       ]
     },
     {
-      "property": "当 process_o 为真或 done_i 被严格判定为真，且同拍不满足 process_i && !process_o 时，process_latched 一定被清零。",
-      "output_signals": [
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not in reset, if process_i is high and process_o is low, process_latched is set to 1.",
+      "cond": "!rst_ni && process_i && !process_o",
+      "signals": [
+        "process_latched",
+        "process_i",
+        "process_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:278-279"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When not in reset, if process_o is high or the strict true test on done_i (a mubi4 signal) passes, process_latched is cleared to 0.",
+      "cond": "!rst_ni && (process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i))",
+      "signals": [
+        "process_latched",
+        "process_o",
+        "done_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-282"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When none of the above conditions are true (i.e., not reset, process_i=0 or process_o=1, and neither process_o nor done_i true asserted as per G3 condition), process_latched retains its previous value.",
+      "cond": "!rst_ni && !(process_i && !process_o) && !(process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i))",
+      "signals": [
         "process_latched"
       ],
-      "source_refs": [
-        "kmac_core.sv:278-282"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275-284"
       ]
     }
   ],
-  "security_implications": "done_i 采用 mubi4_test_true_strict 进行严格真值判定，说明完成信号使用了 multi-bit boolean 语义，避免将无效或被干扰的编码误判为完成。这有助于防止安全关键处理流程被错误提前结束。",
   "assumptions": [
     {
-      "constraint": "process_i 应表示一个合法的处理启动请求；设计允许在 process_o 尚未置位时先将该请求锁存，但若上游在非预期状态下持续或反复拉高 process_i，可能导致 process_latched 长时间保持置位。该场景从代码看有安全回退行为（保持锁存），但设计上通常不应发生。",
-      "bug_relevance": "若不满足则 process_latched 可能持续指示存在待处理请求，影响后续控制流或掩盖真正的请求边界，但该片段本身不会进入未定义状态。",
-      "related_signals": [
+      "id": "A1",
+      "type": "handshake",
+      "claim": "Inputs process_i, process_o, and done_i are synchronous to clk_i and stable at the sampling edge.",
+      "cond": "Every posedge clk_i",
+      "risk": "Metastability or setup/hold violations could cause incorrect sampling, leading to spurious process_latched changes.",
+      "signals": [
         "process_i",
         "process_o",
-        "process_latched"
+        "done_i",
+        "clk_i"
       ],
-      "source_refs": [
-        "kmac_core.sv:278-279"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275"
       ]
     },
     {
-      "constraint": "done_i 需要遵循 prim_mubi_pkg::mubi4_test_true_strict 所期望的合法 MuBi4 编码；否则即使外部认为已完成，该片段也可能不会清零 process_latched。",
-      "bug_relevance": "如果违反该约束，完成事件可能无法被本逻辑识别，导致 process_latched 错误地保持为 1，进而影响处理完成后的控制行为。",
-      "related_signals": [
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "done_i is a valid mubi4 encoded signal, and prim_mubi_pkg::mubi4_test_true_strict correctly returns true only for the 'true' encoding, false otherwise.",
+      "cond": "Whenever done_i is evaluated",
+      "risk": "If done_i is driven with an invalid encoding, mubi4_test_true_strict may return false even when a done condition should be signaled, preventing process_latched from clearing and potentially stalling the core.",
+      "signals": [
+        "done_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:281"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If done_i becomes corrupted (invalid mubi4 encoding or stuck at false), process_latched may never be cleared, causing a permanent stall.",
+      "cond": "done_i is invalid or stuck",
+      "risk": "Core hangs, potentially denying service or blocking secure wipe/shutdown sequences.",
+      "signals": [
         "done_i",
         "process_latched"
       ],
-      "source_refs": [
-        "kmac_core.sv:280-282"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:281"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The simultaneous use of process_o and done_i to clear process_latched (OR) may represent an intended early termination, but the exact protocol (whether process_o reflects active processing and done_i indicates normal completion) needs clarification.",
+      "cond": "When process_o is low but done_i becomes true",
+      "risk": "If done_i is not intended as an early-termination signal, its assertion while process_o is low might incorrectly terminate a request that has not yet started.",
+      "signals": [
+        "process_o",
+        "done_i",
+        "process_latched"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-281"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_core.sv:275-282"
-  ],
-  "uncertain_points": [
-    "仅凭该片段无法确定 process_latched 在模块其余部分中的具体用途；从命名和条件看，它像是用于跨若干拍记住 process 请求，直到 process_o 或 done_i 表示请求已被接收/完成。",
-    "当 process_o 与 done_i 的语义不一致时该片段仍会对任一条件清零，但无法仅凭此处判断二者分别代表“请求已发出”还是“运算已完成”的精确定义。"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275-284"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 275,
-  "line_end": 284
+  "line_end": 284,
+  "security_implications": ""
 }

@@ -1,37 +1,157 @@
 {
   "chunk_id": "kmac__continuous_region__declarations_or_instances__015",
-  "summary": "该片段将恢复类控制更新错误写入状态寄存器接口，并把多种内部错误汇总为一个致命告警指示。",
-  "behavior": "片段首先把内部状态信号 status_alert_recov_ctrl_update_err 直接驱动到寄存器回写接口 hw2reg.status.alert_recov_ctrl_update_err.d，用于把该恢复类控制更新错误反映到状态寄存器中（1444）。同时，组合信号 alert_fatal 被定义为若干错误源的按位或：shadowed_storage_err、alert_intg_err、sparse_fsm_error、counter_error 和 control_integrity_error 中任一为真时，alert_fatal 即为真（1446-1451）。随后声明了 status_alert_fatal_fault，并由注释表明设计意图是将 fatal alert 暴露到状态寄存器，且该状态除硬复位外不可清除；但本片段仅出现声明和注释，未展示该信号的具体赋值或保持逻辑，因此该不可清除特性无法仅凭本片段确认（1453-1455）。",
+  "header": {
+    "module": "kmac",
+    "block_kind": "mixed",
+    "driven": [
+      "hw2reg.status.alert_recov_ctrl_update_err.d",
+      "alert_fatal"
+    ],
+    "used": [
+      "status_alert_recov_ctrl_update_err",
+      "shadowed_storage_err",
+      "alert_intg_err",
+      "sparse_fsm_error",
+      "counter_error",
+      "control_integrity_error"
+    ],
+    "modes": [],
+    "tags": [
+      "alert",
+      "error",
+      "fault",
+      "status",
+      "integrity"
+    ]
+  },
   "guarantees": [
     {
-      "property": "状态寄存器回写字段 hw2reg.status.alert_recov_ctrl_update_err.d 始终等于内部信号 status_alert_recov_ctrl_update_err。",
-      "output_signals": [
-        "hw2reg.status.alert_recov_ctrl_update_err.d"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "hw2reg.status.alert_recov_ctrl_update_err.d is continuously assigned to status_alert_recov_ctrl_update_err.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.status.alert_recov_ctrl_update_err.d",
+        "status_alert_recov_ctrl_update_err"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1444-1444"
+      "refs": [
+        "kmac.sv:1444"
       ]
     },
     {
-      "property": "当 shadowed_storage_err、alert_intg_err、sparse_fsm_error、counter_error、control_integrity_error 中任一置位时，alert_fatal 一定为 1；仅当这些错误源全部为 0 时，alert_fatal 为 0。",
-      "output_signals": [
-        "alert_fatal"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "alert_fatal is asserted when any of shadowed_storage_err, alert_intg_err, sparse_fsm_error, counter_error, or control_integrity_error is high.",
+      "cond": "combinational OR",
+      "signals": [
+        "alert_fatal",
+        "shadowed_storage_err",
+        "alert_intg_err",
+        "sparse_fsm_error",
+        "counter_error",
+        "control_integrity_error"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1446-1451"
+      "refs": [
+        "kmac.sv:1446-1451"
       ]
     }
   ],
-  "security_implications": "该片段属于安全/完整性相关告警汇总路径。影子寄存器存储错误、告警完整性错误、稀疏 FSM 错误、计数器错误和控制完整性错误都会直接升级为统一的 fatal alert（1446-1451），有利于故障检测与失效上报。注释还表明 fatal alert 状态计划对软件可见且应具备粘滞性，仅能由硬复位清除（1453-1454），这有助于防止软件掩盖严重故障；但该粘滞实现不在本片段中体现。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1444-1455"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "The hw2reg module correctly latches status_alert_recov_ctrl_update_err on its update strobe to capture the recoverable control update error.",
+      "cond": "when hw2reg.status.alert_recov_ctrl_update_err is read/updated",
+      "risk": "Incorrect latching could cause the error to be missed or glitched, leading to undetected recoverable control update errors.",
+      "signals": [
+        "hw2reg.status.alert_recov_ctrl_update_err.d",
+        "status_alert_recov_ctrl_update_err"
+      ],
+      "refs": [
+        "kmac.sv:1444"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The error inputs to alert_fatal (shadowed_storage_err, alert_intg_err, sparse_fsm_error, counter_error, control_integrity_error) are synchronous to the sampling of alert_fatal or are held stable long enough to avoid glitch propagation.",
+      "cond": "when alert_fatal is observed by downstream logic",
+      "risk": "Combinational glitches may cause false assertion or missed capture of the fatal alert, breaking fault signaling.",
+      "signals": [
+        "alert_fatal",
+        "shadowed_storage_err",
+        "alert_intg_err",
+        "sparse_fsm_error",
+        "counter_error",
+        "control_integrity_error"
+      ],
+      "refs": [
+        "kmac.sv:1446-1451"
+      ]
+    }
   ],
   "uncertain_points": [
-    "注释称 fatal alert 应“通过状态寄存器可观察”且“除硬复位外不可复位”（1453-1454），但本片段只声明了 status_alert_fatal_fault（1455），没有展示其赋值、置位条件或粘滞保持逻辑，需结合后续 always_ff/assign 代码确认实际 RTL 是否完全符合该设计意图。",
-    "本片段仅定义了 alert_fatal 的组合汇总（1446-1451），未显示其是否直接连接到外部 alert 发送机制，或是否还会经过额外屏蔽/锁存逻辑。"
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The combinational alert_fatal may glitch if its error inputs change asynchronously or have different arrival times, risking missed capture by the intended sticky status_alert_fatal_fault register.",
+      "cond": "error input transitions relative to the capture logic timing",
+      "risk": "A fatal alert could be missed, allowing critical integrity or fault conditions to go undetected.",
+      "signals": [
+        "alert_fatal",
+        "shadowed_storage_err",
+        "alert_intg_err",
+        "sparse_fsm_error",
+        "counter_error",
+        "control_integrity_error",
+        "status_alert_fatal_fault"
+      ],
+      "refs": [
+        "kmac.sv:1446-1451",
+        "kmac.sv:1453-1455"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Multiple fatal error sources are OR‑reduced to a single alert_fatal signal; it is unclear if each source has a separate sticky status bit for root‑cause isolation.",
+      "cond": "when any error source is active",
+      "risk": "Debug and fault isolation are hindered, especially for integrity and shadow storage errors.",
+      "signals": [
+        "shadowed_storage_err",
+        "alert_intg_err",
+        "sparse_fsm_error",
+        "counter_error",
+        "control_integrity_error",
+        "alert_fatal"
+      ],
+      "refs": [
+        "kmac.sv:1446-1451",
+        "kmac.sv:1453-1455"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "The logic signal status_alert_fatal_fault is declared but not assigned in this chunk; its usage and connection to the alert_fatal path are not visible here.",
+      "cond": "unknown",
+      "risk": "If never assigned, fatal fault status would be missing, breaking the observability of fatal errors.",
+      "signals": [
+        "status_alert_fatal_fault"
+      ],
+      "refs": [
+        "kmac.sv:1455"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:1444-1455"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1444,
-  "line_end": 1455
+  "line_end": 1455,
+  "security_implications": ""
 }

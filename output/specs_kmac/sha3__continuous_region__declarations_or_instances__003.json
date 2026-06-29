@@ -1,72 +1,200 @@
 {
   "chunk_id": "sha3__continuous_region__declarations_or_instances__003",
-  "summary": "该片段将若干内部状态/完成信号直接导出，并实例化受保护的稀疏编码 SHA3 状态寄存器。",
-  "behavior": "该连续逻辑把 `keccak_complete` 直接映射到 `block_processed_o`，因此块处理完成输出与内部 Keccak 完成指示保持一致；同时把内部状态有效标志 `state_valid` 导出为 `state_valid_o`，把受保护状态值 `state_guarded` 导出为 `state_o`。`sha3_fsm_o` 则由稀疏编码状态 `st` 经过 `sparse2logic` 转换得到，用于向外提供逻辑化的 FSM 状态表示。最后，片段通过 `PRIM_FLOP_SPARSE_FSM` 宏实例化状态寄存器 `u_state_regs`，使用 `st_d` 作为下一状态、`st` 作为当前状态，状态类型为 `sha3_st_sparse_e`，复位/默认状态为 `StIdle_sparse`；从注释和宏名看，设计意图是采用稀疏 FSM 寄存器实现状态保护，但宏的精确防护行为需依赖其定义确认。",
+  "header": {
+    "module": "sha3",
+    "block_kind": "mixed",
+    "driven": [
+      "block_processed_o",
+      "state_valid_o",
+      "state_o",
+      "sha3_fsm_o",
+      "st"
+    ],
+    "used": [
+      "keccak_complete",
+      "state_valid",
+      "state_guarded",
+      "st",
+      "st_d",
+      "sha3_st_sparse_e",
+      "StIdle_sparse",
+      "sparse2logic",
+      "PRIM_FLOP_SPARSE_FSM"
+    ],
+    "modes": [
+      "StIdle_sparse"
+    ],
+    "tags": [
+      "handshake",
+      "sparse_fsm",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "`block_processed_o` 始终等于内部完成指示 `keccak_complete`。",
-      "output_signals": [
-        "block_processed_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "block_processed_o is continuously assigned the value of keccak_complete.",
+      "cond": "always",
+      "signals": [
+        "block_processed_o",
+        "keccak_complete"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:214-214"
+      "refs": [
+        "sha3.sv:214"
       ]
     },
     {
-      "property": "`state_valid_o` 和 `state_o` 分别直接反映内部的 `state_valid` 与 `state_guarded`。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "state_valid_o is continuously assigned the value of state_valid.",
+      "cond": "always",
+      "signals": [
         "state_valid_o",
-        "state_o"
+        "state_valid"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:217-218"
+      "refs": [
+        "sha3.sv:217"
       ]
     },
     {
-      "property": "`sha3_fsm_o` 始终是当前稀疏状态 `st` 经过 `sparse2logic` 转换后的结果。",
-      "output_signals": [
-        "sha3_fsm_o"
+      "id": "G3",
+      "type": "assignment",
+      "claim": "state_o is continuously assigned the value of state_guarded.",
+      "cond": "always",
+      "signals": [
+        "state_o",
+        "state_guarded"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:220-220"
+      "refs": [
+        "sha3.sv:218"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "sha3_fsm_o is continuously assigned the result of sparse2logic(st).",
+      "cond": "always",
+      "signals": [
+        "sha3_fsm_o",
+        "st"
+      ],
+      "refs": [
+        "sha3.sv:220"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "reg_update",
+      "claim": "The macro PRIM_FLOP_SPARSE_FSM instantiates a state register that updates st with st_d on each clock edge and resets to StIdle_sparse.",
+      "cond": "on positive clock edge (inferred from macro name)",
+      "signals": [
+        "st",
+        "st_d",
+        "StIdle_sparse"
+      ],
+      "refs": [
+        "sha3.sv:227"
       ]
     }
   ],
-  "security_implications": "该片段涉及安全相关的状态机保护：FSM 状态采用稀疏编码寄存器宏 `PRIM_FLOP_SPARSE_FSM` 保存，并对外导出 `state_guarded` 而不是裸内部状态，说明设计意图是提升对状态非法编码或故障注入的鲁棒性。另一方面，`sha3_fsm_o` 将内部稀疏状态经 `sparse2logic` 后导出，外部可见的是逻辑化状态而非原始稀疏编码。",
   "assumptions": [
     {
-      "constraint": "`sparse2logic(st)` 必须对 `sha3_st_sparse_e` 的所有合法状态提供唯一且正确的逻辑映射。",
-      "bug_relevance": "如果映射错误，外部通过 `sha3_fsm_o` 观察到的 FSM 状态会与真实内部状态不一致，可能导致控制/监测逻辑误判；这属于行为契约，违反通常构成功能错误。",
-      "related_signals": [
-        "st",
-        "sha3_fsm_o"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "keccak_complete must be glitch-free and meet the timing requirements of the consumer of block_processed_o.",
+      "cond": "during active operation",
+      "risk": "glitches could cause false block_processed indications downstream.",
+      "signals": [
+        "keccak_complete",
+        "block_processed_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:220-220"
+      "refs": [
+        "sha3.sv:214"
       ]
     },
     {
-      "constraint": "`PRIM_FLOP_SPARSE_FSM` 宏需按设计意图正确实现 `st_d` 到 `st` 的稀疏 FSM 寄存和默认落到 `StIdle_sparse` 的行为。",
-      "bug_relevance": "如果该宏实现与注释/调用语义不符，FSM 复位默认状态或非法状态防护可能失效，进而影响状态导出与后续控制逻辑；这属于行为契约，违反可能构成功能或安全问题。",
-      "related_signals": [
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "st_d must be a valid sparse one-hot encoding consistent with sha3_st_sparse_e at every clock edge.",
+      "cond": "before each active clock edge",
+      "risk": "the sparse flop may capture an illegal state, leading to undefined FSM behavior.",
+      "signals": [
         "st_d",
-        "st"
+        "st",
+        "sha3_st_sparse_e"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:226-227"
+      "refs": [
+        "sha3.sv:227"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "state_guarded is directly assigned to state_o; it is unclear whether state_guarded contains secret or sensitive cryptographic material that should not be exposed without additional masking or filtering.",
+      "cond": "always",
+      "risk": "if state_guarded holds unprotected secrets (e.g., key bits, digest intermediates), they will be observable at state_o, breaking confidentiality.",
+      "signals": [
+        "state_guarded",
+        "state_o"
+      ],
+      "refs": [
+        "sha3.sv:218"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The PRIM_FLOP_SPARSE_FSM macro may not explicitly handle illegal non-one-hot inputs on st_d (e.g., due to glitches or soft errors); the resulting st could represent an undefined state.",
+      "cond": "if st_d becomes multi-bit or zero",
+      "risk": "FSM could enter a dead-end, skip security-critical stages, or produce incorrect outputs without detection.",
+      "signals": [
+        "st_d",
+        "st",
+        "sha3_st_sparse_e"
+      ],
+      "refs": [
+        "sha3.sv:227"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The behavior of sparse2logic on an illegal sparse input from st (e.g., if the flop captures a faulty value) is not specified here; the output sha3_fsm_o may become an invalid logical state.",
+      "cond": "if st is not a one-hot sparse value",
+      "risk": "sha3_fsm_o could assert an inconsistent or reserved value, confusing external monitors or causing false state reports.",
+      "signals": [
+        "st",
+        "sha3_fsm_o"
+      ],
+      "refs": [
+        "sha3.sv:220"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:214-220",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv:226-227"
-  ],
-  "uncertain_points": [
-    "`state_guarded` 与内部原始状态之间的关系在本片段未定义，只能确认 `state_o` 直接等于 `state_guarded`，无法仅据此判断其具体保护编码或错误处理方式。",
-    "`PRIM_FLOP_SPARSE_FSM` 的具体复位、非法状态检测/纠错和告警行为未在片段中展开；安全属性主要来自宏名和注释，需结合宏定义确认。",
-    "`keccak_complete` 的产生条件不在本片段中，故只能确认 `block_processed_o` 是其镜像，不能单独从此片段定义“处理完成”的完整语义。"
+    "sha3.sv:214",
+    "sha3.sv:215",
+    "sha3.sv:216",
+    "sha3.sv:217",
+    "sha3.sv:218",
+    "sha3.sv:219",
+    "sha3.sv:220",
+    "sha3.sv:221",
+    "sha3.sv:222",
+    "sha3.sv:223",
+    "sha3.sv:224",
+    "sha3.sv:225",
+    "sha3.sv:226",
+    "sha3.sv:227"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3.sv",
   "line_start": 214,
-  "line_end": 227
+  "line_end": 227,
+  "security_implications": ""
 }

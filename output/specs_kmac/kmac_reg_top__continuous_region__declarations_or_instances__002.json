@@ -1,83 +1,322 @@
 {
   "chunk_id": "kmac_reg_top__continuous_region__declarations_or_instances__002",
-  "summary": "该片段搭建了 KMAC 寄存器顶层的 TL-UL 到寄存器接口，并开始实例化中断状态寄存器字段，其中 kmac_done 为软件写 1 清零且 fifo_empty 为硬件只读更新。",
-  "behavior": "片段首先实例化 `tlul_adapter_reg`，将 TL 寄存器总线请求转换为内部寄存器访问信号：输出写使能 `reg_we`、读使能 `reg_re`、地址 `reg_addr`、写数据 `reg_wdata` 和字节使能 `reg_be`，并使用 `reg_busy`、`reg_rdata`、`reg_error` 作为返回通道；取指访问被固定禁止为 `MuBi4False`，该适配器的数据完整性生成功能也被关闭（`EnableDataIntgGen(0)`），且其 `intg_error_o` 未被使用 [kmac_reg_top.sv:148-170]。组合逻辑上，读返回数据直接等于 `reg_rdata_next`，寄存器访问错误 `reg_error` 由地址未命中 `addrmiss`、写错误 `wr_err` 或完整性错误 `intg_err` 的按位或构成 [kmac_reg_top.sv:172-175]。随后本片段声明了大量软件可见寄存器字段对应的内部连线，采用 `<reg>_<field>_{wd,we,qs}` 命名，覆盖中断、告警测试、影子配置、命令、状态、熵参数、密钥 share、前缀和错误码等寄存器接口信号；这些声明本身不产生行为，但表明后续寄存器实例会通过这些信号与 `reg2hw/hw2reg` 交互 [kmac_reg_top.sv:177-376]。在实际寄存器实现上，本片段开始实例化 `intr_state` 寄存器的两个字段：`kmac_done` 字段是 1 位、复位为 0 的 `prim_subreg`，软件访问类型为 W1C，因此软件经 `intr_state_we`/`intr_state_kmac_done_wd` 可执行写 1 清除，同时硬件也可通过 `hw2reg.intr_state.kmac_done.de/d` 更新该位，当前值对内部硬件经 `reg2hw.intr_state.kmac_done.q` 可见，读路径经 `intr_state_kmac_done_qs` 提供 [kmac_reg_top.sv:377-404]。`intr_state.fifo_empty` 字段同样为 1 位、复位为 0，但软件访问类型为只读，软件写入端被硬连为无效（`we=1'b0`, `wd='0`），因此该位只能由硬件通过 `hw2reg.intr_state.fifo_empty.de/d` 更新，并通过 `reg2hw.intr_state.fifo_empty.q` 与读侧 `qs` 导出 [kmac_reg_top.sv:406-427]。",
+  "header": {
+    "module": "kmac_reg_top",
+    "block_kind": "mixed",
+    "driven": [
+      "reg_rdata",
+      "reg_error",
+      "reg_we",
+      "reg_re",
+      "reg_addr",
+      "reg_wdata",
+      "reg_be"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "tl_reg_h2d",
+      "tl_reg_d2h",
+      "prim_mubi_pkg::MuBi4False",
+      "reg_rdata_next",
+      "addrmiss",
+      "wr_err",
+      "intg_err",
+      "reg_rdata",
+      "reg_error",
+      "reg_busy"
+    ],
+    "modes": [
+      "EnableDataIntgGen=0",
+      "SwAccessW1C (intr_state_kmac_done)",
+      "SwAccessRO (intr_state_fifo_empty)"
+    ],
+    "tags": [
+      "secret",
+      "key",
+      "entropy",
+      "alert",
+      "error",
+      "fault",
+      "integrity",
+      "fifo",
+      "reset",
+      "handshake",
+      "csr"
+    ]
+  },
   "guarantees": [
     {
-      "property": "寄存器总线返回给适配器的读数据始终等于 `reg_rdata_next`。",
-      "output_signals": [
-        "reg_rdata"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "reg_rdata is continuously assigned from reg_rdata_next.",
+      "cond": "always",
+      "signals": [
+        "reg_rdata",
+        "reg_rdata_next"
       ],
-      "source_refs": [
-        "kmac_reg_top.sv:174-174"
+      "refs": [
+        "file:174"
       ]
     },
     {
-      "property": "寄存器访问错误指示 `reg_error` 在 `addrmiss`、`wr_err` 或 `intg_err` 任一为 1 时必定为 1。",
-      "output_signals": [
-        "reg_error"
-      ],
-      "source_refs": [
-        "kmac_reg_top.sv:175-175"
-      ]
-    },
-    {
-      "property": "`intr_state.fifo_empty` 字段不接受软件写入，只能由硬件更新。",
-      "output_signals": [
-        "reg2hw.intr_state.fifo_empty.q",
-        "intr_state_fifo_empty_qs"
-      ],
-      "source_refs": [
-        "kmac_reg_top.sv:407-427"
-      ]
-    }
-  ],
-  "security_implications": "该片段涉及若干安全相关寄存器接口声明，包括影子配置错误、告警测试、密钥 share 和错误码信号 [kmac_reg_top.sv:197-375]，但本片段中实际生效的安全行为主要体现在总线错误聚合上：`intg_err` 会直接并入 `reg_error`，因此完整性异常会被寄存器接口报告 [kmac_reg_top.sv:175-175]。同时，取指访问被固定禁止 [kmac_reg_top.sv:159-159]。不过，由于 `tlul_adapter_reg` 的 `intg_error_o` 被悬空且数据完整性生成关闭，其更完整的安全策略需要结合外部上下文确认 [kmac_reg_top.sv:151-160]。",
-  "assumptions": [
-    {
-      "constraint": "`reg_rdata_next`、`addrmiss`、`wr_err` 和 `intg_err` 需要由本模块其他组合逻辑对每次寄存器访问给出一致且互不矛盾的结果，否则 TL 适配器会基于错误的读数据或错误标志响应事务。",
-      "bug_relevance": "这是行为契约；若违反，合法总线访问可能返回错误数据，或漏报/误报寄存器访问错误。",
-      "related_signals": [
-        "reg_rdata_next",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "reg_error is the logical OR of addrmiss, wr_err, and intg_err.",
+      "cond": "always",
+      "signals": [
+        "reg_error",
         "addrmiss",
         "wr_err",
-        "intg_err",
-        "reg_rdata",
-        "reg_error"
+        "intg_err"
       ],
-      "source_refs": [
-        "kmac_reg_top.sv:162-169",
-        "kmac_reg_top.sv:174-175"
+      "refs": [
+        "file:175"
       ]
     },
     {
-      "constraint": "软件不应期望通过寄存器写操作改变 `intr_state.fifo_empty`，因为该字段被设计为只读并带有安全回退行为（写入口被硬关闭）。",
-      "bug_relevance": "若不满足则软件会观察到写入无效；这更像防御性设计下的不应发生场景，而不是该 RTL 的 bug。",
-      "related_signals": [
+      "id": "G3",
+      "type": "assignment",
+      "claim": "The TL-UL adapter u_reg_if has en_ifetch_i driven to MuBi4False, disabling instruction fetch mode.",
+      "cond": "always",
+      "signals": [
+        "en_ifetch_i",
+        "prim_mubi_pkg::MuBi4False"
+      ],
+      "refs": [
+        "file:159"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "The intg_error_o output of u_reg_if is left unconnected, so no integrity error signal is routed from the adapter.",
+      "cond": "always",
+      "signals": [
+        "intg_error_o"
+      ],
+      "refs": [
+        "file:160"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "u_intr_state_kmac_done instance connects write-enable from intr_state_we, write-data from intr_state_kmac_done_wd, hardware set/de from hw2reg.intr_state.kmac_done, and output qs to intr_state_kmac_done_qs, with SwAccessW1C.",
+      "cond": "always",
+      "signals": [
         "intr_state_we",
-        "intr_state_fifo_empty_qs",
+        "intr_state_kmac_done_wd",
+        "hw2reg.intr_state.kmac_done.de",
+        "hw2reg.intr_state.kmac_done.d",
+        "intr_state_kmac_done_qs"
+      ],
+      "refs": [
+        "file:379-404"
+      ]
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "u_intr_state_fifo_empty instance ties we=0, wd=0, and connects hardware de/d from hw2reg.intr_state.fifo_empty, making the register read-only.",
+      "cond": "always",
+      "signals": [
+        "intr_state_fifo_empty",
         "hw2reg.intr_state.fifo_empty.de",
         "hw2reg.intr_state.fifo_empty.d"
       ],
-      "source_refs": [
-        "kmac_reg_top.sv:406-427"
+      "refs": [
+        "file:407-427"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "reg_rdata_next provides the correct read data for the addressed register.",
+      "cond": "when a valid read access occurs",
+      "risk": "Incorrect reg_rdata_next would corrupt bus read data, possibly leaking secret key material.",
+      "signals": [
+        "reg_rdata_next",
+        "reg_rdata"
+      ],
+      "refs": [
+        "file:174"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "addrmiss, wr_err, intg_err are valid error indicators, correctly asserted under their respective error conditions.",
+      "cond": "when a bus transaction is processed",
+      "risk": "False assertions or missed assertions would lead to incorrect error reporting, hiding faults or causing spurious errors.",
+      "signals": [
+        "addrmiss",
+        "wr_err",
+        "intg_err",
+        "reg_error"
+      ],
+      "refs": [
+        "file:175"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "en_ifetch_i tied to MuBi4False assumes the interface is used only for data/register access, not instruction fetch.",
+      "cond": "always",
+      "risk": "If instruction fetch is needed, the adapter would not operate correctly, causing protocol violations.",
+      "signals": [
+        "en_ifetch_i"
+      ],
+      "refs": [
+        "file:159"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "EnableDataIntgGen=0 disables integrity generation in the adapter; system must provide alternative integrity protection if required.",
+      "cond": "when data integrity is a system requirement",
+      "risk": "Without integrity, read data is vulnerable to fault injection, potentially exposing or altering secret keys.",
+      "signals": [
+        "EnableDataIntgGen"
+      ],
+      "refs": [
+        "file:151"
+      ]
+    },
+    {
+      "id": "A5",
+      "type": "security_precondition",
+      "claim": "intg_error_o is unconnected, assuming no integrity errors will occur or they are handled elsewhere.",
+      "cond": "always",
+      "risk": "If the adapter detects integrity errors on writes, they will be ignored, allowing corrupt data to reach key or configuration registers.",
+      "signals": [
+        "intg_error_o"
+      ],
+      "refs": [
+        "file:160"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "How are the key_share0_* and key_share1_* registers securely cleared (wiped) on reset or a security wipe operation?",
+      "cond": "unknown",
+      "risk": "Residual key material may remain accessible after a security event, leading to key leakage.",
+      "signals": [
+        "key_share0_*",
+        "key_share1_*"
+      ],
+      "refs": [
+        "file:276-339"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "What access control restricts writes to entropy_seed registers? Can arbitrary bus masters modify them?",
+      "cond": "when entropy_seed_we is asserted",
+      "risk": "Unauthorized modification of entropy seed would compromise the entropy source, weakening all cryptographic operations.",
+      "signals": [
+        "entropy_seed_we",
+        "entropy_seed_wd"
+      ],
+      "refs": [
+        "file:274-275"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When addrmiss=1, reg_rdata_next may still drive stale (possibly secret) data, and no zeroization logic is present.",
+      "cond": "addrmiss == 1",
+      "risk": "An address miss could return stale sensitive data (e.g., a previous key read) on the bus, causing information leakage.",
+      "signals": [
+        "addrmiss",
+        "reg_rdata_next",
+        "reg_rdata"
+      ],
+      "refs": [
+        "file:174-175"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Source of intg_err is not defined here; since adapter's intg_error_o is unconnected, intg_err must originate from another block, raising timing and correctness concerns.",
+      "cond": "when intg_err is asserted",
+      "risk": "If intg_err is not properly generated, bus write integrity violations could be missed, allowing malicious register writes.",
+      "signals": [
+        "intg_err",
+        "intg_error_o"
+      ],
+      "refs": [
+        "file:175",
+        "file:160"
+      ]
+    },
+    {
+      "id": "U5",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Shadowed register storage_err and update_err signals are declared but no alert or fault connection is visible; are they linked to the alert system?",
+      "cond": "when storage_err or update_err is asserted",
+      "risk": "If shadow copy errors are not propagated to an alert, corrupted configuration could remain undetected and be used by KMAC, leading to security bypass.",
+      "signals": [
+        "cfg_shadowed_*_storage_err",
+        "cfg_shadowed_*_update_err"
+      ],
+      "refs": [
+        "file:206-247"
+      ]
+    },
+    {
+      "id": "U6",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "Simultaneous software write (W1C) and hardware set on intr_state_kmac_done could cause race if prim_subreg does not handle arbitration correctly.",
+      "cond": "concurrent intr_state_we and hw2reg.intr_state.kmac_done.de",
+      "risk": "Interrupt could be lost or spuriously remain set, affecting interrupt handling.",
+      "signals": [
+        "intr_state_we",
+        "intr_state_kmac_done_wd",
+        "hw2reg.intr_state.kmac_done.de"
+      ],
+      "refs": [
+        "file:379-404"
+      ]
+    },
+    {
+      "id": "U7",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": ".ds and .qe outputs of prim_subreg instances are unconnected; are any security features (e.g., dual-rail) being left unused?",
+      "cond": "N/A",
+      "risk": "Low, unless these ports provide security hardening that should be leveraged.",
+      "signals": [
+        ".ds",
+        ".qe"
+      ],
+      "refs": [
+        "file:400",
+        "file:425-427"
       ]
     }
   ],
   "evidence_refs": [
-    "kmac_reg_top.sv:148-170",
-    "kmac_reg_top.sv:174-175",
-    "kmac_reg_top.sv:177-376",
-    "kmac_reg_top.sv:377-404",
-    "kmac_reg_top.sv:406-427"
-  ],
-  "uncertain_points": [
-    "`reg_rdata_next`、`addrmiss`、`wr_err`、`intg_err` 的具体生成逻辑不在片段中，无法确定哪些地址或写条件会触发错误，只能确认它们被汇总到 `reg_error` [kmac_reg_top.sv:174-175]。",
-    "`prim_subreg` 在软件 W1C 写与硬件更新同时发生时的优先级与合并语义取决于该原语定义，本片段只能确认 `intr_state.kmac_done` 同时连接了软件写口和硬件更新口 [kmac_reg_top.sv:380-404]。",
-    "大量已声明的寄存器字段（如影子配置、密钥 share、告警测试等）在本片段中仅有信号声明、尚未看到实例化和地址映射，因此无法仅凭此片段确定这些寄存器的访问权限和复位行为 [kmac_reg_top.sv:177-376]。",
-    "`intg_error_o()` 被忽略且 `EnableDataIntgGen(0)` 的设计意图需要结合系统级 TL 完整性策略判断；片段无法单独证明这是否为预期安全配置 [kmac_reg_top.sv:148-160]。"
+    "file:148-427"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv",
   "line_start": 148,
-  "line_end": 427
+  "line_end": 427,
+  "security_implications": ""
 }

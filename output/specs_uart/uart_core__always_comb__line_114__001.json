@@ -1,26 +1,79 @@
 {
   "chunk_id": "uart_core__always_comb__line_114__001",
-  "summary": "根据接收缓冲级配置选择断点（break）检测的零比特计数阈值",
-  "behavior": "该组合块根据寄存器字段 reg2hw.ctrl.rxblvl.q 的值选择不同的 allzero_cnt_d 阈值来生成 break_err 信号。当 rxblvl 为 0 时，若 allzero_cnt_d 达到或超过 2 则 break_err 置 1；为 1 时阈值 4；为 2 时阈值 8；对于未明确使用的值 3（default 分支），使用阈值 16。",
-  "guarantees": [],
-  "security_implications": "",
+  "header": {
+    "module": "uart_core",
+    "block_kind": "always_comb",
+    "driven": [
+      "break_err"
+    ],
+    "used": [
+      "reg2hw.ctrl.rxblvl.q",
+      "allzero_cnt_d"
+    ],
+    "modes": [
+      "rxblvl=0",
+      "rxblvl=1",
+      "rxblvl=2",
+      "rxblvl=3"
+    ],
+    "tags": [
+      "error",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "break_err is assigned based on reg2hw.ctrl.rxblvl.q: 2'h0 -> (allzero_cnt_d >= 5'd2); 2'h1 -> (>=5'd4); 2'h2 -> (>=5'd8); default (2'h3) -> (>=5'd16).",
+      "cond": "always",
+      "signals": [
+        "break_err",
+        "reg2hw.ctrl.rxblvl.q",
+        "allzero_cnt_d"
+      ],
+      "refs": [
+        "uart_core.sv:115-120"
+      ]
+    }
+  ],
   "assumptions": [
     {
-      "constraint": "reg2hw.ctrl.rxblvl.q 设计上不应为 2'h3，该值可能导致 break_err 使用 16 的阈值，与预期的 2/4/8 级别不同。",
-      "bug_relevance": "若硬件异常或软件错误导致 rxblvl 为 3，break_err 触发阈值变为 16，可能将非断点条件误识别为断点，影响 UART 接收行为。此场景属于设计外非法输入，硬件提供回退但不符合预期用途。",
-      "related_signals": [
-        "reg2hw.ctrl.rxblvl.q"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "allzero_cnt_d accurately reflects the number of consecutive zero bits received on the UART line and is updated before this combinational block evaluates.",
+      "cond": "during normal UART reception",
+      "risk": "incorrect or stale allzero_cnt_d can cause false break_err assertion or missed break detection.",
+      "signals": [
+        "allzero_cnt_d"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:119"
+      "refs": [
+        "uart_core.sv:116-119"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "rxblvl.q=2'h3 is covered by the default case with threshold 16; if 2'h3 is a legal writable value, the chosen threshold may be unintended.",
+      "cond": "software writes 2'h3 to ctrl.rxblvl",
+      "risk": "break detection could use an incorrect threshold, leading to false or missed break signaling.",
+      "signals": [
+        "reg2hw.ctrl.rxblvl.q",
+        "break_err"
+      ],
+      "refs": [
+        "uart_core.sv:119"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:114-121"
+    "uart_core.sv:114-121"
   ],
-  "uncertain_points": [],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 114,
-  "line_end": 121
+  "line_end": 121,
+  "security_implications": ""
 }

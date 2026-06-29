@@ -1,0 +1,195 @@
+{
+  "chunk_id": "kmac_continuous_region_declarations_or_instances_011__structure__003",
+  "header": {
+    "module": "kmac",
+    "block_kind": "instance",
+    "driven": [
+      "wr_collision_i",
+      "write_pending_i",
+      "en_ifetch_i",
+      "readback_en_i",
+      "tlram_req",
+      "tlram_we",
+      "tlram_addr",
+      "tlram_wdata",
+      "tlram_wmask"
+    ],
+    "used": [
+      "tl_win_h2d",
+      "tl_win_d2h",
+      "WinMsgFifo",
+      "tlram_gnt",
+      "tlram_rdata",
+      "tlram_rvalid",
+      "tlram_rerror",
+      "clk_i",
+      "rst_ni",
+      "MsgWindowDepth",
+      "MsgWindowWidth"
+    ],
+    "modes": [
+      "ErrOnRead",
+      "ByteAccess",
+      "Outstanding",
+      "MsgWindowDepth",
+      "MsgWindowWidth"
+    ],
+    "tags": [
+      "tlul",
+      "sram_adapter",
+      "fifo",
+      "integrity",
+      "message_window",
+      "parameterization"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Instance u_tlul_adapter_msgfifo permanently ties wr_collision_i and write_pending_i to 1'b0, and en_ifetch_i and readback_en_i to prim_mubi_pkg::MuBi4False.",
+      "cond": "always",
+      "signals": [
+        "wr_collision_i",
+        "write_pending_i",
+        "en_ifetch_i",
+        "readback_en_i"
+      ],
+      "refs": [
+        "kmac.sv:1016",
+        "kmac.sv:1033",
+        "kmac.sv:1035",
+        "kmac.sv:1036"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The array indices WinMsgFifo used to select tl_win_h2d and tl_win_d2h must be within the declared bounds of those arrays.",
+      "cond": "always",
+      "risk": "An out-of-bounds index could access the wrong TL window, potentially exposing or corrupting sensitive data from other windows (e.g., key registers, configuration).",
+      "signals": [
+        "tl_win_h2d",
+        "tl_win_d2h",
+        "WinMsgFifo"
+      ],
+      "refs": [
+        "kmac.sv:1017-1018"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The downstream memory must never generate an integrity error during any access because the adapter output intg_error_o is unconnected.",
+      "cond": "when tlram_req is active and rvalid_i asserts",
+      "risk": "An integrity error on the message FIFO memory would be silently discarded, allowing corrupted message data to be used in cryptographic computations without any detection.",
+      "signals": [
+        "intg_error_o",
+        "tlram_rerror",
+        "tlram_rdata"
+      ],
+      "refs": [
+        "kmac.sv:1027"
+      ]
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The memory must not generate readback errors because the readback_error_o output is unconnected.",
+      "cond": "when readback_en_i is asserted (currently tied to false, so this condition may never occur)",
+      "risk": "If readback were ever enabled and an error occurred, it would be unreported, possibly allowing faulty data propagation.",
+      "signals": [
+        "readback_error_o",
+        "readback_en_i"
+      ],
+      "refs": [
+        "kmac.sv:1033-1034"
+      ]
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "The incoming TL-UL request on tl_i must be a valid, properly formed TileLink-UL transaction targeting the address range served by this adapter.",
+      "cond": "when a request is issued",
+      "risk": "Malformed requests could cause the adapter to enter an illegal state, issue invalid memory commands, or hang the bus.",
+      "signals": [
+        "tl_i"
+      ],
+      "refs": [
+        "kmac.sv:1017"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The intg_error_o output is unconnected, meaning any memory integrity error from the message FIFO SRAM is silently ignored. It is unclear whether this is intentional (relying on stronger upstream integrity checks) or an oversight.",
+      "cond": "whenever a memory integrity error occurs",
+      "risk": "Corrupted message data could be fed into the SHA3/KMAC core without detection, potentially breaking integrity guarantees and enabling attacks on the cryptographic output.",
+      "signals": [
+        "intg_error_o"
+      ],
+      "refs": [
+        "kmac.sv:1027"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The adapter is parameterized with ErrOnRead=1 and readback_en_i is tied to false. The exact intended behavior under a read request (e.g., TL error response format, impact on SRAM side handshake) is not specified in this chunk.",
+      "cond": "when a read request arrives via tl_i",
+      "risk": "If reads are expected (e.g., for debug or CSR mirroring), the permanent error response could cause bus deadlock or information leakage. If reads are meant to be completely disabled, the behavior must still guarantee no side-effects on the message FIFO state.",
+      "signals": [
+        "ErrOnRead",
+        "readback_en_i"
+      ],
+      "refs": [
+        "kmac.sv:1012",
+        "kmac.sv:1033"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "req_type_o and compound_txn_in_progress_o outputs are left unconnected. These may carry protocol information that could be useful for debug or for future compound transaction support.",
+      "cond": "during any TL-UL transaction",
+      "risk": "No functional risk if the adapter always drives default safe values on unconnected outputs, but missing this information could hinder debug or integration verification.",
+      "signals": [
+        "req_type_o",
+        "compound_txn_in_progress_o"
+      ],
+      "refs": [
+        "kmac.sv:1021",
+        "kmac.sv:1032"
+      ]
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "readback_error_o is unconnected. If readback is ever enabled, errors would go unreported and could lead to undetected data corruption.",
+      "cond": "when readback_en_i is asserted (currently false)",
+      "risk": "Silent acceptance of corrupted data in readback mode could compromise security if readback is used for attestation or integrity checks in future configurations.",
+      "signals": [
+        "readback_error_o",
+        "readback_en_i"
+      ],
+      "refs": [
+        "kmac.sv:1034"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac.sv:1007-1038"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
+  "line_start": 1007,
+  "line_end": 1038,
+  "security_implications": ""
+}

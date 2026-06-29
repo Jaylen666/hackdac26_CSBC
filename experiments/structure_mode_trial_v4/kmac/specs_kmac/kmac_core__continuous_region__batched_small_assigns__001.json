@@ -1,0 +1,169 @@
+{
+  "chunk_id": "kmac_core__continuous_region__batched_small_assigns__001",
+  "header": {
+    "module": "kmac_core",
+    "block_kind": "mixed",
+    "driven": [
+      "u_state_regs",
+      "encode_keylen",
+      "inc_keyidx",
+      "sent_blocksize"
+    ],
+    "used": [
+      "st_d",
+      "st",
+      "kmac_st_e",
+      "StKmacIdle",
+      "kmac_valid",
+      "msg_ready_i",
+      "key_index",
+      "block_addr_limit",
+      "EnMasking"
+    ],
+    "modes": [
+      "EnMasking=0|1",
+      "kmac_st_e enum",
+      "StKmacIdle reset value"
+    ],
+    "tags": [
+      "sparse_fsm",
+      "key",
+      "counter",
+      "masking"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "u_state_regs implements a sparse‑encoded FSM state register that updates st with st_d on each clock, resetting to StKmacIdle.",
+      "cond": "always (clock edge)",
+      "signals": [
+        "u_state_regs",
+        "st",
+        "st_d",
+        "StKmacIdle"
+      ],
+      "refs": [
+        "162-163"
+      ]
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When Enable=1, encode_keylen[1] is permanently tied to 0.",
+      "cond": "EnMasking == 1",
+      "signals": [
+        "EnMasking",
+        "encode_keylen[1]"
+      ],
+      "refs": [
+        "165-167"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "inc_keyidx is the logical AND of kmac_valid and msg_ready_i.",
+      "cond": "always combinational",
+      "signals": [
+        "kmac_valid",
+        "msg_ready_i",
+        "inc_keyidx"
+      ],
+      "refs": [
+        "169"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "sent_blocksize is asserted when key_index equals block_addr_limit.",
+      "cond": "always combinational",
+      "signals": [
+        "key_index",
+        "block_addr_limit",
+        "sent_blocksize"
+      ],
+      "refs": [
+        "174"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "StKmacIdle must be a legal member of the kmac_st_e enumeration, otherwise the sparse FSM flop may reset to an undefined state.",
+      "cond": "device reset",
+      "risk": "FSM may start in an invalid state, leading to unpredictable behavior.",
+      "signals": [
+        "StKmacIdle",
+        "kmac_st_e"
+      ],
+      "refs": [
+        "162-163"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "When EnMasking is false, encode_keylen[1] is not driven by this chunk; it must be assigned elsewhere to prevent an undriven net (X).",
+      "cond": "EnMasking == 0",
+      "risk": "X propagation into key length encoding could corrupt the key schedule, a security‑critical data path.",
+      "signals": [
+        "EnMasking",
+        "encode_keylen[1]"
+      ],
+      "refs": [
+        "165-167"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The comment “SEC_CM: CTR.REDUN” and “This primitive is used to place a hardened counter” appears near assignments, but inc_keyidx is a simple AND gate and sent_blocksize is a comparator; no hardened counter primitive is instantiated in this region. It is unclear whether the intended redundant counter for key index integrity is missing, misplaced, or implemented elsewhere.",
+      "cond": "always",
+      "risk": "A missing or non‑redundant key‑index counter may violate a countermeasure requirement, allowing undetected corruption of the key index.",
+      "signals": [
+        "inc_keyidx",
+        "sent_blocksize",
+        "key_index"
+      ],
+      "refs": [
+        "171-172",
+        "169",
+        "174"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "When EnMasking is false, the chunk does not drive encode_keylen[1]. It must be verified that another block always drives this bit; otherwise it will be undriven (X).",
+      "cond": "EnMasking == 0",
+      "risk": "Undriven encode_keylen[1] can propagate X into the key schedule, potentially breaking security or causing functional failure.",
+      "signals": [
+        "EnMasking",
+        "encode_keylen[1]"
+      ],
+      "refs": [
+        "165-167"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "162-163",
+    "165-167",
+    "169",
+    "171-172",
+    "174"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
+  "line_start": 162,
+  "line_end": 444,
+  "security_implications": ""
+}

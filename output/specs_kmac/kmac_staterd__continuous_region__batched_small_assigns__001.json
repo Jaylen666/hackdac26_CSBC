@@ -1,63 +1,74 @@
 {
   "chunk_id": "kmac_staterd__continuous_region__batched_small_assigns__001",
-  "summary": "该片段为状态读接口定义了只对读请求返回授权且读错误恒为零的组合行为，并声明了按 Share 维度组织的 32 位 muxed_state 数组。",
-  "behavior": "tlram_gnt 由 tlram_req 与 tlram_we 的组合决定：只有在存在 tlram_req 且不是写操作时才置位，因此该接口在此片段中只对读请求授予访问，写请求不会得到授权。tlram_rerror 被固定驱动为全零，注释也表明设计意图是读操作始终不报告错误。另一个声明定义了 muxed_state，它是一个元素宽度为 32 位、深度为 Share 的逻辑数组；本片段仅给出该中间信号的类型与存储组织方式，未展示其赋值或用途。",
+  "header": {
+    "module": "kmac_staterd",
+    "block_kind": "mixed",
+    "driven": [
+      "tlram_gnt",
+      "tlram_rerror"
+    ],
+    "used": [
+      "tlram_req",
+      "tlram_we",
+      "Share"
+    ],
+    "modes": [],
+    "tags": [
+      "handshake",
+      "error",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 tlram_we 为 0 且 tlram_req 为 1 时，tlram_gnt 一定为 1；当 tlram_we 为 1 时，tlram_gnt 一定为 0。",
-      "output_signals": [
-        "tlram_gnt"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "tlram_gnt is asserted when tlram_req is high and tlram_we is low, otherwise deasserted.",
+      "cond": "always",
+      "signals": [
+        "tlram_gnt",
+        "tlram_req",
+        "tlram_we"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:97-97"
+      "refs": [
+        "kmac_staterd.sv:97"
       ]
     },
     {
-      "property": "tlram_rerror 恒为 0，不会由该片段产生读错误指示。",
-      "output_signals": [
+      "id": "G2",
+      "type": "assignment",
+      "claim": "tlram_rerror is permanently driven to all zeroes.",
+      "cond": "always",
+      "signals": [
         "tlram_rerror"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:99-100"
+      "refs": [
+        "kmac_staterd.sv:100"
       ]
     }
   ],
-  "security_implications": "该片段与 KMAC 状态读路径相关。它显式拒绝写请求授权，并保证读路径不返回错误，这有助于将该接口限定为只读访问面。若系统上层错误地依赖 tlram_rerror 来检测非法访问或异常数据，这里恒为 0 的设计会掩盖此类问题；但从片段本身看，更像是有意将该端口实现为无错误的只读状态窗口。",
-  "assumptions": [
+  "assumptions": [],
+  "uncertain_points": [
     {
-      "constraint": "外部发往该接口的合法事务应为读事务，即 tlram_req 有效时通常应满足 tlram_we=0；写事务在设计上不应发生，因为本片段对其安全回退为不授予访问。",
-      "bug_relevance": "若不满足则写请求不会被授权，功能上表现为事务停滞或被上层超时处理；这是防御性回退，但说明调用方可能违反了只读接口约定。",
-      "related_signals": [
-        "tlram_req",
-        "tlram_we",
-        "tlram_gnt"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:97-97"
-      ]
-    },
-    {
-      "constraint": "若系统需要对读访问失败、地址非法或底层存储异常进行显式报错，则不能依赖该片段驱动的 tlram_rerror，因为它被固定为 0。",
-      "bug_relevance": "若违反该契约，上层可能将异常读错误地视为成功完成，导致数据完整性检查或异常处理失效。",
-      "related_signals": [
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "tlram_rerror is hardwired to 0; it is unclear whether the design intends to permanently suppress all read-error reporting or if error propagation was omitted unintentionally.",
+      "cond": "always",
+      "risk": "If the underlying read path can encounter errors (e.g., integrity violations), they would be silently masked, potentially leading to corrupted data being used without detection, which could affect security or functional safety.",
+      "signals": [
         "tlram_rerror"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:99-100"
+      "refs": [
+        "kmac_staterd.sv:99-100"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:97-97",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:99-100",
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv:102-102"
-  ],
-  "uncertain_points": [
-    "注释“always no error on reading”表明读访问不会报错，但片段未展示地址检查、数据有效性或其他错误源；因此无法确认这是完整系统层面的保证，还是仅此局部接口不报告错误。",
-    "muxed_state 仅被声明，未在本片段中看到其驱动或消费逻辑，无法确定其具体承载的是内部状态份额、读出数据的中间选择结果，还是其他用途。",
-    "tlram_gnt 仅在此片段中由读请求与非写条件组合生成，尚不清楚上游协议是否还要求其他就绪/仲裁条件；因此这里只能确认本地授予条件。"
+    "kmac_staterd.sv:96-106"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_staterd.sv",
   "line_start": 96,
-  "line_end": 106
+  "line_end": 106,
+  "security_implications": ""
 }

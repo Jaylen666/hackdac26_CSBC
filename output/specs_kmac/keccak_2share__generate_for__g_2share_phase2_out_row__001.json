@@ -1,51 +1,76 @@
 {
   "chunk_id": "keccak_2share__generate_for__g_2share_phase2_out_row__001",
-  "summary": "为 2-share 状态阵列的每个 5x5 lane 生成 phase2_out，按 dom_out_low_i 在 state_in 与 iota_data 之间进行半字拼接选择。",
-  "behavior": "该 generate 循环覆盖两个 share、5x5 的所有 (x,y) lane，对每个 W 位 lane 组合生成 phase2_out。对 share 0 和 share 1 的逻辑完全相同：若 dom_out_low_i 为 1，则 phase2_out 的高半字来自对应的 state_in，高半字范围为 [W-1:W/2]，低半字来自 iota_data 的低半字 [W/2-1:0]；若 dom_out_low_i 为 0，则相反，由 iota_data 提供高半字、state_in 提供低半字。该片段本身不改变位内容，只是在每个 lane 内按半字边界重组两个输入源，并且两个 share 始终分别独立处理，不发生 share 间混合。",
+  "header": {
+    "module": "keccak_2share",
+    "block_kind": "generate",
+    "driven": [
+      "phase2_out"
+    ],
+    "used": [
+      "dom_out_low_i",
+      "state_in",
+      "iota_data"
+    ],
+    "modes": [],
+    "tags": [
+      "mask"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对任意 share 0 的任意 lane (x,y)，当 dom_out_low_i=1 时，phase2_out[0][x][y] 的高半字等于 state_in[0][x][y] 的高半字、低半字等于 iota_data[0][x][y] 的低半字；当 dom_out_low_i=0 时，两者来源对调。",
-      "output_signals": [
-        "phase2_out"
+      "id": "G1",
+      "type": "mux_case",
+      "claim": "For each share s in {0,1} and each column x in 0..4, y in 0..4, phase2_out[s][x][y] is assigned {state_in[s][x][y][W-1:W/2], iota_data[s][x][y][W/2-1:0]} when dom_out_low_i is 1, else {iota_data[s][x][y][W-1:W/2], state_in[s][x][y][W/2-1:0]}.",
+      "cond": "always (combinational)",
+      "signals": [
+        "dom_out_low_i",
+        "state_in",
+        "iota_data",
+        "phase2_out",
+        "W"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:286-288"
-      ]
-    },
-    {
-      "property": "对任意 share 1 的任意 lane (x,y)，当 dom_out_low_i=1 时，phase2_out[1][x][y] 的高半字等于 state_in[1][x][y] 的高半字、低半字等于 iota_data[1][x][y] 的低半字；当 dom_out_low_i=0 时，两者来源对调。",
-      "output_signals": [
-        "phase2_out"
-      ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:289-291"
+      "refs": [
+        "file:284-293"
       ]
     }
   ],
-  "security_implications": "该片段处理双 share 数据且保持每个 share 独立，只在同一 share 内于半字粒度组合 state_in 和 iota_data，没有跨 share 混合。这有助于维持掩码/域分离属性。但其安全意义仍依赖上游对 dom_out_low_i 的正确控制以及 W 的半字划分是否符合算法/掩码设计预期。",
   "assumptions": [
     {
-      "constraint": "W 必须能按 W/2 在 lane 中进行期望的半字划分，即设计语义上要求高半字 [W-1:W/2] 与低半字 [W/2-1:0] 覆盖完整且无歧义的两半。",
-      "bug_relevance": "如果 W 不是设计预期的偶数半字宽度，phase2_out 的拼接将不再对应“上下半字交换/选择”的功能语义，可能导致 Keccak 变换数据布局错误；这属于行为契约而非防御性回退。",
-      "related_signals": [
-        "W",
-        "phase2_out",
-        "state_in",
-        "iota_data"
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "Parameter W must be ≥ 2 to keep bit‑select W/2-1:0 non‑negative.",
+      "cond": "always",
+      "risk": "Out‑of‑range part select causes elaboration error or X propagation.",
+      "signals": [
+        "W"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:286-291"
+      "refs": [
+        "file:287-288"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "dom_out_low_i is a combinatorial mux control; glitches may propagate to phase2_out and be sampled by downstream logic.",
+      "cond": "when dom_out_low_i toggles near a downstream sampling event",
+      "risk": "Transient incorrect concatenation appears on phase2_out, potentially consuming a wrongly‑shaped masked word.",
+      "signals": [
+        "dom_out_low_i",
+        "phase2_out"
+      ],
+      "refs": [
+        "file:286-291"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv:284-293"
-  ],
-  "uncertain_points": [
-    "仅从该片段无法确认 dom_out_low_i 的命名是否严格表示“iota_data 放在低半字”；实际代码语义是 dom_out_low_i=1 时低半字来自 iota_data、高半字来自 state_in，需结合上文确认命名与设计注释是否完全一致。",
-    "仅从该片段无法确认这种半字拼接在算法上对应 Keccak 的哪一具体 phase2 变换目的，或 iota_data 是否已在别处预处理。"
+    "file:284-293"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/keccak_2share.sv",
   "line_start": 284,
-  "line_end": 293
+  "line_end": 293,
+  "security_implications": ""
 }

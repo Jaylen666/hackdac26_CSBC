@@ -1,49 +1,106 @@
 {
   "chunk_id": "kmac_entropy__always_ff__line_406__001",
-  "summary": "该寄存器块对 aux_rand_d 进行时序采样，并在异步低有效复位时将 aux_rand_q 清零。",
-  "behavior": "该 always_ff 块实现一个带异步低有效复位的寄存器。复位有效时，aux_rand_q 被置为全 0；否则 aux_rand_q 更新为 aux_rand_d 的当前值。片段本身不包含使能、保持或附加条件，因此在非复位状态下 aux_rand_q 每拍都跟随 aux_rand_d 的采样结果。",
+  "header": {
+    "module": "kmac_entropy",
+    "block_kind": "always_ff",
+    "driven": [
+      "aux_rand_q"
+    ],
+    "used": [
+      "aux_rand_d",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [
+      "reset"
+    ],
+    "tags": [
+      "entropy",
+      "reset"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 rst_ni 为低时，aux_rand_q 被强制清零。",
-      "output_signals": [
-        "aux_rand_q"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, aux_rand_q is asynchronously cleared to '0.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "aux_rand_q",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:406-409"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:407-408"
       ]
     },
     {
-      "property": "当 rst_ni 为高时，aux_rand_q 的下一寄存值等于 aux_rand_d，没有其他条件屏蔽该更新。",
-      "output_signals": [
-        "aux_rand_q"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "At each positive edge of clk_i while rst_ni is high, aux_rand_q is updated with aux_rand_d.",
+      "cond": "posedge clk_i and rst_ni == 1",
+      "signals": [
+        "aux_rand_q",
+        "aux_rand_d",
+        "clk_i"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:409-410"
       ]
     }
   ],
-  "security_implications": "aux_rand_q 从命名上看承载辅助随机数据。该片段确保复位时该寄存器被清零，避免复位后保留旧随机值；同时其正常工作时无条件采样 aux_rand_d，因此上游 aux_rand_d 的正确性和安全性会直接影响该寄存器内容。",
   "assumptions": [
     {
-      "constraint": "aux_rand_d 在合法工作场景下应由上游逻辑驱动为有效、已定义的随机/辅助随机数据；该寄存器块不会过滤或校验其内容。",
-      "bug_relevance": "如果违反该行为契约，aux_rand_q 会无条件锁存错误或未知值，可能导致后续依赖辅助随机数的功能或安全属性失效。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "aux_rand_d is stable and meets setup/hold timing at the rising edge of clk_i.",
+      "cond": "at every posedge clk_i when rst_ni is high",
+      "risk": "aux_rand_q may capture a metastable or incorrect value, corrupting downstream randomness.",
+      "signals": [
+        "aux_rand_d",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:410"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The source of aux_rand_d is not visible in this chunk; it may be updated only under certain conditions, leaving stale or invalid values at other times.",
+      "cond": "unknown (depends on upstream logic)",
+      "risk": "aux_rand_q may capture a non-valid value that pretends to be entropy, potentially breaking randomness assumptions.",
+      "signals": [
         "aux_rand_d",
         "aux_rand_q"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:409-410"
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:410"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Resetting aux_rand_q to zero may expose a predictable all-zero entropy value immediately after reset, if the register is used before it is seeded with fresh randomness.",
+      "cond": "after reset de-assertion and before the first valid aux_rand_d update",
+      "risk": "Security-critical operations could proceed with zero entropy, leading to weak or guessable keys, masks, or nonces.",
+      "signals": [
+        "aux_rand_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:407-408"
       ]
     }
   ],
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:406-412"
   ],
-  "uncertain_points": [
-    "仅凭该片段无法确认 aux_rand_q 的具体用途、位宽以及 aux_rand_d 的来源，因此无法判断清零值是否具有协议层面的特殊语义。",
-    "该片段未展示复位释放与 aux_rand_d 稳定性的系统级要求；若存在跨时钟域或熵源握手约束，需要结合上下文确认。"
-  ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv",
   "line_start": 406,
-  "line_end": 412
+  "line_end": 412,
+  "security_implications": ""
 }

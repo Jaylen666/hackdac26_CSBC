@@ -1,57 +1,213 @@
 {
   "chunk_id": "kmac_app__always_ff__line_863__001",
-  "summary": "该寄存器块在复位、应用选择/清除以及空闲状态下，维护并切换导出的 KMAC/SHA3 模式配置。",
-  "behavior": "该时序块驱动三个配置寄存器输出：kmac_en_o、sha3_mode_o 和 keccak_strength_o。异步低有效复位时，它们分别被初始化为 0、sha3_pkg::Sha3 和 sha3_pkg::L256 [kmac_app.sv:863-867]。正常工作时，若 clr_appid 置位，则注释表明“应用完成后锁存寄存器值”，实际行为是把这三个输出恢复为对应的软件寄存器输入 reg_kmac_en_i、reg_sha3_mode_i 和 reg_keccak_strength_i [kmac_app.sv:868-872]。若未清除而 set_appid 置位，则输出切换为当前仲裁到的应用配置 AppCfg[arb_idx]：当 Mode 为 AppKMAC 时 kmac_en_o=1，否则为 0；当 Mode 为 AppSHA3 时 sha3_mode_o 取 sha3_pkg::Sha3，否则取 sha3_pkg::CShake；keccak_strength_o 直接取应用配置中的 KeccakStrength [kmac_app.sv:873-877]。若上述两者都不成立且状态 st 为 StIdle，则输出同样回到寄存器输入值 [kmac_app.sv:878-881]。条件优先级为 reset > clr_appid > set_appid > st==StIdle，因此 clr_appid 与 set_appid 同时出现时会优先恢复寄存器值；若既不满足这些条件也不在空闲态，则三个寄存器保持原值不变 [kmac_app.sv:863-883]。",
+  "header": {
+    "module": "kmac_app",
+    "block_kind": "always_ff",
+    "driven": [
+      "kmac_en_o",
+      "sha3_mode_o",
+      "keccak_strength_o"
+    ],
+    "used": [
+      "rst_ni",
+      "clr_appid",
+      "set_appid",
+      "st",
+      "reg_kmac_en_i",
+      "reg_sha3_mode_i",
+      "reg_keccak_strength_i",
+      "AppCfg",
+      "arb_idx"
+    ],
+    "modes": [
+      "StIdle",
+      "AppKMAC",
+      "AppSHA3",
+      "Sha3",
+      "CShake",
+      "L256"
+    ],
+    "tags": [
+      "mode_config",
+      "handshake",
+      "reset",
+      "app_context"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位期间，kmac_en_o 必为 0，sha3_mode_o 必为 sha3_pkg::Sha3，keccak_strength_o 必为 sha3_pkg::L256。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reset_assignment",
+      "claim": "When rst_ni is low, kmac_en_o is driven to 0, sha3_mode_o to Sha3, and keccak_strength_o to L256.",
+      "cond": "rst_ni == 0",
+      "signals": [
+        "rst_ni",
         "kmac_en_o",
         "sha3_mode_o",
         "keccak_strength_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:863-867"
+      "refs": [
+        "kmac_app.sv:864-867"
       ]
     },
     {
-      "property": "当 set_appid 生效且未被 clr_appid 屏蔽时，输出配置一定反映 AppCfg[arb_idx]：AppKMAC 使能 kmac_en_o，AppSHA3 选择 sha3_pkg::Sha3，否则选择 sha3_pkg::CShake，强度取 AppCfg[arb_idx].KeccakStrength。",
-      "output_signals": [
+      "id": "G2",
+      "type": "conditional_update",
+      "claim": "When clr_appid is asserted (and not in reset), kmac_en_o, sha3_mode_o, and keccak_strength_o are updated with the values of reg_kmac_en_i, reg_sha3_mode_i, and reg_keccak_strength_i respectively.",
+      "cond": "!rst_ni && clr_appid",
+      "signals": [
+        "clr_appid",
+        "kmac_en_o",
+        "sha3_mode_o",
+        "keccak_strength_o",
+        "reg_kmac_en_i",
+        "reg_sha3_mode_i",
+        "reg_keccak_strength_i"
+      ],
+      "refs": [
+        "kmac_app.sv:868-872"
+      ]
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When set_appid is asserted (and not reset or clr_appid), kmac_en_o is set to 1 if AppCfg[arb_idx].Mode equals AppKMAC, else 0; sha3_mode_o is set to Sha3 if AppCfg[arb_idx].Mode equals AppSHA3, else CShake; keccak_strength_o is set to AppCfg[arb_idx].KeccakStrength.",
+      "cond": "!rst_ni && !clr_appid && set_appid",
+      "signals": [
+        "set_appid",
+        "AppCfg",
+        "arb_idx",
         "kmac_en_o",
         "sha3_mode_o",
         "keccak_strength_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:873-877"
+      "refs": [
+        "kmac_app.sv:873-877"
+      ]
+    },
+    {
+      "id": "G4",
+      "type": "conditional_update",
+      "claim": "When st equals StIdle (and no reset, clr_appid, or set_appid), the outputs are loaded from reg_kmac_en_i, reg_sha3_mode_i, reg_keccak_strength_i.",
+      "cond": "!rst_ni && !clr_appid && !set_appid && st == StIdle",
+      "signals": [
+        "st",
+        "StIdle",
+        "kmac_en_o",
+        "sha3_mode_o",
+        "keccak_strength_o",
+        "reg_kmac_en_i",
+        "reg_sha3_mode_i",
+        "reg_keccak_strength_i"
+      ],
+      "refs": [
+        "kmac_app.sv:878-881"
+      ]
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When none of the above conditions (reset, clr_appid, set_appid, st==StIdle) are true, the outputs retain their previous values due to the absence of an else assignment.",
+      "cond": "!rst_ni && !clr_appid && !set_appid && st != StIdle",
+      "signals": [
+        "kmac_en_o",
+        "sha3_mode_o",
+        "keccak_strength_o"
+      ],
+      "refs": [
+        "kmac_app.sv:863-883"
       ]
     }
   ],
-  "security_implications": "该块控制导出的 KMAC 使能、SHA3/CShake 模式和 Keccak 强度，属于安全相关算法配置路径。set_appid 时应用配置会覆盖寄存器配置，而 clr_appid 或空闲态会恢复寄存器值 [kmac_app.sv:868-881]；因此应用选择控制若异常，可能导致执行错误的密码模式或强度。优先级上 clr_appid 高于 set_appid，可避免应用完成与新应用设置冲突时残留应用配置 [kmac_app.sv:868-877]。",
   "assumptions": [
     {
-      "constraint": "set_appid 有效时，arb_idx 必须稳定并指向一个有效的 AppCfg 表项，且该表项的 Mode/KeccakStrength 编码属于设计定义的合法取值。",
-      "bug_relevance": "这是行为契约；若 arb_idx 非法或配置编码异常，输出可能锁存错误的算法模式或强度，导致后续散列/KMAC 操作功能错误，安全配置也可能偏离预期。",
-      "related_signals": [
-        "set_appid",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "arb_idx must index a valid entry within the AppCfg array whenever set_appid is asserted.",
+      "cond": "set_appid == 1",
+      "risk": "Out-of-bounds access can lead to X propagation or unpredictable mode/strength settings, potentially enabling KMAC or altering SHA3 mode in unintended ways.",
+      "signals": [
         "arb_idx",
         "AppCfg",
+        "set_appid"
+      ],
+      "refs": [
+        "kmac_app.sv:874-877"
+      ]
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "reg_kmac_en_i, reg_sha3_mode_i, and reg_keccak_strength_i must be stable and valid at the clock edge when clr_appid is asserted or when st == StIdle and the update occurs.",
+      "cond": "clr_appid == 1 or (st == StIdle and !clr_appid and !set_appid)",
+      "risk": "Capturing inconsistent or undefined register values may lead to incorrect operational mode or crypto strength, breaking protocol or security properties.",
+      "signals": [
+        "reg_kmac_en_i",
+        "reg_sha3_mode_i",
+        "reg_keccak_strength_i",
+        "clr_appid",
+        "st"
+      ],
+      "refs": [
+        "kmac_app.sv:868-872",
+        "kmac_app.sv:878-881"
+      ]
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The condition named 'clr_appid' does not clear the outputs to a known clear state but instead loads them from reg_*_i registers. It is unclear if this behavior is intended to restore a default configuration or if the signal name is misleading.",
+      "cond": "clr_appid asserted",
+      "risk": "Misunderstanding the function could lead to incorrect system integration or testing gaps, but not a direct hardware bug if the design intends a restore-to-register operation.",
+      "signals": [
+        "clr_appid"
+      ],
+      "refs": [
+        "kmac_app.sv:868-872"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "arb_idx is used to select an AppCfg entry without visible bounds checking. The source and safety of arb_idx need verification to ensure it cannot be manipulated to point to unauthorized or attacker-controlled configuration.",
+      "cond": "set_appid == 1",
+      "risk": "If arb_idx can be influenced by untrusted firmware or inputs, an attacker could set kmac_en_o=1 or choose an undesirable KeccakStrength, compromising security or enabling a KMAC operation on sensitive data.",
+      "signals": [
+        "arb_idx",
+        "AppCfg",
+        "set_appid"
+      ],
+      "refs": [
+        "kmac_app.sv:874-877"
+      ]
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "When st is not StIdle and neither clr_appid nor set_appid is active, the outputs preserve their previous values. A stale configuration from a previous application may persist until a new update.",
+      "cond": "st != StIdle and !clr_appid and !set_appid",
+      "risk": "Stale configuration could be active if the system enters a non-idle state unexpectedly, but likely benign if the state machine guarantees updates before use. Cross-check with state transitions needed.",
+      "signals": [
+        "st",
         "kmac_en_o",
         "sha3_mode_o",
         "keccak_strength_o"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:873-877"
+      "refs": [
+        "kmac_app.sv:878-882"
       ]
     }
   ],
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:863-883"
-  ],
-  "uncertain_points": [
-    "sha3_mode_o 在 set_appid 分支中仅对 Mode==AppSHA3 选择 Sha3，否则一律选择 CShake [kmac_app.sv:875-876]；这意味着包括 AppKMAC 在内的非 AppSHA3 模式都会映射到 CShake。若存在其他 Mode 编码，其设计意图需结合枚举定义确认。",
-    "注释“As App completed, latch reg value”表明 clr_appid 用于应用完成后的配置回退 [kmac_app.sv:869]，但仅凭本片段无法确认 clr_appid 的产生条件是否严格等同于‘应用完成’。"
+    "kmac_app.sv:863-883"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv",
   "line_start": 863,
-  "line_end": 883
+  "line_end": 883,
+  "security_implications": ""
 }

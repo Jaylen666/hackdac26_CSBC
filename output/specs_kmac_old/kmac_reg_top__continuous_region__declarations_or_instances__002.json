@@ -1,0 +1,83 @@
+{
+  "chunk_id": "kmac_reg_top__continuous_region__declarations_or_instances__002",
+  "summary": "该片段搭建了 KMAC 寄存器顶层的 TL-UL 到寄存器接口，并开始实例化中断状态寄存器字段，其中 kmac_done 为软件写 1 清零且 fifo_empty 为硬件只读更新。",
+  "behavior": "片段首先实例化 `tlul_adapter_reg`，将 TL 寄存器总线请求转换为内部寄存器访问信号：输出写使能 `reg_we`、读使能 `reg_re`、地址 `reg_addr`、写数据 `reg_wdata` 和字节使能 `reg_be`，并使用 `reg_busy`、`reg_rdata`、`reg_error` 作为返回通道；取指访问被固定禁止为 `MuBi4False`，该适配器的数据完整性生成功能也被关闭（`EnableDataIntgGen(0)`），且其 `intg_error_o` 未被使用 [kmac_reg_top.sv:148-170]。组合逻辑上，读返回数据直接等于 `reg_rdata_next`，寄存器访问错误 `reg_error` 由地址未命中 `addrmiss`、写错误 `wr_err` 或完整性错误 `intg_err` 的按位或构成 [kmac_reg_top.sv:172-175]。随后本片段声明了大量软件可见寄存器字段对应的内部连线，采用 `<reg>_<field>_{wd,we,qs}` 命名，覆盖中断、告警测试、影子配置、命令、状态、熵参数、密钥 share、前缀和错误码等寄存器接口信号；这些声明本身不产生行为，但表明后续寄存器实例会通过这些信号与 `reg2hw/hw2reg` 交互 [kmac_reg_top.sv:177-376]。在实际寄存器实现上，本片段开始实例化 `intr_state` 寄存器的两个字段：`kmac_done` 字段是 1 位、复位为 0 的 `prim_subreg`，软件访问类型为 W1C，因此软件经 `intr_state_we`/`intr_state_kmac_done_wd` 可执行写 1 清除，同时硬件也可通过 `hw2reg.intr_state.kmac_done.de/d` 更新该位，当前值对内部硬件经 `reg2hw.intr_state.kmac_done.q` 可见，读路径经 `intr_state_kmac_done_qs` 提供 [kmac_reg_top.sv:377-404]。`intr_state.fifo_empty` 字段同样为 1 位、复位为 0，但软件访问类型为只读，软件写入端被硬连为无效（`we=1'b0`, `wd='0`），因此该位只能由硬件通过 `hw2reg.intr_state.fifo_empty.de/d` 更新，并通过 `reg2hw.intr_state.fifo_empty.q` 与读侧 `qs` 导出 [kmac_reg_top.sv:406-427]。",
+  "guarantees": [
+    {
+      "property": "寄存器总线返回给适配器的读数据始终等于 `reg_rdata_next`。",
+      "output_signals": [
+        "reg_rdata"
+      ],
+      "source_refs": [
+        "kmac_reg_top.sv:174-174"
+      ]
+    },
+    {
+      "property": "寄存器访问错误指示 `reg_error` 在 `addrmiss`、`wr_err` 或 `intg_err` 任一为 1 时必定为 1。",
+      "output_signals": [
+        "reg_error"
+      ],
+      "source_refs": [
+        "kmac_reg_top.sv:175-175"
+      ]
+    },
+    {
+      "property": "`intr_state.fifo_empty` 字段不接受软件写入，只能由硬件更新。",
+      "output_signals": [
+        "reg2hw.intr_state.fifo_empty.q",
+        "intr_state_fifo_empty_qs"
+      ],
+      "source_refs": [
+        "kmac_reg_top.sv:407-427"
+      ]
+    }
+  ],
+  "security_implications": "该片段涉及若干安全相关寄存器接口声明，包括影子配置错误、告警测试、密钥 share 和错误码信号 [kmac_reg_top.sv:197-375]，但本片段中实际生效的安全行为主要体现在总线错误聚合上：`intg_err` 会直接并入 `reg_error`，因此完整性异常会被寄存器接口报告 [kmac_reg_top.sv:175-175]。同时，取指访问被固定禁止 [kmac_reg_top.sv:159-159]。不过，由于 `tlul_adapter_reg` 的 `intg_error_o` 被悬空且数据完整性生成关闭，其更完整的安全策略需要结合外部上下文确认 [kmac_reg_top.sv:151-160]。",
+  "assumptions": [
+    {
+      "constraint": "`reg_rdata_next`、`addrmiss`、`wr_err` 和 `intg_err` 需要由本模块其他组合逻辑对每次寄存器访问给出一致且互不矛盾的结果，否则 TL 适配器会基于错误的读数据或错误标志响应事务。",
+      "bug_relevance": "这是行为契约；若违反，合法总线访问可能返回错误数据，或漏报/误报寄存器访问错误。",
+      "related_signals": [
+        "reg_rdata_next",
+        "addrmiss",
+        "wr_err",
+        "intg_err",
+        "reg_rdata",
+        "reg_error"
+      ],
+      "source_refs": [
+        "kmac_reg_top.sv:162-169",
+        "kmac_reg_top.sv:174-175"
+      ]
+    },
+    {
+      "constraint": "软件不应期望通过寄存器写操作改变 `intr_state.fifo_empty`，因为该字段被设计为只读并带有安全回退行为（写入口被硬关闭）。",
+      "bug_relevance": "若不满足则软件会观察到写入无效；这更像防御性设计下的不应发生场景，而不是该 RTL 的 bug。",
+      "related_signals": [
+        "intr_state_we",
+        "intr_state_fifo_empty_qs",
+        "hw2reg.intr_state.fifo_empty.de",
+        "hw2reg.intr_state.fifo_empty.d"
+      ],
+      "source_refs": [
+        "kmac_reg_top.sv:406-427"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "kmac_reg_top.sv:148-170",
+    "kmac_reg_top.sv:174-175",
+    "kmac_reg_top.sv:177-376",
+    "kmac_reg_top.sv:377-404",
+    "kmac_reg_top.sv:406-427"
+  ],
+  "uncertain_points": [
+    "`reg_rdata_next`、`addrmiss`、`wr_err`、`intg_err` 的具体生成逻辑不在片段中，无法确定哪些地址或写条件会触发错误，只能确认它们被汇总到 `reg_error` [kmac_reg_top.sv:174-175]。",
+    "`prim_subreg` 在软件 W1C 写与硬件更新同时发生时的优先级与合并语义取决于该原语定义，本片段只能确认 `intr_state.kmac_done` 同时连接了软件写口和硬件更新口 [kmac_reg_top.sv:380-404]。",
+    "大量已声明的寄存器字段（如影子配置、密钥 share、告警测试等）在本片段中仅有信号声明、尚未看到实例化和地址映射，因此无法仅凭此片段确定这些寄存器的访问权限和复位行为 [kmac_reg_top.sv:177-376]。",
+    "`intg_error_o()` 被忽略且 `EnableDataIntgGen(0)` 的设计意图需要结合系统级 TL 完整性策略判断；片段无法单独证明这是否为预期安全配置 [kmac_reg_top.sv:148-160]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reg_top.sv",
+  "line_start": 148,
+  "line_end": 427
+}

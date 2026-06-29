@@ -1,0 +1,88 @@
+{
+  "chunk_id": "sha3pad__always_comb__line_297__001",
+  "summary": "该组合块实现 sha3pad 的主状态机下一状态与控制输出逻辑，在空闲、前缀注入、消息吸收、填充、冲刷和终端错误状态之间切换，并向 Keccak 数据通路发出数据选择、有效、运行及缓冲控制信号。",
+  "behavior": "该块先为所有控制信号提供保守默认值：保持当前状态，关闭 keccak_run_o 与 fsm_keccak_valid，选择无输入 MuxNone，不保持消息、不清 sent 计数、不使能或清空消息缓冲，并将 absorbed_d 置为 MuBi4False、sparse_fsm_error_o 置 0 [sha3pad.sv:298-314]。在 StPadIdle，只有 start_i 触发启动；若 mode_eq_cshake 为真则先进入 StPrefix 注入 cSHAKE 前缀，否则直接进入 StMessage 处理消息 [sha3pad.sv:324-335]。StPrefix 选择前缀通路 MuxPrefix，在前缀尚未达到块边界前持续声明 fsm_keccak_valid；一旦 sent_blocksize 为真，停止继续送前缀，发出 keccak_run_o 启动 Keccak，清 clr_sentmsg，并转入 StPrefixWait 等待 keccak_complete_i，再进入 StMessage [sha3pad.sv:344-368]。\n\n在 StMessage，输入选择为 MuxFifo。若 msg_valid_i 与 msg_partial 同时为真，则说明收到部分消息字节，此时保持在消息态并将其写入消息缓冲 en_msgbuf，而不是立即送往 Keccak [sha3pad.sv:374-381]。否则若 sent_blocksize 为真，优先认为当前吸收块已满，即使处理结束请求同时存在也先进入 StMessageWait，拉起 keccak_run_o 触发轮函数，清 clr_sentmsg，并通过 hold_msg 对上游反压 [sha3pad.sv:381-387]。若块未满但 process_latched 或 process_i 为真，则停止继续接收消息，置 hold_msg 并转入 StPad 开始注入末尾填充 [sha3pad.sv:388-393]。StMessageWait 中持续 hold_msg，直到 keccak_complete_i 到来后回到 StMessage [sha3pad.sv:399-407]。\n\nStPad 选择函数填充 MuxFuncPad，并持续声明 fsm_keccak_valid 以送出模式相关的后缀/首个 pad 位 [sha3pad.sv:413-417]。当 keccak_ack 且 end_of_block 同时成立时，表示该次填充已经落在块末，无需额外 Pad01 阶段，直接转 StPadRun，同时清除消息缓冲和 sent 计数 [sha3pad.sv:418-425]。若只有 keccak_ack，则说明已接受 StPad 产生的数据但仍需补完 pad10*1() 的尾部，因此转入 StPad01 并清空消息缓冲 [sha3pad.sv:426-428]；未被 ack 时留在 StPad [sha3pad.sv:429-431]。StPadRun 无条件进入 StPadFlush，并发出 keccak_run_o、清 clr_sentmsg [sha3pad.sv:434-439]。StPad01 选择 MuxZeroEnd：在 sent_blocksize 未到达前持续声明 fsm_keccak_valid，向当前块补零并在末尾补最终 1 位；一旦 sent_blocksize 为真，则停止继续送数据，发出 keccak_run_o、清 clr_sentmsg，并转入 StPadFlush [sha3pad.sv:446-461]。\n\nStPadFlush 持续清 clr_sentmsg 与 clr_msgbuf，等待 keccak_complete_i；完成后返回 StPadIdle，并把 absorbed_d 置为 MuBi4True，表示本次吸收/填充流程已完成 [sha3pad.sv:464-475]。StTerminalError 是终端状态，保持当前状态并拉高 sparse_fsm_error_o；任何未覆盖状态编码也会跳到该终端错误状态并报告 sparse_fsm_error_o [sha3pad.sv:478-488]。此外，无论当前状态为何，只要 lc_escalate_en_i 被 life cycle 控制器判定为真，下一状态都会被强制改写为 StTerminalError，实现全局/本地升级下的失效安全跳转 [sha3pad.sv:491-496]。",
+  "guarantees": [
+    {
+      "property": "当状态机处于 StTerminalError，或状态值落入 default 分支时，sparse_fsm_error_o 一定被拉高；default 分支还会将下一状态导向 StTerminalError。",
+      "output_signals": [
+        "sparse_fsm_error_o",
+        "st_d"
+      ],
+      "source_refs": [
+        "sha3pad.sv:478-488"
+      ]
+    },
+    {
+      "property": "在 StPadFlush 且 keccak_complete_i 为真时，该块保证下一状态返回 StPadIdle，并将 absorbed_d 置为 MuBi4True 表示吸收完成。",
+      "output_signals": [
+        "st_d",
+        "absorbed_d"
+      ],
+      "source_refs": [
+        "sha3pad.sv:464-475"
+      ]
+    },
+    {
+      "property": "只要 lc_escalate_en_i 触发升级，下一状态一定被强制设为 StTerminalError，不受当前状态分支影响。",
+      "output_signals": [
+        "st_d"
+      ],
+      "source_refs": [
+        "sha3pad.sv:491-496"
+      ]
+    }
+  ],
+  "security_implications": "该状态机包含显式的安全失效路径：默认非法状态编码和 StTerminalError 都会拉高 sparse_fsm_error_o，而 life cycle escalation 会无条件把状态机推进到终端错误态 [sha3pad.sv:478-496]。这意味着在检测到稀疏 FSM 编码错误或系统升级事件时，模块停止正常哈希数据推进，避免继续处理潜在受攻击或失效条件下的数据流。由于 absorbed_d 仅在 StPadFlush 完成后置真 [sha3pad.sv:469-473]，外部逻辑可据此避免把未完整填充/吸收的消息误认为已提交。",
+  "assumptions": [
+    {
+      "constraint": "start_i 应为启动脉冲而不是长时间保持；源码注释明确写明“assume it is pulse”，状态机也只在 StPadIdle 用它触发一次启动。",
+      "bug_relevance": "若 start_i 在离开 StPadIdle 后仍异常保持，高层控制可能错误地认为可以重复启动；虽然本片段在非 Idle 状态不再使用该信号，设计上该场景不应发生，系统级启动时序可能因此与软件/上层 FSM 预期不一致。",
+      "related_signals": [
+        "start_i",
+        "st",
+        "st_d"
+      ],
+      "source_refs": [
+        "sha3pad.sv:318-325"
+      ]
+    },
+    {
+      "constraint": "keccak_ack、keccak_complete_i、sent_blocksize 与 end_of_block 的产生应与 Keccak/计数通路语义一致：ack 仅在当前输出被接受时出现，complete 仅在一次 run 真正完成后出现，sent_blocksize/end_of_block 需准确反映块边界。",
+      "bug_relevance": "若这些握手或边界指示错误，状态机可能过早/过晚启动 Keccak、错误进入或跳过 StPad01、错误清空消息缓冲，导致消息吸收长度、填充位置或完成指示出错，这属于功能性错误而非简单防御回退。",
+      "related_signals": [
+        "keccak_ack",
+        "keccak_complete_i",
+        "sent_blocksize",
+        "end_of_block",
+        "keccak_run_o",
+        "clr_msgbuf",
+        "clr_sentmsg"
+      ],
+      "source_refs": [
+        "sha3pad.sv:347-352",
+        "sha3pad.sv:363-367",
+        "sha3pad.sv:381-387",
+        "sha3pad.sv:418-428",
+        "sha3pad.sv:451-456",
+        "sha3pad.sv:469-473"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "sha3pad.sv:298-314",
+    "sha3pad.sv:324-335",
+    "sha3pad.sv:344-368",
+    "sha3pad.sv:374-407",
+    "sha3pad.sv:413-475",
+    "sha3pad.sv:478-496"
+  ],
+  "uncertain_points": [
+    "msg_valid_i && msg_partial 时只置 en_msgbuf 而不置 fsm_keccak_valid，表明部分消息先缓存在内部，但该缓冲何时与后续完整字节重新组合并送出，需要结合其他代码确认 [sha3pad.sv:377-380]。",
+    "process_latched 与 process_i 的精确差异在本片段中不可见；这里只能确认任一为真都会使消息阶段停止接收并转向填充 [sha3pad.sv:388-393]。",
+    "注释称 StPad 注入的具体后缀依模式不同（SHA3/SHAKE/cSHAKE），但实际后缀编码由 MuxFuncPad/相关组合逻辑决定，本片段仅体现状态机选择该通路，未直接展示具体比特值 [sha3pad.sv:409-417]。"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/sha3pad.sv",
+  "line_start": 297,
+  "line_end": 497
+}

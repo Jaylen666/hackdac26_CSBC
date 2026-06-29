@@ -1,37 +1,106 @@
 {
   "chunk_id": "kmac_msgfifo__always_ff__line_184__001",
-  "summary": "该寄存器过程维护 flush 状态寄存器：复位时进入 FlushIdle，非复位时采样下一状态 flush_st_d。",
-  "behavior": "该 always_ff 块实现 flush_st 的状态寄存器更新。异步低有效复位有效时，flush_st 被强制置为 FlushIdle；否则 flush_st 无条件更新为组合生成的下一状态 flush_st_d。片段本身不包含状态转移条件，实际 flush 状态机行为取决于 flush_st_d 的生成逻辑。",
+  "header": {
+    "module": "kmac_msgfifo",
+    "block_kind": "always_ff",
+    "driven": [
+      "flush_st"
+    ],
+    "used": [
+      "flush_st_d",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [
+      "FlushIdle"
+    ],
+    "tags": [
+      "reset",
+      "fifo"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 rst_ni 为低时，flush_st 一定被置为 FlushIdle。",
-      "output_signals": [
-        "flush_st"
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (active reset), flush_st is asynchronously forced to the FlushIdle state.",
+      "cond": "negedge rst_ni",
+      "signals": [
+        "flush_st",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:184-187"
+      "refs": [
+        "file:185-186"
       ]
     },
     {
-      "property": "在非复位条件下，flush_st 的寄存值始终等于上一更新时刻的 flush_st_d。",
-      "output_signals": [
-        "flush_st"
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On the rising edge of clk_i when rst_ni is high, flush_st is updated to the value of flush_st_d.",
+      "cond": "posedge clk_i & rst_ni",
+      "signals": [
+        "flush_st",
+        "flush_st_d",
+        "clk_i",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:187-189"
+      "refs": [
+        "file:188"
       ]
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:184-190"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "flush_st_d continuously presents a member of the FlushState enumeration (i.e., a legal state assignment).",
+      "cond": "every clock cycle when rst_ni is high",
+      "risk": "If flush_st_d is an undefined or illegal value, flush_st may enter an invalid state, potentially disabling or corrupting the FIFO flush control logic.",
+      "signals": [
+        "flush_st_d"
+      ],
+      "refs": [
+        "file:188"
+      ]
+    }
   ],
   "uncertain_points": [
-    "FlushIdle 的具体编码和语义需要结合状态类型定义确认；本片段只表明它是复位后的默认状态。",
-    "flush_st_d 的生成逻辑不在本片段中，因此无法仅凭此处判断 flush 状态机的完整转移规则或非法状态处理策略。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The combinational logic generating flush_st_d is outside this chunk; cannot verify that the flush state machine correctly sequences through flush, clear, and done states under all conditions.",
+      "cond": "any flush request or error scenario",
+      "risk": "Incorrect next-state logic could leave the FIFO in an inconsistent or partially flushed state, potentially leaking or corrupting message data.",
+      "signals": [
+        "flush_st_d",
+        "flush_st"
+      ],
+      "refs": [
+        "file:188"
+      ]
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The reset logic only returns the flush state machine to FlushIdle; it does not directly clear the FIFO memory. The FIFO may contain key material or sensitive intermediate values that remain intact across reset.",
+      "cond": "asynchronous reset assertion",
+      "risk": "If the flush logic does not perform a full FIFO wipe on reset release, sensitive cryptographic data could persist in the FIFO and be accessible after reset, violating security clear-on-reset requirements.",
+      "signals": [
+        "flush_st",
+        "rst_ni"
+      ],
+      "refs": [
+        "file:185-186"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "file:184-190"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv",
   "line_start": 184,
-  "line_end": 190
+  "line_end": 190,
+  "security_implications": ""
 }
