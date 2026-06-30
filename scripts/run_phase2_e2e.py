@@ -130,8 +130,8 @@ def main() -> None:
     parser.add_argument("--channel-f", action="store_true",
                         help="Run Channel F: synthesise SVAs for unpaired uncertain points "
                              "(and unpaired assumptions in semantic mode)")
-    parser.add_argument("--channel-f-max-tokens", type=int, default=4000,
-                        help="Max output tokens for Channel F LLM calls (default: 4000)")
+    parser.add_argument("--channel-f-max-tokens", type=int, default=10000,
+                        help="Max output tokens for Channel F LLM calls (default: 10000)")
     parser.add_argument("--run-solver", action="store_true",
                         help="Run formal solver (sby+z3) on PENDING SVAs before Phase 3")
     parser.add_argument("--solver-depth", type=int, default=20,

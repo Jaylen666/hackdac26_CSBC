@@ -885,7 +885,7 @@ def run_channel_d(
     graph: SignalGraph,
     client: OpenAICompatibleClient,
     prompt_path: str | Path = DEFAULT_PROMPT,
-    max_tokens: int = 3000,
+    max_tokens: int = 10000,
     top_n_pairs: int = 50,
 ) -> list[dict[str, Any]]:
     """Run anchor-supervised temporal consistency detection."""

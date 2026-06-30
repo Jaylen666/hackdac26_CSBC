@@ -40,7 +40,7 @@ def run_channel_c(
     graph: SignalGraph,
     client: OpenAICompatibleClient,
     prompt_path: str | Path = DEFAULT_PROMPT,
-    max_tokens: int = 2500,
+    max_tokens: int = 10000,
     workers: int = 4,
     checkpoint_path: str | None = None,
 ) -> list[dict[str, Any]]:

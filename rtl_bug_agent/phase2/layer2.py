@@ -63,6 +63,15 @@ DEFAULT_OFFICIAL_DOCS: dict[str, str] = {
     "keymgr": str(
         Path("/home/smy/opentitan/hw/ip/keymgr/doc/theory_of_operation.md")
     ),
+    "dma": str(
+        Path("/home/smy/opentitan/hw/ip/dma/doc/theory_of_operation.md")
+    ),
+    "tlul": str(
+        Path("/home/smy/opentitan/hw/ip/tlul/doc/TlulProtocolChecker.md")
+    ),
+    "soc_dbg_ctrl": str(
+        Path("/home/smy/opentitan/hw/ip/soc_dbg_ctrl/doc/theory_of_operation.md")
+    ),
 }
 
 
@@ -75,7 +84,7 @@ def extract_claims(
     doc_path: str | Path,
     client: OpenAICompatibleClient,
     prompt_path: str | Path = DEFAULT_EXTRACT_PROMPT,
-    max_tokens: int = 16000,
+    max_tokens: int = 32000,
 ) -> list[dict[str, Any]]:
     """Read an official design document and use the LLM to extract
     verifiable claims.
@@ -391,4 +400,63 @@ def _parse_llm_response(content: str) -> dict[str, Any]:
                 except json.JSONDecodeError:
                     continue
 
+    # Salvage path: response is a `{"claims": [ {...}, {...}, <cut off> ]}`
+    # that was truncated mid-object. Recover every COMPLETE claim object by
+    # scanning the array with brace-depth tracking and dropping the partial tail.
+    salvaged = _salvage_truncated_claims(text)
+    if salvaged is not None:
+        return {"claims": salvaged, "_truncated": True}
+
     raise RuntimeError(f"Cannot parse LLM response: {text[:500]}")
+
+
+def _salvage_truncated_claims(text: str) -> list[dict[str, Any]] | None:
+    """Recover complete claim objects from a truncated ``{"claims": [...]}``.
+
+    Scans from the first ``[`` after the ``claims`` key, tracking brace depth
+    (ignoring braces inside strings), and collects each top-level ``{...}``
+    object that closed cleanly. A trailing object cut off by ``max_tokens`` is
+    silently dropped. Returns ``None`` if no array or no complete object found.
+    """
+    import re
+
+    key = re.search(r'"claims"\s*:\s*\[', text)
+    if not key:
+        return None
+    start = key.end()  # position just after the opening '['
+
+    objects: list[dict[str, Any]] = []
+    depth = 0
+    obj_start = -1
+    in_str = False
+    escaped = False
+
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                obj_start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and obj_start >= 0:
+                snippet = text[obj_start : i + 1]
+                try:
+                    objects.append(json.loads(snippet))
+                except json.JSONDecodeError:
+                    pass
+                obj_start = -1
+        elif ch == "]" and depth == 0:
+            break  # end of the claims array
+
+    return objects or None

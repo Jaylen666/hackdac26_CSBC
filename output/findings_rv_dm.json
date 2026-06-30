@@ -1,19 +1,19 @@
 {
   "_stats": {
-    "call_count": 34,
+    "call_count": 29,
     "error_count": 0,
-    "total_input_tokens": 111737,
-    "total_output_tokens": 56078,
-    "total_tokens": 167815,
-    "total_wall_seconds": 1429.0,
-    "total_wall_minutes": 23.8
+    "total_input_tokens": 90047,
+    "total_output_tokens": 49682,
+    "total_tokens": 139729,
+    "total_wall_seconds": 504.2,
+    "total_wall_minutes": 8.4
   },
   "_ag_pairing_mode": "semantic",
-  "_semantic_batch_mode": "guarded",
+  "_semantic_batch_mode": "single",
   "findings": [
     {
       "finding_id": "F-0001",
-      "title": "lc_tx_test_true_strict 函数的正确性假设（能区分严格真、全零、单比特错误及退化状态）无配套 guarantee 保证，若该函数实现有偏差，可能将无效生命周期状态错误判为真，导致非法调试请求使能，构成安全漏洞。",
+      "title": "生命週期控制信号 lc_hw_debug_en_i 的同步器时序假设（建立/保持时间、稳定周期要求）缺少上游或系统级保证，集成时可能忽略这些约束，导致亚稳态传播，引起调试使能、测试绕过或安全升级信号误动作，形成安全漏洞。",
       "severity": "HIGH",
       "verdict": "GAP",
       "channels": [
@@ -22,38 +22,211 @@
       "cross_channel_hits": 1,
       "is_self_ref": false,
       "score": 0.9,
-      "contradiction": "prim_lc_sync同步器的输入时序要求（建立/保持时间）缺少对应的保证或约束，若外部驱动不满足这些时序，可能导致同步器采样亚稳态并传播，造成lc_hw_debug_en_raw等信号出现非预期值，进而引发安全漏洞（如非法打开调试接口）。",
+      "contradiction": "生命週期控制信号 lc_hw_debug_en_i 的同步器时序假设（建立/保持时间、稳定周期要求）缺少上游或系统级保证，集成时可能忽略这些约束，导致亚稳态传播，引起调试使能、测试绕过或安全升级信号误动作，形成安全漏洞。",
       "involved_signals": [
-        "lc_hw_debug_en_gated",
         "lc_hw_debug_en_i"
       ],
       "involved_specs": [
-        "rv_dm__generate_for__gen_debug_req_hart__001",
-        "rv_dm__generate_for__gen_mubi_mux__001",
         "rv_dm_dmi_gate__structural_skip__struct_57_83__001",
         "rv_dm__continuous_region__int__002"
       ],
       "evidence": [
         {
-          "spec": "rv_dm__generate_for__gen_debug_req_hart__001",
-          "field": "assumption",
-          "excerpt": "lc_tx_test_true_strict 必须能够正确识别生命周期信号的“严格真”状态，且其逻辑不包含可被注入的时序漏洞。"
-        },
-        {
-          "spec": "rv_dm__generate_for__gen_mubi_mux__001",
-          "field": "guarantee",
-          "excerpt": "对于任意有效位 k，如果 otp_dis_rv_dm_late_debug[k] 为 MUBI8 True 或 late_debug_enable[k] 为 MUBI32 True，则 lc_hw_debug_en_gated_raw[k] 等于 lc_hw_debug_en_raw[k]；否则等于 lc_dft_en_raw[k]。"
-        },
-        {
           "spec": "rv_dm_dmi_gate__structural_skip__struct_57_83__001",
           "field": "assumption",
-          "excerpt": "输入信号 lc_hw_debug_en_i、lc_check_byp_en_i、lc_escalate_en_i 必须满足 prim_lc_sync 模块的时序要求（例如相对于 clk_i 的建立/保持时间），并在有效跳变前保持稳定至少一个目标时钟周期。"
+          "excerpt": "输入信号 lc_hw_debug_en_i、lc_check_byp_en_i、lc_escalate_en_i 必须满足 prim_lc_sync 模块的时序要求（例如相对于 clk_i 的建立/保持时间），并在有效跳变前保持稳定至少一个目标时钟周期。若不满足时序要求，同步器可能采样到亚稳态并传播，导致同步后的使能信号出现非预期值。"
         },
         {
           "spec": "rv_dm__continuous_region__int__002",
           "field": "guarantee",
           "excerpt": "lc_hw_debug_en_raw 和 lc_dft_en_raw 与对应同步器输出 lc_hw_debug_en、lc_dft_en 完全一致，是经同步后的稳定信号。"
+        }
+      ],
+      "formal_verdict": "DIRECT",
+      "formal_confidence": 0.9,
+      "formal": {
+        "sva": "",
+        "sva_source": "channel_b",
+        "clock": "clk_i",
+        "reset": "",
+        "bind_module": "rv_dm_dmi_gate",
+        "bind_signals": [
+          "lc_hw_debug_en_i",
+          "lc_check_byp_en_i",
+          "lc_escalate_en_i",
+          "clk_i"
+        ],
+        "formalizability": "none",
+        "unknown_signals": [],
+        "status": "NO_PROPERTY"
+      }
+    },
+    {
+      "finding_id": "F-0002",
+      "title": "设计中未提供 lc_tx_test_true_strict 函数的正确性保证，无法验证其能否在所有生命周期状态下给出正确的真/假判断。错误识别可能导致非法调试请求使能，破坏调试安全性。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "设计中未提供 lc_tx_test_true_strict 函数的正确性保证，无法验证其能否在所有生命周期状态下给出正确的真/假判断。错误识别可能导致非法调试请求使能，破坏调试安全性。",
+      "involved_signals": [
+        "lc_hw_debug_en_gated"
+      ],
+      "involved_specs": [
+        "rv_dm__generate_for__gen_debug_req_hart__001",
+        "rv_dm__generate_for__gen_mubi_mux__001"
+      ],
+      "evidence": [
+        {
+          "spec": "rv_dm__generate_for__gen_debug_req_hart__001",
+          "field": "assumption",
+          "excerpt": "lc_tx_test_true_strict 必须能够正确识别生命周期信号的“严格真”状态，且其逻辑不包含可被注入的时序漏洞。\nrisk: 若该函数的实现未能正确区分全零、单比特错误或退化状态，则可能将无效的生命周期状态错误判定为真，导致非法调试请求使能。"
         },
+        {
+          "spec": "rv_dm__generate_for__gen_mubi_mux__001",
+          "field": "guarantee",
+          "excerpt": "对于任意有效位 k，如果 otp_dis_rv_dm_late_debug[k] 为 MUBI8 True 或 late_debug_enable[k] 为 MUBI32 True，则 lc_hw_debug_en_gated_raw[k] 等于 lc_hw_debug_en_raw[k]；否则等于 lc_dft_en_raw[k]。"
+        }
+      ],
+      "formal_verdict": "DIRECT",
+      "formal_confidence": 0.9,
+      "formal": {
+        "sva": "",
+        "sva_source": "channel_b",
+        "clock": "",
+        "reset": "",
+        "bind_module": "",
+        "bind_signals": [],
+        "formalizability": "none",
+        "unknown_signals": [],
+        "status": "NO_PROPERTY"
+      }
+    },
+    {
+      "finding_id": "F-0003",
+      "title": "设计假设 strap_en_override_i 在置高后永久保持高电平，但外部没有任何机制确保这一行为。如果外部驱动违反该假设（例如拉高后又拉低），将导致 strap_en 产生多次覆盖脉冲，覆盖功能失效。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "设计假设 strap_en_override_i 在置高后永久保持高电平，但外部没有任何机制确保这一行为。如果外部驱动违反该假设（例如拉高后又拉低），将导致 strap_en 产生多次覆盖脉冲，覆盖功能失效。",
+      "involved_signals": [
+        "strap_en_override_i"
+      ],
+      "involved_specs": [
+        "rv_dm_dmi_gate__continuous_region__declarations_or_instances__002",
+        "rv_dm_dmi_gate__always_ff__p_strap_override_reg__001"
+      ],
+      "evidence": [
+        {
+          "spec": "rv_dm_dmi_gate__continuous_region__declarations_or_instances__002",
+          "field": "assumption",
+          "excerpt": "当使用 strap 覆盖（即 gen_no_strap_override 未激活）时，strap_en_override_i 必须满足 `strap_en_override_i |=> strap_en_override_i`（一旦为 1 则保持为 1）"
+        },
+        {
+          "spec": "rv_dm_dmi_gate__always_ff__p_strap_override_reg__001",
+          "field": "guarantee",
+          "excerpt": "复位期间（rst_ni 为低）strap_en_override_q 保持 0；复位释放后该信号在时钟边沿同步更新，不会出现不定态。"
+        }
+      ],
+      "formal_verdict": "DIRECT",
+      "formal_confidence": 1.0,
+      "formal": {
+        "sva": "assert property (@(posedge clk_i) disable iff (!rst_ni) (strap_en_override_i && !gen_no_strap_override) |=> strap_en_override_i);",
+        "sva_source": "channel_b",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "bind_module": "rv_dm_dmi_gate",
+        "bind_signals": [
+          "strap_en_override_i",
+          "gen_no_strap_override"
+        ],
+        "formalizability": "direct",
+        "unknown_signals": [
+          "gen_no_strap_override"
+        ],
+        "status": "NAME_UNVERIFIED"
+      }
+    },
+    {
+      "finding_id": "F-0004",
+      "title": "lc_hw_debug_en_gated_raw 由纯组合逻辑生成，若其任一依赖信号（如 lc_hw_debug_en_raw）来自异步源或不同时钟域，将导致 prim_lc_sync 捕获到亚稳态或错误值，可能引发调试功能异常或安全状态传播错误。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "lc_hw_debug_en_gated_raw 由纯组合逻辑生成，若其任一依赖信号（如 lc_hw_debug_en_raw）来自异步源或不同时钟域，将导致 prim_lc_sync 捕获到亚稳态或错误值，可能引发调试功能异常或安全状态传播错误。",
+      "involved_signals": [
+        "lc_hw_debug_en_gated_raw"
+      ],
+      "involved_specs": [
+        "rv_dm__continuous_region__declarations_or_instances__001",
+        "rv_dm__generate_for__gen_mubi_mux__001"
+      ],
+      "evidence": [
+        {
+          "spec": "rv_dm__continuous_region__declarations_or_instances__001",
+          "field": "assumption",
+          "excerpt": "lc_hw_debug_en_gated_raw 与 clk_i 同步（Prim_lc_sync 实例化时 AsyncOn=0，要求输入已同步）"
+        },
+        {
+          "spec": "rv_dm__generate_for__gen_mubi_mux__001",
+          "field": "guarantee",
+          "excerpt": "按照 otp_dis_rv_dm_late_debug 和 late_debug_enable 的多比特值，从 lc_hw_debug_en_raw 或 lc_dft_en_raw 选择生成 lc_hw_debug_en_gated_raw 的每一位。"
+        }
+      ],
+      "formal_verdict": "PARTIAL",
+      "formal_confidence": 0.75,
+      "formal": {
+        "sva": "",
+        "sva_source": "channel_b",
+        "clock": "clk_i",
+        "reset": "",
+        "bind_module": "rv_dm",
+        "bind_signals": [
+          "lc_hw_debug_en_gated_raw",
+          "lc_hw_debug_en_raw",
+          "lc_dft_en_raw",
+          "otp_dis_rv_dm_late_debug",
+          "late_debug_enable"
+        ],
+        "formalizability": "none",
+        "unknown_signals": [],
+        "status": "NO_PROPERTY"
+      }
+    },
+    {
+      "finding_id": "F-0005",
+      "title": "lc_hw_debug_en_gated_raw 的位宽未被 guarantee 显式保证足够覆盖所有有效索引（LcEnDebugReq + NrHarts-1），可能导致参数不匹配时出现越界读取，破坏调试安全策略。",
+      "severity": "HIGH",
+      "verdict": "GAP",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.9,
+      "contradiction": "lc_hw_debug_en_gated_raw 的位宽未被 guarantee 显式保证足够覆盖所有有效索引（LcEnDebugReq + NrHarts-1），可能导致参数不匹配时出现越界读取，破坏调试安全策略。",
+      "involved_signals": [
+        "lc_hw_debug_en_gated"
+      ],
+      "involved_specs": [
+        "rv_dm__generate_for__gen_debug_req_hart__001",
+        "rv_dm__generate_for__gen_mubi_mux__001"
+      ],
+      "evidence": [
         {
           "spec": "rv_dm__generate_for__gen_debug_req_hart__001",
           "field": "assumption",
@@ -65,85 +238,39 @@
           "excerpt": "对于任意有效位 k，如果 otp_dis_rv_dm_late_debug[k] 为 MUBI8 True 或 late_debug_enable[k] 为 MUBI32 True，则 lc_hw_debug_en_gated_raw[k] 等于 lc_hw_debug_en_raw[k]；否则等于 lc_dft_en_raw[k]。"
         }
       ],
-      "phase3": {
-        "verdict": "FALSE_ALARM",
-        "confidence": 0.94,
-        "summary": "从给出的 RTL 看，报告所指的两条风险链都没有被代码支持。第一，rv_dm 中真正控制 hart debug request 的是 `lc_tx_test_true_strict()` 对同步后的生命周期编码值进行严格判真；在提供的代码窗口里并不存在把原始 `lc_hw_debug_en_i` 直接当布尔量使用的路径。第二，关于 `prim_lc_sync` 缺少建立/保持 guarantee 因而可能传播亚稳态的说法，无法据此确认本模块缺陷：该输入本身就是生命周期控制信号，设计显式通过 `prim_lc_sync` 做时钟域/时序边界处理，且本代码窗口中没有任何绕过同步器的使用。自动报告把“外部若违反同步器输入时序，可能出问题”当成了本模块 bug，但这属于环境/原语契约层面的泛化担忧，不是此 RTL 片段中可证实的实现错误。",
-        "root_cause": "报告的核心假设是：`lc_tx_test_true_strict` 可能误判，或 `prim_lc_sync` 可能因异步输入而把非法值传播到 `lc_hw_debug_en_gated`/`lc_hw_debug_en`，进而错误打开调试。但在所给 RTL 中，`debug_req_en[i]` 明确由 `lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnDebugReq + i])` 生成（rv_dm.sv 439-443），并未看到任何更宽松的判定或直接使用 `lc_hw_debug_en_i` 的路径。`rv_dm_dmi_gate.sv` 57-65 也显示 `lc_hw_debug_en_i` 先进入 `prim_lc_sync`，输出为内部同步后的 `lc_hw_debug_en`。因此，报告并未指出一个可在当前 RTL 中定位的具体实现缺陷；它只是质疑下游原语/函数本身是否可靠，但没有证据表明此模块错误使用了它们。",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1) 先看被怀疑的安全关键使能路径。rv_dm.sv 437-443 定义了每个 hart 的 `debug_req_en`，其中 441 行：`assign debug_req_en[i] = lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnDebugReq + i]);`。443 行又将最终输出限制为 `debug_req_o = debug_req & debug_req_en;`。这说明即便 `debug_req` 本身被拉高，只有生命周期门控位被 `lc_tx_test_true_strict` 严格判为真时才会向 hart 发起 debug request。\n\n2) 对原报告第一部分“`lc_tx_test_true_strict` 的正确性假设无配套 guarantee”进行核查。给出的代码里没有 `lc_tx_test_true_strict` 的实现，因此无法审查其内部真值表；但就本模块使用方式而言，它恰恰是在做 defensive 的严格解码，而不是宽松布尔解释。报告声称“若该函数实现有偏差，可能将无效生命周期状态错误判为真”，这属于对共享库函数正确性的假设性担忧，不是从本模块 RTL 可直接证明的 bug。按照任务要求应基于 RTL 源码判定，这里无法把“若基础函数错了则会有漏洞”认定为本模块确认缺陷。\n\n3) 再看第二部分关于同步器的说法。rv_dm_dmi_gate.sv 57-65：`lc_hw_debug_en_i` 被送入 `prim_lc_sync`，输出为内部 `lc_hw_debug_en`。同文件 66-82 对另外两个 LC 使能也采用同样模式。这表明设计者已经意识到这些是特殊的生命周期控制输入，并通过专用同步器处理。报告说“缺少建立/保持保证或约束，若外部驱动不满足时序，可能导致同步器采样亚稳态并传播”，这实际上是对任何同步器输入都成立的环境级陈述，不构成本模块 RTL 的特有实现 bug。仅凭这一点不能证明 `lc_hw_debug_en_raw` 或相关信号会出现可被利用的错误值。\n\n4) 从信号来源角度看，报告列出的 involved_signals 是 `lc_hw_debug_en_gated` 和 `lc_hw_debug_en_i`。在给出的代码窗口中，`lc_hw_debug_en_i` 只作为 `prim_lc_sync` 的输入出现（rv_dm_dmi_gate.sv 63）；没有看到它被直接组合使用。`lc_hw_debug_en_gated` 在 rv_dm.sv 中被下游严格解码后用于 `debug_req_en`（441 行）。因此报告所暗示的“原始输入未经充分保护直接导致非法调试使能”并不成立。\n\n5) 官方 spec 也更支持当前实现的方向：调试仅在特定 life cycle 状态可用，非允许状态不可达；并且在 NDM reset 期间，来自 pinmux strap sampling 的硬件 debug enable 会被锁存并保持稳定。虽然我们没有完整看到 `lc_hw_debug_en_gated` 的生成逻辑，但文档说明该类信号本就应由专门门控/锁存逻辑处理，而当前代码确实在关键输出处再次使用严格 LC 判定。\n\n6) 是否存在同一路径上的其他真实问题？在当前窗口中未见。相反，`debug_req_o = debug_req & debug_req_en` 是额外的最终门控。若要进一步质疑，需要查看 `lc_hw_debug_en_gated` 的生成处、`prim_lc_sync` 的实现、以及 `lc_tx_test_true_strict` 的定义；否则不能把假设升级为已确认 bug。\n\n7) 结论：报告把对公共原语/环境假设的担忧等同于本模块实现漏洞，但在所给 RTL 中，看不到错误连接、漏门控、默认分支放开、或非法编码被当真值使用的证据，因此应判为 FALSE_ALARM，而不是 CONFIRMED。",
-        "additional_findings": [
-          "当前代码窗口未包含 `lc_hw_debug_en_gated` 的生成逻辑；若要完整审计 debug reachability，应继续检查该信号的来源以及与 strap/late-debug 机制的交互。",
-          "当前代码窗口未包含 `lc_tx_test_true_strict` 和 `prim_lc_sync` 的定义；它们若存在库级缺陷会影响多个模块，但那将是共享原语问题，不是这里可由使用方式确认的 rv_dm 局部实现 bug。"
-        ]
+      "formal_verdict": "DIRECT",
+      "formal_confidence": 0.9,
+      "formal": {
+        "sva": "assert final (LcEnDebugReq + NrHarts - 1 < $bits(lc_hw_debug_en_gated));",
+        "sva_source": "channel_b",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "bind_module": "rv_dm",
+        "bind_signals": [
+          "LcEnDebugReq",
+          "NrHarts",
+          "lc_hw_debug_en_gated"
+        ],
+        "formalizability": "direct",
+        "unknown_signals": [
+          "final",
+          "bits"
+        ],
+        "status": "NAME_UNVERIFIED"
       }
     },
     {
-      "finding_id": "F-0002",
-      "title": "缺少对 lc_tx_t 输入信号合法编码的检查或防御措施。当集成方未按生命周期编码规范驱动信号时（例如输入非法值），同步器输出的值将不被硬化逻辑正确解释，可能导致调试门控在未授权时使能或紧急关闭失效。",
+      "finding_id": "F-0006",
+      "title": "alerts[0] 必须能正确表达所有 gen_alert_tx 实例的待发警报请求；若设计预期每个通道独立触发，则当前连接将错误地使所有通道同步触发。",
       "severity": "HIGH",
-      "verdict": "GAP",
+      "verdict": "UNCERTAIN",
       "channels": [
         "B-AG"
       ],
       "cross_channel_hits": 1,
       "is_self_ref": false,
-      "score": 0.9,
-      "contradiction": "缺少对 lc_tx_t 输入信号合法编码的检查或防御措施。当集成方未按生命周期编码规范驱动信号时（例如输入非法值），同步器输出的值将不被硬化逻辑正确解释，可能导致调试门控在未授权时使能或紧急关闭失效。",
-      "involved_signals": [
-        "lc_check_byp_en"
-      ],
-      "involved_specs": [
-        "rv_dm_dmi_gate__continuous_region__declarations_or_instances__003",
-        "rv_dm_dmi_gate__structural_skip__struct_57_83__001",
-        "rv_dm__continuous_region__int__002"
-      ],
-      "evidence": [
-        {
-          "spec": "rv_dm_dmi_gate__continuous_region__declarations_or_instances__003",
-          "field": "assumption",
-          "excerpt": "所有 lc_tx_t 信号的编码必须符合生命周期编码规范（TRUE 为 ON 编码，FALSE 为 OFF 编码），硬化函数才能正确解释。"
-        },
-        {
-          "spec": "rv_dm_dmi_gate__structural_skip__struct_57_83__001",
-          "field": "guarantee",
-          "excerpt": "同步后输出信号 lc_hw_debug_en、lc_check_byp_en、lc_escalate_en 在复位结束后将分别反映对应输入信号的逻辑值，且在本时钟域内无亚稳态传播。"
-        },
-        {
-          "spec": "rv_dm__continuous_region__int__002",
-          "field": "guarantee",
-          "excerpt": "lc_hw_debug_en_raw 和 lc_dft_en_raw 与对应同步器输出 lc_hw_debug_en、lc_dft_en 完全一致，是经同步后的稳定信号。"
-        }
-      ],
-      "phase3": {
-        "verdict": "FALSE_ALARM",
-        "confidence": 0.94,
-        "summary": "The reported issue claims rv_dm_dmi_gate lacks checking/defensive handling for illegal lc_tx_t encodings on lc_check_byp_en and that such values could be misinterpreted to enable debug or defeat escalation. The provided RTL does not support that claim. In the shown code, lc_check_byp_en is only synchronized by prim_lc_sync; there is no direct decode or control use of lc_check_byp_en in the provided window that could reinterpret an illegal value as an enable. Separately, the top-level rv_dm.sv uses hardened strict MuBi decode functions for lifecycle-related gating paths (for example mubi8_test_true_strict and mubi32_test_true_strict), which indicates the design style is fail-closed rather than permissive. Based on the provided source, the specific bug report against lc_check_byp_en is not substantiated.",
-        "root_cause": "The report appears to assume that synchronized lc_tx_t values are later consumed without strict legality checks, but the provided RTL excerpt does not show any such unsafe use of lc_check_byp_en. In rv_dm_dmi_gate.sv lines 66-74, lc_check_byp_en is only passed through prim_lc_sync. No subsequent logic using lc_check_byp_en is shown, so there is no evidence that an illegal encoding is treated as a valid assertion. In the related lifecycle gating logic shown in rv_dm.sv lines 246-258, hardened strict MuBi predicates are used on gating controls, which is consistent with rejecting non-canonical values.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The allegation is specifically about missing legal-encoding checks/defenses for lc_tx_t input signal lc_check_byp_en, with the consequence that illegal lifecycle encodings might be misinterpreted and enable unauthorized debug or disable emergency shutoff.\n2. In rv_dm_dmi_gate.sv lines 66-74, the relevant signal path is: input lc_check_byp_en_i -> prim_lc_sync instance u_prim_lc_sync_lc_check_byp_en -> local synchronized signal lc_check_byp_en. The code shown is:\n   - line 66: declaration of lc_check_byp_en as lc_tx_t [0:0]\n   - lines 67-74: prim_lc_sync synchronizer wiring lc_en_i(lc_check_byp_en_i) to lc_en_o(lc_check_byp_en)\n   This excerpt contains no decode, no comparison, and no control decision based on lc_check_byp_en.\n3. Therefore, the report's concrete claim that 'the synchronizer output value will not be correctly interpreted by hardened logic' is not demonstrated in the provided code. We would need the downstream consumption of lc_check_byp_en to prove such a bug. As provided, this excerpt only shows synchronization, not unsafe interpretation.\n4. The neighboring lifecycle paths in the provided top-level code show the opposite design pattern: hardened strict decoders are used. In rv_dm.sv line 178, scanmode uses mubi4_test_true_strict(scanmode_i). In lines 255-256, each gated bit is controlled by mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k]) || mubi32_test_true_strict(late_debug_enable[k]). Strict MuBi tests conventionally fail closed for illegal/non-canonical encodings, which weakens the hypothesis that this block broadly accepts malformed lifecycle encodings.\n5. The report also mentions emergency shutdown failure. The only escalation-related signal in the rv_dm_dmi_gate excerpt is lc_escalate_en synchronized at lines 75-82. Again, no downstream use is shown here, and the report did not identify that signal as the involved one. There is no evidence in the provided code that an illegal lc_check_byp_en value can override escalation behavior.\n6. The official spec says invalid lifecycle states must not make RV_DM reachable or fully ungated. Nothing in the provided RTL contradicts that. The shown top-level gating logic is consistent with hardened/fail-closed operation, and the report does not point to an actual permissive comparison or default-true path.\n7. Because the claim is not supported by the RTL excerpt and the nearby available logic uses strict hardened decodes, the proper verdict for the finding as stated is FALSE_ALARM rather than CONFIRMED.",
-        "additional_findings": [
-          "The provided rv_dm_dmi_gate.sv excerpt is too narrow to assess whether lc_check_byp_en is ever consumed unsafely later in the module, but that is a limitation on proving a new bug, not support for this report's claim.",
-          "The visible top-level RV_DM lifecycle gating in rv_dm.sv lines 246-258 appears carefully hardened with strict MuBi predicates on control signals, suggesting the intended security posture is fail-closed for malformed multibit values."
-        ]
-      }
-    },
-    {
-      "finding_id": "F-0003",
-      "title": "alerts[0] 被错误地广播连接到所有 gen_alert_tx 实例的 alert_req_i，导致每个告警通道失去独立性，全部通道被同一事件触发，可能掩盖真实告警源或产生虚假多重报警。",
-      "severity": "HIGH",
-      "verdict": "GAP",
-      "channels": [
-        "B-AG"
-      ],
-      "cross_channel_hits": 1,
-      "is_self_ref": false,
-      "score": 0.9,
-      "contradiction": "alerts[0] 被错误地广播连接到所有 gen_alert_tx 实例的 alert_req_i，导致每个告警通道失去独立性，全部通道被同一事件触发，可能掩盖真实告警源或产生虚假多重报警。",
+      "score": 0.762,
+      "contradiction": "Assumption 的核心关切是 alerts[0] 作为 alert_req_i 的源信号时，能否为每个 gen_alert_tx 实例独立提供待发请求。Guarantee 仅保证了 alerts[0] 是若干完整性错误信号的 OR，并未涉及与 gen_alert_tx 实例 alert_req_i 的连接方式，也没有提供独立触发能力。由于当前信息无法确定设计规范是否明确要求各通道独立触发（如不同通道对应不同错误源），该需求可被视为合法场景（要求独立）或非法场景（若设计意图本就是共享触发）。Guarantee 未能覆盖独立性需求，但不足以确认为确定的协议矛盾或缺口，因此判定为不确定。",
       "involved_signals": [
         "alerts[0]"
       ],
@@ -163,23 +290,67 @@
           "excerpt": "告警信号 alerts[0] 在任何所列的完整性错误信号为高时置为高，否则为低。"
         }
       ],
-      "phase3": {
-        "verdict": "CONFIRMED",
-        "confidence": 0.99,
-        "summary": "该缺陷在给定 RTL 中被直接证实：`gen_alert_tx` 生成的每一个 `prim_alert_sender` 实例，其 `alert_req_i` 都连接到同一个 `alerts[0]`，而不是各自对应的 `alerts[i]`。因此如果 `NumAlerts > 1`，所有告警发送通道都会由第 0 路告警统一触发，丧失每路告警的独立性；同时非 0 路 `alerts[i]` 即使被置位也不会驱动对应发送器。这与“所有通道被同一事件触发”的报告一致，并且还包含一个更严重的伴生问题：除第 0 路外的真实告警请求会被完全忽略。",
-        "root_cause": "在 `/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv` 第160-173行的 `for (genvar i = 0; i < NumAlerts; i++) begin : gen_alert_tx` 循环中，实例化的 `prim_alert_sender` 使用了固定连接 `.alert_req_i   ( alerts[0]     )`（第168行），而不是索引化的 `.alert_req_i(alerts[i])`。由于 `alert_rx_i` 和 `alert_tx_o` 都按 `i` 正确索引（第171-172行），唯独请求端未索引，导致所有 sender 共享同一请求源。",
-        "trigger_condition": "当 `NumAlerts > 1` 时触发该缺陷。具体地：1) `alerts[0]` 置位时，所有 `gen_alert_tx[i]` 实例都会同时看到 `alert_req_i=1`，从而产生多路同步告警；2) 任意 `alerts[k]`（`k>0`）置位而 `alerts[0]=0` 时，对应第 k 路 sender 不会发出请求，真实告警被丢失。",
-        "security_impact": "告警基础设施的通道隔离与根因可归属性被破坏。其后果包括：真实的非 0 路安全/完整性故障可能无法上报；第 0 路故障可能被错误扩散为多路同时告警，误导上层监控、故障响应和日志归因；若不同 alert 通道在系统级连接到不同接收策略或不同严重级别处理链路，则可能造成错误的复位/升级/诊断行为。",
-        "software_visible": true,
-        "reasoning": "1) 从 RTL 直接检查告警发送器生成逻辑。第160行开始是 `for (genvar i = 0; i < NumAlerts; i++) begin : gen_alert_tx`，说明设计意图是为每个 alert 通道生成一个独立的 sender 实例。\n2) 实例内部端口连接逐项检查：第167行 `.alert_test_i  ( alert_test[i] )`，第171行 `.alert_rx_i    ( alert_rx_i[i] )`，第172行 `.alert_tx_o    ( alert_tx_o[i] )`，这些都按照循环变量 `i` 分别连接到每个通道，表明该循环确实是逐通道展开。\n3) 关键错误出现在第168行：`.alert_req_i   ( alerts[0]     )`。这里没有使用 `i`，而是固定取第 0 位。这意味着无论当前实例编号为何，所有 `prim_alert_sender` 的请求输入都来自同一个 `alerts[0]`。\n4) 因此对合法值空间分析：对于任意实例 `gen_alert_tx[i]`，其 `alert_req_i` 的唯一来源都是 `alerts[0]`。如果 `alerts[0]=1`，所有实例都请求；如果 `alerts[0]=0`，所有实例都不请求。`alerts[1]..alerts[NumAlerts-1]` 对任何 sender 的 `alert_req_i` 都没有影响。不存在其他 fallback 或 defensive 分支来修正该行为。\n5) 这不仅验证了报告中的“`alerts[0]` 被广播到所有实例”这一点，也进一步说明第二类实际缺陷：非 0 路告警请求信号即使在其他地方被正确产生，也在这里被完全截断，无法到达对应 `prim_alert_sender`。\n6) 从代码结构看，这不太可能是有意设计。如果本意是全局单一告警广播，则第167/171/172行就不应按 `i` 逐通道连接；当前写法呈现出只有 `alert_req_i` 一项与其余逐通道端口风格不一致，强烈表明是索引笔误。\n7) 提供的官方文档主要描述 life cycle/debug gating，与 alert 多路连接无直接约束，因此不会推翻该 RTL 结论。即使缺少 alerts 的上游定义，当前代码窗口也已经足以确认此连接错误，因为端口绑定本身就是最终行为的一部分。\n8) 软件可见性方面，尽管告警是硬件机制，系统软件/固件通常可通过告警日志、状态寄存器、升级复位原因或生命周期错误响应观察到错误归因或缺失上报，因此判定为 software_visible=true 是合理的。",
-        "additional_findings": [
-          "除报告提到的“第0路广播到全部通道”外，还存在更具体的功能丢失：`alerts[1]..alerts[NumAlerts-1]` 根本未连接到任何 `prim_alert_sender.alert_req_i`，对应真实告警将被静默丢弃。",
-          "该错误仅在 `NumAlerts > 1` 时显性暴露；若当前参数配置恰好为 1，则综合/仿真不会体现问题，但 RTL 仍然脆弱，未来扩展到多告警配置时会立即失效。"
-        ]
+      "formal_verdict": "DIRECT",
+      "formal_confidence": 0.9,
+      "formal": {
+        "sva": "",
+        "sva_source": "channel_b",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "bind_module": "rv_dm",
+        "bind_signals": [],
+        "formalizability": "none",
+        "unknown_signals": [],
+        "status": "NO_PROPERTY"
       }
     },
     {
-      "finding_id": "F-0004",
+      "finding_id": "F-0007",
+      "title": "当 SecVolatileRawUnlockEn=0 时，strap_en_override_i 不被使用，其电平无影响。",
+      "severity": "HIGH",
+      "verdict": "DEFENSIVE",
+      "channels": [
+        "B-AG"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": false,
+      "score": 0.712,
+      "contradiction": "Assumption 明确声明 '当 SecVolatileRawUnlockEn=0 时，strap_en_override_i 不被使用，其电平无影响'，并补充 '若外部逻辑错误地驱动该信号...设计上不可发生'，说明该场景在系统契约中属于非法/不应发生的输入。Guarantee 仅描述了 strap_en_override_i 被双同步到本地时钟域产生 strap_en_override_q，但未给出该寄存器输出被用于控制任何功能通路的证据。这属于防御性设计：即使外部违反了契约，硬件仍提供安全的同步行为，不会破坏模块功能。因此不存在协议矛盾或覆盖缺口。",
+      "involved_signals": [
+        "strap_en_override_i"
+      ],
+      "involved_specs": [
+        "rv_dm_dmi_gate__continuous_region__rv_dm_dmi_gate__001",
+        "rv_dm_dmi_gate__always_ff__p_strap_override_reg__001"
+      ],
+      "evidence": [
+        {
+          "spec": "rv_dm_dmi_gate__continuous_region__rv_dm_dmi_gate__001",
+          "field": "assumption",
+          "excerpt": "当 SecVolatileRawUnlockEn=0 时，strap_en_override_i 不被使用，其电平无影响。"
+        },
+        {
+          "spec": "rv_dm_dmi_gate__always_ff__p_strap_override_reg__001",
+          "field": "guarantee",
+          "excerpt": "复位期间（rst_ni 为低）strap_en_override_q 保持 0；复位释放后该信号在时钟边沿同步更新，不会出现不定态。"
+        }
+      ],
+      "formal_verdict": "DIRECT",
+      "formal_confidence": 1.0,
+      "formal": {
+        "sva": "",
+        "sva_source": "channel_b",
+        "clock": "",
+        "reset": "",
+        "bind_module": "",
+        "bind_signals": [],
+        "formalizability": "",
+        "unknown_signals": [],
+        "status": "NO_PROPERTY"
+      }
+    },
+    {
+      "finding_id": "F-0008",
       "title": "[U-UP] 当 ndmreset_ack 与 lc_rst_asserted 在同一周期有效且 ndmreset_pending_q 为 1 时，ndmreset_pending_q 被清零而 lc_rst_pending_q 被置 1（行 329 / 333），此后 lc_rst_pending_q 只能由另",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -193,24 +364,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.65,
-        "summary": "The report points to a plausible corner case involving simultaneous `ndmreset_ack` and `lc_rst_asserted`, but no RTL source was actually provided in `rtl_source`, so I cannot verify whether lines 329/333 do what the report claims, nor whether `lc_rst_pending_q` truly lacks an independent clear path. The spec excerpt does suggest reset-related debug gating is intentionally sticky during certain reset sequences, so the reported behavior could be either deliberate or a real latch-up depending on the exact state machine and surrounding clear logic.",
-        "root_cause": "RTL unavailable. The hypothesis specifically depends on the sequential update logic for `ndmreset_pending_q`, `lc_rst_pending_q`, and the generation/consumption of `ndmreset_ack` and `lc_rst_asserted`, but the provided `rtl_source` array is empty.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The bug report alleges that when `ndmreset_ack` and `lc_rst_asserted` are high in the same cycle while `ndmreset_pending_q==1`, the RTL clears `ndmreset_pending_q` and sets `lc_rst_pending_q`, and thereafter `lc_rst_pending_q` can only be cleared by a later `ndmreset_ack` even though `ndmreset_pending_q` is already 0. This is a concrete claim about exact assignment ordering and reachable state transitions.\n2. To confirm or refute that, I need the actual always_ff/always_comb logic around the cited lines 329/333 plus any next-state/default assignment logic for both pending flops. None of that is present: `rtl_source` is an empty list.\n3. The official spec is not sufficient to decide the issue. It says reset severs the RV_DM/JTAG connection whenever the device is reset, and that a separate strap-sampled hardware debug enable remains stable while NDM reset is active. That supports the possibility of intentional sticky behavior across reset windows, but it does not define the exact semantics of `lc_rst_pending_q` versus `ndmreset_pending_q`, nor the required clear condition for each.\n4. The key verification questions that require RTL are: (a) Are `ndmreset_ack` and `lc_rst_asserted` independent or mutually constrained? (b) Is `lc_rst_pending_q` only a holding bit for deferred processing, with a later unconditional clear elsewhere? (c) Is there reset logic, FSM state exit logic, or combinational consumption that clears/ignores `lc_rst_pending_q` without another `ndmreset_ack`? (d) Is simultaneous assertion even legal in the design?\n5. Because the code window is missing entirely, any verdict stronger than NEEDS_MORE_CONTEXT would be speculative.",
-        "additional_findings": [
-          "Please provide the RTL block containing lines 329 and 333, plus at least 40 lines of context before/after, especially the sequential block updating `ndmreset_pending_q`/`lc_rst_pending_q` and any combinational next-state logic.",
-          "Also needed: definitions/drivers of `ndmreset_ack` and `lc_rst_asserted`, and any consumer logic that interprets or clears `lc_rst_pending_q`.",
-          "If available, include module-level comments or design doc text describing the intended interaction between non-debug-module reset and life-cycle reset."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0005",
+      "finding_id": "F-0009",
       "title": "[U-UP] 第二级同步器 u_prim_flop_2sync_lc_rst_sync 未指定 ResetValue，其默认值（可能为 0）可能在系统上电且 rst_ni 有效时清零 lc_rst_asserted，导致漏报 lc 复位状态，需确认该行为是否符合预期。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -224,23 +382,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "无法验证该报告，因为当前未提供任何RTL源码片段（rtl_source 为空）。该怀疑点明确指向实例 u_prim_flop_2sync_lc_rst_sync、信号 lc_rst_asserted、以及其 ResetValue/复位行为，但缺少这些对象的定义、实例化参数和下游使用逻辑。仅凭报告文字和规格，既不能确认“第二级同步器默认 ResetValue 可能为 0”是否属实，也不能判断即便为 0 是否真的会造成功能性漏报；规格反而提示“设备复位时应切断 RV_DM 与 JTAG 的连接”，这可能意味着复位期间清零/屏蔽某些debug可达性状态是设计本意。必须查看RTL才能定论。",
-        "root_cause": "未提供可分析的RTL代码。需要至少以下内容：1) u_prim_flop_2sync_lc_rst_sync 的实例化代码及参数（特别是 ResetValue）；2) prim_flop_2sync/prim_flop_2sync_lc_rst_sync 模块定义，确认默认参数值和复位极性；3) lc_rst_asserted 的声明、驱动和所有使用位置；4) rst_ni 与 life cycle/reset/debug gating 相关组合与时序逻辑，以判断该信号在上电和复位期间的预期语义。",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1) 报告的核心断言有两个前提：A. 实例 u_prim_flop_2sync_lc_rst_sync 未显式指定 ResetValue；B. 该原语默认 ResetValue 可能为 0，并因此在 rst_ni 有效时把 lc_rst_asserted 清零。当前 rtl_source 为空，无法核实 A 或 B。2) 即使默认值为 0，也不能直接推出这是缺陷。官方规格明确指出：\"Whenever the device is reset, the life cycle gating mechanism severs the connection between the RV_DM and a JTAG attached debugger.\" 这表明在设备复位期间，debug相关可达性/解门控信号被压低、屏蔽或重新同步，可能正是预期行为。3) 报告提到“漏报 lc 复位状态”，但未给出 lc_rst_asserted 的精确定义：它是表示‘LC侧当前正请求复位’、‘同步后的复位活动状态’、还是‘用于调试门控的复位阻断条件’？不同语义下，复位时被清零可能分别是错误、无害或必要。4) 要判定真伪，必须端到端追踪信号：首先查看 u_prim_flop_2sync_lc_rst_sync 的 d/i 输入来源，确认输入是否来自异步 lc reset 指示；其次查看 q/o 输出是否就是 lc_rst_asserted；然后检查 lc_rst_asserted 是否参与 RV_DM reachable/full ungating/JTAG TAP routing/strap-latched hardware debug enable 等控制。如果其下游逻辑在 reset active 期间本就强制关闭 debug 通路，则同步器复位值未必构成功能漏洞。5) 还需要检查原语实现中‘第二级同步器’在复位时是否两级都被置同一值、是否采用 async reset、以及是否存在默认参数仅用于仿真而综合另有绑定的情况。没有模块定义就无法判断。6) 因为缺失源码，无法给出按行号引用的确认或否定结论，因此只能判定 NEEDS_MORE_CONTEXT。",
-        "additional_findings": [
-          "官方规格与报告存在潜在语义张力：规格说设备复位时应切断 RV_DM 与 JTAG 的连接，因此如果 lc_rst_asserted 属于该切断路径的一部分，其复位默认值必须结合整个门控逻辑分析，不能孤立地以“默认 0”判错。",
-          "除实例化代码外，还应检查 pinmux/strap sampling 相关稳定化信号，因为规格提到 NDM reset 期间有单独的 hardware debug enable 调制路径；该路径可能掩盖或覆盖 lc_rst_asserted 的影响。"
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0006",
+      "finding_id": "F-0010",
       "title": "[U-UP] lc_tx_test_true_strict 函数的确切行为（是否为多副本一致性检查或简单真值判定）影响 reset_req_en 的生成条件，当前仅从名称推断为严格真值测试。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -254,23 +400,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "无法验证该怀疑项，因为提供的 RTL 源码窗口为空，且报告本身只是在质疑 `lc_tx_test_true_strict` 的语义是否会影响 `reset_req_en` 的生成条件。要确认或否认，需要至少看到 `reset_req_en` 的赋值处、`lc_tx_test_true_strict` 的定义/导入位置，以及相关 life-cycle/debug gating 信号的来源与编码。仅凭函数名和行为规格无法对 RTL 缺陷下结论。",
-        "root_cause": "当前证据不足：`rtl_source` 为空，无法检查 `lc_tx_test_true_strict(...)` 在 `reset_req_en` 路径上的实际用法，也无法确认该函数是“严格真值判定”、 “多副本一致性+真值判定”、还是对非法编码进行 fail-closed 处理。因此既不能确认 bug，也不能证明是误报。",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. 报告的核心是假设：`lc_tx_test_true_strict` 的精确定义会影响 `reset_req_en` 的生成条件；但这只是基于名称的推测，不是 RTL 事实。\n2. 提供的 `rtl_source` 为空，因此无法完成最基本的信号追踪：\n   - `reset_req_en` 在哪一行被赋值；\n   - 赋值表达式中是否直接调用 `lc_tx_test_true_strict`；\n   - 该函数的参数是什么信号，这些信号来自哪里；\n   - 相关 life cycle/debug strap 信号的合法编码是什么；\n   - 是否存在 default/fallback 路径，以及这些路径是防御非法值还是遗漏合法值。\n3. 从官方规格只能知道设计意图：\n   - 调试可达性和 fully ungated 条件依赖 life cycle state、`DIS_RV_DM_LATE_DEBUG`、`LATE_DEBUG_ENABLE`、以及 reset 期间的额外 gating；\n   - reset 期间应切断 RV_DM 与 JTAG 调试器的连接；\n   - 但规格没有给出 `lc_tx_test_true_strict` 的实现语义，也没有给出 `reset_req_en` 的 RTL 公式。\n4. 因此，当前无法验证报告中“若该函数不是简单真值测试，则 `reset_req_en` 可能错误生成”的命题。这个命题有可能成立，也有可能恰恰是设计者有意使用 strict/fail-closed 语义来防御非法 life-cycle 编码。\n5. 需要补充的最小代码范围：\n   - 包含 `reset_req_en` 赋值的模块源码与上下文；\n   - `lc_tx_test_true_strict` 的定义（函数体、package、typedef/enum 编码）；\n   - 相关信号如 `lc_hw_debug_en`、`late_debug_enable`、`dis_rv_dm_late_debug`、`ndmreset`/`reset_req`、strap-sampled debug enable 的生成逻辑；\n   - 若函数位于通用 LC package，还需提供对应 `lc_tx_t` 类型定义及合法取值。",
-        "additional_findings": [
-          "官方规格明确要求 reset 时切断 RV_DM 与 JTAG 的连接；拿到 RTL 后应重点检查 `reset_req_en` 是否仅影响 TL/JTAG 侧中的一部分 gating，而遗漏其他可达路径。",
-          "规格提到 NDM reset 期间使用来自 pinmux strap sampling 的独立硬件 debug enable；拿到 RTL 后应同时核查 reset 期间是否错误地继续依赖普通 life-cycle/debug enable 信号，而非锁存后的稳定信号。"
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0007",
+      "finding_id": "F-0011",
       "title": "[U-UP] MemAw 与 BusWidth 的大小关系未知，若 MemAw > BusWidth，BusWidth'(device_addr) 会截断高位地址位，可能导致地址不对齐，但通常 MemAw 不应大于 BusWidth。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -284,23 +418,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The reported issue cannot be verified from the provided evidence because no RTL source excerpt is included at all (`rtl_source` is empty). The hypothesis mentions a cast/truncation pattern involving `BusWidth'(device_addr)` and a parameter relation `MemAw > BusWidth`, but there is no code to inspect for the declaration of `device_addr`, the definitions of `MemAw` and `BusWidth`, any static assertions, or the downstream address-alignment logic. The attached official spec is about RV_DM reachability and TL-UL access policy, which does not establish or refute the claimed width-truncation bug.",
-        "root_cause": "Insufficient RTL context. To verify the claim, the relevant module source is needed showing: (1) parameter declarations for `MemAw` and `BusWidth`; (2) `device_addr` declaration and assignment; (3) the exact cast expression `BusWidth'(device_addr)` or equivalent; (4) any assertions/generates constraining parameter relationships; and (5) downstream consumers of the casted address.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The bug report hypothesis is specific: if `MemAw > BusWidth`, then a cast such as `BusWidth'(device_addr)` could truncate upper address bits and mis-handle addressing/alignment.\n2. Verification must be against RTL, but `rtl_source` is an empty array, so there are no line numbers or code paths to trace.\n3. Without source, it is impossible to determine whether `BusWidth` is actually a bit width, a byte count, a localparam derived from `MemAw`, or something else entirely. The report may be using imprecise terminology.\n4. It is also impossible to know whether the suspected cast is on a legal path, an unreachable fallback, or protected by elaboration-time assertions such as `if (MemAw > BusWidth) $error` / `ASSERT_INIT` style checks.\n5. Even if truncation exists syntactically, correctness depends on surrounding logic: perhaps only low bits are intentionally used for word indexing, or perhaps higher bits are consumed elsewhere before the cast. None of that can be assessed here.\n6. The provided official spec discusses debug reachability, late debug enable, reset gating, and TL-UL accessible regions. Those claims are unrelated to the specific width/cast issue and do not substitute for code inspection.\n7. Therefore the only defensible verdict is NEEDS_MORE_CONTEXT. The minimum additional evidence required is the relevant module/file excerpt with the cast and parameter declarations, plus any connected address-generation logic.",
-        "additional_findings": [
-          "The supplied official spec appears unrelated to the reported width-truncation hypothesis, suggesting the evidence bundle may have mismatched context.",
-          "Because the report cites no involved signals and no RTL excerpt, there is also a possibility the automated finding attached the wrong hypothesis to the wrong module."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0008",
+      "finding_id": "F-0012",
       "title": "[U-UP] ndmreset_ack 是纯组合信号，但所有输入均来自其他模块，未在本片段中定义时序或同步关系。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -314,24 +436,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.99,
-        "summary": "The suspected issue cannot be verified from the provided evidence because the RTL source window is empty. Without the module that defines ndmreset_ack, its fan-in signals, and any surrounding clock/reset-domain handling, I cannot determine whether ndmreset_ack is actually combinational, whether any of its inputs are asynchronous, whether they are already synchronized in their source modules, or whether a combinational acknowledge is architecturally intended and safe.",
-        "root_cause": "Insufficient RTL context. The provided rtl_source array is empty, so there are no source lines showing ndmreset_ack, its assignment, its input declarations, any synchronizers, or its downstream consumers. To verify the report, I need at minimum: the module containing ndmreset_ack; the declarations and assignments of every signal in its fan-in cone; clock/reset definitions for those signals; and any relevant CDC/synchronizer or strap-latching logic referenced by the spec.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": true,
-        "reasoning": "1) The report claims ndmreset_ack is a pure combinational signal driven only by signals from other modules, with no timing or synchronization relationship shown. 2) However, no RTL was provided at all: rtl_source is empty, so there are no line numbers to inspect and no way to confirm even the basic premise that ndmreset_ack is combinational. 3) Even if ndmreset_ack were combinational, that alone would not prove a bug. A combinational output fed by module inputs is common and can be correct if those inputs are in the same clock/reset domain, already synchronized, or guaranteed stable during the relevant protocol window. 4) The official spec actually suggests at least one stabilization mechanism exists elsewhere: during non-debug-module reset, the hardware debug enable from pinmux is latched and kept stable while NDM reset is active. That means the mere fact that an input originates in another module is not evidence of unsafe behavior. 5) Conversely, the spec also implies there are cross-module interactions on this path, so the implementation must be checked carefully for CDC/reset-domain correctness; but that check requires the actual source. 6) Therefore I cannot confirm or refute the bug from the supplied material. The minimum additional context needed is: the source lines defining ndmreset_ack; the source of each fan-in signal; the clock/reset domain ownership of those inputs; any synchronizers or sampled strap logic; and the logic that consumes ndmreset_ack.",
-        "additional_findings": [
-          "The evidence package is incomplete: the RTL source array is empty, so no source-based verification is possible.",
-          "The report's premise is too weak as written: a combinational signal driven by other modules is not inherently a defect; the key question is whether the fan-in is synchronized or otherwise guaranteed stable.",
-          "Once RTL is available, the highest-priority review item should be the spec-mandated path where pinmux hardware debug enable is latched stable during NDM reset, since that is directly relevant to ndmreset_ack behavior."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0009",
+      "finding_id": "F-0013",
       "title": "[U-UP] ASSERT_PRIM_FSM_ERROR_TRIGGER_ALERT 和 ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT 宏的具体实现（是否综合为硬件错误检测逻辑并直接驱动 alert，或仅作为仿真断言）未在片段内定义，基于命名惯例推断其会产生硬件 al",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -345,24 +454,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.99,
-        "summary": "The reported issue cannot be verified from the supplied materials because no RTL excerpt was provided. The hypothesis hinges on whether ASSERT_PRIM_FSM_ERROR_TRIGGER_ALERT and ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT expand into synthesizable hardware checker/alert logic or into simulation-only assertions, and that can only be determined from the macro definitions and their invocation context in the RTL.",
-        "root_cause": "The rtl_source array is empty, so there are no source lines to inspect for the macro call sites, the included .svh file that defines these macros, any synthesis/formal guards around them, or the downstream alert wiring. The official specification excerpts only describe RV_DM/JTAG/life-cycle behavior and do not define the implementation semantics of these prim_assert-style macros.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1) The finding is explicitly about macro implementation semantics, not about a concrete RTL statement with visible behavior. 2) No RTL source lines were provided at all; rtl_source is empty, so there is nothing to trace end-to-end and no line numbers to cite. 3) To confirm the claim, I would need to inspect the exact definitions of ASSERT_PRIM_FSM_ERROR_TRIGGER_ALERT and ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT, because only those definitions reveal whether they instantiate synthesizable error-detection logic, connect to alert hardware, or reduce to simulation/formal assertions only. 4) I would also need the surrounding module source to see whether these macros are conditionally compiled out under guards such as SYNTHESIS/FORMAL/VERILATOR, and whether any checker output ultimately drives alert_tx_o or an alert sender instance. 5) The supplied official_spec entries concern late debug enable, life-cycle gating, reset-time debug disconnect, DMI-vs-TL-UL accessibility, and memory-map permissions. Those topics are orthogonal to the macro-expansion question, so they cannot confirm or refute whether the macros synthesize into hardware alert logic. 6) Because the necessary RTL evidence is missing, the correct verdict is NEEDS_MORE_CONTEXT rather than CONFIRMED or FALSE_ALARM.",
-        "additional_findings": [
-          "Please provide the module source lines where ASSERT_PRIM_FSM_ERROR_TRIGGER_ALERT and ASSERT_PRIM_REG_WE_ONEHOT_ERROR_TRIGGER_ALERT are invoked.",
-          "Please provide the included macro-definition/header file(s) that define these macros, such as the relevant prim_assert-related .svh file(s).",
-          "Please provide the local alert path around the invocation site, including any alert sender instantiation or alert_tx_o connection, so hardware visibility can be determined."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0010",
+      "finding_id": "F-0014",
       "title": "[U-UP] JTAG 断言的 Known 检查条件 !jtag_i.tck && !jtag_i.trst_n 依赖于注释中‘JTAG TDO is driven by an inverted TCK in dmi_jtag_tap.sv’的上下文，若实际相位关系不同可能导致误报。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -376,23 +472,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.99,
-        "summary": "The suspected issue cannot be verified or refuted from the provided evidence because the RTL source is missing entirely. The report is specifically about a JTAG assertion guard involving !jtag_i.tck && !jtag_i.trst_n and a comment referencing inverted-TCK behavior in dmi_jtag_tap.sv, but there is no code to inspect for the assertion itself, the TDO generation path, or any wrapper/clocking logic that could preserve or change the expected phase relationship. The official spec excerpts cover debug reachability and reset/life-cycle gating, not JTAG TDO/TCK assertion timing.",
-        "root_cause": "Insufficient evidence: the rtl_source array is empty. To determine whether the assertion condition is correct or can false-fire, the relevant RTL is required, including the module containing the Known check, dmi_jtag_tap.sv, any wrapper that connects jtag_i and TDO, and the assertion macro/clocking context.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1) The bug report is about a specific assertion condition: the Known check is guarded by !jtag_i.tck && !jtag_i.trst_n and allegedly depends on the comment 'JTAG TDO is driven by an inverted TCK in dmi_jtag_tap.sv'. 2) Verifying that requires tracing the exact RTL path end-to-end: where the assertion is written, what signal is being checked, how jtag_i.tck and jtag_i.trst_n are used, how TDO is generated in dmi_jtag_tap.sv, and whether any intermediate register/wrapper changes the phase relation. 3) The provided RTL source is empty, so there are no line numbers or code excerpts to inspect. That makes it impossible to determine whether the report is correct, whether the comment is stale, whether the assertion is sampling on the intended edge, or whether the condition is actually defensive against X-propagation. 4) The official spec claims only describe debug accessibility versus life-cycle state, late-debug enable, and NDM-reset gating. None of those statements define the required JTAG timing relationship between TCK and TDO for this assertion, so they do not resolve the report. 5) Because the task explicitly requires verification against RTL source and exact line references for any confirmed defect, the correct outcome with the current evidence is NEEDS_MORE_CONTEXT. The minimum additional material needed is: (a) the source file containing the assertion, (b) dmi_jtag_tap.sv, (c) any top-level or wrapper that forwards/drives TDO and receives jtag_i.*, and (d) the assertion macro definition or clocking block used by the Known check.",
-        "additional_findings": [
-          "The supplied spec excerpts are orthogonal to the reported issue: they constrain debug reachability and gating, not TDO/TCK assertion timing.",
-          "If the assertion is implemented through a macro such as ASSERT_KNOWN or ASSERT_KNOWN_IF, the macro definition and its sampling clock are also required; without that, even the exact semantics of the guard expression cannot be determined."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0011",
+      "finding_id": "F-0015",
       "title": "[U-UP] alert_test 的赋值使用单个拼接元素 {regs_reg2hw.alert_test.q & regs_reg2hw.alert_test.qe}，若 NumAlerts 大于 1，高位比特状态未定义，需确认实际位宽与生成信号是否匹配。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -406,23 +490,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The bug report points to a plausible width/matching concern on alert_test, but no RTL source was provided in the evidence bundle (the rtl_source array is empty). Without the actual declaration of alert_test, the type/width of regs_reg2hw.alert_test.q and .qe, and the assignment site, it is impossible to verify whether the single-element concatenation is harmless width propagation, intentional scalar replication elsewhere, or a real truncation/extension bug. The supplied official spec discusses debug/lifecycle behavior and appears unrelated to alert_test, so it does not resolve the issue.",
-        "root_cause": "Insufficient RTL evidence. To verify the hypothesis, the exact source lines are needed for: (1) the declaration/parameterization of NumAlerts, (2) the declaration of alert_test and any intermediate signals it feeds, (3) the assignment using {regs_reg2hw.alert_test.q & regs_reg2hw.alert_test.qe}, and (4) the reg2hw struct field definitions generated by reggen.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "The report claims that alert_test is assigned using a single concatenation element {regs_reg2hw.alert_test.q & regs_reg2hw.alert_test.qe}, and that if NumAlerts > 1 then upper bits may be undefined. That can only be judged from RTL context. In SystemVerilog, a one-element concatenation does not by itself replicate bits; however, whether this is a bug depends on the source and destination widths and declarations. For example: if regs_reg2hw.alert_test.q and .qe are already NumAlerts-wide vectors, then {q & qe} is still NumAlerts bits and there is no issue. If they are 1-bit scalars assigned into a wider alert_test bus, then the upper bits would typically be zero-extended, not undefined, unless downstream logic expects per-alert independent bits; that would be a functional mismatch, but not exactly as stated. If the destination is 1 bit and later replicated in a generate block, then again the report would be false. Since rtl_source is empty, none of these possibilities can be eliminated. The official spec entries concern RV_DM, lifecycle gating, TL-UL access, and reset behavior; they do not mention alert_test or alert handling, so they cannot substantiate the finding. Therefore the only defensible verdict is NEEDS_MORE_CONTEXT. Required files/lines: the module containing alert_test assignment, its parameter list with NumAlerts, associated alert sender/generator instantiations, and the generated register package/struct defining regs_reg2hw.alert_test.q/qe widths.",
-        "additional_findings": [
-          "The provided official_spec appears unrelated to the reported alert_test issue, suggesting the evidence bundle may have been assembled from the wrong module or mixed contexts.",
-          "Even if the exact claim about 'undefined upper bits' proves false, there could still be a real bug if a scalar software test register is incorrectly connected to a multi-alert design and only controls alert 0. This must be checked in the RTL once provided."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0012",
+      "finding_id": "F-0016",
       "title": "[U-UP] mem_tl_win_d2h 的来源未在该片段指定，依赖外部实例（如 PULP 调试模块）驱动，其完整性和时序未知。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -436,23 +508,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.97,
-        "summary": "该报告本质上是在质疑信号 mem_tl_win_d2h 的来源“未在片段中出现、依赖外部实例驱动，因此完整性和时序未知”。但当前提供的 RTL 源码数组为空，无法沿信号路径核查 mem_tl_win_d2h 的定义、驱动源、连接关系、时序边界或是否经过生命周期/调试门控。因此既不能确认存在缺陷，也不能据此判定为误报。基于现有信息，唯一严谨结论是代码窗口不足，需要补充包含该信号声明、赋值、端口连接及实例化关系的 RTL。",
-        "root_cause": "未提供任何相关 RTL 代码（rtl_source 为空），无法检查 mem_tl_win_d2h 是否为本模块输入/输出、中间线网，是否由 rv_dm / tlul_socket / xbar / adapter 等实例驱动，也无法验证其在复位、生命周期门控、late debug enable 或 TL-UL 访问路径上的实际行为。",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. 需要验证的假设是：mem_tl_win_d2h 的来源未在片段指定，并依赖外部实例驱动，因而完整性和时序未知。这类问题必须通过 RTL 网表级追踪确认：先看信号声明，再看 assign/always_comb/always_ff 驱动，最后看模块端口和实例连接。\n2. 但当前输入中的 rtl_source 为 []，没有任何可引用的代码行号、声明、赋值或实例化信息。因此无法完成最基本的源追踪：不知道 mem_tl_win_d2h 是否在当前模块中声明，是否仅是某实例的输出端口，是否被直接透传，或是否经过多路选择/门控。\n3. 官方 spec 只描述了 RV_DM 的生命周期可达性、JTAG/TAP 访问门控、NDM reset 行为，以及“Debug Module Registers 只能通过 DMI over JTAG 访问而非 TL-UL device interface”。这些信息可以提供设计意图背景，但不能替代 RTL 证明具体信号 mem_tl_win_d2h 的实现是否正确。\n4. 反而从 spec 看，若 mem_tl_win_d2h 属于 TL-UL device memory window，它可能承载的是 debug memory window 访问而不是 DMI 寄存器访问；这要求进一步查看实际地址解码和 TL-UL 路径实现。没有源码，无法判断该信号是否与官方“寄存器不经 TL-UL 暴露”要求一致。\n5. 该报告当前措辞也不构成可直接确认的 bug。‘来源未在片段指定’本身可能只是摘录窗口不完整，不等于真实设计缺陷。很多顶层/封装层信号合法地由外部实例驱动，这是正常结构，不是 bug；是否有问题取决于连接是否正确、是否跨时钟域、是否缺少门控/约束。\n6. 要得出 CONFIRMED 或 FALSE_ALARM，至少需要以下 RTL：a) 声明/使用 mem_tl_win_d2h 的模块完整代码；b) 该信号连接到的实例端口定义；c) 上游驱动实例（疑似 rv_dm 或其 tlul adapter）的实现或端口方向；d) 相关复位、时钟和生命周期/late_debug 门控逻辑；e) 若有，TL-UL 设备窗口地址解码逻辑。",
-        "additional_findings": [
-          "官方 spec 明确指出 Debug Module Registers 只能通过 DMI over JTAG 访问，而不能通过 TL-UL device interface 访问；若后续 RTL 显示 mem_tl_win_d2h 所在窗口可直接访问 DM 寄存器，则那将是比当前报告更实质的架构性缺陷。",
-          "官方 spec 同时要求在不允许调试的生命周期状态下，RV_DM 不应通过 TAP 可达；后续检查时应特别核对与 mem_tl_win_d2h 相关的 TL-UL memory window 是否也被适当门控，避免出现‘JTAG 被关但内存窗口仍可达’的旁路问题。"
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0013",
+      "finding_id": "F-0017",
       "title": "[U-UP] lc_hw_debug_en_gated_raw 仅在此声明但未驱动，驱动逻辑应在后续代码中。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -466,23 +526,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The bug report cannot be verified or refuted from the material provided because no RTL source was included at all. The claim is specifically about whether `lc_hw_debug_en_gated_raw` is declared but not driven, which requires tracing that signal in the actual module source, its assignments, and any downstream generate/always/assign logic. The spec excerpts describe intended debug gating behavior, but they do not prove whether this particular RTL signal is undriven, driven later in the file, or driven from another included block.",
-        "root_cause": "Insufficient evidence. The `rtl_source` field is empty, so there are no line references or assignments to inspect for `lc_hw_debug_en_gated_raw`.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The reported hypothesis is narrow: `lc_hw_debug_en_gated_raw` is declared but allegedly not driven in the visible code region. Verifying that requires the RTL declaration and all assignments/always_comb/always_ff/continuous assign/generate blocks touching that net.\n2. The provided `rtl_source` array is empty, so there is no source code to examine. Without source, I cannot determine whether the signal is: (a) driven later in the same file, (b) driven in a generate block, (c) assigned via an intermediate struct/interface field, (d) intentionally left unused, or (e) genuinely undriven.\n3. The official spec only states intended behavior for RV_DM gating across life cycle states and reset conditions. Those claims suggest that a signal like `lc_hw_debug_en_gated_raw` is likely part of the debug reachability/ungating path, but they do not establish an RTL defect.\n4. Because the report wording itself says the drive logic 'should be in later code', the absence of the relevant later code window is exactly the missing evidence needed to decide.\n5. To complete verification, I need the module containing `lc_hw_debug_en_gated_raw` with: its declaration, all assignments to it, surrounding combinational/sequential logic, and the logic that consumes it. Ideally provide the full file or at least grep results for `lc_hw_debug_en_gated_raw` plus ~50 lines of context around each hit.",
-        "additional_findings": [
-          "The spec excerpts imply this signal may participate in a security-sensitive path controlling RV_DM reachability in DEV/TEST/RMA versus PROD/RAW states, so an undriven or incorrectly defaulted net here could have meaningful security impact if confirmed.",
-          "No software-visible conclusion can be drawn yet because the underlying RTL connectivity is unavailable."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0014",
+      "finding_id": "F-0018",
       "title": "[U-UP] testmode 信号的后续用途未在本片段体现，需结合外部上下文确认。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -496,23 +544,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The supplied bug report is not verifiable because no RTL source was provided at all. The report itself already states that the downstream use of `testmode` is not visible in the snippet, and in this submission the snippet is empty (`rtl_source: []`). Without the module containing `testmode` declaration, assignment, fanout, and any related gating logic, I cannot confirm or refute whether `testmode` is unused, incorrectly used, or correctly consumed elsewhere.",
-        "root_cause": "No RTL lines are available for analysis. Since the verification task requires tracing signals through the actual source, the absence of any code window prevents determination of whether `testmode` is dead, intentionally exported, consumed in another module, or involved in a real bug.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The suspected finding is explicitly framed as uncertain: it says the later use of `testmode` is not shown in the fragment and requires external context.\n2. The provided `rtl_source` array is empty, so there are no line numbers, declarations, assignments, module ports, instantiations, or consumers to inspect.\n3. Because there is no RTL, I cannot perform the required signal-trace analysis: where `testmode` originates, whether it is combinational or registered, what legal values it can take, and which logic it gates.\n4. The official spec excerpts discuss late debug enable, life-cycle gating, TAP reachability, NDM reset behavior, and DMI/TL-UL access restrictions, but none mention `testmode` directly. Therefore the spec cannot substitute for RTL evidence on this exact signal path.\n5. With no code, I also cannot assess nearby corner cases such as whether `testmode` affects RV_DM ungating, JTAG reachability during reset, strap-sampled debug enable behavior, or is simply a top-level passthrough.\n6. Therefore the correct outcome is `NEEDS_MORE_CONTEXT`, not `CONFIRMED` or `FALSE_ALARM`.",
-        "additional_findings": [
-          "To verify this report, provide the module defining `testmode`, any submodule instantiations that connect it, and the downstream modules where it may be consumed.",
-          "If the intent is to relate `testmode` to debug accessibility, also provide the RTL implementing life-cycle gating, late debug enable, TAP/JTAG gating, and NDM reset interaction."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0015",
+      "finding_id": "F-0019",
       "title": "[U-UP] 枚举 rv_dm_lc_en_e 的具体索引使用方式（用于访问哪个数组/信号）未在本片段给出。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -526,23 +562,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The reported issue cannot be verified or refuted from the provided evidence because no RTL source excerpt is included at all. The hypothesis specifically concerns how enum rv_dm_lc_en_e is used as an index into some array or signal, but neither the enum definition nor any consuming logic is present. The official spec describes intended RV_DM gating behavior, but without the actual RTL implementing that behavior, there is no way to trace the signal path, legal enum values, or determine whether any index mapping is correct.",
-        "root_cause": "Insufficient evidence: the RTL source window is empty, so there are no line-level assignments, case statements, array declarations, or index expressions involving rv_dm_lc_en_e to inspect. To verify this hypothesis, the relevant RTL must include (1) the typedef/enum definition of rv_dm_lc_en_e, (2) every place that enum is used to index an array or select a signal, and (3) surrounding debug-gating logic that connects those indexed values to RV_DM reachability/ungating behavior.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The suspected finding is narrowly about the 'specific index usage' of enum rv_dm_lc_en_e and whether the snippet omits which array/signal it accesses. 2. The provided rtl_source field is empty, so there are no RTL lines to inspect. 3. Because of that, I cannot perform the required verification steps: trace where the enum comes from, enumerate legal values, inspect all index sites, check default/fallback behavior, or compare implementation against the late-debug gating spec. 4. The official spec does establish expected behavior for DEV/TEST/RMA/PROD/RAW states and late debug enable, but a spec alone cannot confirm or refute an implementation defect in enum indexing. 5. Therefore the only defensible verdict is NEEDS_MORE_CONTEXT. The minimum additional context needed is the module/file containing rv_dm_lc_en_e, any arrays/signals indexed by it, and the surrounding TAP/RV_DM gating logic implementing LC_HW_DEBUG_EN, LATE_DEBUG_ENABLE, and DIS_RV_DM_LATE_DEBUG.",
-        "additional_findings": [
-          "Because the RTL excerpt is entirely absent, none of the official-spec claims about RV_DM reachability, full ungating, or non-debug-module reset gating can be validated against implementation.",
-          "If the intent is to check life-cycle-state mapping, the needed code likely spans both the enum definition and the combinational/sequential logic that derives TAP reachability and RV_DM ungating from life-cycle inputs."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0016",
+      "finding_id": "F-0020",
       "title": "[U-UP] hartinfo 数组未在该片段内驱动，其赋值逻辑和使用上下文未知。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -556,23 +580,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.99,
-        "summary": "The reported issue cannot be verified or refuted from the provided material because there is no RTL source excerpt at all: the `rtl_source` array is empty, and the report itself only states that `hartinfo` is not driven within an unspecified fragment. Without the actual module, signal declarations, assignments, and readout paths, it is impossible to determine whether `hartinfo` is correctly driven elsewhere, intentionally tied off, parameterized, generated in another file, or truly left undriven.",
-        "root_cause": "Insufficient evidence. No RTL lines were provided for the `hartinfo` signal path, so there is no basis to trace its driver(s), legal values, or usage. To verify this, the relevant module source containing the `hartinfo` declaration, assignment logic, register packing/readback logic, and any generate/parameter code is required.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The suspected finding is itself framed as uncertainty: `hartinfo` is said to be 'not driven in this fragment' and its assignment/use is unknown. That is not a concrete defect claim against the full design; it only observes absence within a partial view.\n2. The provided `rtl_source` is empty, so there are no line numbers, declarations, assignments, or module instances to inspect.\n3. Because there is no source, I cannot answer the required verification questions: where `hartinfo` comes from, which always_comb/always_ff/assign statements drive it, whether it is a packed array or register field, whether it is parameter-derived, or whether downstream logic safely handles default values.\n4. The official spec excerpt is about RV_DM reachability, late debug gating, reset behavior, and TL-UL accessibility. None of those claims establish anything about a `hartinfo` array being driven or undriven.\n5. Therefore the only defensible verdict is NEEDS_MORE_CONTEXT. This is not a confirmed bug, but not a false alarm either, because the key evidence is missing.",
-        "additional_findings": [
-          "The official spec provided is largely unrelated to the stated `hartinfo` concern; it discusses lifecycle/JTAG/debug gating rather than `hartinfo` generation or register contents.",
-          "To complete the review, provide: (a) the module containing `hartinfo` declaration, (b) all assignments to `hartinfo`, including generate blocks and parameter defaults, (c) the logic that exposes `hartinfo` through DMI/TL-UL/register interfaces, and (d) any package/type definitions for the `hartinfo` element type."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0017",
+      "finding_id": "F-0021",
       "title": "[U-UP] RaclPolicySelVecRegs 参数的实际使用方式需要查看后续逻辑。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -586,23 +598,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The supplied bug report is too vague to verify, and no RTL source was provided at all. The finding only says that the actual usage of the parameter \"RaclPolicySelVecRegs\" must be checked in downstream logic, but there are no extracted code sections showing where that parameter is declared, propagated, or consumed. Without the RTL, I cannot confirm or refute any defect, nor can I determine whether the concern is even related to the provided official-spec claims, which appear to describe RV_DM debug gating rather than RaclPolicySelVecRegs behavior.",
-        "root_cause": "Insufficient evidence. The report names a parameter (RaclPolicySelVecRegs) but provides no RTL lines showing its definition or use. The rtl_source array is empty, so there is nothing to trace end-to-end as required.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. I first examined the suspected finding: it does not actually assert a concrete bug mechanism, only that the actual usage of parameter RaclPolicySelVecRegs needs to be checked in later logic. That is a request for inspection, not a falsifiable defect claim. 2. I then checked the provided RTL evidence. The rtl_source field is an empty list, so there are no module declarations, parameter definitions, generate blocks, assignments, case statements, or consumers to inspect. 3. Because the signal/parameter path cannot be traced, I cannot answer the required verification questions: where RaclPolicySelVecRegs comes from, what legal values it can take, how each value is handled, whether any default branch is defensive or incorrect, or whether downstream logic misuses it. 4. The official_spec excerpts discuss RV_DM reachability, life-cycle gating, JTAG/DMI access, TL-UL accessibility, and reset-time debug gating. None of those claims mention RaclPolicySelVecRegs, so they do not provide enough indirect evidence to verify this report either. 5. Therefore the only technically sound verdict is NEEDS_MORE_CONTEXT. To complete verification, I would need the RTL lines for: (a) the declaration/default of parameter RaclPolicySelVecRegs, (b) any generate-if or localparam logic derived from it, (c) all uses of that parameter in register instantiation, muxing, address decode, or policy selection logic, and ideally (d) the enclosing module and any submodule ports it influences.",
-        "additional_findings": [
-          "The supplied official-spec excerpts appear unrelated to the named parameter RaclPolicySelVecRegs; they focus on RV_DM debug gating and memory-map access rather than the reported parameter path.",
-          "The finding itself is underspecified: it does not identify a signal failure mode, expected behavior, or contradiction against either RTL or spec."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0018",
+      "finding_id": "F-0022",
       "title": "[U-UP] TlulHostUserRsvdBits 和 SecVolatileRawUnlockEn 参数仅声明默认值，与内部逻辑的具体交互未体现。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -616,23 +616,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "The suspected issue cannot be verified or refuted from the provided evidence because the RTL source extraction is empty. The claim is specifically about whether parameters `TlulHostUserRsvdBits` and `SecVolatileRawUnlockEn` are merely declared with defaults or actually influence behavior, and that requires the module declaration plus all internal references, generate blocks, and submodule instantiations that consume those parameters. The supplied official spec discusses RV_DM reachability, life-cycle gating, and TL-UL accessibility, but does not mention either parameter, so it cannot substitute for the missing RTL.",
-        "root_cause": "Insufficient evidence: `rtl_source` is empty, so there are no RTL lines to trace parameter declaration, propagation, or use. To verify this finding, the relevant module definition and any dependent files showing uses of `TlulHostUserRsvdBits` and `SecVolatileRawUnlockEn` are required.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. The reported hypothesis concerns two parameters: `TlulHostUserRsvdBits` and `SecVolatileRawUnlockEn`, specifically alleging that they are only declared with default values and that their interaction with internal logic is not reflected.\n2. Verifying that claim requires RTL inspection of at least: (a) the parameter declarations in the target module, (b) any localparams or generate conditions derived from them, (c) ports or struct widths affected by them, and (d) any submodule instantiations where they are forwarded.\n3. The provided `rtl_source` array is empty, so there are no RTL line numbers available to trace signal/parameter flow or to determine whether the parameters are unused, intentionally reserved, or consumed indirectly through lower-level modules.\n4. The official spec excerpts focus on RV_DM debug reachability, life-cycle gating, JTAG/TAP behavior, and TL-UL access restrictions. None of the spec claims mention `TlulHostUserRsvdBits` or `SecVolatileRawUnlockEn`, so the spec does not establish a contradiction or confirm a defect on its own.\n5. Because the source window is missing entirely, this is not a case of a disproven bug; it is an unverifiable hypothesis. The minimum additional context needed is the top-level/module RTL containing these parameter declarations, plus any instantiated modules or package definitions that reference them.",
-        "additional_findings": [
-          "The provided official-spec excerpts appear weakly correlated with the reported finding: they describe late debug enable and RV_DM/TAP/TL-UL behavior, not the semantics or expected use of `TlulHostUserRsvdBits` or `SecVolatileRawUnlockEn`.",
-          "A common benign pattern in RTL is that parameters exist solely to configure submodule instances or interface widths; without the instantiation context, an apparent 'unused parameter' report may be a false positive."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0019",
+      "finding_id": "F-0023",
       "title": "[U-UP] 当定义 DMIDirectTAP 时，DMI 和 JTAG 信号由外部 DPI 模块驱动，但本片段未包含替换 TAP 和 DMI 接口的实现，因此 dmi_req_valid、dmi_req_ready 等信号的实际连接不明确。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -646,23 +634,11 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.98,
-        "summary": "该报告本质上是在质疑 `DMIDirectTAP` 条件编译分支下 DMI/JTAG 信号是否被正确替换和连接。但当前提供的 `rtl_source` 为空，完全没有可核查的 RTL 代码，因此既无法确认存在悬空/未驱动/错误复用的问题，也无法反驳该怀疑。基于现有证据，只能判定为需要更多上下文，而不是确认缺陷。",
-        "root_cause": "当前没有提供任何相关 RTL 代码片段（`rtl_source` 为空），因此无法检查 `DMIDirectTAP` 宏定义分支、`dmi_req_valid`/`dmi_req_ready`/JTAG/TAP 相关信号的驱动源、条件编译替换逻辑、实例连接关系或默认赋值路径。官方文档只描述调试可达性和生命周期/复位门控意图，不能证明具体实现是否遗漏连接。",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1. 被报告的问题聚焦于 `DMIDirectTAP` 定义时，DMI/JTAG 信号可能由外部 DPI 模块驱动，而当前片段未显示替代 TAP/DMI 实现，导致 `dmi_req_valid`、`dmi_req_ready` 等连接不明确。\n2. 按验证要求，必须回到 RTL 逐信号追踪：这些信号在哪里声明、在 `ifdef DMIDirectTAP`/`else` 分支中如何赋值、是否经过 TAP 模块、DMI adapter、DPI shim 或顶层端口转接、是否存在默认值或未覆盖分支。\n3. 但当前输入中的 `rtl_source` 是空数组，没有任何源码行号、模块名、实例化代码或宏分支可供分析。因此无法执行最基本的 end-to-end trace，也无法引用“确切代码行”来确认或否认缺陷。\n4. 官方文档中的信息仅说明设计意图：RV_DM 通过 JTAG/DMI 访问、受生命周期和 late debug gating 控制、reset 时应切断连接等。这些内容与“`DMIDirectTAP` 条件编译是否实现正确”不是同一层次的问题。即便文档说 TAP 可达，也不能据此推断 RTL 中 `dmi_req_valid` 一定有正确驱动；反过来也不能仅因代码片段缺失就断言 RTL 一定有 bug。\n5. 因此，该报告目前既不能被确认，也不能被判定为误报；真正缺的是以下 RTL 上下文：\n   - 含 `DMIDirectTAP` 条件编译的顶层模块及其完整 `ifdef/else/endif` 代码；\n   - `dmi_req_valid`、`dmi_req_ready`、`dmi_rsp_valid`、`dmi_rsp_ready`、`tck/tms/tdi/tdo/trst_n` 等信号的声明与所有赋值位置；\n   - JTAG TAP、DMI adapter、DPI direct TAP 或 testbench shim 的实例化与端口连接；\n   - 若这些信号跨模块传递，还需要相邻层级的顶层封装文件。\n6. 在缺少这些代码前，任何“确认未连接”或“确认连接正确”的结论都不可靠。",
-        "additional_findings": [
-          "官方规格与报告关注点不在同一层：规格描述的是 debug 可达性/门控策略，而报告质疑的是条件编译下的具体连线实现；仅凭规格无法验证该实现级问题。",
-          "若后续提供 RTL，应特别检查 `DMIDirectTAP` 分支下是否绕过了正常 TAP 门控逻辑，从而与生命周期/late debug/reset severing 机制产生实现偏差。"
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     },
     {
-      "finding_id": "F-0020",
+      "finding_id": "F-0024",
       "title": "[U-UP] scan_rst_ni 的作用仅限于在 testmode 时多路选择为 JTAG 复位源，其具体用法需结合测试架构理解。",
       "severity": "LOW",
       "verdict": "UNCERTAIN",
@@ -676,20 +652,440 @@
       "involved_signals": [],
       "involved_specs": [],
       "evidence": [],
-      "phase3": {
-        "verdict": "NEEDS_MORE_CONTEXT",
-        "confidence": 0.99,
-        "summary": "The provided evidence is insufficient to verify or refute the claim about scan_rst_ni. The suspected finding points to a specific reset/testmode/JTAG signal path, but no RTL source was supplied at all, so there is no way to trace where scan_rst_ni is declared, how it is muxed, whether it is used only in testmode, or whether it has any side effects on JTAG/TAP or RV_DM reachability. The official spec excerpts discuss debug gating and reset behavior at a higher level, but they do not mention scan_rst_ni directly.",
-        "root_cause": "No RTL code window was provided for the signal under review. The rtl_source array is empty, so there are no line numbers to inspect for scan_rst_ni declaration, fanout, reset muxing, testmode gating, or JTAG/TAP integration.",
-        "trigger_condition": "",
-        "security_impact": "",
-        "software_visible": false,
-        "reasoning": "1) The suspected report is about scan_rst_ni and claims its role is limited to selecting the JTAG reset source in testmode. Verifying that requires tracing the signal end-to-end in RTL: port declaration, assignments, mux select conditions, and downstream consumers. 2) The provided rtl_source is empty, so there are no RTL lines to analyze or cite. Without source, it is impossible to determine whether scan_rst_ni is used only in a testmode-controlled mux, is also consumed elsewhere, has polarity inversions, or interacts with other reset domains. 3) The official spec excerpts discuss RV_DM reachability, lifecycle gating, non-debug-module reset behavior, and JTAG/debug accessibility, but none of those excerpts define scan_rst_ni or describe its exact implementation. They therefore cannot prove or disprove the report. 4) Because the claim is specifically about implementation detail on a reset/test/JTAG path, the minimum needed context is: the module containing the scan_rst_ni port; the combinational/sequential logic that selects between scan_rst_ni and other reset sources; the JTAG/TAP wrapper or DMI/JTAG integration where that reset is consumed; and any top-level testmode/scanmode wiring or reset manager logic that drives the mux select. 5) With no RTL lines available, any verdict beyond NEEDS_MORE_CONTEXT would be speculative.",
-        "additional_findings": [
-          "The supplied official spec is largely about lifecycle/debug gating and non-debug-module reset behavior, but it is not sufficient to infer the implementation semantics of scan_rst_ni.",
-          "Please provide the RTL files or line ranges covering: scan_rst_ni declaration, testmode mux logic, JTAG/TAP reset input handling, and any top-level instantiations connecting scan_rst_ni into the debug/reset tree."
-        ]
-      }
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0025",
+      "title": "[U-UP] DMI 模式下 ifndef DMIDirectTAP 块内未覆盖 DMIDirectTAP 定义情况下的 dmi_rst_n 来源，复位信号可能存在未驱动风险。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "DMI 模式下 ifndef DMIDirectTAP 块内未覆盖 DMIDirectTAP 定义情况下的 dmi_rst_n 来源，复位信号可能存在未驱动风险。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0026",
+      "title": "[U-UP] alert_req_i 连接到 alerts[0] 而非 alerts[i]，是否是设计意图还是笔误？上下文缺失，可能 alerts 只有 1 位宽，但循环用 NumAlerts 生成多个实例，广播行为需确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "alert_req_i 连接到 alerts[0] 而非 alerts[i]，是否是设计意图还是笔误？上下文缺失，可能 alerts 只有 1 位宽，但循环用 NumAlerts 生成多个实例，广播行为需确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0027",
+      "title": "[U-UP] alert_ack_o 和 alert_state_o 悬空，是否意味着这些输出信号未被使用，或是集成错误？",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "alert_ack_o 和 alert_state_o 悬空，是否意味着这些输出信号未被使用，或是集成错误？",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0028",
+      "title": "[U-UP] 所有实例 IsFatal 固定为 1，是否所有警报都为致命，还是该模块仅处理致命警报？",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "所有实例 IsFatal 固定为 1，是否所有警报都为致命，还是该模块仅处理致命警报？",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0029",
+      "title": "[U-UP] lc_tx_test_true_strict 的准确功能（例如它如何定义“严格真”，是否包含多比特校验、空闲状态检测等）未在本片段显示，需要参考该函数的实现来确认具体判定逻辑。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "lc_tx_test_true_strict 的准确功能（例如它如何定义“严格真”，是否包含多比特校验、空闲状态检测等）未在本片段显示，需要参考该函数的实现来确认具体判定逻辑。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0030",
+      "title": "[U-UP] LcEnDebugReq 的常量值及其与 lc_hw_debug_en_gated 位宽的对应关系未在片段中给出，索引越界风险需结合外部定义评估。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "LcEnDebugReq 的常量值及其与 lc_hw_debug_en_gated 位宽的对应关系未在片段中给出，索引越界风险需结合外部定义评估。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0031",
+      "title": "[U-UP] 当 otp_dis_rv_dm_late_debug 和 late_debug_enable 均不为 True 时，回退到 lc_dft_en_raw 的设计意图未在片段中说明，需参考上下文确认 lc_dft_en_raw 的作用与安全属性。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "当 otp_dis_rv_dm_late_debug 和 late_debug_enable 均不为 True 时，回退到 lc_dft_en_raw 的设计意图未在片段中说明，需参考上下文确认 lc_dft_en_raw 的作用与安全属性。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0032",
+      "title": "[U-UP] strap_en_override_q 信号被声明但未在本片段内使用，其用途需结合完整模块确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "strap_en_override_q 信号被声明但未在本片段内使用，其用途需结合完整模块确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0033",
+      "title": "[U-UP] strap_en 信号在此声明，但未在本片段中赋值或连接，其与 gen_strap_override 块的关联不明确。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "strap_en 信号在此声明，但未在本片段中赋值或连接，其与 gen_strap_override 块的关联不明确。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0034",
+      "title": "[U-UP] strap_en_override_d 和 strap_en_override_q 的确切定义未在此片段内显示，推测它们分别是 strap_en_override_i 的同步版本和同步后的前一周期值，需要上层逻辑确认。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "strap_en_override_d 和 strap_en_override_q 的确切定义未在此片段内显示，推测它们分别是 strap_en_override_i 的同步版本和同步后的前一周期值，需要上层逻辑确认。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0035",
+      "title": "[U-UP] ASSUME 宏的实际检查机制未展示，其假设可能依赖外部验证工具强制执行，本片段仅声明该属性。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "ASSUME 宏的实际检查机制未展示，其假设可能依赖外部验证工具强制执行，本片段仅声明该属性。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0036",
+      "title": "[U-UP] lc_tx_and_lo 和 lc_tx_inv 的精确真值表未在片段中定义，需查阅 lc_tx 包以确认门控逻辑的边界条件。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "lc_tx_and_lo 和 lc_tx_inv 的精确真值表未在片段中定义，需查阅 lc_tx 包以确认门控逻辑的边界条件。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0037",
+      "title": "[U-UP] StEnDmiTlulLast 的实际数值未显式声明，仅从枚举推断为 2，影响数组位宽和副本索引。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "StEnDmiTlulLast 的实际数值未显式声明，仅从枚举推断为 2，影响数组位宽和副本索引。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0038",
+      "title": "[U-UP] 本片段仅包含模块接口声明，无任何行为逻辑，无法确定 DMI 门控或信号处理的具体实现。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "本片段仅包含模块接口声明，无任何行为逻辑，无法确定 DMI 门控或信号处理的具体实现。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0039",
+      "title": "[U-UP] strap_en_override_i 在 SecVolatileRawUnlockEn=1 时的同步与采样逻辑未在本片段体现。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "strap_en_override_i 在 SecVolatileRawUnlockEn=1 时的同步与采样逻辑未在本片段体现。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0040",
+      "title": "[U-UP] lc_tx_t 类型的具体编码未知（可能包含有效位或多比特状态），影响同步器对输入信号的处理方式。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "lc_tx_t 类型的具体编码未知（可能包含有效位或多比特状态），影响同步器对输入信号的处理方式。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0041",
+      "title": "[U-UP] prim_lc_sync 内部同步级数与输出延迟拍数未在本片段给出，无法确定输出相对输入的准确更新时刻。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "prim_lc_sync 内部同步级数与输出延迟拍数未在本片段给出，无法确定输出相对输入的准确更新时刻。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0042",
+      "title": "[U-UP] 输入使能信号的来源时钟域是否与 clk_i 异步未在片段中显式说明，但使用同步器实例暗示存在异步关系。",
+      "severity": "LOW",
+      "verdict": "UNCERTAIN",
+      "channels": [
+        "U-UP"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.135,
+      "contradiction": "输入使能信号的来源时钟域是否与 clk_i 异步未在片段中显式说明，但使用同步器实例暗示存在异步关系。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0043",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "未提供官方设计文档（theory_of_operation.md），无法定位与 finding 相关的设计声明，因此无法判断 RTL 实现是否违背设计意图。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0044",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "LLM call failed after retries",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0045",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "输入中缺少该 IP 模块的官方设计文档（theory_of_operation.md），仅提供了自动提取的 RTL 规范片段，无法将 finding 与正式设计意图进行比对。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0046",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "任务所需官方设计文档全文（theory_of_operation.md）缺失，无法进行比对判断。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0047",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "No matching RTL specs.",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
+    },
+    {
+      "finding_id": "F-0048",
+      "title": "Finding on ",
+      "severity": "LOW",
+      "verdict": "NOT_FOUND",
+      "channels": [
+        "L2-G"
+      ],
+      "cross_channel_hits": 1,
+      "is_self_ref": true,
+      "score": 0.126,
+      "contradiction": "官方设计文档全文未提供，无法查找与 finding 声称的'生命周期状态无效时 RV_DM 不可达'相关的设计声明。仅收到的 RTL 规范片段不足以作为设计文档的替代。",
+      "involved_signals": [],
+      "involved_specs": [],
+      "evidence": [],
+      "formal_verdict": "NONE",
+      "formal_confidence": 0.0
     }
   ]
 }

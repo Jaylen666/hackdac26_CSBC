@@ -200,7 +200,7 @@ def main() -> None:
                 chunk,
                 client,
                 prompt_path=args.prompt or None,
-                max_tokens=12000,
+                max_tokens=20000,
             )
             out_path.write_text(
                 json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8"
