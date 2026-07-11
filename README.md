@@ -85,6 +85,7 @@ export TRANSFORMERS_OFFLINE=1
 rtl_bug_agent/
 ├── config/
 │   └── prompts/
+│       ├── chunk_spec_agu_structured_slim_en.md
 │       ├── phase2/
 │       │   ├── channel_b_ag_pairing.md
 │       │   └── ref_extract.md
@@ -196,6 +197,8 @@ $VENV_PY -m rtl_bug_agent.cli chunk \
 `--prefilter` 会使用 LLM 过滤部分结构性代码。若不希望调用预过滤 LLM，可以去掉该选项。
 
 ### 4.2 批量生成 spec
+
+默认使用 `config/prompts/chunk_spec_agu_structured_slim_en.md`。如需实验其他 spec prompt，可以通过 `--prompt` 显式指定；不指定时使用该默认文件。
 
 ```bash
 $VENV_PY scripts/generate_all_specs.py \
