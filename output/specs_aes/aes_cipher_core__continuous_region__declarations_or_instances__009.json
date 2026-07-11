@@ -58,12 +58,13 @@
       "SecSBoxImpl"
     ],
     "tags": [
+      "secret",
       "wipe",
       "mask",
       "alert",
       "error",
       "handshake",
-      "reset",
+      "control",
       "parameterization"
     ]
   },
@@ -71,240 +72,359 @@
     {
       "id": "G1",
       "type": "instance_connection",
-      "claim": "alert_o is driven by u_aes_cipher_control.alert_o output.",
-      "cond": "always",
-      "signals": [
-        "alert_o"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:592"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "instance_connection",
-      "claim": "key_clear_o is driven by u_aes_cipher_control.key_clear_o output.",
+      "claim": "u_aes_cipher_control always drives key_clear_o with a valid logic value (0 or 1); it is never undriven or tristate.",
       "cond": "always",
       "signals": [
         "key_clear_o"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:585"
-      ]
+        "aes_cipher_core.sv:585"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "key_clear_o !== 'bx && key_clear_o !== 'bz",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_clear_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "key_clear_o !== 'bx && key_clear_o !== 'bz",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G3",
+      "id": "G2",
       "type": "instance_connection",
-      "claim": "data_out_clear_o is driven by u_aes_cipher_control.data_out_clear_o output.",
+      "claim": "u_aes_cipher_control always drives data_out_clear_o with a valid logic value (0 or 1); it is never undriven or tristate.",
       "cond": "always",
       "signals": [
         "data_out_clear_o"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:587"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "instance_connection",
-      "claim": "prd_masking_upd (prng_update_o) is driven by u_aes_cipher_control.prng_update_o output.",
-      "cond": "always",
-      "signals": [
-        "prd_masking_upd",
-        "prng_update_o"
+        "aes_cipher_core.sv:587"
       ],
-      "refs": [
-        "output/aes_cipher_core.sv:594"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "instance_connection",
-      "claim": "prd_masking_rsd_req (prng_reseed_req_o) is driven by u_aes_cipher_control.prng_reseed_req_o output.",
-      "cond": "always",
-      "signals": [
-        "prd_masking_rsd_req",
-        "prng_reseed_req_o"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:595"
-      ]
-    },
-    {
-      "id": "G6",
-      "type": "instance_connection",
-      "claim": "sub_bytes_en, key_expand_en, and other control enables are driven by the respective u_aes_cipher_control outputs.",
-      "cond": "always",
-      "signals": [
-        "sub_bytes_en",
-        "key_expand_en",
-        "state_we_ctrl",
-        "key_full_we_ctrl",
-        "key_dec_we_ctrl"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:600-616"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "data_out_clear_o !== 'bx && data_out_clear_o !== 'bz",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_out_clear_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "data_out_clear_o !== 'bx && data_out_clear_o !== 'bz",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "sub_bytes_out_req must be deasserted after sub_bytes_out_ack is asserted, following standard request/ack handshake.",
-      "cond": "when sub_bytes operation is active",
-      "risk": "sub_bytes module may stall or receive spurious requests, causing incorrect substitution or deadlock.",
-      "signals": [
-        "sub_bytes_out_req",
-        "sub_bytes_out_ack"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:601-602"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "handshake",
-      "claim": "key_expand_out_req must be deasserted after key_expand_out_ack is asserted, following standard request/ack handshake.",
-      "cond": "when key expansion module is active",
-      "risk": "key expansion may proceed with invalid data or stall, potentially corrupting round keys.",
-      "signals": [
-        "key_expand_out_req",
-        "key_expand_out_ack"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:611-612"
-      ]
-    },
-    {
-      "id": "A3",
       "type": "value_domain",
-      "claim": "cfg_valid must be asserted only when the cipher is in a configuration-safe state (e.g., idle or after reset) and held stable for at least one cycle.",
-      "cond": "during configuration writes",
-      "risk": "reconfiguration mid-operation could lead to illegal op modes, key length mismatches, and unpredictable cipher behavior.",
+      "claim": "cfg_valid is asserted only when op_i and key_len_i represent a legal configuration, and does not glitch while the control module samples it.",
+      "cond": "when configuration is being loaded (during in_valid_i and in_ready_o handshake or later usage)",
+      "risk": "Illegal or glitched configuration could cause incorrect cipher mode selection, invalid key length, or unpredictable state transitions, potentially bypassing security restrictions.",
       "signals": [
         "cfg_valid",
         "op_i",
         "key_len_i"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:575-577"
-      ]
+        "aes_cipher_core.sv:575-577"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "cfg_valid",
+        "consequent": "$stable(cfg_valid)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_valid",
+          "op_i",
+          "key_len_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cfg_valid",
+        "consequent": "$stable(cfg_valid)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "Error inputs mux_sel_err, sp_enc_err_q, and op_err are asserted only when genuine errors occur, and are not spuriously toggled.",
+      "cond": "always",
+      "risk": "False or glitching error assertions may trigger premature or unnecessary key_clear_o/data_out_clear_o cycles, destroying secret material or causing denial of service.",
+      "signals": [
+        "mux_sel_err",
+        "sp_enc_err_q",
+        "op_err"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:588-590"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "mux_sel_err",
+          "sp_enc_err_q",
+          "op_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "Error inputs mux_sel_err, sp_enc_err_q, and op_err are asserted only when genuine errors occur, and are not spuriously toggled",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "alert_fatal_i meets setup and hold timing relative to clk_i and is synchronized outside this module if needed.",
+      "cond": "on every posedge of clk_i when alert_fatal_i is sampled",
+      "risk": "Metastability on alert_fatal_i could corrupt the internal alert generation path, causing false alert issuance or missed fatal alerts.",
+      "signals": [
+        "alert_fatal_i",
+        "clk_i"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:591"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "alert_fatal_i",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "on every posedge of clk_i when alert_fatal_i is sampled",
+        "consequent": "alert_fatal_i meets setup and hold timing relative to clk_i and is synchronized outside this module if needed",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A4",
-      "type": "value_domain",
-      "claim": "sp_enc_err_q must present valid, stable sparse-encoding error status until acknowledged by the control module's internal logic.",
-      "cond": "when a sparse encoding error occurs",
-      "risk": "the error may be missed, potentially allowing corrupted substitution results to propagate without alert.",
-      "signals": [
-        "sp_enc_err_q"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:589"
-      ]
-    },
-    {
-      "id": "A5",
       "type": "handshake",
-      "claim": "prd_masking_rsd_ack must be asserted exactly once per prd_masking_rsd_req, without spurious toggles.",
-      "cond": "during PRNG reseed sequence",
-      "risk": "masking PRNG may lose synchronization, causing stale masks or deadlock.",
+      "claim": "Handshake signals prd_masking_rsd_ack, sub_bytes_out_req, and key_expand_out_req follow their respective req/ack protocols (no combinational loops, correct sequencing).",
+      "cond": "during active operations",
+      "risk": "Protocol violation could stall the control FSM, leaving secret key/material exposed in datapath pipelines without proper clearing.",
       "signals": [
         "prd_masking_rsd_ack",
-        "prd_masking_rsd_req"
+        "sub_bytes_out_req",
+        "key_expand_out_req",
+        "prd_masking_rsd_req",
+        "sub_bytes_out_ack",
+        "key_expand_out_ack"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:595-596"
-      ]
+        "aes_cipher_core.sv:594-596,602,612"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prd_masking_rsd_ack",
+          "sub_bytes_out_req",
+          "key_expand_out_req",
+          "prd_masking_rsd_req",
+          "sub_bytes_out_ack",
+          "key_expand_out_ack"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during active operations",
+        "consequent": "Handshake signals prd_masking_rsd_ack, sub_bytes_out_req, and key_expand_out_req follow their respective req/ack protocols (no combinational loops, correct sequencing)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "Timing of sp_enc_err_q deassertion relative to control sampling may cause missed error detection if the control block only captures a single-cycle pulse.",
-      "cond": "when sp_enc_err_q is asserted as a short pulse",
-      "risk": "could allow corrupted S-Box output to be used without raising a fatal alert, breaking integrity.",
+      "claim": "The exact error escalation logic inside u_aes_cipher_control (how mux_sel_err, sp_enc_err_q, op_err, and alert_fatal_i combine to trigger key_clear_o, data_out_clear_o, and alert_o) is invisible here. It must be reviewed to ensure that all fatal errors lead to immediate clearing of secrets and that no legal error can be missed.",
+      "cond": "any error assertion",
+      "risk": "A missing or delayed clearing action could leave key or plaintext exposed in registers after a fault.",
       "signals": [
-        "sp_enc_err_q"
+        "mux_sel_err",
+        "sp_enc_err_q",
+        "op_err",
+        "alert_fatal_i",
+        "key_clear_o",
+        "data_out_clear_o",
+        "alert_o"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:589"
-      ]
+        "aes_cipher_core.sv:588-592,584-587"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "mux_sel_err",
+          "sp_enc_err_q",
+          "op_err",
+          "alert_fatal_i",
+          "key_clear_o",
+          "data_out_clear_o",
+          "alert_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "any error assertion",
+        "consequent": "The exact error escalation logic inside u_aes_cipher_control (how mux_sel_err, sp_enc_err_q, op_err, and alert_fatal_i combine to trigger key_clear_o, data_out_clear_o, and alert_o) is invisible here. It must be reviewed to ensure that all",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The control module receives both key_clear_i/data_out_clear_i and drives key_clear_o/data_out_clear_o; it is unclear whether these outputs directly propagate the inputs or implement a gated/oob clear sequence.",
-      "cond": "when a clear request is asserted",
-      "risk": "a malicious kludge could suppress the clear output, leaving key material in registers.",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The interactions among handshake signals (prng_reseed, sub_bytes_out, key_expand_out) and the control FSM may introduce deadlocks or backpressure limitations under certain throughput conditions. Cross-chunk verification is needed to guarantee that no stall can prevent clearing or leak state.",
+      "cond": "during continuous operation with out_ready_i low or while one datapath unit is stalled",
+      "risk": "A deadlock could hold the AES core in an intermediate state, potentially exposing half-computed ciphertext or key material.",
       "signals": [
-        "key_clear_i",
-        "key_clear_o",
-        "data_out_clear_i",
-        "data_out_clear_o"
+        "prd_masking_rsd_req",
+        "prd_masking_rsd_ack",
+        "sub_bytes_out_req",
+        "sub_bytes_out_ack",
+        "key_expand_out_req",
+        "key_expand_out_ack"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:584-587"
-      ]
+        "aes_cipher_core.sv:594-596,601-602,611-612"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prd_masking_rsd_req",
+          "prd_masking_rsd_ack",
+          "sub_bytes_out_req",
+          "sub_bytes_out_ack",
+          "key_expand_out_req",
+          "key_expand_out_ack"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during continuous operation with out_ready_i low or while one datapath unit is stalled",
+        "consequent": "The interactions among handshake signals (prng_reseed, sub_bytes_out, key_expand_out) and the control FSM may introduce deadlocks or backpressure limitations under certain throughput conditions. Cross-chunk verification is needed to guarant",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "alert_fatal_i is connected to u_aes_cipher_control, and alert_o is driven by it; need to verify that internal errors (mux_sel_err, op_err, sp_enc_err_q) are properly OR-ed or prioritized with external fatal alerts.",
-      "cond": "when any error input is asserted",
-      "risk": "an internal error could be masked if external alert suppresses output, or vice versa, violating alert integrity.",
-      "signals": [
-        "alert_fatal_i",
-        "alert_o",
-        "mux_sel_err",
-        "op_err",
-        "sp_enc_err_q"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:588-592"
-      ]
-    },
-    {
-      "id": "U4",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "prd_masking_rsd_ack handshake must prevent multiple reseed requests while one is outstanding; timing may violate protocol if request is re-asserted before ack completion.",
-      "cond": "when PRNG reseed is triggered",
-      "risk": "masking key may be reseeded incorrectly, causing functional failure but not necessarily a security leak.",
-      "signals": [
-        "prd_masking_rsd_req",
-        "prd_masking_rsd_ack"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:595-596"
-      ]
-    },
-    {
-      "id": "U5",
       "type": "U_unhandled_legal_case",
-      "priority": "medium",
-      "claim": "The control module inputs mux_sel_err and op_err appear to report internal selection/operational errors; if the control module does not treat them as fatal, they may lead to incorrect data path processing.",
-      "cond": "when these error signals are asserted",
-      "risk": "incorrect mix-column or AddRoundKey selection could produce wrong ciphertext without alert.",
+      "priority": "high",
+      "claim": "The parameters SecMasking and SecSBoxImpl may affect how PRNG masking updates are orchestrated. It is unclear whether all legal combinations have been verified to ensure that masking is never unintentionally disabled, possibly leaking side-channel information.",
+      "cond": "when SecMasking = 0 or SecSBoxImpl selects a non-masked S-Box variant",
+      "risk": "Unprotected configuration could leak secret key or state through power/EM side channels.",
       "signals": [
-        "mux_sel_err",
-        "op_err"
+        "SecMasking",
+        "SecSBoxImpl",
+        "prd_masking_upd"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:588,590"
-      ]
+        "aes_cipher_core.sv:562-564,594"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "SecMasking",
+          "SecSBoxImpl",
+          "prd_masking_upd"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when SecMasking = 0 or SecSBoxImpl selects a non-masked S-Box variant",
+        "consequent": "The parameters SecMasking and SecSBoxImpl may affect how PRNG masking updates are orchestrated. It is unclear whether all legal combinations have been verified to ensure that masking is never unintentionally disabled, possibly leaking side-",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This instance is the control hub of the AES cipher core, connecting key clear, data out clear, masking PRNG updates, and alert escalation. The control module internally decides when to zeroize secret key and output data, and it propagates fatal/system errors to the top-level alert. Any flaw in the control logic—such as a missed error, glitched clear signal, or deadlocked handshake—could directly cause secrets to remain in registers after a fault, or allow leakage through side channels. The assumptions on external inputs are critical for the security guarantees of the entire AES module.",
   "evidence_refs": [
-    "output/aes_cipher_core.sv:554-617"
+    "aes_cipher_core.sv:554-617"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 554,
-  "line_end": 617,
-  "security_implications": ""
+  "line_end": 617
 }

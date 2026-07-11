@@ -24,16 +24,30 @@
       "op_start_i",
       "advance_sel",
       "inv_state",
-      "en_i",
-      "disable_sel",
-      "adv_state",
-      "dis_state",
       "prng_reseed_ack_i",
-      "op_busy",
-      "root_key_valid_q",
       "cnt",
       "EntropyRounds",
-      "state_intg_err_q"
+      "en_i",
+      "root_key_valid_q",
+      "disable_sel",
+      "dis_state",
+      "adv_state",
+      "op_busy",
+      "StCtrlReset",
+      "StCtrlEntropyReseed",
+      "StCtrlRandom",
+      "StCtrlRootKey",
+      "StCtrlInit",
+      "StCtrlCreatorRootKey",
+      "StCtrlOwnerIntKey",
+      "StCtrlOwnerKey",
+      "StCtrlWipe",
+      "StCtrlDisabled",
+      "StCtrlInvalid",
+      "Creator",
+      "OwnerInt",
+      "Owner",
+      "Disable"
     ],
     "modes": [
       "StCtrlReset",
@@ -46,8 +60,7 @@
       "StCtrlOwnerKey",
       "StCtrlWipe",
       "StCtrlDisabled",
-      "StCtrlInvalid",
-      "EntropyRounds"
+      "StCtrlInvalid"
     ],
     "tags": [
       "secret",
@@ -56,412 +69,1029 @@
       "entropy",
       "fault",
       "integrity",
+      "lifecycle",
       "reset",
       "sparse_fsm",
       "handshake",
-      "parameterization"
+      "access_control"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "default_fallback",
-      "claim": "All combinational outputs are assigned inactive default values (0, Disable, etc.) before state-specific logic, preventing latches and ensuring defined safe behavior if a state branch misses an assignment.",
-      "cond": "always",
+      "claim": "When state_q is not one of the defined FSM states, the chunk sets state_intg_err_d to 1 and forces the next state to StCtrlWipe.",
+      "cond": "state_q does not match any case item in the unique case",
       "signals": [
-        "state_d",
-        "op_req",
-        "random_req",
-        "random_ack",
-        "wipe_req",
-        "invalid_op",
-        "stage_sel_o",
-        "disabled",
-        "invalid",
-        "prng_en_dis_inv_set",
-        "prng_reseed_req_o",
-        "init_o",
-        "initialized",
-        "state_intg_err_d"
+        "state_q",
+        "state_intg_err_d",
+        "state_d"
       ],
       "refs": [
-        "468-506"
-      ]
+        "keymgr_ctrl.sv:681-685"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!(state_q == StCtrlReset || state_q == StCtrlEntropyReseed || state_q == StCtrlRandom || state_q == StCtrlRootKey || state_q == StCtrlInit || state_q == StCtrlCreatorRootKey || state_q == StCtrlOwnerIntKey || state_q == StCtrlOwnerKey || state_q == StCtrlWipe || state_q == StCtrlDisabled || state_q == StCtrlInvalid)",
+        "consequent": "state_intg_err_d == 1'b1 && state_d == StCtrlWipe",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "state_intg_err_d",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!(state_q == StCtrlReset || state_q == StCtrlEntropyReseed || state_q == StCtrlRandom || state_q == StCtrlRootKey || state_q == StCtrlInit || state_q == StCtrlCreatorRootKey || state_q == StCtrlOwnerIntKey || state_q == StCtrlOwnerKey || state_q == StCtrlWipe || state_q == StCtrlDisabled || state_q == StCtrlInvalid)",
+        "consequent": "state_intg_err_d == 1'b1 && state_d == StCtrlWipe",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "state_transition",
-      "claim": "In StCtrlReset, any op_start_i without advance_sel is flagged as invalid_op; if inv_state is true, forces transition to StCtrlWipe; otherwise if advance_sel is asserted, transitions to StCtrlEntropyReseed.",
+      "claim": "In StCtrlReset, if inv_state is high, the next state is forced to StCtrlWipe; otherwise, if advance_sel is asserted, the next state becomes StCtrlEntropyReseed.",
       "cond": "state_q == StCtrlReset",
       "signals": [
-        "invalid_op",
-        "state_d",
+        "state_q",
+        "inv_state",
         "advance_sel",
-        "op_start_i",
-        "inv_state"
+        "state_d"
       ],
       "refs": [
-        "510-527"
-      ]
+        "keymgr_ctrl.sv:509-527"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlReset",
+        "consequent": "(inv_state ? (state_d == StCtrlWipe) : (advance_sel ? state_d == StCtrlEntropyReseed : 1'b1))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "StCtrlReset",
+        "signals": [
+          "state_q",
+          "inv_state",
+          "advance_sel",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlReset",
+        "consequent": "(inv_state ? (state_d == StCtrlWipe) : (advance_sel ? state_d == StCtrlEntropyReseed : 1'b1))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "state_transition",
-      "claim": "In StCtrlEntropyReseed, asserts prng_reseed_req_o and waits for prng_reseed_ack_i; on ack, transitions to StCtrlRandom.",
-      "cond": "state_q == StCtrlEntropyReseed",
+      "type": "error_detection",
+      "claim": "In StCtrlReset, any operation except advance is flagged as invalid by asserting invalid_op when op_start_i is high and advance_sel is low.",
+      "cond": "state_q == StCtrlReset",
       "signals": [
-        "prng_reseed_req_o",
-        "state_d",
-        "prng_reseed_ack_i"
+        "op_start_i",
+        "advance_sel",
+        "invalid_op"
       ],
       "refs": [
-        "530-537"
-      ]
+        "keymgr_ctrl.sv:519"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlReset",
+        "consequent": "invalid_op == (op_start_i & ~advance_sel)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "StCtrlReset",
+        "signals": [
+          "op_start_i",
+          "advance_sel",
+          "invalid_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlReset",
+        "consequent": "invalid_op == (op_start_i & ~advance_sel)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "state_transition",
-      "claim": "In StCtrlRandom, asserts random_req; when internal counter cnt equals EntropyRounds-1, asserts random_ack and transitions to StCtrlRootKey.",
-      "cond": "state_q == StCtrlRandom",
+      "claim": "In StCtrlEntropyReseed, prng_reseed_req_o is asserted and when prng_reseed_ack_i is high, the next state becomes StCtrlRandom.",
+      "cond": "state_q == StCtrlEntropyReseed",
       "signals": [
-        "random_req",
-        "random_ack",
-        "state_d",
-        "cnt",
-        "EntropyRounds"
+        "state_q",
+        "prng_reseed_req_o",
+        "prng_reseed_ack_i",
+        "state_d"
       ],
       "refs": [
-        "540-551"
-      ]
+        "keymgr_ctrl.sv:530-537"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlEntropyReseed",
+        "consequent": "prng_reseed_req_o == 1'b1 && (prng_reseed_ack_i ? state_d == StCtrlRandom : 1'b1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "prng_reseed_req_o",
+          "prng_reseed_ack_i",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlEntropyReseed",
+        "consequent": "prng_reseed_req_o == 1'b1 && (prng_reseed_ack_i ? state_d == StCtrlRandom : 1'b1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
       "type": "state_transition",
-      "claim": "In StCtrlRootKey, asserts init_o and initialized; transitions to StCtrlInit if en_i and root_key_valid_q are both true, otherwise transitions to StCtrlWipe.",
-      "cond": "state_q == StCtrlRootKey",
+      "claim": "In StCtrlRandom, random_req is asserted; when the count cnt equals EntropyRounds-1, random_ack is set and the next state becomes StCtrlRootKey.",
+      "cond": "state_q == StCtrlRandom",
       "signals": [
-        "init_o",
-        "initialized",
-        "state_d",
-        "en_i",
-        "root_key_valid_q"
+        "state_q",
+        "random_req",
+        "cnt",
+        "EntropyRounds",
+        "random_ack",
+        "state_d"
       ],
       "refs": [
-        "553-558"
-      ]
+        "keymgr_ctrl.sv:540-551"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlRandom",
+        "consequent": "random_req == 1'b1 && ((cnt == EntropyRounds-1) ? (random_ack == 1'b1 && state_d == StCtrlRootKey) : 1'b1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "random_req",
+          "cnt",
+          "EntropyRounds",
+          "random_ack",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlRandom",
+        "consequent": "random_req == 1'b1 && ((cnt == EntropyRounds-1) ? (random_ack == 1'b1 && state_d == StCtrlRootKey) : 1'b1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G6",
       "type": "state_transition",
-      "claim": "In StCtrlInit, sets op_req = op_start_i, selects stage_sel_o as Creator if advance_sel else Disable; invalid_op flags op_start_i without advance_sel or disable_sel; transitions to StCtrlWipe if !en_i or inv_state, to StCtrlDisabled if dis_state, or to StCtrlCreatorRootKey if adv_state.",
-      "cond": "state_q == StCtrlInit",
+      "claim": "In StCtrlRootKey, init_o and initialized are set to 1; next state is StCtrlInit if en_i and root_key_valid_q are both true, otherwise StCtrlWipe.",
+      "cond": "state_q == StCtrlRootKey",
       "signals": [
-        "op_req",
-        "stage_sel_o",
-        "invalid_op",
-        "state_d",
-        "advance_sel",
-        "disable_sel",
-        "dis_state",
-        "adv_state",
+        "state_q",
+        "init_o",
+        "initialized",
         "en_i",
-        "inv_state"
+        "root_key_valid_q",
+        "state_d"
       ],
       "refs": [
-        "563-578"
-      ]
+        "keymgr_ctrl.sv:554-558"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlRootKey",
+        "consequent": "init_o == 1'b1 && initialized == 1'b1 && state_d == ((en_i && root_key_valid_q) ? StCtrlInit : StCtrlWipe)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "init_o",
+          "initialized",
+          "en_i",
+          "root_key_valid_q",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlRootKey",
+        "consequent": "init_o == 1'b1 && initialized == 1'b1 && state_d == ((en_i && root_key_valid_q) ? StCtrlInit : StCtrlWipe)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G7",
-      "type": "state_transition",
-      "claim": "In StCtrlCreatorRootKey, sets op_req = op_start_i; stage_sel_o selects Disable if disable_sel, OwnerInt if advance_sel, else Creator; transitions to StCtrlWipe if !en_i or inv_state, to StCtrlDisabled if dis_state, or to StCtrlOwnerIntKey if adv_state.",
-      "cond": "state_q == StCtrlCreatorRootKey",
+      "type": "assignment",
+      "claim": "In StCtrlInit, op_req is driven by op_start_i, stage_sel_o selects Creator when advance_sel is true else Disable; invalid_op is set for operations that are not advance or disable; state transitions to Wipe if !en_i || inv_state, to Disabled if dis_state, or to CreatorRootKey if adv_state.",
+      "cond": "state_q == StCtrlInit",
       "signals": [
         "op_req",
+        "op_start_i",
         "stage_sel_o",
-        "state_d",
-        "disable_sel",
         "advance_sel",
-        "dis_state",
-        "adv_state",
-        "en_i",
-        "inv_state"
-      ],
-      "refs": [
-        "581-598"
-      ]
-    },
-    {
-      "id": "G8",
-      "type": "state_transition",
-      "claim": "In StCtrlOwnerIntKey, sets op_req = op_start_i; stage_sel_o selects Disable if disable_sel, Owner if advance_sel, else OwnerInt; transitions to StCtrlWipe if !en_i or inv_state, to StCtrlDisabled if dis_state, or to StCtrlOwnerKey if adv_state.",
-      "cond": "state_q == StCtrlOwnerIntKey",
-      "signals": [
-        "op_req",
-        "stage_sel_o",
-        "state_d",
+        "invalid_op",
         "disable_sel",
-        "advance_sel",
-        "dis_state",
-        "adv_state",
-        "en_i",
-        "inv_state"
-      ],
-      "refs": [
-        "600-618"
-      ]
-    },
-    {
-      "id": "G9",
-      "type": "state_transition",
-      "claim": "In StCtrlOwnerKey, sets op_req = op_start_i; stage_sel_o selects Disable if advance_sel or disable_sel, else Owner; transitions to StCtrlWipe if !en_i or inv_state, else to StCtrlDisabled if adv_state or dis_state, also sets prng_en_dis_inv_set in that case.",
-      "cond": "state_q == StCtrlOwnerKey",
-      "signals": [
-        "op_req",
-        "stage_sel_o",
-        "state_d",
-        "advance_sel",
-        "disable_sel",
-        "adv_state",
-        "dis_state",
         "en_i",
         "inv_state",
+        "dis_state",
+        "adv_state",
+        "state_d",
         "prng_en_dis_inv_set"
       ],
       "refs": [
-        "620-636"
-      ]
+        "keymgr_ctrl.sv:563-578"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlInit",
+        "consequent": "op_req == op_start_i && stage_sel_o == (advance_sel ? Creator : Disable) && invalid_op == (op_start_i & ~(advance_sel | disable_sel)) && ((!en_i || inv_state) ? (state_d == StCtrlWipe) : (dis_state ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : (adv_state ? state_d == StCtrlCreatorRootKey : 1'b1)))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "op_start_i",
+          "stage_sel_o",
+          "advance_sel",
+          "invalid_op",
+          "disable_sel",
+          "en_i",
+          "inv_state"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlInit",
+        "consequent": "op_req == op_start_i && stage_sel_o == (advance_sel ? Creator : Disable) && invalid_op == (op_start_i & ~(advance_sel | disable_sel)) && ((!en_i || inv_state) ? (state_d == StCtrlWipe) : (dis_state ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : (adv_state ? state_d == StCtrlCreatorRootKey : 1'b1)))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G8",
+      "type": "assignment",
+      "claim": "In StCtrlCreatorRootKey, op_req = op_start_i, stage_sel_o depends on disable/advance signals, and state transitions similarly with wipe/disable/advance paths.",
+      "cond": "state_q == StCtrlCreatorRootKey",
+      "signals": [
+        "op_req",
+        "op_start_i",
+        "stage_sel_o",
+        "disable_sel",
+        "advance_sel",
+        "en_i",
+        "inv_state",
+        "dis_state",
+        "adv_state",
+        "state_d",
+        "prng_en_dis_inv_set"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:581-598"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlCreatorRootKey",
+        "consequent": "op_req == op_start_i && stage_sel_o == (disable_sel ? Disable : (advance_sel ? OwnerInt : Creator)) && ((!en_i || inv_state) ? state_d == StCtrlWipe : (dis_state ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : (adv_state ? state_d == StCtrlOwnerIntKey : 1'b1)))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "op_start_i",
+          "stage_sel_o",
+          "disable_sel",
+          "advance_sel",
+          "en_i",
+          "inv_state",
+          "dis_state"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlCreatorRootKey",
+        "consequent": "op_req == op_start_i && stage_sel_o == (disable_sel ? Disable : (advance_sel ? OwnerInt : Creator)) && ((!en_i || inv_state) ? state_d == StCtrlWipe : (dis_state ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : (adv_state ? state_d == StCtrlOwnerIntKey : 1'b1)))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G9",
+      "type": "assignment",
+      "claim": "In StCtrlOwnerIntKey, analogous control: op_req = op_start_i, stage_sel_o selects Disable/Owner/OwnerInt, transitions to Wipe/Disabled/OwnerKey.",
+      "cond": "state_q == StCtrlOwnerIntKey",
+      "signals": [
+        "op_req",
+        "op_start_i",
+        "stage_sel_o",
+        "disable_sel",
+        "advance_sel",
+        "en_i",
+        "inv_state",
+        "dis_state",
+        "adv_state",
+        "state_d",
+        "prng_en_dis_inv_set"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:601-618"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlOwnerIntKey",
+        "consequent": "op_req == op_start_i && stage_sel_o == (disable_sel ? Disable : (advance_sel ? Owner : OwnerInt)) && ((!en_i || inv_state) ? state_d == StCtrlWipe : (dis_state ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : (adv_state ? state_d == StCtrlOwnerKey : 1'b1)))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "op_start_i",
+          "stage_sel_o",
+          "disable_sel",
+          "advance_sel",
+          "en_i",
+          "inv_state",
+          "dis_state"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlOwnerIntKey",
+        "consequent": "op_req == op_start_i && stage_sel_o == (disable_sel ? Disable : (advance_sel ? Owner : OwnerInt)) && ((!en_i || inv_state) ? state_d == StCtrlWipe : (dis_state ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : (adv_state ? state_d == StCtrlOwnerKey : 1'b1)))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G10",
-      "type": "state_transition",
-      "claim": "In StCtrlWipe, asserts wipe_req; holds op_req = op_busy to complete ongoing operation; flags any new op_start_i as invalid_op; when op_start_i is low, transitions to StCtrlInvalid and sets prng_en_dis_inv_set.",
+      "type": "assignment",
+      "claim": "In StCtrlOwnerKey, op_req = op_start_i, stage_sel_o is Disable when disable_sel or advance_sel is true else Owner; state transitions to Wipe if !en_i || inv_state, else to Disabled if adv_state or dis_state.",
+      "cond": "state_q == StCtrlOwnerKey",
+      "signals": [
+        "op_req",
+        "op_start_i",
+        "stage_sel_o",
+        "disable_sel",
+        "advance_sel",
+        "en_i",
+        "inv_state",
+        "adv_state",
+        "dis_state",
+        "state_d",
+        "prng_en_dis_inv_set"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:622-636"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlOwnerKey",
+        "consequent": "op_req == op_start_i && stage_sel_o == ((disable_sel | advance_sel) ? Disable : Owner) && ((!en_i || inv_state) ? state_d == StCtrlWipe : ((adv_state || dis_state) ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : 1'b1))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "op_start_i",
+          "stage_sel_o",
+          "disable_sel",
+          "advance_sel",
+          "en_i",
+          "inv_state",
+          "adv_state"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlOwnerKey",
+        "consequent": "op_req == op_start_i && stage_sel_o == ((disable_sel | advance_sel) ? Disable : Owner) && ((!en_i || inv_state) ? state_d == StCtrlWipe : ((adv_state || dis_state) ? (state_d == StCtrlDisabled && prng_en_dis_inv_set == 1'b1) : 1'b1))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G11",
+      "type": "assignment",
+      "claim": "In StCtrlWipe, wipe_req is asserted; op_req is op_busy; invalid_op = op_start_i; if op_start_i is low, next state becomes StCtrlInvalid and prng_en_dis_inv_set is asserted.",
       "cond": "state_q == StCtrlWipe",
       "signals": [
         "wipe_req",
         "op_req",
         "op_busy",
         "invalid_op",
+        "op_start_i",
         "state_d",
-        "prng_en_dis_inv_set",
-        "op_start_i"
+        "prng_en_dis_inv_set"
       ],
       "refs": [
-        "642-658"
-      ]
-    },
-    {
-      "id": "G11",
-      "type": "state_transition",
-      "claim": "In StCtrlDisabled, sets op_req = op_start_i and asserts disabled flag; transitions to StCtrlWipe if either !en_i or inv_state is true.",
-      "cond": "state_q == StCtrlDisabled",
-      "signals": [
-        "op_req",
-        "disabled",
-        "state_d",
-        "en_i",
-        "inv_state"
+        "keymgr_ctrl.sv:642-659"
       ],
-      "refs": [
-        "667-673"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlWipe",
+        "consequent": "wipe_req == 1'b1 && op_req == op_busy && invalid_op == op_start_i && (!op_start_i ? (state_d == StCtrlInvalid && prng_en_dis_inv_set == 1'b1) : 1'b1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wipe_req",
+          "op_req",
+          "op_busy",
+          "invalid_op",
+          "op_start_i",
+          "state_d",
+          "prng_en_dis_inv_set"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlWipe",
+        "consequent": "wipe_req == 1'b1 && op_req == op_busy && invalid_op == op_start_i && (!op_start_i ? (state_d == StCtrlInvalid && prng_en_dis_inv_set == 1'b1) : 1'b1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G12",
-      "type": "state_transition",
-      "claim": "In StCtrlInvalid, flags any op_start_i as invalid_op and asserts invalid signal; does not change state.",
-      "cond": "state_q == StCtrlInvalid",
+      "type": "assignment",
+      "claim": "In StCtrlDisabled, op_req = op_start_i, disabled flag is set; if !en_i or inv_state is true, next state becomes StCtrlWipe.",
+      "cond": "state_q == StCtrlDisabled",
       "signals": [
-        "invalid_op",
-        "invalid",
-        "op_start_i"
-      ],
-      "refs": [
-        "676-679"
-      ]
-    },
-    {
-      "id": "G13",
-      "type": "error_detection",
-      "claim": "If state_q takes an illegal value not matching any defined state, the default branch sets state_intg_err_d = 1 and forces state_d = StCtrlWipe.",
-      "cond": "state_q not equal to any enumerated state",
-      "signals": [
-        "state_intg_err_d",
+        "op_req",
+        "op_start_i",
+        "disabled",
+        "en_i",
+        "inv_state",
         "state_d"
       ],
       "refs": [
-        "682-685"
-      ]
+        "keymgr_ctrl.sv:667-674"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlDisabled",
+        "consequent": "op_req == op_start_i && disabled == 1'b1 && ((!en_i || inv_state) ? state_d == StCtrlWipe : 1'b1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "op_start_i",
+          "disabled",
+          "en_i",
+          "inv_state",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlDisabled",
+        "consequent": "op_req == op_start_i && disabled == 1'b1 && ((!en_i || inv_state) ? state_d == StCtrlWipe : 1'b1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G13",
+      "type": "assignment",
+      "claim": "In StCtrlInvalid, invalid_op = op_start_i, invalid flag is set; state_d remains StCtrlInvalid (no transition) because it is not reassigned.",
+      "cond": "state_q == StCtrlInvalid",
+      "signals": [
+        "invalid_op",
+        "op_start_i",
+        "invalid",
+        "state_d"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:676-679, 470"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlInvalid",
+        "consequent": "invalid_op == op_start_i && invalid == 1'b1 && state_d == StCtrlInvalid",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_op",
+          "op_start_i",
+          "invalid",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlInvalid",
+        "consequent": "invalid_op == op_start_i && invalid == 1'b1 && state_d == StCtrlInvalid",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "state_q must always be a legal enumerated value; any illegal encoding will trigger default wipe path, potentially destroying key material.",
-      "cond": "always during normal operation",
-      "risk": "Transient bit-flip in state register could be treated as fault and wipe keys, but if fault is not caught in time, may allow invalid state transitions before wipe.",
+      "type": "handshake",
+      "claim": "op_start_i, advance_sel, disable_sel, adv_state, and dis_state are mutually consistent and glitch-free during the combinational evaluation, especially when op_start_i is asserted.",
+      "cond": "always",
+      "risk": "Incorrect or unstable operation selection could cause unintended state transitions (e.g., advance when disable intended) or invalid operation detection, potentially leading to key state corruption or bypass of wipe.",
       "signals": [
-        "state_q"
-      ],
-      "refs": [
-        "508",
-        "682-685"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "inv_state signal is asserted only on a genuine structural integrity fault; the FSM immediately wipes keys in most states upon seeing inv_state.",
-      "cond": "any time inv_state changes",
-      "risk": "False assertion of inv_state (e.g., due to glitch) causes premature key wipe and denial of service.",
-      "signals": [
-        "inv_state"
-      ],
-      "refs": [
-        "522",
-        "570",
-        "590",
-        "610",
-        "630",
-        "671"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "producer_contract",
-      "claim": "prng_reseed_ack_i is guaranteed to be asserted after prng_reseed_req_o is raised; no timeout or fallback is implemented.",
-      "cond": "when in StCtrlEntropyReseed",
-      "risk": "If PRNG hardware hangs and never acks, the key manager stalls forever in entropy reseed state.",
-      "signals": [
-        "prng_reseed_req_o",
-        "prng_reseed_ack_i"
-      ],
-      "refs": [
-        "532-536"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "producer_contract",
-      "claim": "op_busy correctly reflects an ongoing transaction and will eventually deassert after op_req and op_start_i protocol completes.",
-      "cond": "during wipe state when op_start_i is high",
-      "risk": "If op_busy is stuck high, the FSM cannot transition to Invalid and may hang, though op_start_i low would still force transition.",
-      "signals": [
-        "op_busy",
-        "op_start_i"
-      ],
-      "refs": [
-        "645",
-        "655-658"
-      ]
-    },
-    {
-      "id": "A5",
-      "type": "value_domain",
-      "claim": "root_key_valid_q is asserted only when the root key is truly valid and available; a false low will force immediate transition to StCtrlWipe, destroying key state.",
-      "cond": "during StCtrlRootKey state",
-      "risk": "Transient invalid indicator (e.g., due to a timing pulse) causes unnecessary full key wipe and loss of secure operation.",
-      "signals": [
-        "root_key_valid_q"
-      ],
-      "refs": [
-        "557"
-      ]
-    },
-    {
-      "id": "A6",
-      "type": "mode_config",
-      "claim": "advance_sel, disable_sel, adv_state, and dis_state are decoded exclusively such that in any state where multiple could be true, priority implicit in the code (disable over advance) does not violate system-level intent.",
-      "cond": "when op_start_i triggers a command",
-      "risk": "If both advance and disable are asserted, the FSM may take a path that the software didn't intend, possibly skipping key progression or incorrect wipe sequence.",
-      "signals": [
+        "op_start_i",
         "advance_sel",
         "disable_sel",
         "adv_state",
         "dis_state"
       ],
       "refs": [
-        "567",
-        "570-576",
-        "587-588",
-        "607-608",
-        "628"
-      ]
+        "keymgr_ctrl.sv:519, 567-578, 588-598, 608-618, 628-636"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_start_i",
+          "advance_sel",
+          "disable_sel",
+          "adv_state",
+          "dis_state"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "op_start_i, advance_sel, disable_sel, adv_state, and dis_state are mutually consistent and glitch-free during the combinational evaluation, especially when op_start_i is asserted",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "prng_reseed_ack_i is eventually asserted within a bounded time after prng_reseed_req_o is set, otherwise the FSM will stall in StCtrlEntropyReseed.",
+      "cond": "state_q == StCtrlEntropyReseed",
+      "risk": "Stall prevents advancement to StCtrlRandom and subsequent key initialization, causing a hang.",
+      "signals": [
+        "prng_reseed_req_o",
+        "prng_reseed_ack_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:534-536"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_q == StCtrlEntropyReseed",
+        "consequent": "##[0:$] prng_reseed_ack_i",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_reseed_req_o",
+          "prng_reseed_ack_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_q == StCtrlEntropyReseed",
+        "consequent": "##[0:$] prng_reseed_ack_i",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "The external counter cnt correctly counts up to EntropyRounds-1 and matches the expected entropy accumulation rounds.",
+      "cond": "state_q == StCtrlRandom",
+      "risk": "Premature or never-asserted random_ack could cause loading of the root key before entropy is fully mixed, or stall the FSM.",
+      "signals": [
+        "cnt",
+        "EntropyRounds"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:547"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_q == StCtrlRandom",
+        "consequent": "##[0:$] cnt == EntropyRounds-1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt",
+          "EntropyRounds"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_q == StCtrlRandom",
+        "consequent": "##[0:$] cnt == EntropyRounds-1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "root_key_valid_q is asserted when the root key hardware provides valid data; if deasserted while en_i is true in StCtrlRootKey, the state will go to StCtrlWipe.",
+      "cond": "state_q == StCtrlRootKey",
+      "risk": "Unnecessary wipe of the key state if root_key_valid_q is not yet ready, potentially clearing a valid root key.",
+      "signals": [
+        "root_key_valid_q",
+        "en_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:557"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlRootKey",
+        "consequent": "root_key_valid_q == 1'b1 || state_d == StCtrlWipe",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "root_key_valid_q",
+          "en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlRootKey",
+        "consequent": "root_key_valid_q == 1'b1 || state_d == StCtrlWipe",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A5",
+      "type": "lifecycle",
+      "claim": "en_i is a stable life cycle enable; it does not glitch during normal operation.",
+      "cond": "always",
+      "risk": "Unstable en_i could cause spurious transitions to StCtrlWipe or StCtrlDisabled, unexpected key wipes or disable.",
+      "signals": [
+        "en_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:557, 570, 590, 610, 630, 648, 671"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "en_i is a stable life cycle enable; it does not glitch during normal operation",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A6",
+      "type": "security_precondition",
+      "claim": "inv_state is asserted only when a structural fault is detected and remains stable; it is not spuriously toggled.",
+      "cond": "always",
+      "risk": "False assertion forces unnecessary wipes, disrupting normal key management.",
+      "signals": [
+        "inv_state"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:522, 570, 590, 610, 630, 671"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "inv_state"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "inv_state is asserted only when a structural fault is detected and remains stable; it is not spuriously toggled",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A7",
+      "type": "producer_contract",
+      "claim": "op_busy accurately reflects an ongoing operation’s busy status and will not be stuck high indefinitely when no operation is active.",
+      "cond": "state_q == StCtrlWipe",
+      "risk": "A stuck-high op_busy would cause op_req to stay high and the transition to StCtrlInvalid delayed until op_start_i goes low, potentially stalling the key wipe completion.",
+      "signals": [
+        "op_busy",
+        "op_start_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:645, 655-658"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlWipe",
+        "consequent": "(!op_start_i) || !op_busy",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_busy",
+          "op_start_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q == StCtrlWipe",
+        "consequent": "(!op_start_i) || !op_busy",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "When StCtrlRootKey transitions to StCtrlWipe because en_i deasserts or root_key_valid_q is false, prng_en_dis_inv_set is not set, unlike other wipe-inducing transitions (Init, Creator, Owner) where it is set. This may leave the PRNG state not invalidated on a root-key failure.",
-      "cond": "state_q == StCtrlRootKey and (!en_i or !root_key_valid_q)",
-      "risk": "PRNG output may not be cleared or reseeded after a forced key wipe, potentially leaking deterministic state or enabling subsequent key extraction.",
+      "claim": "When the FSM enters StCtrlInvalid due to an operational fault (inv_state asserted), no wipe_req is asserted and state_d remains Invalid, leaving the key state uncleared. It is unclear whether security requirements demand an immediate key wipe upon fault.",
+      "cond": "state_q transitions to StCtrlInvalid because of inv_state or other fault, while key registers may still hold secrets.",
+      "risk": "If keys are not wiped, a subsequent attacker extracting state from the Invalid state could recover active key material, violating confidentiality.",
       "signals": [
-        "prng_en_dis_inv_set",
+        "wipe_req",
         "state_d",
-        "en_i",
-        "root_key_valid_q"
+        "StCtrlInvalid",
+        "inv_state"
       ],
       "refs": [
-        "553-558"
-      ]
+        "keymgr_ctrl.sv:676-679, 522-523, 570-571, 590-591, 610-611, 630-631, 671-672"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wipe_req",
+          "state_d",
+          "StCtrlInvalid",
+          "inv_state"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "state_q transitions to StCtrlInvalid because of inv_state or other fault, while key registers may still hold secrets",
+        "consequent": "no wipe_req is asserted and state_d remains Invalid, leaving the key state uncleared. It is unclear whether security requirements demand an immediate key wipe upon fault",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "In StCtrlWipe, the transition to StCtrlInvalid occurs only when op_start_i is low. If op_start_i remains asserted while op_busy is stuck high, the FSM may deadlock. It is unclear if there is a hardware guarantee that op_start_i will eventually deassert after a timeout.",
-      "cond": "state_q == StCtrlWipe and op_start_i remains high and op_busy stuck",
-      "risk": "Permanent hang in wipe state prevents entering Invalid and may stall system-level key recovery.",
+      "claim": "When the default case fires due to a corrupt state_q, state_d is set to StCtrlWipe but the wipe_req signal is not asserted immediately; it will only be asserted in the next cycle when the state becomes StCtrlWipe.",
+      "cond": "state_q is corrupted and triggers default branch.",
+      "risk": "One cycle of operation with the corrupted state before wipe_req is active could leak key material if any register is read during that cycle.",
       "signals": [
-        "op_start_i",
-        "op_busy",
-        "state_d"
+        "state_intg_err_d",
+        "state_d",
+        "wipe_req"
       ],
       "refs": [
-        "655-658"
-      ]
+        "keymgr_ctrl.sv:682-684, 642-644"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_q not in defined set",
+        "consequent": "toggle wipe_req two cycles later",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_intg_err_d",
+          "state_d",
+          "wipe_req"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_q not in defined set",
+        "consequent": "toggle wipe_req two cycles later",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_unhandled_legal_case",
-      "priority": "low",
-      "claim": "In StCtrlInit, the invalid_op expression excludes operations that are not advance_sel and not disable_sel, but the state accepts only those two decoded operations. However, if a future command is added, this would incorrectly mark it invalid. No specification defines the full command set accepted at this state.",
-      "cond": "state_q == StCtrlInit and op_start_i with a new command",
-      "risk": "Functional bug if a yet-unimplemented legal command is issued; it would be treated as invalid and ignored.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The correctness of the counter cnt reaching EntropyRounds-1 and the handshakes prng_reseed_ack_i, op_busy, root_key_valid_q are assumed from external modules; any timing violation or deadlock will stall the FSM or cause premature transitions.",
+      "cond": "Depends on external logic.",
+      "risk": "FSM hang or key material corruption.",
       "signals": [
-        "invalid_op",
-        "op_start_i",
-        "advance_sel",
-        "disable_sel"
+        "cnt",
+        "EntropyRounds",
+        "prng_reseed_ack_i",
+        "op_busy",
+        "root_key_valid_q"
       ],
       "refs": [
-        "567-568"
-      ]
+        "keymgr_ctrl.sv:534, 547, 557, 645, 655"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt",
+          "EntropyRounds",
+          "prng_reseed_ack_i",
+          "op_busy",
+          "root_key_valid_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Depends on external logic",
+        "consequent": "The correctness of the counter cnt reaching EntropyRounds-1 and the handshakes prng_reseed_ack_i, op_busy, root_key_valid_q are assumed from external modules; any timing violation or deadlock will stall the FSM or cause premature transition",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U4",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "StCtrlEntropyReseed waits indefinitely for prng_reseed_ack_i; there is no timeout or error recovery. If the PRNG fails to ack, the key manager will never leave this state.",
-      "cond": "state_q == StCtrlEntropyReseed and prng_reseed_ack_i stuck at 0",
-      "risk": "Permanent stall of the key manager, rendering the entire system non-functional.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The signal inv_state is used to trigger wipe transitions, but the chunk does not define its origin or latching behavior. If inv_state is a pulse, it might be missed in a state that does not check it (like StCtrlInvalid).",
+      "cond": "inv_state is pulsed while in StCtrlInvalid.",
+      "risk": "A fault may not be handled, leaving the state in Invalid without wipe.",
       "signals": [
-        "prng_reseed_ack_i",
-        "state_d"
+        "inv_state",
+        "state_q"
       ],
       "refs": [
-        "534-536"
-      ]
+        "keymgr_ctrl.sv:522, 570, 590, 610, 630, 671"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "inv_state",
+          "state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "inv_state is pulsed while in StCtrlInvalid",
+        "consequent": "The signal inv_state is used to trigger wipe transitions, but the chunk does not define its origin or latching behavior. If inv_state is a pulse, it might be missed in a state that does not check it (like StCtrlInvalid)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U5",
+      "type": "U_unhandled_legal_case",
+      "priority": "low",
+      "claim": "Once en_i goes low, the FSM enters StCtrlWipe and may eventually reach StCtrlDisabled or StCtrlInvalid; there is no defined path to return to a normal state without a full reset. If en_i recovers, the key manager remains non-functional.",
+      "cond": "en_i deasserts then reasserts while in disabled/invalid states.",
+      "risk": "Key manager stuck in non-operational state until reset, which may be undesirable if en_i is a life cycle enable that can be re-enabled.",
+      "signals": [
+        "en_i",
+        "state_q"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:570, 590, 610, 630, 671, 676-679"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "en_i transitions from 0 to 1 while state_q is StCtrlDisabled or StCtrlInvalid",
+        "consequent": "state_d should not remain StCtrlDisabled/StCtrlInvalid",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "reset.",
+        "signals": [
+          "en_i",
+          "state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "en_i transitions from 0 to 1 while state_q is StCtrlDisabled or StCtrlInvalid",
+        "consequent": "state_d should not remain StCtrlDisabled/StCtrlInvalid",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk controls all key manager state transitions, including secret key initialization, wipe requests, and random data masking. It ensures that on state corruption (default case) a wipe is requested, but with a one‑cycle delay. The StCtrlInvalid state does not issue a wipe request, potentially leaving key material uncleared if entered due to a fault (e.g., inv_state not checked while in Invalid). The state machine relies on external handshake signals (prng_reseed_ack_i, op_busy) and the entropy counter; any hang or misbehavior could stall or skip key clearing steps. The unique case with default provides some fault detection, but the one‑cycle window before wipe could expose secrets. Additionally, the life‑cycle enable en_i can force unconditional wipe, but no re‑entry path exists once disabled.",
   "evidence_refs": [
-    "468-688"
+    "keymgr_ctrl.sv:468-688"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 468,
-  "line_end": 688,
-  "security_implications": ""
+  "line_end": 688
 }

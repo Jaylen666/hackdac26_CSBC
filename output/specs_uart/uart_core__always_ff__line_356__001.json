@@ -7,66 +7,130 @@
       "lsio_trigger_o"
     ],
     "used": [
-      "clk_i",
       "rst_ni"
     ],
     "modes": [],
     "tags": [
-      "reset"
+      "reset",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, lsio_trigger_o is set to 0; otherwise, on every posedge clk_i, lsio_trigger_o is set to 1.",
-      "cond": "always at posedge clk_i or negedge rst_ni",
+      "claim": "When rst_ni asynchronously falls, lsio_trigger_o is immediately set to 0.",
+      "cond": "negedge rst_ni",
       "signals": [
-        "lsio_trigger_o",
         "rst_ni",
-        "clk_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:356-364"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "The downstream DMA FSM is responsible for TX/RX watermark logic and can tolerate lsio_trigger_o being permanently asserted after reset.",
-      "cond": "after reset deassertion",
-      "risk": "If the DMA does not handle watermarks, the constant trigger could cause spurious transfers, data loss, or functional failure.",
-      "signals": [
         "lsio_trigger_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:360-362"
-      ]
+        "uart_core.sv:357-358"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 1'b0",
+        "consequent": "lsio_trigger_o == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "lsio_trigger_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 1'b0",
+        "consequent": "lsio_trigger_o == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and on every posedge clk_i, lsio_trigger_o is driven to 1.",
+      "cond": "rst_ni == 1'b1",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "lsio_trigger_o"
+      ],
+      "refs": [
+        "uart_core.sv:360-362"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1'b1",
+        "consequent": "lsio_trigger_o == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "lsio_trigger_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1'b1",
+        "consequent": "lsio_trigger_o == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "lsio_trigger_o is unconditionally driven to 1 after reset; the comment mentions a simplification, leaving unclear whether a conditional assert was intended (e.g., based on mode, FIFO status, or power state).",
-      "cond": "after reset deassertion",
-      "risk": "In modes where the UART should not trigger (idle, low-power, configuration), the permanent trigger may produce unintended DMA requests or waste energy.",
+      "claim": "lsio_trigger_o is always driven to 1 after reset, but the comment indicates it was simplified to a static enable. This may bypass expected TX/RX watermark logic in downstream DMA FSM, potentially causing continuous trigger and ignoring flow control.",
+      "cond": "always after reset",
+      "risk": "If downstream expects dynamic trigger, DMA may be activated continuously, leading to premature or uncontrolled data transfers.",
       "signals": [
         "lsio_trigger_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:360-362"
-      ]
+        "uart_core.sv:360-362"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "lsio_trigger_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always after reset",
+        "consequent": "lsio_trigger_o is always driven to 1 after reset, but the comment indicates it was simplified to a static enable. This may bypass expected TX/RX watermark logic in downstream DMA FSM, potentially causing continuous trigger and ignoring flow",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:356-364"
+    "uart_core.sv:356-364"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 356,
-  "line_end": 364,
-  "security_implications": ""
+  "line_end": 364
 }

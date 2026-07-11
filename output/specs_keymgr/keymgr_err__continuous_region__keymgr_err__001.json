@@ -5,7 +5,8 @@
     "block_kind": "assign",
     "driven": [
       "err_vld",
-      "sync_err_d"
+      "sync_err_d[SyncErrInvalidOp]",
+      "sync_err_d[SyncErrInvalidIn]"
     ],
     "used": [
       "op_update_i",
@@ -13,40 +14,62 @@
       "invalid_op_i",
       "disabled_i",
       "invalid_i",
-      "fault_o",
-      "kmac_input_invalid_i"
+      "kmac_input_invalid_i",
+      "fault_o"
     ],
     "modes": [],
     "tags": [
       "error",
       "fault",
-      "handshake",
-      "kmac",
-      "keymgr"
+      "integrity",
+      "wipe"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "err_vld is the logical OR of op_update_i and op_done_i.",
+      "claim": "err_vld is asserted whenever op_update_i or op_done_i is asserted.",
       "cond": "always",
       "signals": [
+        "err_vld",
         "op_update_i",
-        "op_done_i",
-        "err_vld"
+        "op_done_i"
       ],
       "refs": [
-        "file:65-66"
-      ]
+        "keymgr_err.sv:66"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "err_vld == (op_update_i | op_done_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "err_vld",
+          "op_update_i",
+          "op_done_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "err_vld == (op_update_i | op_done_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "When err_vld is high, sync_err_d[SyncErrInvalidOp] is set to the OR of invalid_op_i, disabled_i, invalid_i, and the reduction-OR of fault_o.",
-      "cond": "err_vld == 1",
+      "claim": "sync_err_d[SyncErrInvalidOp] is set high when err_vld is true and any of invalid_op_i, disabled_i, invalid_i, or any bit of fault_o is high.",
+      "cond": "always",
       "signals": [
-        "sync_err_d",
+        "sync_err_d[SyncErrInvalidOp]",
         "err_vld",
         "invalid_op_i",
         "disabled_i",
@@ -54,85 +77,115 @@
         "fault_o"
       ],
       "refs": [
-        "file:71-74"
-      ]
+        "keymgr_err.sv:71-74"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sync_err_d[SyncErrInvalidOp] == (err_vld & (invalid_op_i | disabled_i | invalid_i | (|fault_o)))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sync_err_d[SyncErrInvalidOp]",
+          "err_vld",
+          "invalid_op_i",
+          "disabled_i",
+          "invalid_i",
+          "fault_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sync_err_d[SyncErrInvalidOp] == (err_vld & (invalid_op_i | disabled_i | invalid_i | (|fault_o)))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "When err_vld is high, sync_err_d[SyncErrInvalidIn] equals kmac_input_invalid_i.",
-      "cond": "err_vld == 1",
+      "claim": "sync_err_d[SyncErrInvalidIn] is set high when err_vld and kmac_input_invalid_i are both high.",
+      "cond": "always",
       "signals": [
-        "sync_err_d",
+        "sync_err_d[SyncErrInvalidIn]",
         "err_vld",
         "kmac_input_invalid_i"
       ],
       "refs": [
-        "file:75"
-      ]
+        "keymgr_err.sv:75"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sync_err_d[SyncErrInvalidIn] == (err_vld & kmac_input_invalid_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sync_err_d[SyncErrInvalidIn]",
+          "err_vld",
+          "kmac_input_invalid_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sync_err_d[SyncErrInvalidIn] == (err_vld & kmac_input_invalid_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "The indices SyncErrInvalidOp and SyncErrInvalidIn are within the range [0, SyncErrLastIdx-1] as defined by keymgr_pkg.",
-      "cond": "any use of sync_err_d",
-      "risk": "Out-of-bounds bit selection on sync_err_d, leading to undefined behavior or simulation error.",
-      "signals": [
-        "sync_err_d"
-      ],
-      "refs": [
-        "file:71-75"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "handshake",
-      "claim": "The inputs invalid_op_i, disabled_i, invalid_i, and fault_o must be stable while err_vld (op_update_i | op_done_i) is high.",
-      "cond": "during op_update_i or op_done_i assertion",
-      "risk": "Glitches on sync_err_d may be captured by the downstream register, causing spurious or missed error latching.",
-      "signals": [
-        "invalid_op_i",
-        "disabled_i",
-        "invalid_i",
-        "fault_o",
-        "op_update_i",
-        "op_done_i",
-        "err_vld",
-        "sync_err_d"
-      ],
-      "refs": [
-        "file:65-75"
-      ]
-    }
-  ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "The logic that generates fault_o and the connection from sync_err_d to sync_err_o is not shown in this chunk; missing or incorrect logic could prevent sync_err_o from reflecting captured errors.",
-      "cond": "any error condition requiring output propagation",
-      "risk": "sync_err_o may be stuck at 0 or incorrectly driven, causing error detection failures downstream.",
+      "claim": "Only two bits of sync_err_d (SyncErrInvalidOp and SyncErrInvalidIn) are assigned in this chunk; remaining bits are left undriven. If no other combinational assignment exists, synthesis will infer latches on those bits, leading to retained stale error state.",
+      "cond": "always when the chunk is in isolation",
+      "risk": "Latched error bits may persist and cause spurious error reports or prevent clearing of acknowledged faults, breaking error handling sequences.",
       "signals": [
-        "fault_o",
-        "sync_err_d",
-        "sync_err_o"
+        "sync_err_d"
       ],
       "refs": [
-        "file:54-55",
-        "file:62-75"
-      ]
+        "keymgr_err.sv:71-75"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sync_err_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always when the chunk is in isolation",
+        "consequent": "Only two bits of sync_err_d (SyncErrInvalidOp and SyncErrInvalidIn) are assigned in this chunk; remaining bits are left undriven. If no other combinational assignment exists, synthesis will infer latches on those bits, leading to retained s",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk aggregates multiple error and fault conditions (invalid_op_i, disabled_i, invalid_i, kmac_input_invalid_i, fault_o) during an operation update/done window (err_vld). The assertion of sync_err_d[SyncErrInvalidOp] when any fault_o bit is high can directly trigger a wipe sequence in the key manager, protecting secret key material from being used or exposed in a corrupted state. A missed error due to a glitch or incorrect gating could allow a faulty operation to proceed, while a false error could unnecessarily wipe secrets and cause denial-of-service. Therefore the correctness and glitch-free behavior of these assignment expressions is security-critical.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv:65-66",
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv:71-74",
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv:75"
+    "keymgr_err.sv:66-75"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 8,
-  "line_end": 75,
-  "security_implications": ""
+  "line_end": 75
 }

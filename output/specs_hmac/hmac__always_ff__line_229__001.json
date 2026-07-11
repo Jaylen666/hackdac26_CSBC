@@ -11,9 +11,7 @@
       "clk_i",
       "secret_key_d"
     ],
-    "modes": [
-      "reset"
-    ],
+    "modes": [],
     "tags": [
       "secret",
       "key",
@@ -23,98 +21,127 @@
   "guarantees": [
     {
       "id": "G1",
-      "type": "reset_clear",
-      "claim": "When rst_ni is low, secret_key is cleared to all zeros (asynchronously asserted, synchronously deasserted on clk_i).",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, secret_key is cleared to zero.",
       "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "secret_key"
       ],
       "refs": [
-        "file:229-230"
-      ]
+        "hmac.sv:230"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni == 0",
+        "consequent": "secret_key == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "secret_key"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni == 0",
+        "consequent": "secret_key == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When rst_ni is high, secret_key captures secret_key_d on every posedge clk_i.",
-      "cond": "rst_ni && posedge clk_i",
+      "claim": "When rst_ni is high, secret_key is updated with the value of secret_key_d on every positive clock edge.",
+      "cond": "rst_ni",
       "signals": [
-        "clk_i",
         "rst_ni",
-        "secret_key_d",
-        "secret_key"
-      ],
-      "refs": [
-        "file:231"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "secret_key_d must be a stable, valid value before each posedge clk_i.",
-      "cond": "rst_ni high",
-      "risk": "If secret_key_d is X or invalid, secret_key captures unknown bits, corrupting the secret and potentially leaking it.",
-      "signals": [
+        "secret_key",
         "secret_key_d",
         "clk_i"
       ],
       "refs": [
-        "file:231"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "reset_protocol",
-      "claim": "rst_ni must be glitch-free and deasserted synchronously to avoid metastability or partial reset in the secret_key register.",
-      "cond": "always during reset assertion and deassertion",
-      "risk": "A glitch or asynchronous deassertion may cause unstable state in secret_key, leading to secret corruption or security breach.",
-      "signals": [
-        "rst_ni"
+        "hmac.sv:231"
       ],
-      "refs": [
-        "file:229-230"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "secret_key == $past(secret_key_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "secret_key",
+          "secret_key_d",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "secret_key == $past(secret_key_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_temporal_window",
       "priority": "high",
-      "claim": "secret_key is updated unconditionally on every clock cycle (outside reset). It is unclear if secret_key_d is qualified by a key-load valid or enable signal, risking accidental overwrite of a valid key.",
-      "cond": "when a key-load protocol expects gating",
-      "risk": "An unintended value on secret_key_d could overwrite an active HMAC key, breaking integrity and allowing chosen-key attacks.",
+      "claim": "After reset deassertion, secret_key_d might not be valid in the first clock cycle, potentially loading an unintended or stale secret key into secret_key.",
+      "cond": "rst_ni rising edge (reset release)",
+      "risk": "An invalid or residual secret key could be immediately used for HMAC/crypto operations, breaking confidentiality or integrity.",
       "signals": [
+        "secret_key",
         "secret_key_d",
-        "secret_key"
+        "rst_ni",
+        "clk_i"
       ],
       "refs": [
-        "file:231"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "secret_key resets to all zeros. It is not clear if a zero key is considered a safe 'not-loaded' state or if the design could inadvertently compute with a zeroed key before a valid key is loaded.",
-      "cond": "between reset deassertion and first key write",
-      "risk": "If HMAC uses the zero key, outputs become predictable, enabling impersonation or forgery attacks.",
-      "signals": [
-        "secret_key"
+        "hmac.sv:229-232"
       ],
-      "refs": [
-        "file:230"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(rst_ni)",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "secret_key",
+          "secret_key_d",
+          "rst_ni",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(rst_ni)",
+        "consequent": "After reset deassertion, secret_key_d might not be valid in the first clock cycle, potentially loading an unintended or stale secret key into secret_key",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The secret_key register is zeroized on asynchronous reset and directly loaded from secret_key_d every cycle. If secret_key_d is ever uncontrolled, stale, or attacker-influenced around reset release, a hostile key can be loaded and used for subsequent HMAC operations. The lack of a write-enable or key-loading handshake creates a continuous update path that must be safeguarded upstream. This chunk touches secret/key storage and reset zeroization, with direct propagation to cryptographic output if security precondition fails.",
   "evidence_refs": [
-    "file:229-232"
+    "hmac.sv:229-232"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 229,
-  "line_end": 232,
-  "security_implications": ""
+  "line_end": 232
 }

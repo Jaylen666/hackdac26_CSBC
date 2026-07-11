@@ -4,20 +4,20 @@
     "module": "aes_cipher_control_fsm",
     "block_kind": "mixed",
     "driven": [
-      "cyc_ctr_expr",
       "cyc_ctr_q",
+      "cyc_ctr_expr",
       "unused_cyc_ctr"
     ],
     "used": [
-      "cyc_ctr_q",
       "cyc_ctr_d",
+      "cyc_ctr_q",
       "cfg_valid_i",
       "op_i",
       "key_len_i",
+      "alert_o",
       "aes_cipher_ctrl_cs",
-      "alert_o"
-    ],
-    "modes": [
+      "SecMasking",
+      "SecSBoxImpl",
       "CIPH_FWD",
       "CIPH_INV",
       "AES_128",
@@ -31,35 +31,62 @@
       "CIPHER_CTRL_CLEAR_S",
       "CIPHER_CTRL_CLEAR_KD"
     ],
+    "modes": [
+      "gen_cyc_ctr",
+      "gen_no_cyc_ctr"
+    ],
     "tags": [
       "secret",
       "mask",
-      "entropy",
-      "fsm",
       "alert",
-      "security",
-      "encryption"
+      "error",
+      "counter",
+      "state_machine",
+      "assertion",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "In the non-gen_no_cyc_ctr generate branch, cyc_ctr_expr is driven combinatorially as (cyc_ctr_q >= 3'd4).",
-      "cond": "when the enclosing generate-if condition (likely `inside`) is true",
+      "claim": "When the gen_cyc_ctr generate branch is active, cyc_ctr_expr is driven combinationally as cyc_ctr_q >= 4.",
+      "cond": "gen_cyc_ctr branch active (implied by !gen_no_cyc_ctr)",
       "signals": [
         "cyc_ctr_expr",
         "cyc_ctr_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:476"
-      ]
+        "aes_cipher_control_fsm.sv:476"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cyc_ctr_expr == (cyc_ctr_q >= 3'd4)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cyc_ctr_expr",
+          "cyc_ctr_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "gen_cyc_ctr branch active (implied by !gen_no_cyc_ctr)",
+        "consequent": "cyc_ctr_expr == (cyc_ctr_q >= 3'd4)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "In the gen_no_cyc_ctr branch, cyc_ctr_q is directly driven by cyc_ctr_d, cyc_ctr_expr is tied to 1'b1, and unused_cyc_ctr is assigned the value of cyc_ctr_q.",
-      "cond": "when the generate-else branch `gen_no_cyc_ctr` is active",
+      "claim": "When the gen_no_cyc_ctr generate branch is active, cyc_ctr_q is driven directly by cyc_ctr_d, cyc_ctr_expr is forced to 1, and an unused_cyc_ctr signal is connected to cyc_ctr_q to suppress lint warnings.",
+      "cond": "gen_no_cyc_ctr branch active",
       "signals": [
         "cyc_ctr_q",
         "cyc_ctr_d",
@@ -67,122 +94,320 @@
         "unused_cyc_ctr"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:477-482"
-      ]
+        "aes_cipher_control_fsm.sv:477-482"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cyc_ctr_q == cyc_ctr_d && cyc_ctr_expr == 1'b1 && unused_cyc_ctr == cyc_ctr_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cyc_ctr_q",
+          "cyc_ctr_d",
+          "cyc_ctr_expr",
+          "unused_cyc_ctr"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "gen_no_cyc_ctr branch active",
+        "consequent": "cyc_ctr_q == cyc_ctr_d && cyc_ctr_expr == 1'b1 && unused_cyc_ctr == cyc_ctr_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "static_check",
+      "claim": "Static lint error ASSERT enforces SecMasking == 1 to prevent accidental disabling of masking.",
+      "cond": "always (elaboration)",
+      "signals": [
+        "SecMasking"
+      ],
+      "refs": [
+        "aes_cipher_control_fsm.sv:489"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "SecMasking == 1",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "SecMasking"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (elaboration)",
+        "consequent": "SecMasking == 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "static_check",
+      "claim": "Static lint error ASSERT enforces SecSBoxImpl == SBoxImplDom to guarantee a secure DOM SBox implementation.",
+      "cond": "always (elaboration)",
+      "signals": [
+        "SecSBoxImpl",
+        "SBoxImplDom"
+      ],
+      "refs": [
+        "aes_cipher_control_fsm.sv:493"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "SecSBoxImpl == SBoxImplDom",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "SecSBoxImpl",
+          "SBoxImplDom"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (elaboration)",
+        "consequent": "SecSBoxImpl == SBoxImplDom",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "assertion_check",
+      "claim": "Runtime assertion AesCiphOpValid: whenever cfg_valid_i is true, op_i must be inside {CIPH_FWD, CIPH_INV}.",
+      "cond": "cfg_valid_i asserted",
+      "signals": [
+        "cfg_valid_i",
+        "op_i",
+        "CIPH_FWD",
+        "CIPH_INV"
+      ],
+      "refs": [
+        "aes_cipher_control_fsm.sv:496-499"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cfg_valid_i",
+        "consequent": "op_i inside {CIPH_FWD, CIPH_INV}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_valid_i",
+          "op_i",
+          "CIPH_FWD",
+          "CIPH_INV"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cfg_valid_i",
+        "consequent": "op_i inside {CIPH_FWD, CIPH_INV}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "assertion_check",
+      "claim": "Runtime assertion AesKeyLenValid: whenever cfg_valid_i is true, key_len_i must be inside {AES_128, AES_192, AES_256}.",
+      "cond": "cfg_valid_i asserted",
+      "signals": [
+        "cfg_valid_i",
+        "key_len_i",
+        "AES_128",
+        "AES_192",
+        "AES_256"
+      ],
+      "refs": [
+        "aes_cipher_control_fsm.sv:500-504"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cfg_valid_i",
+        "consequent": "key_len_i inside {AES_128, AES_192, AES_256}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_valid_i",
+          "key_len_i",
+          "AES_128",
+          "AES_192",
+          "AES_256"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cfg_valid_i",
+        "consequent": "key_len_i inside {AES_128, AES_192, AES_256}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "assertion_check",
+      "claim": "Runtime assertion AesCipherControlStateValid: when alert_o is low, the FSM state aes_cipher_ctrl_cs must be inside the defined set of valid states.",
+      "cond": "!alert_o",
+      "signals": [
+        "alert_o",
+        "aes_cipher_ctrl_cs",
+        "CIPHER_CTRL_IDLE",
+        "CIPHER_CTRL_INIT",
+        "CIPHER_CTRL_ROUND",
+        "CIPHER_CTRL_FINISH",
+        "CIPHER_CTRL_PRNG_RESEED",
+        "CIPHER_CTRL_CLEAR_S",
+        "CIPHER_CTRL_CLEAR_KD"
+      ],
+      "refs": [
+        "aes_cipher_control_fsm.sv:505-513"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!alert_o",
+        "consequent": "aes_cipher_ctrl_cs inside {CIPHER_CTRL_IDLE, CIPHER_CTRL_INIT, CIPHER_CTRL_ROUND, CIPHER_CTRL_FINISH, CIPHER_CTRL_PRNG_RESEED, CIPHER_CTRL_CLEAR_S, CIPHER_CTRL_CLEAR_KD}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_o",
+          "aes_cipher_ctrl_cs",
+          "CIPHER_CTRL_IDLE",
+          "CIPHER_CTRL_INIT",
+          "CIPHER_CTRL_ROUND",
+          "CIPHER_CTRL_FINISH",
+          "CIPHER_CTRL_PRNG_RESEED",
+          "CIPHER_CTRL_CLEAR_S"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!alert_o",
+        "consequent": "aes_cipher_ctrl_cs inside {CIPHER_CTRL_IDLE, CIPHER_CTRL_INIT, CIPHER_CTRL_ROUND, CIPHER_CTRL_FINISH, CIPHER_CTRL_PRNG_RESEED, CIPHER_CTRL_CLEAR_S, CIPHER_CTRL_CLEAR_KD}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
+  "assumptions": [],
+  "uncertain_points": [
     {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "When cfg_valid_i is asserted, op_i must be one of CIPH_FWD or CIPH_INV.",
-      "cond": "cfg_valid_i == 1",
-      "risk": "An invalid op_i may cause the FSM to enter an illegal or unmapped state, potentially corrupting cipher control or leaking side-channel information.",
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The gen_no_cyc_ctr branch bypasses cycle counting (cyc_ctr_expr forced to 1) and directly passes cyc_ctr_d to cyc_ctr_q. This may remove the round-number gate used for AES security. It must be verified that this branch is only active in non‑secure or debug configurations and is blocked by security parameters (e.g., SecMasking) during normal operation.",
+      "cond": "gen_no_cyc_ctr branch selected (generation parameter)",
+      "risk": "An attacker could reduce AES rounds by entering this mode, potentially enabling key recovery or weakening cipher strength.",
       "signals": [
-        "cfg_valid_i",
-        "op_i"
+        "cyc_ctr_q",
+        "cyc_ctr_d",
+        "cyc_ctr_expr",
+        "gen_no_cyc_ctr"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:496-499"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "When cfg_valid_i is asserted, key_len_i must be one of AES_128, AES_192, or AES_256.",
-      "cond": "cfg_valid_i == 1",
-      "risk": "An invalid key length will cause the cipher logic to be misconfigured, leading to incorrect encryption or key schedule corruption.",
-      "signals": [
-        "cfg_valid_i",
-        "key_len_i"
+        "aes_cipher_control_fsm.sv:477-482"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:500-504"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "gen_no_cyc_ctr_active",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cyc_ctr_q",
+          "cyc_ctr_d",
+          "cyc_ctr_expr",
+          "gen_no_cyc_ctr"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "gen_no_cyc_ctr_active",
+        "consequent": "The gen_no_cyc_ctr branch bypasses cycle counting (cyc_ctr_expr forced to 1) and directly passes cyc_ctr_d to cyc_ctr_q. This may remove the round-number gate used for AES security. It must be verified that this branch is only active in non",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
-      "id": "A3",
-      "type": "producer_contract",
-      "claim": "The FSM state `aes_cipher_ctrl_cs` must remain within the set of defined legal states whenever `alert_o` is low.",
-      "cond": "alert_o == 0",
-      "risk": "A spontaneous transition to an illegal state without raising an alert can silently corrupt the cipher pipeline, possibly leading to loss of data integrity or secret leakage.",
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The AesCipherControlStateValid assertion only checks state legality when alert_o is low. State transitions during an active alert are not constrained by this assertion, leaving open the possibility of the FSM entering an undefined state while alert is high.",
+      "cond": "alert_o == 1'b1",
+      "risk": "If the FSM enters an invalid state during an alert, it could exhibit undefined behavior that persists after alert deassertion, potentially impacting clearing sequence correctness or exposing intermediate values.",
       "signals": [
         "alert_o",
         "aes_cipher_ctrl_cs"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:505-513"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "security_precondition",
-      "claim": "The design must be instantiated with the masking parameter `SecMasking` set to 1; otherwise the implementation uses a less secure unmasked datapath.",
-      "cond": "static",
-      "risk": "Masking is disabled, exposing the design to side-channel analysis and compromising key/secrets.",
-      "signals": [
-        "SecMasking"
+        "aes_cipher_control_fsm.sv:505-513"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:489"
-      ]
-    },
-    {
-      "id": "A5",
-      "type": "security_precondition",
-      "claim": "The S-Box implementation parameter `SecSBoxImpl` must be set to `SBoxImplDom` (Domain-Oriented Masking); any other value is considered less secure.",
-      "cond": "static",
-      "risk": "Use of a weaker S-Box implementation reduces resistance to power analysis attacks, potentially leaking key material.",
-      "signals": [
-        "SecSBoxImpl"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:491-493"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "alert_o",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_o",
+          "aes_cipher_ctrl_cs"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "alert_o",
+        "consequent": "The AesCipherControlStateValid assertion only checks state legality when alert_o is low. State transitions during an active alert are not constrained by this assertion, leaving open the possibility of the FSM entering an undefined state whi",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The exact generate condition selecting between the two `cyc_ctr_expr` assignments (line 476 vs. gen_no_cyc_ctr) is not visible in the current chunk; its definition (likely `inside`) resides in the excluded preceding region.",
-      "cond": "always (instantiation time)",
-      "risk": "Without knowing the condition, the actual source of `cyc_ctr_expr` during simulation cannot be determined, possibly hiding a functional mismatch in AES round counting.",
-      "signals": [
-        "cyc_ctr_expr",
-        "inside"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:476-482"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "The assertion `AesCipherControlStateValid` only checks that the FSM state is valid when `alert_o` is low; it does not specify any recovery or forcing logic if an illegal state occurs.",
-      "cond": "FSM enters an illegal state and alert_o remains low",
-      "risk": "An illegal state could propagate through the cipher control without raising an alert, potentially leading to data corruption, incorrect round key usage, or secret data leakage.",
-      "signals": [
-        "aes_cipher_ctrl_cs",
-        "alert_o"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:505-513"
-      ]
-    }
-  ],
+  "security_implications": "This chunk controls AES round counter gating, enforces security masking and DOM SBox implementation via static assertions, and validates operation mode, key length, and FSM state legality. The gen_no_cyc_ctr branch could weaken cipher strength by bypassing round count; it must be proven that this branch is unreachable in security‑critical configurations. The runtime assertions protect against illegal op_i/key_len_i values and ensure the FSM stays within known safe states when no alert is active, preventing malformed configurations from propagating. The static lint errors guarantee that masking and DOM SBox are always enabled, protecting against side‑channel and fault attacks.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:476-482",
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:489",
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:491-493",
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:496-499",
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:500-504",
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:505-513"
+    "aes_cipher_control_fsm.sv:476",
+    "aes_cipher_control_fsm.sv:477-482",
+    "aes_cipher_control_fsm.sv:489",
+    "aes_cipher_control_fsm.sv:493",
+    "aes_cipher_control_fsm.sv:496-499",
+    "aes_cipher_control_fsm.sv:500-504",
+    "aes_cipher_control_fsm.sv:505-513"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_control_fsm.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv",
   "line_start": 476,
-  "line_end": 515,
-  "security_implications": ""
+  "line_end": 515
 }

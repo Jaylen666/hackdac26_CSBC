@@ -19,30 +19,30 @@
     ],
     "modes": [
       "reset",
-      "active"
+      "normal"
     ],
     "tags": [
       "handshake",
-      "reset",
-      "tl-ul",
-      "response",
-      "error"
+      "error",
+      "access_control",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On asynchronous reset (negedge rst_ni), reqid_q and reqsz_q are cleared to 0, rspop_q is set to AccessAck.",
-      "cond": "negedge rst_ni",
+      "claim": "When rst_ni is low, reqid_q and reqsz_q are cleared to 0, and rspop_q is set to AccessAck.",
+      "cond": "always while reset is active",
       "signals": [
         "rst_ni",
         "reqid_q",
         "reqsz_q",
-        "rspop_q"
+        "rspop_q",
+        "AccessAck"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:99-103"
+        "tlul_adapter_reg.sv:100-103"
       ],
       "formal": {
         "temporal_shape": "always",
@@ -53,13 +53,14 @@
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "negedge",
+        "clock": "",
         "reset": "rst_ni",
         "signals": [
           "rst_ni",
           "reqid_q",
           "reqsz_q",
-          "rspop_q"
+          "rspop_q",
+          "AccessAck"
         ],
         "temporal_shape": "always",
         "antecedent": "!rst_ni",
@@ -72,39 +73,46 @@
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When a_ack is asserted, reqid_q captures tl_i.a_source and reqsz_q captures tl_i.a_size on the next clock edge.",
-      "cond": "a_ack == 1",
+      "claim": "When not in reset and a_ack is asserted, reqid_q is updated with tl_i.a_source, reqsz_q with tl_i.a_size, and rspop_q becomes AccessAckData if rd_req is true, else AccessAck.",
+      "cond": "rst_ni && a_ack",
       "signals": [
         "a_ack",
+        "tl_i.a_source",
+        "tl_i.a_size",
+        "rd_req",
         "reqid_q",
         "reqsz_q",
-        "tl_i.a_source",
-        "tl_i.a_size"
+        "rspop_q",
+        "AccessAckData",
+        "AccessAck"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-106"
+        "tlul_adapter_reg.sv:104-108"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "a_ack",
-        "consequent": "reqid_q == tl_i.a_source && reqsz_q == tl_i.a_size",
+        "antecedent": "rst_ni && a_ack",
+        "consequent": "reqid_q == tl_i.a_source && reqsz_q == tl_i.a_size && rspop_q == (rd_req ? AccessAckData : AccessAck)",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "clock",
-        "reset": "",
+        "clock": "",
+        "reset": "reset",
         "signals": [
           "a_ack",
+          "tl_i.a_source",
+          "tl_i.a_size",
+          "rd_req",
           "reqid_q",
           "reqsz_q",
-          "tl_i.a_source",
-          "tl_i.a_size"
+          "rspop_q",
+          "AccessAckData"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "a_ack",
-        "consequent": "reqid_q == tl_i.a_source && reqsz_q == tl_i.a_size",
+        "antecedent": "rst_ni && a_ack",
+        "consequent": "reqid_q == tl_i.a_source && reqsz_q == tl_i.a_size && rspop_q == (rd_req ? AccessAckData : AccessAck)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -113,48 +121,7 @@
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When a_ack is asserted, rspop_q is set to AccessAckData if rd_req is true, else AccessAck on the next clock edge.",
-      "cond": "a_ack == 1",
-      "signals": [
-        "a_ack",
-        "rspop_q",
-        "rd_req",
-        "AccessAckData",
-        "AccessAck"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:107-109"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "a_ack",
-        "consequent": "rspop_q == (rd_req ? AccessAckData : AccessAck)",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "clock",
-        "reset": "",
-        "signals": [
-          "a_ack",
-          "rspop_q",
-          "rd_req",
-          "AccessAckData",
-          "AccessAck"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "a_ack",
-        "consequent": "rspop_q == (rd_req ? AccessAckData : AccessAck)",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G4",
-      "type": "default_fallback",
-      "claim": "When not in reset and a_ack is deasserted, reqid_q, reqsz_q, and rspop_q retain their previous values.",
+      "claim": "When not in reset and a_ack is deasserted, reqid_q, reqsz_q and rspop_q hold their previous values.",
       "cond": "rst_ni && !a_ack",
       "signals": [
         "reqid_q",
@@ -162,7 +129,7 @@
         "rspop_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:99-110"
+        "tlul_adapter_reg.sv:99-110"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
@@ -193,53 +160,121 @@
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "When a_ack is asserted, tl_i.a_source, tl_i.a_size, and rd_req are valid and stable until the next clock edge.",
-      "cond": "during a_ack high",
-      "risk": "Captured values may be incorrect or metastable, leading to wrong request identification or response behavior.",
+      "claim": "When a_ack is asserted, tl_i.a_source and tl_i.a_size must be stable and valid.",
+      "cond": "a_ack high",
+      "risk": "Captured ID/size mismatch may route the response to the wrong destination or misinterprets the response size.",
       "signals": [
         "a_ack",
         "tl_i.a_source",
-        "tl_i.a_size",
-        "rd_req"
+        "tl_i.a_size"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-109"
+        "tlul_adapter_reg.sv:105-106"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "a_ack",
-        "consequent": "$stable(tl_i.a_source) && $stable(tl_i.a_size) && $stable(rd_req)",
-        "formalizability": "partial"
+        "consequent": "$stable(tl_i.a_source) && $stable(tl_i.a_size)",
+        "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "clock",
+        "clock": "",
         "reset": "",
         "signals": [
           "a_ack",
           "tl_i.a_source",
-          "tl_i.a_size",
-          "rd_req"
+          "tl_i.a_size"
         ],
         "temporal_shape": "comb",
         "antecedent": "a_ack",
-        "consequent": "$stable(tl_i.a_source) && $stable(tl_i.a_size) && $stable(rd_req)",
-        "formalizability": "partial",
+        "consequent": "$stable(tl_i.a_source) && $stable(tl_i.a_size)",
+        "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
       "id": "A2",
+      "type": "producer_contract",
+      "claim": "rd_req must correctly indicate whether the acknowledged transaction is a read when a_ack is asserted.",
+      "cond": "a_ack high",
+      "risk": "Incorrect rspop_q leads to wrong response opcode, causing upstream to misinterpret the response (e.g., treating a write response as data response).",
+      "signals": [
+        "a_ack",
+        "rd_req"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:108"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "a_ack",
+        "consequent": "rd_req matches the acknowledged request type",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "a_ack",
+          "rd_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "a_ack",
+        "consequent": "rd_req matches the acknowledged request type",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
       "type": "handshake",
-      "claim": "a_ack is a one-cycle pulse, asserted for exactly one clock cycle when a request is accepted.",
-      "cond": "on a_ack rising edge",
-      "risk": "Multiple updates can corrupt stored request info (reqid_q, reqsz_q, rspop_q) with stale or unintended values.",
+      "claim": "a_ack must be low when rst_ni is released (transitions from low to high).",
+      "cond": "$rose(rst_ni)",
+      "risk": "A spurious capture after reset may store stale or undefined values.",
+      "signals": [
+        "rst_ni",
+        "a_ack"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:104"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(rst_ni)",
+        "consequent": "!a_ack",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "a_ack"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(rst_ni)",
+        "consequent": "!a_ack",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "a_ack must be a single-cycle pulse.",
+      "cond": "a_ack high",
+      "risk": "If a_ack remains high for multiple cycles, reqid_q, reqsz_q and rspop_q update every cycle, possibly sending multiple responses for one transaction and violating protocol.",
       "signals": [
         "a_ack"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104"
+        "tlul_adapter_reg.sv:104"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
@@ -249,7 +284,7 @@
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "clock",
+        "clock": "",
         "reset": "",
         "signals": [
           "a_ack"
@@ -268,22 +303,22 @@
       "id": "U1",
       "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "rspop_q is set to AccessAckData for read requests regardless of errors, as noted in the comment. It is unclear if error status is intentionally discarded, potentially masking errors in downstream logic.",
-      "cond": "a_ack && rd_req && an error condition exists",
-      "risk": "A read with an error may be treated as a successful data transfer, causing consumption of invalid data or privilege bypass.",
+      "claim": "The block sets rspop_q to AccessAckData for all reads, irrespective of any error condition (comment 'regardless of error'). It is unclear whether errors should suppress the data response or if upstream logic guarantees data clearing/zeroization.",
+      "cond": "A read request is acknowledged while an internal error (e.g., permission violation) is present.",
+      "risk": "If an erroneous read returns valid secret data via AccessAckData, sensitive information may be leaked.",
       "signals": [
         "rspop_q",
         "rd_req",
         "AccessAckData"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:107-108"
+        "tlul_adapter_reg.sv:107-108"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "a_ack && rd_req && error_occurred",
-        "consequent": "rspop_q == AccessAckData",
-        "formalizability": "partial"
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
@@ -295,91 +330,59 @@
           "AccessAckData"
         ],
         "temporal_shape": "comb",
-        "antecedent": "a_ack && rd_req && error_occurred",
-        "consequent": "rspop_q == AccessAckData",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "antecedent": "A read request is acknowledged while an internal error (e.g., permission violation) is present",
+        "consequent": "The block sets rspop_q to AccessAckData for all reads, irrespective of any error condition (comment 'regardless of error'). It is unclear whether errors should suppress the data response or if upstream logic guarantees data clearing/zeroiza",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "rd_req is used to decide the response opcode but is generated outside this chunk. Its value must accurately reflect the request type at the time a_ack is asserted.",
-      "cond": "a_ack",
-      "risk": "Incorrect rd_req classification could set wrong rspop_q, causing protocol violations or functional errors in the response phase.",
+      "claim": "If a_ack is asserted for more than one cycle, reqid_q, reqsz_q, and rspop_q will be repeatedly updated, potentially causing multiple responses for a single transaction. The design assumes a single-cycle a_ack but contains no width enforcement.",
+      "cond": "a_ack remains high for N > 1 cycles",
+      "risk": "Protocol violation and possible data corruption or bandwidth waste.",
       "signals": [
-        "rd_req",
+        "a_ack",
+        "reqid_q",
+        "reqsz_q",
         "rspop_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:108"
+        "tlul_adapter_reg.sv:104"
       ],
       "formal": {
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "a_ack",
-        "consequent": "",
-        "formalizability": "none"
+        "consequent": "##1 !a_ack",
+        "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
         "reset": "",
         "signals": [
-          "rd_req",
+          "a_ack",
+          "reqid_q",
+          "reqsz_q",
           "rspop_q"
         ],
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "a_ack",
-        "consequent": "rd_req is used to decide the response opcode but is generated outside this chunk. Its value must accurately reflect the request type at the time a_ack is asserted",
-        "formalizability": "none",
-        "confidence": 0.85,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U3",
-      "type": "U_unhandled_legal_case",
-      "priority": "low",
-      "claim": "When a_ack is asserted and rd_req is false, rspop_q defaults to AccessAck. It is unclear if this covers all legal non-read opcodes correctly (e.g., atomic operations, intrinsics).",
-      "cond": "a_ack && !rd_req",
-      "risk": "Non-data response opcode might be misinterpreted by the target, leading to a protocol error.",
-      "signals": [
-        "rspop_q",
-        "rd_req"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:108"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "a_ack && !rd_req",
-        "consequent": "rspop_q == AccessAck",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "rspop_q",
-          "rd_req"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "a_ack && !rd_req",
-        "consequent": "rspop_q == AccessAck",
-        "formalizability": "none",
-        "confidence": 0.85,
+        "consequent": "##1 !a_ack",
+        "formalizability": "direct",
+        "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The chunk unconditionally sets rspop_q = AccessAckData on any read acknowledgement, ignoring error signals (comment 'regardless of error'). If an access error occurs (e.g., permission denied), the adapter still signals a data response, which could cause the initiator to accept data from a failed transaction. Unless upstream logic explicitly clears or masks the data path on errors, this behavior may leak secret/confidential data from an unauthorized access. This needs cross‑chunk verification of error handling and data zeroization.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:99-110"
+    "tlul_adapter_reg.sv:99-110"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 99,
-  "line_end": 110,
-  "security_implications": ""
+  "line_end": 110
 }

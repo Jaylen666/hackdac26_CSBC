@@ -7,15 +7,15 @@
       "state_intg_err_q"
     ],
     "used": [
-      "rst_ni",
       "state_intg_err_d",
-      "clk_i"
+      "clk_i",
+      "rst_ni"
     ],
     "modes": [],
     "tags": [
-      "error",
       "integrity",
-      "fault",
+      "error",
+      "secret",
       "reset"
     ]
   },
@@ -23,68 +23,124 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is high, state_intg_err_q registers state_intg_err_d on posedge clk_i.",
-      "cond": "rst_ni == 1 and rising edge of clk_i",
+      "claim": "When rst_ni is low (reset active), state_intg_err_q is asynchronously forced to 0.",
+      "cond": "!rst_ni",
       "signals": [
-        "state_intg_err_q",
-        "state_intg_err_d",
-        "clk_i"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:267"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "assignment",
-      "claim": "On reset (rst_ni low), state_intg_err_q is cleared to 0.",
-      "cond": "rst_ni == 0",
-      "signals": [
-        "state_intg_err_q",
-        "rst_ni"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:264-265"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "handshake",
-      "claim": "state_intg_err_d must be stable at the rising edge of clk_i when rst_ni is high to avoid metastability or glitch capture.",
-      "cond": "always during normal operation",
-      "risk": "Sampling an unstable state_intg_err_d may cause a spurious integrity error flag or missed real error.",
-      "signals": [
-        "state_intg_err_d",
-        "clk_i"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:263-267"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "state_intg_err_q is driven but its downstream usage for security-critical response (e.g., alert, wipe, key destruction) is not visible here.",
-      "cond": "when state_intg_err_q asserts",
-      "risk": "If consumers do not properly handle state_intg_err_q, a state integrity error could be missed, leading to key leakage or security bypass.",
-      "signals": [
+        "rst_ni",
         "state_intg_err_q"
       ],
       "refs": [
-        "keymgr_ctrl.sv:267"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:264-265"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "state_intg_err_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "state_intg_err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "state_intg_err_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On every rising clock edge when rst_ni is high, state_intg_err_q captures the value of state_intg_err_d.",
+      "cond": "posedge clk_i && rst_ni",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "state_intg_err_d",
+        "state_intg_err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:266-267"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(clk_i) && rst_ni",
+        "consequent": "state_intg_err_q == $past(state_intg_err_d, 1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "state_intg_err_d",
+          "state_intg_err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(clk_i) && rst_ni",
+        "consequent": "state_intg_err_q == $past(state_intg_err_d, 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If an integrity error state is present on state_intg_err_d while rst_ni is active low, the asynchronously cleared state_intg_err_q will miss this error after reset de-assertion, potentially hiding a persistent fault during the post-reset interval.",
+      "cond": "!rst_ni && state_intg_err_d != 0",
+      "risk": "A real integrity error could be lost, allowing the key manager to operate without proper error handling (e.g., skipping key wipe or alert escalation) until the next error event, which may be too late for security.",
+      "signals": [
+        "rst_ni",
+        "state_intg_err_d",
+        "state_intg_err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:264-268"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "state_intg_err_q == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "state_intg_err_d",
+          "state_intg_err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "state_intg_err_q == 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The register state_intg_err_q latches an integrity error flag. If this flag is spuriously cleared during reset (e.g., asynchronous reset while state_intg_err_d is active), a critical integrity violation could be masked after reset release, letting the key manager proceed in a corrupted state. This may bypass security responses such as secret wiping, alert generation, or safe-state entry, directly threatening the confidentiality and integrity of cryptographic keys managed by keymgr.",
   "evidence_refs": [
-    "keymgr_ctrl.sv:263-269"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:263-269"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 263,
-  "line_end": 269,
-  "security_implications": ""
+  "line_end": 269
 }

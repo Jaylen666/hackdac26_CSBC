@@ -1,24 +1,141 @@
 {
   "chunk_id": "rv_dm_dmi_gate__always_ff__p_strap_override_reg__001",
-  "summary": "异步复位寄存器，将 strap_en_override_d 锁存到 strap_en_override_q，复位清零。",
-  "behavior": "该 always_ff 块由时钟上升沿或异步复位下降沿触发。当 rst_ni 为低时，strap_en_override_q 被异步置 0；当 rst_ni 为高且有时钟上升沿时，strap_en_override_q 更新为 strap_en_override_d 的值。寄存器默认 1 拍延迟，无额外时序例外。",
+  "header": {
+    "module": "rv_dm_dmi_gate",
+    "block_kind": "always_ff",
+    "driven": [
+      "strap_en_override_q"
+    ],
+    "used": [
+      "strap_en_override_d",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [],
+    "tags": [
+      "access_control"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位期间（rst_ni 为低）strap_en_override_q 保持 0；复位释放后该信号在时钟边沿同步更新，不会出现不定态。",
-      "output_signals": [
-        "strap_en_override_q"
+      "id": "G1",
+      "type": "default_fallback",
+      "claim": "When rst_ni is low (active reset), strap_en_override_q is held to 0 asynchronously.",
+      "cond": "!rst_ni",
+      "signals": [
+        "strap_en_override_q",
+        "rst_ni"
       ],
-      "source_refs": [
-        "home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:104-107"
-      ]
+      "refs": [
+        "rv_dm_dmi_gate.sv:104-105"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "strap_en_override_q == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "strap_en_override_q",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "strap_en_override_q == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On rising clk_i while rst_ni is high, strap_en_override_q updates to the value of strap_en_override_d after one cycle.",
+      "cond": "posedge clk_i and rst_ni == 1",
+      "signals": [
+        "strap_en_override_q",
+        "strap_en_override_d",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "rv_dm_dmi_gate.sv:106-107"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "strap_en_override_q == $past(strap_en_override_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "strap_en_override_q",
+          "strap_en_override_d",
+          "clk_i",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "strap_en_override_q == $past(strap_en_override_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "",
-  "assumptions": [],
-  "evidence_refs": [
-    "home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:103-109"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "strap_en_override_d must be stable and meet setup/hold timing before and after posedge clk_i when rst_ni is high.",
+      "cond": "posedge clk_i with rst_ni high",
+      "risk": "Sampling a metastable or incorrect value leads to an erroneous override state, potentially enabling debug access improperly.",
+      "signals": [
+        "strap_en_override_d",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "rv_dm_dmi_gate.sv:107"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "$stable(strap_en_override_d) during setup/hold window (physical assumption)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "strap_en_override_d",
+          "clk_i",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "$stable(strap_en_override_d) during setup/hold window (physical assumption)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
   "uncertain_points": [],
+  "security_implications": "strap_en_override_q may gate debug strap override functionality; if strap_en_override_d is driven by unauthorized logic or corrupted, it could enable debug access circumventing access control policies. The block itself provides no protection; the reset value forces override off (safe default).",
+  "evidence_refs": [
+    "rv_dm_dmi_gate.sv:103-109"
+  ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv",
   "line_start": 103,
   "line_end": 109

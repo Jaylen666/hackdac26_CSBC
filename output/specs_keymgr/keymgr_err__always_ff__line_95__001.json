@@ -7,55 +7,96 @@
       "sync_fault_q"
     ],
     "used": [
+      "clk_i",
       "rst_ni",
       "op_done_i",
       "op_update_i",
       "sync_fault_d"
     ],
-    "modes": [
-      "reset",
-      "clear_on_done",
-      "load_on_update",
-      "hold"
-    ],
+    "modes": [],
     "tags": [
       "error",
       "fault",
-      "register_update"
+      "reset",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "state_transition",
-      "claim": "When asynchronous reset rst_ni is low, sync_fault_q is cleared to '0.",
-      "cond": "rst_ni = 0",
+      "type": "reg_update",
+      "claim": "On reset (negedge rst_ni), sync_fault_q is cleared to zero.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "sync_fault_q"
       ],
       "refs": [
         "keymgr_err.sv:96-97"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "sync_fault_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "negedge",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "sync_fault_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "sync_fault_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When op_done_i is asserted and rst_ni is high, sync_fault_q is cleared to '0.",
-      "cond": "!rst_ni false and op_done_i true",
+      "claim": "When op_done_i is asserted (and not in reset), sync_fault_q is cleared to zero.",
+      "cond": "op_done_i && rst_ni",
       "signals": [
         "op_done_i",
         "sync_fault_q"
       ],
       "refs": [
         "keymgr_err.sv:98-99"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_done_i",
+        "consequent": "sync_fault_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "op_done_i",
+          "sync_fault_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_done_i",
+        "consequent": "sync_fault_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When op_update_i is asserted, op_done_i is not asserted, and rst_ni is high, sync_fault_q is updated to sync_fault_d.",
-      "cond": "!rst_ni, !op_done_i, op_update_i",
+      "claim": "When op_update_i is asserted (and not in reset, and op_done_i is low), sync_fault_q is loaded from sync_fault_d.",
+      "cond": "op_update_i && !op_done_i && rst_ni",
       "signals": [
         "op_update_i",
         "sync_fault_d",
@@ -63,107 +104,153 @@
       ],
       "refs": [
         "keymgr_err.sv:100-101"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_update_i && !op_done_i",
+        "consequent": "sync_fault_q == sync_fault_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "op_update_i",
+          "sync_fault_d",
+          "sync_fault_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_update_i && !op_done_i",
+        "consequent": "sync_fault_q == sync_fault_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
-      "type": "reg_update_priority",
-      "claim": "If both op_done_i and op_update_i are asserted, op_done_i takes precedence and clears sync_fault_q.",
-      "cond": "op_done_i and op_update_i both true",
+      "type": "reg_update",
+      "claim": "When none of reset, op_done_i, op_update_i are active, sync_fault_q retains its previous value.",
+      "cond": "rst_ni && !op_done_i && !op_update_i",
       "signals": [
-        "op_done_i",
-        "op_update_i",
         "sync_fault_q"
       ],
       "refs": [
-        "keymgr_err.sv:98-101"
-      ]
+        "keymgr_err.sv:95-103"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!op_done_i && !op_update_i",
+        "consequent": "$stable(sync_fault_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "sync_fault_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!op_done_i && !op_update_i",
+        "consequent": "$stable(sync_fault_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "External logic must not assert op_update_i when op_done_i is asserted, otherwise the intended fault update is lost because clear takes priority.",
-      "cond": "when the producer intends to load a new fault value",
-      "risk": "Fault capture is silently dropped, leaving sync_fault_q zero when a fault should be recorded.",
+      "type": "handshake",
+      "claim": "op_done_i and op_update_i must not be asserted simultaneously; if they are, sync_fault_q is cleared and any new fault in sync_fault_d is lost.",
+      "cond": "always",
+      "risk": "Loss of a latched fault event, potentially hiding a security‑critical error.",
       "signals": [
-        "op_update_i",
         "op_done_i",
+        "op_update_i",
         "sync_fault_d",
         "sync_fault_q"
       ],
       "refs": [
         "keymgr_err.sv:98-101"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "sync_fault_d must present a stable and valid fault value during the cycle op_update_i is asserted.",
-      "cond": "op_update_i asserted",
-      "risk": "sync_fault_q may latch an invalid or glitched fault indication, causing false error handling.",
-      "signals": [
-        "sync_fault_d",
-        "op_update_i"
       ],
-      "refs": [
-        "keymgr_err.sv:101"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "handshake",
-      "claim": "op_done_i must be asserted only after the captured fault in sync_fault_q has been fully processed by the downstream logic.",
-      "cond": "when a fault value has been loaded via op_update_i and needs to be consumed",
-      "risk": "Premature clearing could drop an unreported or unhandled fault, compromising error containment.",
-      "signals": [
-        "op_done_i",
-        "sync_fault_q"
-      ],
-      "refs": [
-        "keymgr_err.sv:98-99"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "!(op_done_i && op_update_i)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done_i",
+          "op_update_i",
+          "sync_fault_d",
+          "sync_fault_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "!(op_done_i && op_update_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "Clearing sync_fault_q immediately on op_done_i may cause loss of a fault that was captured but not yet consumed if op_done_i arrives too early.",
-      "cond": "op_done_i asserted while a fault is still pending in sync_fault_q (e.g., after op_update_i but before downstream consumption)",
-      "risk": "Fault is cleared without being handled, leading to missed error propagation and potential security violation.",
+      "claim": "If op_done_i and op_update_i are asserted in the same cycle, the fault update from sync_fault_d is discarded because sync_fault_q is cleared by the higher-priority op_done_i branch.",
+      "cond": "op_done_i && op_update_i",
+      "risk": "A hardware fault captured in sync_fault_d is silently dropped, potentially allowing a safety or security violation to go unrecorded/unhandled.",
       "signals": [
         "op_done_i",
-        "sync_fault_q",
-        "op_update_i"
-      ],
-      "refs": [
-        "keymgr_err.sv:98-101"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The unconditional clear on op_done_i may conflict with fault capture modes if op_done_i is not gated by a fault-serviced condition; need to verify intended operational protocol.",
-      "cond": "unknown; depends on higher-level state machine",
-      "risk": "Incorrect integration could lead to lost faults or redundant clears.",
-      "signals": [
-        "op_done_i",
+        "op_update_i",
+        "sync_fault_d",
         "sync_fault_q"
       ],
       "refs": [
-        "keymgr_err.sv:98-99"
-      ]
+        "keymgr_err.sv:98-101"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_done_i && op_update_i",
+        "consequent": "sync_fault_q == '0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done_i",
+          "op_update_i",
+          "sync_fault_d",
+          "sync_fault_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_done_i && op_update_i",
+        "consequent": "sync_fault_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "sync_fault_q holds synchronous fault status which may be used to escalate alerts or block operations. If a fault update (op_update_i) coincides with an operation complete (op_done_i), the fault is cleared without being stored, potentially allowing a fault (e.g., integrity error) to be missed. This could undermine error reporting and safety mechanisms.",
   "evidence_refs": [
     "keymgr_err.sv:95-103"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 95,
-  "line_end": 103,
-  "security_implications": ""
+  "line_end": 103
 }

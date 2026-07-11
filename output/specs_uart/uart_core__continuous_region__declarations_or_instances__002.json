@@ -6,25 +6,27 @@
     "driven": [
       "tick_baud_x16",
       "tx_fifo_rready",
+      "tx",
       "tx_fifo_wready",
       "tx_fifo_depth",
       "tx_fifo_rvalid",
       "tx_fifo_data",
       "tx_out",
-      "tx_uart_idle",
-      "tx"
+      "tx_uart_idle"
     ],
     "used": [
       "nco_sum_q",
       "tx_uart_idle",
       "tx_fifo_rvalid",
       "tx_enable",
+      "clk_i",
+      "rst_ni",
       "uart_fifo_txrst",
       "reg2hw.wdata.qe",
       "reg2hw.wdata.q",
-      "tx_fifo_data",
       "reg2hw.ctrl.parity_en.q",
       "reg2hw.ctrl.parity_odd.q",
+      "tx_fifo_data",
       "line_loopback",
       "rx",
       "tx_out_q"
@@ -35,28 +37,52 @@
     "tags": [
       "fifo",
       "handshake",
-      "reset",
-      "parameterization"
+      "parity",
+      "integrity",
+      "error_unconnected",
+      "loopback"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "tick_baud_x16 is always assigned to bit 16 of nco_sum_q.",
+      "claim": "tick_baud_x16 is driven by bit 16 of nco_sum_q.",
       "cond": "always",
       "signals": [
         "tick_baud_x16",
         "nco_sum_q"
       ],
       "refs": [
-        "file:175"
-      ]
+        "uart_core.sv:175"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "tick_baud_x16 == nco_sum_q[16]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tick_baud_x16",
+          "nco_sum_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "tick_baud_x16 == nco_sum_q[16]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "tx_fifo_rready is high only when tx_uart_idle, tx_fifo_rvalid and tx_enable are all high; otherwise it is low.",
+      "claim": "tx_fifo_rready is asserted when tx_uart_idle, tx_fifo_rvalid, and tx_enable are all high; deasserted otherwise.",
       "cond": "always",
       "signals": [
         "tx_fifo_rready",
@@ -65,32 +91,121 @@
         "tx_enable"
       ],
       "refs": [
-        "file:181"
-      ]
+        "uart_core.sv:181"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "tx_fifo_rready == (tx_uart_idle && tx_fifo_rvalid && tx_enable)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_fifo_rready",
+          "tx_uart_idle",
+          "tx_fifo_rvalid",
+          "tx_enable"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "tx_fifo_rready == (tx_uart_idle && tx_fifo_rvalid && tx_enable)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "instance",
-      "claim": "prim_fifo_sync u_uart_txfifo is instantiated with Width=8, Pass=0, Depth=TxFifoDepth. wdata_i is tied to reg2hw.wdata.q, wvalid_i to reg2hw.wdata.qe, rready_i to tx_fifo_rready. Outputs wready_o, depth_o, rvalid_o, rdata_o go to tx_fifo_wready, tx_fifo_depth, tx_fifo_rvalid, tx_fifo_data. full_o and err_o are unconnected.",
+      "type": "assignment",
+      "claim": "The wr_parity input to uart_tx is computed as XOR reduction of tx_fifo_data XORed with the parity_odd control bit.",
       "cond": "always",
       "signals": [
-        "reg2hw.wdata.q",
-        "reg2hw.wdata.qe",
-        "tx_fifo_wready",
-        "tx_fifo_depth",
-        "tx_fifo_rvalid",
         "tx_fifo_data",
-        "full_o",
-        "err_o"
+        "reg2hw.ctrl.parity_odd.q"
       ],
       "refs": [
-        "file:183-200"
-      ]
+        "uart_core.sv:209"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "wr_parity == (^tx_fifo_data) ^ reg2hw.ctrl.parity_odd.q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_fifo_data",
+          "reg2hw.ctrl.parity_odd.q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "wr_parity == (^tx_fifo_data) ^ reg2hw.ctrl.parity_odd.q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
-      "type": "instance",
-      "claim": "uart_tx instance is connected with tx_enable, tick_baud_x16, parity_enable from reg2hw.ctrl.parity_en.q, wr from tx_fifo_rready, wr_parity as (^tx_fifo_data) ^ reg2hw.ctrl.parity_odd.q, wr_data from tx_fifo_data; its idle output drives tx_uart_idle, and tx output drives tx_out.",
+      "type": "generate_param",
+      "claim": "prim_fifo_sync instance u_uart_txfifo is configured with Width=8, Pass=0, Depth=TxFifoDepth; ports connected as listed in the instantiation.",
+      "cond": "always",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "uart_fifo_txrst",
+        "reg2hw.wdata.qe",
+        "tx_fifo_wready",
+        "reg2hw.wdata.q",
+        "tx_fifo_depth",
+        "tx_fifo_rvalid",
+        "tx_fifo_rready",
+        "tx_fifo_data"
+      ],
+      "refs": [
+        "uart_core.sv:183-200"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "uart_fifo_txrst",
+          "reg2hw.wdata.qe",
+          "tx_fifo_wready",
+          "reg2hw.wdata.q",
+          "tx_fifo_depth",
+          "tx_fifo_rvalid"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "prim_fifo_sync instance u_uart_txfifo is configured with Width=8, Pass=0, Depth=TxFifoDepth; ports connected as listed in the instantiation",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "instance_connection",
+      "claim": "uart_tx instance is connected to transmit control and data signals, with outputs idle and tx driving tx_uart_idle and tx_out.",
       "cond": "always",
       "signals": [
         "tx_enable",
@@ -98,18 +213,44 @@
         "reg2hw.ctrl.parity_en.q",
         "tx_fifo_rready",
         "tx_fifo_data",
-        "reg2hw.ctrl.parity_odd.q",
         "tx_uart_idle",
         "tx_out"
       ],
       "refs": [
-        "file:202-213"
-      ]
+        "uart_core.sv:202-213"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "tick_baud_x16",
+          "reg2hw.ctrl.parity_en.q",
+          "tx_fifo_rready",
+          "tx_fifo_data",
+          "tx_uart_idle",
+          "tx_out"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "uart_tx instance is connected to transmit control and data signals, with outputs idle and tx driving tx_uart_idle and tx_out",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
-      "id": "G5",
+      "id": "G6",
       "type": "assignment",
-      "claim": "tx output is assigned to rx when line_loopback is true, otherwise to tx_out_q.",
+      "claim": "tx output equals rx when line_loopback is true; otherwise equals tx_out_q.",
       "cond": "always",
       "signals": [
         "tx",
@@ -118,164 +259,293 @@
         "tx_out_q"
       ],
       "refs": [
-        "file:215"
-      ]
+        "uart_core.sv:215"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "tx == (line_loopback ? rx : tx_out_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx",
+          "line_loopback",
+          "rx",
+          "tx_out_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "tx == (line_loopback ? rx : tx_out_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "The upstream register logic must deassert reg2hw.wdata.qe (wvalid_i) when tx_fifo_wready is low to prevent FIFO overflow, because this chunk does not locally gate wvalid_i with wready_o.",
-      "cond": "during writes when the FIFO is not ready",
-      "risk": "FIFO overflow causing data loss or corruption.",
+      "type": "value_domain",
+      "claim": "nco_sum_q[16] provides a valid baud-rate tick pulse every 16 clock cycles.",
+      "cond": "when transmit logic requires a baud tick",
+      "risk": "incorrect baud rate or no transmission",
       "signals": [
-        "reg2hw.wdata.qe",
-        "tx_fifo_wready"
+        "nco_sum_q"
       ],
       "refs": [
-        "file:191-192"
-      ]
+        "uart_core.sv:175"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "nco_sum_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when transmit logic requires a baud tick",
+        "consequent": "nco_sum_q[16] provides a valid baud-rate tick pulse every 16 clock cycles",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "handshake",
-      "claim": "tx_uart_idle must be a stable, glitch‑free indication that the transmitter can accept a new byte, and tx_fifo_rvalid must be high only when valid data is present, for the AND‑based tx_fifo_rready to function correctly.",
-      "cond": "when reading the FIFO",
-      "risk": "Premature FIFO read or read of invalid data could corrupt transmitted bytes.",
+      "type": "producer_contract",
+      "claim": "prim_fifo_sync instance behaves as a standard synchronous FIFO: wready_o low when full, rvalid_o high when data available, rdata_o stable until rready_i taken, and full/empty handling correct.",
+      "cond": "always",
+      "risk": "data corruption, underflow, or transmit deadlock",
       "signals": [
-        "tx_uart_idle",
+        "tx_fifo_wready",
         "tx_fifo_rvalid",
-        "tx_fifo_rready"
+        "tx_fifo_data"
       ],
       "refs": [
-        "file:181"
-      ]
+        "uart_core.sv:183-200"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_fifo_wready",
+          "tx_fifo_rvalid",
+          "tx_fifo_data"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "prim_fifo_sync instance behaves as a standard synchronous FIFO: wready_o low when full, rvalid_o high when data available, rdata_o stable until rready_i taken, and full/empty handling correct",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
       "type": "producer_contract",
-      "claim": "tx_out_q must be a correctly derived version of tx_out that reflects the actual transmitted serial data; the module output tx does not use tx_out directly.",
-      "cond": "always",
-      "risk": "The output pin may be disconnected from the TX logic, yielding no transmission or stale data.",
+      "claim": "uart_tx module correctly serializes data, asserts tx_uart_idle when not transmitting, and drives tx_out with proper start/stop/parity framing.",
+      "cond": "when tx_enable is active",
+      "risk": "transmission errors or protocol violations",
       "signals": [
-        "tx_out",
-        "tx_out_q",
-        "tx"
+        "uart_tx",
+        "tx_uart_idle",
+        "tx_out"
       ],
       "refs": [
-        "file:212",
-        "file:215"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "handshake",
-      "claim": "tx_fifo_data must remain stable while the uart_tx's wr (tx_fifo_rready) is asserted so that the combinational wr_parity is sampled correctly by uart_tx.",
-      "cond": "during a write pulse to the transmitter",
-      "risk": "A changing tx_fifo_data in the same cycle could cause incorrect parity to be latched.",
-      "signals": [
-        "tx_fifo_data",
-        "wr_parity",
-        "tx_fifo_rready"
+        "uart_core.sv:202-213"
       ],
-      "refs": [
-        "file:209",
-        "file:208"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "uart_tx",
+          "tx_uart_idle",
+          "tx_out"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when tx_enable is active",
+        "consequent": "uart_tx module correctly serializes data, asserts tx_uart_idle when not transmitting, and drives tx_out with proper start/stop/parity framing",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "The FIFO full_o output is unconnected. No local logic monitors full status or prevents writes when full, relying entirely on external handling of wready_o. If the external interface ignores wready_o, writes may be lost.",
-      "cond": "FIFO becomes full",
-      "risk": "Undetected data loss or corruption in the transmit stream.",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "full_o output of transmit FIFO is left unconnected; no backpressure status beyond wready is available.",
+      "cond": "when FIFO becomes full",
+      "risk": "if write source ignores wready backpressure, FIFO overflow could silently occur, causing data loss",
       "signals": [
-        "full_o",
-        "wvalid_i",
-        "wready_o"
+        "full_o"
       ],
       "refs": [
-        "file:195",
-        "file:191-192"
-      ]
+        "uart_core.sv:195"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "full_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when FIFO becomes full",
+        "consequent": "full_o output of transmit FIFO is left unconnected; no backpressure status beyond wready is available",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "The FIFO err_o output (e.g., overflow/underflow indicator) is unconnected, so any internal FIFO error condition is ignored.",
-      "cond": "FIFO internal error occurs",
-      "risk": "Corrupted data may be transmitted without any error indication or interrupt.",
+      "claim": "err_o output of transmit FIFO is unconnected; any internal FIFO error is ignored.",
+      "cond": "when FIFO reports an error",
+      "risk": "silent data corruption or integrity loss on transmitted data, with no alert or software awareness",
       "signals": [
         "err_o"
       ],
       "refs": [
-        "file:199"
-      ]
+        "uart_core.sv:199"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "err_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when FIFO reports an error",
+        "consequent": "err_o output of transmit FIFO is unconnected; any internal FIFO error is ignored",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The uart_tx instance drives tx_out, but the final module output tx is sourced from tx_out_q. The relationship between tx_out and tx_out_q is not defined in this chunk, leaving open whether the transmitter output is correctly propagated to the pin.",
-      "cond": "always",
-      "risk": "The UART output signal may be electrically disconnected from the transmitter logic, leading to a non‑functional TX path.",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "tx_fifo_rready is combinatorial; timing closure of its path to uart_tx wr input may not ensure glitch-free operation.",
+      "cond": "when rready transitions simultaneously with clock edge or when input signals change",
+      "risk": "setup/hold violation on uart_tx wr, potentially causing missed or double write of transmit data",
       "signals": [
-        "tx_out",
-        "tx_out_q",
-        "tx"
+        "tx_fifo_rready",
+        "clock"
       ],
       "refs": [
-        "file:212",
-        "file:215"
-      ]
+        "uart_core.sv:181",
+        "uart_core.sv:208"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "tx_fifo_rready",
+          "clock"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when rready transitions simultaneously with clock edge or when input signals change",
+        "consequent": "tx_fifo_rready is combinatorial; timing closure of its path to uart_tx wr input may not ensure glitch-free operation",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U4",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "wr_parity is computed combinationally from tx_fifo_data and parity_odd, and wr is connected to tx_fifo_rready. It is unclear whether uart_tx samples wr_parity in the same cycle that a FIFO read advances tx_fifo_data, potentially causing a race.",
-      "cond": "when wr asserts and FIFO read pointer advances",
-      "risk": "Incorrect parity could be loaded, resulting in line errors that go undetected.",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "line_loopback enables direct connection from rx to tx, bypassing transmit framing and parity insertion.",
+      "cond": "when line_loopback is asserted",
+      "risk": "if loopback should be restricted (e.g., for debug or in certain life‑cycle states), unprotected loopback may violate security policy or cause protocol mismatch",
       "signals": [
-        "wr_parity",
-        "tx_fifo_data",
-        "tx_fifo_rready"
+        "line_loopback",
+        "rx",
+        "tx"
       ],
       "refs": [
-        "file:209",
-        "file:208",
-        "file:197"
-      ]
-    },
-    {
-      "id": "U5",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "tx_fifo_rready is a function of tx_uart_idle, which is an output of uart_tx. If uart_tx's idle output depends combinationally on its wr input (tx_fifo_rready), a combinational loop could form.",
-      "cond": "when tx_fifo_rvalid and tx_enable are high",
-      "risk": "Glitches or simulation/synthesis mismatches could lead to unpredictable FIFO read behaviour.",
-      "signals": [
-        "tx_fifo_rready",
-        "tx_uart_idle",
-        "wr"
+        "uart_core.sv:215"
       ],
-      "refs": [
-        "file:181",
-        "file:211",
-        "file:208"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "line_loopback",
+          "rx",
+          "tx"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when line_loopback is asserted",
+        "consequent": "line_loopback enables direct connection from rx to tx, bypassing transmit framing and parity insertion",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The transmit data path uses parity for integrity, but err_o from the transmit FIFO is unconnected; any FIFO internal error (overrun, underrun) is silently ignored, potentially leading to corrupted data transmission without detection. The loopback mode bypasses all transmit framing and parity, directly forwarding rx to tx, which could expose raw receive data without integrity checks. No access controls on loopback or parity settings are visible in this chunk.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:175-215"
+    "uart_core.sv:175-215"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 175,
-  "line_end": 215,
-  "security_implications": ""
+  "line_end": 215
 }

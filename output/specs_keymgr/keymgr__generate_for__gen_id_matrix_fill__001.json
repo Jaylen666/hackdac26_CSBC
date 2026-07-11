@@ -2,11 +2,14 @@
   "chunk_id": "keymgr__generate_for__gen_id_matrix_fill__001",
   "header": {
     "module": "keymgr",
-    "block_kind": "generate_for",
+    "block_kind": "generate",
     "driven": [
-      "id_matrix[i] for i in [KeyMgrStages, 2**StageWidth-1]"
+      "id_matrix[KeyMgrStages : 2**StageWidth-1]"
     ],
     "used": [
+      "KeyMgrStages",
+      "StageWidth",
+      "IdLfsrCopies",
       "data_rand[0]"
     ],
     "modes": [
@@ -15,78 +18,138 @@
       "IdLfsrCopies"
     ],
     "tags": [
-      "mask",
+      "key",
       "entropy",
-      "security"
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "For each i from KeyMgrStages to 2**StageWidth-1, id_matrix[i] is continuously assigned a vector of IdLfsrCopies bits, all equal to the current data_rand[0].",
-      "cond": "always (continuous assignment)",
+      "type": "generate_param",
+      "claim": "For indices i from KeyMgrStages to 2**StageWidth-1, id_matrix[i] is assigned to the replication of data_rand[0] IdLfsrCopies times.",
+      "cond": "always (within the generate loop instantiation)",
       "signals": [
-        "id_matrix[i]",
-        "data_rand"
+        "id_matrix",
+        "data_rand",
+        "IdLfsrCopies",
+        "KeyMgrStages",
+        "StageWidth"
       ],
       "refs": [
         "keymgr.sv:470-472"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "id_matrix is declared with a dimension that covers indices up to at least 2**StageWidth - 1.",
-      "cond": "always",
-      "risk": "If id_matrix is smaller, the generate loop assigns out-of-bounds, causing simulation error or potential hardware synthesis issues, leading to undefined behavior or security data corruption.",
-      "signals": [
-        "id_matrix"
       ],
-      "refs": [
-        "keymgr.sv:471"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "id_matrix[i] == {IdLfsrCopies{data_rand[0]}}",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "id_matrix",
+          "data_rand",
+          "IdLfsrCopies",
+          "KeyMgrStages",
+          "StageWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always (within the generate loop instantiation)",
+        "consequent": "id_matrix[i] == {IdLfsrCopies{data_rand[0]}}",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The fill uses only data_rand[0] replicated IdLfsrCopies times, making every bit within each unused id_matrix entry identical. If the design intent is to provide independent random-looking bits for each position to mitigate side-channel leakage or fault attacks, this reduces randomness to a single bit per entry.",
-      "cond": "When id_matrix entries are used for masking or security-critical purposes.",
-      "risk": "Weaker masking or deterministic patterns could leak information or allow fault injection to have predictable effects.",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If KeyMgrStages >= 2**StageWidth, the generate loop produces no assignments, leaving parts of id_matrix undriven.",
+      "cond": "KeyMgrStages >= 2**StageWidth",
+      "risk": "Undriven id_matrix entries could be read as X or unpredictable values, leading to functional errors or security weakness.",
       "signals": [
-        "data_rand[0]",
-        "id_matrix[i]"
+        "KeyMgrStages",
+        "StageWidth",
+        "id_matrix"
       ],
       "refs": [
-        "keymgr.sv:471"
-      ]
+        "keymgr.sv:470-472"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "KeyMgrStages >= 2**StageWidth",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "KeyMgrStages",
+          "StageWidth",
+          "id_matrix"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "KeyMgrStages >= 2**StageWidth",
+        "consequent": "the generate loop produces no assignments, leaving parts of id_matrix undriven",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "Because the assignment is continuous, any glitch on data_rand[0] immediately propagates to all unused id_matrix entries, potentially causing unwanted transitions.",
-      "cond": "During normal operation when data_rand[0] may transition.",
-      "risk": "Spurious switching on unused entries could consume power or, if those entries are observed, introduce side-channel leakage.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "All bits of id_matrix[i] are set to the same value data_rand[0], drastically reducing per-entry entropy.",
+      "cond": "always when the generate loop synthesizes",
+      "risk": "If id_matrix is used for key mixing or masking, the constant-bit pattern may enable predictable secret extraction or linear attacks.",
       "signals": [
-        "data_rand[0]",
-        "id_matrix[i]"
+        "id_matrix",
+        "data_rand",
+        "IdLfsrCopies"
       ],
       "refs": [
         "keymgr.sv:471"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "id_matrix",
+          "data_rand",
+          "IdLfsrCopies"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always when the generate loop synthesizes",
+        "consequent": "All bits of id_matrix[i] are set to the same value data_rand[0], drastically reducing per-entry entropy",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "id_matrix entries are formed by replicating data_rand[0] IdLfsrCopies times, so every bit in an entry is identical. This drastically limits randomness independent of the source quality. If id_matrix participates in key derivation or any masking operation, the lack of intra-word entropy could make secrets predictable or vulnerable to side-channel analysis.",
   "evidence_refs": [
     "keymgr.sv:470-472"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 470,
-  "line_end": 472,
-  "security_implications": ""
+  "line_end": 472
 }

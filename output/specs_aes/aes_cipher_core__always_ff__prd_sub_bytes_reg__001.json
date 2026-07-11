@@ -7,103 +7,146 @@
       "prd_sub_bytes_q"
     ],
     "used": [
+      "rst_ni",
       "state_we",
       "SP2V_HIGH",
-      "prd_sub_bytes_d"
+      "prd_sub_bytes_d",
+      "clk_i"
     ],
     "modes": [
       "SP2V_HIGH"
     ],
     "tags": [
       "secret",
-      "reg_update",
-      "reset"
+      "register",
+      "reset",
+      "cipher"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "reg_update",
-      "claim": "When rst_ni is low (active reset), prd_sub_bytes_q is asynchronously cleared to zero.",
-      "cond": "rst_ni == 0",
-      "signals": [
-        "prd_sub_bytes_q",
-        "rst_ni"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:336-337"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "reg_update",
-      "claim": "On rising edge of clk_i, if rst_ni is high and state_we equals SP2V_HIGH, prd_sub_bytes_q is updated with prd_sub_bytes_d.",
-      "cond": "rst_ni && state_we == SP2V_HIGH",
-      "signals": [
-        "prd_sub_bytes_q",
-        "prd_sub_bytes_d",
-        "state_we",
-        "SP2V_HIGH",
-        "clk_i"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:338-339"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "default_fallback",
-      "claim": "On rising edge of clk_i, if rst_ni is high and state_we is not equal to SP2V_HIGH, prd_sub_bytes_q retains its previous value (no assignment).",
-      "cond": "rst_ni && state_we != SP2V_HIGH",
-      "signals": [
-        "prd_sub_bytes_q",
-        "state_we",
-        "SP2V_HIGH",
-        "clk_i"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:338-341"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "When state_we == SP2V_HIGH at the rising clock edge, prd_sub_bytes_d must be valid and stable, representing the intended next value for prd_sub_bytes_q.",
-      "cond": "state_we == SP2V_HIGH",
-      "risk": "Capture of invalid or stale data may corrupt the AES round state.",
-      "signals": [
-        "prd_sub_bytes_d",
-        "state_we",
-        "SP2V_HIGH",
-        "clk_i"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:338-339"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "lifecycle",
-      "claim": "rst_ni must be asserted (low) before first normal operation to initialize prd_sub_bytes_q to a known value; otherwise the register may hold X or unknown state after power-up.",
-      "cond": "initialization or power-up",
-      "risk": "Uninitialized secret round state could lead to incorrect encryption or information leakage.",
+      "type": "reset_clear",
+      "claim": "When rst_ni is low, prd_sub_bytes_q is forced to 0 asynchronously.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "prd_sub_bytes_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:336-337"
-      ]
+        "aes_cipher_core.sv:336-337"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "prd_sub_bytes_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "prd_sub_bytes_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "prd_sub_bytes_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On the positive edge of clk_i, when rst_ni is high and state_we equals SP2V_HIGH, prd_sub_bytes_q updates to prd_sub_bytes_d.",
+      "cond": "rst_ni && state_we == SP2V_HIGH",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "state_we",
+        "SP2V_HIGH",
+        "prd_sub_bytes_d",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:338-339"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_we == SP2V_HIGH",
+        "consequent": "prd_sub_bytes_q == $past(prd_sub_bytes_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "state_we",
+          "SP2V_HIGH",
+          "prd_sub_bytes_d",
+          "prd_sub_bytes_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_we == SP2V_HIGH",
+        "consequent": "prd_sub_bytes_q == $past(prd_sub_bytes_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "reg_hold",
+      "claim": "When rst_ni is high and state_we is not equal to SP2V_HIGH, prd_sub_bytes_q retains its previous value.",
+      "cond": "rst_ni && state_we != SP2V_HIGH",
+      "signals": [
+        "rst_ni",
+        "state_we",
+        "prd_sub_bytes_q"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:338-340"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_we != SP2V_HIGH",
+        "consequent": "$stable(prd_sub_bytes_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "state_we",
+          "prd_sub_bytes_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_we != SP2V_HIGH",
+        "consequent": "$stable(prd_sub_bytes_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [],
+  "security_implications": "prd_sub_bytes_q stores AES intermediate state, which may be secret. The register is cleared at reset but retains its value during operation. An attacker with access to the register file or data path could extract intermediate cipher state.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:335-341"
+    "aes_cipher_core.sv:335-341"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 335,
-  "line_end": 341,
-  "security_implications": ""
+  "line_end": 341
 }

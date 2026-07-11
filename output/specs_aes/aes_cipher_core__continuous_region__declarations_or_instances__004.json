@@ -6,96 +6,144 @@
     "driven": [
       "data_in_mask_o",
       "sub_bytes_out",
+      "sub_bytes_out_req",
       "sb_out_mask",
-      "sub_bytes_err",
-      "sub_bytes_out_req"
+      "sub_bytes_err"
     ],
     "used": [
-      "data_in_mask",
-      "clk_i",
-      "rst_ni",
+      "data_in_mask[3:0]",
       "sub_bytes_en",
       "sub_bytes_out_ack",
       "op_i",
-      "state_q",
+      "state_q[0]",
       "sb_in_mask",
-      "prd_sub_bytes_q"
+      "prd_sub_bytes_q",
+      "clk_i",
+      "rst_ni"
     ],
-    "modes": [],
+    "modes": [
+      "SecSBoxImpl (parameter)"
+    ],
     "tags": [
       "mask",
-      "handshake"
+      "secret",
+      "handshake",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "data_in_mask_o is continuously assigned as the bit-swapped concatenation {data_in_mask[1], data_in_mask[0], data_in_mask[3], data_in_mask[2]}.",
+      "claim": "data_in_mask_o is assigned to a permutation of data_in_mask bits: {data_in_mask[1], data_in_mask[0], data_in_mask[3], data_in_mask[2]}",
       "cond": "always",
       "signals": [
         "data_in_mask_o",
         "data_in_mask"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:377"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "assignment",
-      "claim": "The u_aes_sub_bytes instance connects all ports as coded, driving sub_bytes_out, sb_out_mask, sub_bytes_err, and sub_bytes_out_req according to the aes_sub_bytes module implementation given the listed inputs.",
-      "cond": "always",
-      "signals": [
-        "sub_bytes_out",
-        "sb_out_mask",
-        "sub_bytes_err",
-        "sub_bytes_out_req",
-        "clk_i",
-        "rst_ni",
-        "sub_bytes_en",
-        "sub_bytes_out_ack",
-        "op_i",
-        "state_q",
-        "sb_in_mask",
-        "prd_sub_bytes_q"
+        "aes_cipher_core.sv:377"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:380-395"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "data_in_mask_o == {data_in_mask[1], data_in_mask[0], data_in_mask[3], data_in_mask[2]}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_in_mask_o",
+          "data_in_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "data_in_mask_o == {data_in_mask[1], data_in_mask[0], data_in_mask[3], data_in_mask[2]}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "handshake",
-      "claim": "External logic must adhere to the handshake protocol of aes_sub_bytes: sub_bytes_en must be asserted appropriately to initiate a computation, and sub_bytes_out_ack must acknowledge when output is accepted.",
-      "cond": "when sub_bytes is in use (en_i transitions or out_req_o asserted)",
-      "risk": "Violating handshake may cause the sub_bytes module to stall, produce incorrect outputs, or miss data acceptance, leading to data corruption or loss of synchronization.",
+      "claim": "The signals sub_bytes_en, sub_bytes_out_ack, op_i, state_q[0], sb_in_mask, and prd_sub_bytes_q must be driven in accordance with the interface protocol of the aes_sub_bytes module to ensure correct operation.",
+      "cond": "when the module is enabled",
+      "risk": "Incorrect handshake or data input timing could lead to sub_bytes producing wrong outputs, data corruption, or deadlock.",
       "signals": [
         "sub_bytes_en",
-        "sub_bytes_out_req",
-        "sub_bytes_out_ack"
+        "sub_bytes_out_ack",
+        "op_i",
+        "state_q[0]",
+        "sb_in_mask",
+        "prd_sub_bytes_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:380-395"
-      ]
+        "aes_cipher_core.sv:385-391"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sub_bytes_en",
+          "sub_bytes_out_ack",
+          "op_i",
+          "state_q[0]",
+          "sb_in_mask",
+          "prd_sub_bytes_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when the module is enabled",
+        "consequent": "The signals sub_bytes_en, sub_bytes_out_ack, op_i, state_q[0], sb_in_mask, and prd_sub_bytes_q must be driven in accordance with the interface protocol of the aes_sub_bytes module to ensure correct operation",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "security_precondition",
-      "claim": "Inputs sb_in_mask, prd_sub_bytes_q, and state_q[0] must be valid and correctly masked/prd-conditioned as expected by the aes_sub_bytes implementation to ensure proper error detection and security.",
-      "cond": "always during operation",
-      "risk": "If masks or PRD are invalid, the sub_bytes module may fail to detect faults or may leak sensitive information through outputs (sub_bytes_out, sb_out_mask, sub_bytes_err).",
+      "type": "value_domain",
+      "claim": "data_in_mask[3:0] is a valid 4-bit vector, as only those bits are used in the permutation.",
+      "cond": "always",
+      "risk": "Undriven or X input may propagate to data_in_mask_o, breaking masking assumptions.",
       "signals": [
-        "sb_in_mask",
-        "prd_sub_bytes_q",
-        "state_q",
-        "sub_bytes_err"
+        "data_in_mask"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:380-395"
-      ]
+        "aes_cipher_core.sv:377"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "!$isunknown(data_in_mask[3:0])",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_in_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "!$isunknown(data_in_mask[3:0])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -103,23 +151,44 @@
       "id": "U1",
       "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "The permutation of data_in_mask bits (swap [1] with [0] and [3] with [2]) to produce data_in_mask_o may be intended for alignment with data byte ordering, but without surrounding context it is unclear whether this permutation matches the data permutation.",
-      "cond": "when mask and data are combined/unmasked",
-      "risk": "If the mask permutation does not correspond to the data permutation, unmasking may produce incorrect plaintext, potentially leaking intermediate values or causing functional faults.",
+      "claim": "The specific bit permutation used to derive data_in_mask_o from data_in_mask is not documented. It is unclear whether this corresponds to a byte-order reversal or is part of a masking protocol.",
+      "cond": "always",
+      "risk": "If the permutation is incorrect relative to the masking scheme used elsewhere, secret data could be exposed or integrity checks may fail.",
       "signals": [
         "data_in_mask",
         "data_in_mask_o"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:377"
-      ]
+        "aes_cipher_core.sv:377"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_in_mask",
+          "data_in_mask_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The specific bit permutation used to derive data_in_mask_o from data_in_mask is not documented. It is unclear whether this corresponds to a byte-order reversal or is part of a masking protocol",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk handles mask signals (data_in_mask, sb_in_mask, sb_out_mask) and a computed mask output (data_in_mask_o). A wrong permutation on data_in_mask_o could break the masking scheme of the AES datapath, potentially leaking intermediate values correlated with secret key material. The instantiated aes_sub_bytes likely implements a masked S-box (controlled by SecSBoxImpl), so correctness of mask inputs/outputs is essential for side-channel resistance.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:377-395"
+    "aes_cipher_core.sv:377-395"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 377,
-  "line_end": 395,
-  "security_implications": ""
+  "line_end": 395
 }

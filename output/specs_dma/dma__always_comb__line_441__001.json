@@ -19,13 +19,11 @@
     "modes": [
       "OpcSha256",
       "OpcSha384",
-      "OpcSha512",
-      "default"
+      "OpcSha512"
     ],
     "tags": [
       "digest",
-      "mode_config",
-      "sha"
+      "parameterization"
     ]
   },
   "guarantees": [
@@ -33,7 +31,7 @@
       "id": "G1",
       "type": "mux_case",
       "claim": "When control_q.opcode equals OpcSha256, sha2_mode is driven to SHA2_256.",
-      "cond": "control_q.opcode == OpcSha256",
+      "cond": "always",
       "signals": [
         "control_q.opcode",
         "sha2_mode"
@@ -68,7 +66,7 @@
       "id": "G2",
       "type": "mux_case",
       "claim": "When control_q.opcode equals OpcSha384, sha2_mode is driven to SHA2_384.",
-      "cond": "control_q.opcode == OpcSha384",
+      "cond": "always",
       "signals": [
         "control_q.opcode",
         "sha2_mode"
@@ -103,7 +101,7 @@
       "id": "G3",
       "type": "mux_case",
       "claim": "When control_q.opcode equals OpcSha512, sha2_mode is driven to SHA2_512.",
-      "cond": "control_q.opcode == OpcSha512",
+      "cond": "always",
       "signals": [
         "control_q.opcode",
         "sha2_mode"
@@ -137,8 +135,8 @@
     {
       "id": "G4",
       "type": "default_fallback",
-      "claim": "For any control_q.opcode value not explicitly listed (i.e., not OpcSha256, OpcSha384, OpcSha512), sha2_mode is driven to SHA2_None.",
-      "cond": "control_q.opcode != OpcSha256 && control_q.opcode != OpcSha384 && control_q.opcode != OpcSha512",
+      "claim": "For any value of control_q.opcode not matching OpcSha256, OpcSha384, or OpcSha512, sha2_mode is driven to SHA2_None.",
+      "cond": "when opcode is not a recognized SHA operation code",
       "signals": [
         "control_q.opcode",
         "sha2_mode"
@@ -174,11 +172,11 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_security_intent_gap",
       "priority": "medium",
-      "claim": "The default case silently maps any unrecognized opcode to SHA2_None without raising an error flag. It is unclear whether this fallback is safe or whether an illegal opcode should be reported to prevent unintended cryptographic operation.",
-      "cond": "control_q.opcode takes an undefined value",
-      "risk": "An illegal opcode could propagate unnoticed, potentially causing a cryptographic operation to be skipped or performed with unintended parameters.",
+      "claim": "If control_q.opcode takes an illegal value (not OpcSha256, OpcSha384, or OpcSha512), sha2_mode silently defaults to SHA2_None, potentially bypassing SHA protection without an error alert. It is unclear if this is the intended safety mechanism or if a fault should be raised.",
+      "cond": "when control_q.opcode is corrupted or misconfigured to an unexpected value",
+      "risk": "A corrupted opcode could cause the DMA to skip SHA hashing, leading to undetected data integrity errors.",
       "signals": [
         "control_q.opcode",
         "sha2_mode"
@@ -195,7 +193,7 @@
       "formal_sketch": {
         "scope": "dma",
         "clock": "",
-        "reset": "reported",
+        "reset": "",
         "signals": [
           "control_q.opcode",
           "sha2_mode"
@@ -209,11 +207,11 @@
       }
     }
   ],
+  "security_implications": "This block directly controls the SHA operation mode based on control_q.opcode. Under a corrupted or misconfigured opcode, sha2_mode may silently become SHA2_None, bypassing SHA hashing and potentially allowing unverified data to be treated as valid, compromising data integrity. Review whether additional opcode validity checks or alerts are implemented elsewhere.",
   "evidence_refs": [
     "dma.sv:441-448"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 441,
-  "line_end": 448,
-  "security_implications": ""
+  "line_end": 448
 }

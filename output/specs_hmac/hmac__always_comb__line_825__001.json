@@ -11,84 +11,171 @@
       "reg2hw.key[0:31].qe"
     ],
     "modes": [
-      "cfg_block"
+      "cfg_block",
+      "i"
     ],
     "tags": [
-      "secret",
       "key",
-      "csr"
+      "secret",
+      "configuration",
+      "combinational"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "update_seckey_inprocess is 1 when cfg_block is true and at least one reg2hw.key[i].qe bit is set, else 0.",
-      "cond": "always",
+      "claim": "update_seckey_inprocess is a combinational signal: when cfg_block is 1, its value equals the OR-reduction of reg2hw.key[0:31].qe; otherwise it is 0.",
+      "cond": "always_comb",
       "signals": [
         "update_seckey_inprocess",
         "cfg_block",
-        "reg2hw.key[*].qe"
+        "reg2hw.key[0:31].qe"
       ],
       "refs": [
-        "825-836"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:825-836"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(cfg_block == 0) -> (update_seckey_inprocess == 0) && (cfg_block == 1) -> (update_seckey_inprocess == (|reg2hw.key[0:31].qe))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "update_seckey_inprocess",
+          "cfg_block",
+          "reg2hw.key[0:31].qe"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always_comb",
+        "consequent": "(cfg_block == 0) -> (update_seckey_inprocess == 0) && (cfg_block == 1) -> (update_seckey_inprocess == (|reg2hw.key[0:31].qe))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "The reg2hw.key unpacked array has exactly 32 entries, matching the loop bound of 32.",
-      "cond": "when cfg_block is true",
-      "risk": "If array size differs, the loop may access out-of-bounds indices or ignore key entries, causing incomplete detection.",
+      "claim": "Reg2hw.key[i].qe signals must be glitch-free and stable while cfg_block is asserted to prevent spurious pulses on update_seckey_inprocess.",
+      "cond": "cfg_block == 1",
+      "risk": "If any reg2hw.key[i].qe toggles while cfg_block is 1, update_seckey_inprocess may glitch high, potentially being sampled by downstream sequential logic as a false key-update-in-progress, leading to incorrect gating of other operations or unintended key state changes.",
       "signals": [
-        "reg2hw.key",
-        "i"
+        "reg2hw.key[0:31].qe",
+        "cfg_block"
       ],
       "refs": [
-        "828"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:828-831"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.key[0:31].qe",
+          "cfg_block"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cfg_block == 1",
+        "consequent": "Reg2hw.key[i].qe signals must be glitch-free and stable while cfg_block is asserted to prevent spurious pulses on update_seckey_inprocess",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "update_seckey_inprocess is a glitch-prone combinational OR of cfg_block and key qe bits; if cfg_block deasserts before all key qualifier bits clear, the signal may fall prematurely.",
-      "cond": "cfg_block deasserts while any reg2hw.key[i].qe is still high",
-      "risk": "Downstream logic may prematurely exit key-update processing, leading to incomplete secret key handling.",
+      "claim": "update_seckey_inprocess is used outside this chunk; must verify that downstream logic correctly interprets it as a level signal and handles potential combinational glitches (e.g., with double-synchronization or careful timing).",
+      "cond": "unknown",
+      "risk": "If downstream logic treats a spurious pulse as a valid in-process indication, secret key operations could be incorrectly gated or allowed.",
       "signals": [
-        "cfg_block",
-        "reg2hw.key[*].qe",
         "update_seckey_inprocess"
       ],
       "refs": [
-        "825-836"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:826"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "update_seckey_inprocess"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "update_seckey_inprocess is used outside this chunk; must verify that downstream logic correctly interprets it as a level signal and handles potential combinational glitches (e.g., with double-synchronization or careful timing)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "The loop bound is a hardcoded literal 32; if the actual reg2hw.key array size is parameterized differently, this block will be incorrect.",
-      "cond": "any configuration where reg2hw.key size != 32",
-      "risk": "Mis-indexing or incomplete key qualifier status detection.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "When cfg_block deasserts, update_seckey_inprocess is forced to 0 instantly, ignoring any pending reg2hw.key[i].qe bits. Is it safe to abort the in-process indication while a key update may still be logically pending?",
+      "cond": "cfg_block transition from 1 to 0 while some reg2hw.key[i].qe == 1",
+      "risk": "This could allow other security operations to proceed while secret key material is only partially updated, potentially exposing stale or partially loaded keys.",
       "signals": [
-        "i",
-        "reg2hw.key"
+        "cfg_block",
+        "reg2hw.key[0:31].qe",
+        "update_seckey_inprocess"
       ],
       "refs": [
-        "828"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:833-834"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_block",
+          "reg2hw.key[0:31].qe",
+          "update_seckey_inprocess"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cfg_block transition from 1 to 0 while some reg2hw.key[i].qe == 1",
+        "consequent": "update_seckey_inprocess is forced to 0 instantly, ignoring any pending reg2hw.key[i].qe bits. Is it safe to abort the in-process indication while a key update may still be logically pending?",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk generates update_seckey_inprocess, a signal that likely gates access to HMAC secret key operations. A glitch or mis-sampling risk could allow unintended operations to proceed while a secret key is being loaded, potentially exposing secret material or causing incorrect digests. The forced zero when cfg_block=0 may abort an in-progress key update, risking use of a partially loaded key.",
   "evidence_refs": [
-    "825-836"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:825-836"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 825,
-  "line_end": 836,
-  "security_implications": ""
+  "line_end": 836
 }

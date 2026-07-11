@@ -12,103 +12,204 @@
     ],
     "modes": [],
     "tags": [
-      "reseed",
-      "handshake"
+      "reset",
+      "handshake",
+      "entropy"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "cnt_en is asynchronously cleared to 0 when rst_ni is low, regardless of other signals.",
-      "cond": "!rst_ni",
+      "claim": "When rst_ni is low, cnt_en is cleared to 0 on the next rising clock edge.",
+      "cond": "rst_ni == 0",
       "signals": [
-        "cnt_en",
-        "rst_ni"
+        "rst_ni",
+        "cnt_en"
       ],
       "refs": [
-        "file:86-87"
-      ]
+        "keymgr_reseed_ctrl.sv:86-87"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "cnt_en == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "cnt_en"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "cnt_en == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "cnt_en is set to 1 on the next rising clock edge after edn_done is sampled high, when not in reset.",
-      "cond": "edn_done && !rst_ni",
+      "claim": "When rst_ni is high and edn_done is asserted, cnt_en is set to 1 on the next rising clock edge.",
+      "cond": "rst_ni && edn_done",
       "signals": [
-        "cnt_en",
+        "rst_ni",
         "edn_done",
-        "clk_i"
+        "cnt_en"
       ],
       "refs": [
-        "file:88-89"
-      ]
+        "keymgr_reseed_ctrl.sv:88-89"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && edn_done",
+        "consequent": "cnt_en == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "edn_done",
+          "cnt_en"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && edn_done",
+        "consequent": "cnt_en == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "cnt_en holds its previous value when not in reset and edn_done is low (no explicit write).",
-      "cond": "!rst_ni && !edn_done",
+      "claim": "When rst_ni is high and edn_done is deasserted, cnt_en retains its previous value.",
+      "cond": "rst_ni && !edn_done",
       "signals": [
+        "rst_ni",
+        "edn_done",
         "cnt_en"
       ],
       "refs": [
-        "file:88 (absence of else clause)"
-      ]
+        "keymgr_reseed_ctrl.sv:85-91"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !edn_done",
+        "consequent": "cnt_en == $past(cnt_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "edn_done",
+          "cnt_en"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !edn_done",
+        "consequent": "cnt_en == $past(cnt_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "handshake",
-      "claim": "edn_done is a synchronous pulse signal that can be sampled at the rising clock edge; its timing and duration are controlled externally.",
-      "cond": "when edn_done occurs",
-      "risk": "If edn_done is not pulsed but stays high, cnt_en will be set again on each clock, which may be harmless but could violate single-shot re-seed expectations.",
+      "claim": "edn_done is synchronous to clk_i and meets setup/hold timing.",
+      "cond": "always",
+      "risk": "If edn_done violates timing, cnt_en may become metastable, causing unpredictable reseed enable behavior.",
       "signals": [
         "edn_done",
         "clk_i"
       ],
       "refs": [
-        "file:88"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "lifecycle",
-      "claim": "The asynchronous reset rst_ni must be asserted during power-up and removed after clocks are stable.",
-      "cond": "always",
-      "risk": "Incorrect reset removal could cause cnt_en to have an unknown state or metastability.",
-      "signals": [
-        "rst_ni",
-        "clk_i"
+        "keymgr_reseed_ctrl.sv:85"
       ],
-      "refs": [
-        "file:86"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$setup(edn_done, posedge clk_i, ...)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "edn_done",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$setup(edn_done, posedge clk_i, ...)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "Once cnt_en becomes 1, there is no mechanism in this always_ff block to clear it back to 0, except a full reset. This may prevent multiple re-seed operations or override external clear attempts.",
-      "cond": "after edn_done is asserted and no reset occurs",
-      "risk": "If multiple re-seed operations are needed, cnt_en will remain stuck at 1 and might prevent subsequent re-seed sequences or handshakes from restarting.",
+      "claim": "cnt_en is only set by edn_done and cleared only by reset. There is no clear condition on an enable path, which could hold cnt_en high permanently after a single edn_done. This may cause continuous reseeding if not intentional.",
+      "cond": "rst_ni && edn_done once and never cleared",
+      "risk": "Unintended continuous key reseeding may degrade entropy source quality or lock key state.",
       "signals": [
         "cnt_en",
+        "edn_done",
         "rst_ni"
       ],
       "refs": [
-        "file:85-91"
-      ]
+        "keymgr_reseed_ctrl.sv:85-91"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni && $rose(cnt_en)",
+        "consequent": "cnt_en == 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "cnt_en",
+          "edn_done",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni && $rose(cnt_en)",
+        "consequent": "cnt_en == 1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "cnt_en is a reseed enable that, if stuck high, may cause repeated key reseeding or continuous access to the entropy source. This could weaken the entropy pool or allow an attacker to force predictable reseed timing, potentially reducing key material strength. The lack of a clear mechanism (only set, no clear except reset) is a concern.",
   "evidence_refs": [
-    "file:85-91"
+    "keymgr_reseed_ctrl.sv:85-91"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
   "line_start": 85,
-  "line_end": 91,
-  "security_implications": ""
+  "line_end": 91
 }

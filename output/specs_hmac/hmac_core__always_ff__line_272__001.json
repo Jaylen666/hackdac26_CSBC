@@ -8,11 +8,10 @@
     ],
     "used": [
       "rst_ni",
-      "txcount_d"
+      "txcount_d",
+      "clk_i"
     ],
-    "modes": [
-      "reset"
-    ],
+    "modes": [],
     "tags": [
       "counter",
       "reset"
@@ -22,40 +21,123 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, txcount is asynchronously reset to 0; when rst_ni is high, txcount loads txcount_d on posedge clk_i.",
-      "cond": "always",
+      "claim": "When rst_ni is low, txcount is asynchronously cleared to 0.",
+      "cond": "rst_ni == 0",
       "signals": [
-        "rst_ni",
         "txcount",
-        "txcount_d"
+        "rst_ni"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:272-275"
-      ]
+        "hmac_core.sv:272-275"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 0",
+        "consequent": "txcount == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "txcount",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 0",
+        "consequent": "txcount == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On the rising edge of clk_i, when rst_ni is high, txcount is updated with the current value of txcount_d.",
+      "cond": "posedge clk_i and rst_ni == 1",
+      "signals": [
+        "txcount",
+        "txcount_d",
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "hmac_core.sv:272-275"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "txcount == $past(txcount_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "txcount",
+          "txcount_d",
+          "rst_ni",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "txcount == $past(txcount_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "txcount_d must provide the correct next count value and be stable at the rising clock edge.",
-      "cond": "when rst_ni is high",
-      "risk": "Incorrect txcount_d would lead to a wrong txcount value, potentially causing downstream data path errors (e.g., message length mismatch).",
+      "claim": "txcount_d must be stable and valid before the rising edge of clk_i when rst_ni is high.",
+      "cond": "rst_ni == 1",
+      "risk": "A glitch or invalid value on txcount_d at the clock edge may cause txcount to latch an incorrect transmit count, potentially leading to over/under-transmission of HMAC data.",
       "signals": [
         "txcount_d",
-        "clk_i"
+        "clk_i",
+        "rst_ni"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:272-275"
-      ]
+        "hmac_core.sv:272-275"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 1",
+        "consequent": "$stable(txcount_d) before(posedge clk_i)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "txcount_d",
+          "clk_i",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 1",
+        "consequent": "$stable(txcount_d) before(posedge clk_i)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [],
+  "security_implications": "txcount is a transmission counter inside HMAC core that controls how many bytes are sent out, potentially including digest bytes. Corruption via glitch on txcount_d or improper reset could cause over-transmission of secret digest material or under-transmission leading to HMAC verification failure, leaking secret or causing denial-of-service. The asynchronous reset ensures a clean start.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:272-275"
+    "hmac_core.sv:272-275"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
   "line_start": 272,
-  "line_end": 275,
-  "security_implications": ""
+  "line_end": 275
 }

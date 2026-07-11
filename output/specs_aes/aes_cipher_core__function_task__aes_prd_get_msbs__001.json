@@ -4,15 +4,14 @@
     "module": "aes_cipher_core",
     "block_kind": "declaration",
     "driven": [
-      "prd_msbs"
+      "prd_msbs (function return)"
     ],
     "used": [
       "in",
-      "WidthPRDSBox",
-      "i"
+      "WidthPRDSBox"
     ],
     "modes": [
-      "WidthPRDSBox"
+      "WidthPRDSBox (parameter)"
     ],
     "tags": [
       "parameterization"
@@ -22,67 +21,151 @@
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For i from 0 to 3, prd_msbs[i] = in[ (i*WidthPRDSBox)+8 +: (WidthPRDSBox-8) ]; the function returns prd_msbs.",
+      "claim": "The function returns a 4-element vector where element i is bits [(i*WidthPRDSBox)+8 +: (WidthPRDSBox-8)] of input 'in' for i=0..3.",
       "cond": "always",
       "signals": [
         "prd_msbs",
         "in"
       ],
       "refs": [
-        "file:896-898"
-      ]
+        "aes_cipher_core.sv:892-900"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "prd_msbs[0] == in[8 +: WidthPRDSBox-8] && prd_msbs[1] == in[WidthPRDSBox+8 +: WidthPRDSBox-8] && prd_msbs[2] == in[2*WidthPRDSBox+8 +: WidthPRDSBox-8] && prd_msbs[3] == in[3*WidthPRDSBox+8 +: WidthPRDSBox-8]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prd_msbs",
+          "in"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "prd_msbs[0] == in[8 +: WidthPRDSBox-8] && prd_msbs[1] == in[WidthPRDSBox+8 +: WidthPRDSBox-8] && prd_msbs[2] == in[2*WidthPRDSBox+8 +: WidthPRDSBox-8] && prd_msbs[3] == in[3*WidthPRDSBox+8 +: WidthPRDSBox-8]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "WidthPRDSBox must be greater than 8.",
-      "cond": "any call to aes_prd_get_msbs",
-      "risk": "If WidthPRDSBox <= 8, the slice width (WidthPRDSBox-8) is zero or negative, causing illegal range or simulation error.",
+      "claim": "WidthPRDSBox must be greater than 8 to guarantee a non-negative width for the bit slice.",
+      "cond": "whenever the function is called",
+      "risk": "If WidthPRDSBox <= 8, the slice width (WidthPRDSBox-8) is zero or negative, causing invalid signal dimensions and potential compilation failure or simulation mismatch.",
       "signals": [
         "WidthPRDSBox"
       ],
       "refs": [
-        "file:892-898"
-      ]
+        "aes_cipher_core.sv:897"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "WidthPRDSBox > 8",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "WidthPRDSBox"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "whenever the function is called",
+        "consequent": "WidthPRDSBox > 8",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "Lower 8 bits of each WidthPRDSBox-bit input segment are discarded; it is unclear what data these bits carry and whether they should be preserved for correct or secure operation.",
-      "cond": "unknown",
-      "risk": "If lower bits contain key, mask, or secret data, discarding them could leak information or break the cipher.",
+      "claim": "The function discards the least-significant 8 bits of each PRD word; need to verify from caller context that those bits carry only noise and no secret/key information.",
+      "cond": "when returned MSBs are used for masking or PRD sequence construction",
+      "risk": "If the discarded LSbits contain entropy or secret data, the extracted MSBs may be predictable, weakening side-channel countermeasures.",
       "signals": [
-        "in"
+        "in",
+        "prd_msbs"
       ],
       "refs": [
-        "file:897"
-      ]
+        "aes_cipher_core.sv:897"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "in",
+          "prd_msbs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when returned MSBs are used for masking or PRD sequence construction",
+        "consequent": "The function discards the least-significant 8 bits of each PRD word; need to verify from caller context that those bits carry only noise and no secret/key information",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_width_param_hazard",
-      "priority": "low",
-      "claim": "WidthPRDSBox is used without range guard; a legal parameter value ≤8 produces an illegal slice width.",
-      "cond": "WidthPRDSBox <= 8",
-      "risk": "Synthesis or simulation error if parent module drives WidthPRDSBox to an invalid value.",
+      "priority": "medium",
+      "claim": "The function requires WidthPRDSBox > 8, but the enclosing module may legally allow WidthPRDSBox = 8, which would cause an invalid bit slice (width <= 0).",
+      "cond": "WidthPRDSBox == 8",
+      "risk": "Invalid SystemVerilog range could lead to unreachable code or simulation artifacts, potentially masking real PRD errors.",
       "signals": [
         "WidthPRDSBox"
       ],
       "refs": [
-        "file:892-897"
-      ]
+        "aes_cipher_core.sv:897"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "WidthPRDSBox == 8",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "WidthPRDSBox"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "WidthPRDSBox == 8",
+        "consequent": "The function requires WidthPRDSBox > 8, but the enclosing module may legally allow WidthPRDSBox = 8, which would cause an invalid bit slice (width <= 0)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Function aes_prd_get_msbs extracts most-significant bits of PRD data, discarding the lower 8 bits. The PRD may be used for masking or dithering inside the cipher core. If the discarded bits are not purely noise, the mask entropy could be reduced, facilitating side-channel attacks. The calling context must confirm that the lower 8 bits are indeed non-sensitive and that the WidthPRDSBox parameter is chosen conservatively.",
   "evidence_refs": [
-    "file:892-900"
+    "aes_cipher_core.sv:892-900"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 892,
-  "line_end": 900,
-  "security_implications": ""
+  "line_end": 900
 }

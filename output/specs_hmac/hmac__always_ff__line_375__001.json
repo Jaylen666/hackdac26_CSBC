@@ -9,99 +9,321 @@
     "used": [
       "rst_ni",
       "cfg_block",
-      "reg2hw.cfg.hmac_en.qe"
-    ],
-    "modes": [
-      "reset",
+      "reg2hw.cfg.hmac_en.qe",
+      "reg2hw.cfg",
       "HMAC_CFG_ENDIAN_SWAP_RESVAL",
       "HMAC_CFG_DIGEST_SWAP_RESVAL",
       "HMAC_CFG_KEY_SWAP_RESVAL",
       "HMAC_CFG_DIGEST_SIZE_RESVAL",
       "HMAC_CFG_KEY_LENGTH_RESVAL"
     ],
+    "modes": [
+      "reset",
+      "cfg_lock",
+      "update"
+    ],
     "tags": [
       "csr",
-      "reset"
+      "config_lock",
+      "hmac",
+      "key_handling",
+      "digest_handling"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (rst_ni low), cfg_reg is assigned default values: hmac_en.q=0, sha_en.q=0, endian_swap.q=HMAC_CFG_ENDIAN_SWAP_RESVAL, digest_swap.q=HMAC_CFG_DIGEST_SWAP_RESVAL, key_swap.q=HMAC_CFG_KEY_SWAP_RESVAL, digest_size.q=HMAC_CFG_DIGEST_SIZE_RESVAL, key_length.q=HMAC_CFG_KEY_LENGTH_RESVAL, and all qe bits are 0.",
-      "cond": "rst_ni == 0",
+      "claim": "On reset, cfg_reg is set to default values: hmac_en.q=0, hmac_en.qe=0, sha_en.q=0, sha_en.qe=0, endian_swap.q=HMAC_CFG_ENDIAN_SWAP_RESVAL with qe=0, digest_swap.q=HMAC_CFG_DIGEST_SWAP_RESVAL with qe=0, key_swap.q=HMAC_CFG_KEY_SWAP_RESVAL with qe=0, digest_size.q=HMAC_CFG_DIGEST_SIZE_RESVAL with qe=0, key_length.q=HMAC_CFG_KEY_LENGTH_RESVAL with qe=0, and all other fields to 0.",
+      "cond": "!rst_ni (active-low reset)",
       "signals": [
-        "cfg_reg",
         "rst_ni",
-        "HMAC_CFG_ENDIAN_SWAP_RESVAL",
-        "HMAC_CFG_DIGEST_SWAP_RESVAL",
-        "HMAC_CFG_KEY_SWAP_RESVAL",
-        "HMAC_CFG_DIGEST_SIZE_RESVAL",
-        "HMAC_CFG_KEY_LENGTH_RESVAL"
+        "cfg_reg"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:375-407"
-      ]
+        "hmac.sv:375-407"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni == 0",
+        "consequent": "cfg_reg == { ... }",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "cfg_reg"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni == 0",
+        "consequent": "cfg_reg == { ... }",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When not in reset, cfg_reg is overwritten with the entire reg2hw.cfg struct if cfg_block is low and reg2hw.cfg.hmac_en.qe is high; otherwise cfg_reg retains its previous value.",
+      "claim": "When cfg_block is low and reg2hw.cfg.hmac_en.qe is high, cfg_reg is updated with reg2hw.cfg on the next clock edge.",
       "cond": "!cfg_block && reg2hw.cfg.hmac_en.qe",
       "signals": [
-        "cfg_reg",
         "cfg_block",
         "reg2hw.cfg.hmac_en.qe",
-        "reg2hw.cfg"
+        "reg2hw.cfg",
+        "cfg_reg"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408-410"
-      ]
+        "hmac.sv:408-410"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!cfg_block && reg2hw.cfg.hmac_en.qe",
+        "consequent": "cfg_reg == reg2hw.cfg",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "cfg_block",
+          "reg2hw.cfg.hmac_en.qe",
+          "reg2hw.cfg",
+          "cfg_reg"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!cfg_block && reg2hw.cfg.hmac_en.qe",
+        "consequent": "cfg_reg == reg2hw.cfg",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "In any other case (no reset, no update), cfg_reg retains its previous value.",
+      "cond": "else (i.e., no reset and no update)",
+      "signals": [
+        "cfg_reg"
+      ],
+      "refs": [
+        "hmac.sv:408-410"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni && !(!cfg_block && reg2hw.cfg.hmac_en.qe)",
+        "consequent": "cfg_reg == $past(cfg_reg)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "cfg_reg"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni && !(!cfg_block && reg2hw.cfg.hmac_en.qe)",
+        "consequent": "cfg_reg == $past(cfg_reg)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "security_precondition",
-      "claim": "cfg_block must be asserted high by external logic during active HMAC/SHA operations to block configuration updates.",
-      "cond": "When a secure operation is ongoing and the configuration must remain stable.",
-      "risk": "A spurious deassertion of cfg_block would allow a write to pass through, potentially corrupting key length, digest size, or swap settings mid‑operation, leading to incorrect HMAC output or secret exposure.",
+      "claim": "cfg_block must remain asserted (locked) when configuration changes are prohibited; this block relies on external logic to set and never clear it after final configuration.",
+      "cond": "during normal operation after initial configuration",
+      "risk": "If cfg_block is deasserted while HMAC is active, hmac_en, sha_en, or swap settings may be altered, potentially disabling HMAC, enabling insecure SHA bypass, or corrupting key/digest swaps.",
       "signals": [
-        "cfg_block"
+        "cfg_block",
+        "cfg_reg"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408-410"
-      ]
+        "hmac.sv:408"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "cfg_block == 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_block",
+          "cfg_reg"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during normal operation after initial configuration",
+        "consequent": "cfg_block == 1",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "reg2hw.cfg must be stable while reg2hw.cfg.hmac_en.qe is asserted.",
+      "cond": "when qe is high",
+      "risk": "If reg2hw.cfg changes during the qe pulse, cfg_reg may capture an incorrect or glitchy value.",
+      "signals": [
+        "reg2hw.cfg.hmac_en.qe",
+        "reg2hw.cfg"
+      ],
+      "refs": [
+        "hmac.sv:408-409"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cfg.hmac_en.qe",
+        "consequent": "$stable(reg2hw.cfg)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.cfg.hmac_en.qe",
+          "reg2hw.cfg"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cfg.hmac_en.qe",
+        "consequent": "$stable(reg2hw.cfg)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The update condition only checks reg2hw.cfg.hmac_en.qe, ignoring the write‑qualification bits of other fields (sha_en.qe, endian_swap.qe, etc.). It is unclear whether the reg2hw interface ensures that any configuration write also sets hmac_en.qe, or if this RTL silently discards writes to other fields.",
-      "cond": "When a write targets sha_en, digest_size, key_length, or swap fields without also setting hmac_en.qe.",
-      "risk": "If separate qe pulses exist, writes to critical security configuration (digest size, key length, swap modes) would be lost, potentially leaving the HMAC with a smaller digest or wrong key length, leading to weakened integrity or exposure.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The reset value uses 'default: '0' for all fields not explicitly listed. If cfg_reg contains security-critical fields not enumerated here (e.g., additional enable or mask bits), they would incorrectly reset to 0 instead of a defined safe value.",
+      "cond": "during reset",
+      "risk": "Unlisted fields may silently reset to an insecure state, potentially disabling protections or clearing secret-dependent controls.",
       "signals": [
-        "reg2hw.cfg.hmac_en.qe",
-        "reg2hw.cfg.sha_en.qe",
-        "reg2hw.cfg.endian_swap.qe",
-        "reg2hw.cfg.digest_swap.qe",
-        "reg2hw.cfg.key_swap.qe",
-        "reg2hw.cfg.digest_size.qe",
-        "reg2hw.cfg.key_length.qe",
         "cfg_reg"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:408-410"
-      ]
+        "hmac.sv:406"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni == 0",
+        "consequent": "cfg_reg.unlisted_fields == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "cfg_reg"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni == 0",
+        "consequent": "cfg_reg.unlisted_fields == 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The update condition uses hmac_en.qe as the sole write-enable, causing the entire reg2hw.cfg struct to be loaded. It is unclear whether all fields are intended to be updated atomically or if individual field-level qe signals exist but are ignored.",
+      "cond": "when hmac_en.qe is asserted",
+      "risk": "If only hmac_en is intended to be written, all other fields (sha_en, swap settings, digest_size, key_length) would be overwritten with potentially stale or attacker-controlled values from reg2hw.cfg, leading to unintended HMAC behavior or security bypass.",
+      "signals": [
+        "reg2hw.cfg.hmac_en.qe",
+        "reg2hw.cfg",
+        "cfg_reg"
+      ],
+      "refs": [
+        "hmac.sv:408-409"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cfg.hmac_en.qe",
+        "consequent": "cfg_reg.sha_en == reg2hw.cfg.sha_en && cfg_reg.endian_swap == reg2hw.cfg.endian_swap && ...",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.cfg.hmac_en.qe",
+          "reg2hw.cfg",
+          "cfg_reg"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cfg.hmac_en.qe",
+        "consequent": "cfg_reg.sha_en == reg2hw.cfg.sha_en && cfg_reg.endian_swap == reg2hw.cfg.endian_swap &&",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The cfg_block signal is used as a lock; its set/clear policy and life cycle are defined outside this chunk. If cfg_block can be deasserted after initial configuration (e.g., by a register write or lifecycle state change), the lock is ineffective and configuration may be altered.",
+      "cond": "when cfg_block toggles from 1 to 0",
+      "risk": "An unauthorized agent could unlock the configuration and modify HMAC enable, swap settings, or key/digest parameters, undermining security.",
+      "signals": [
+        "cfg_block"
+      ],
+      "refs": [
+        "hmac.sv:408"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "cfg_block && !some_secure_condition",
+        "consequent": "##1 cfg_block == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_block"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cfg_block && !some_secure_condition",
+        "consequent": "##1 cfg_block == 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This block directly updates the HMAC configuration register cfg_reg, which contains security-critical fields: hmac_en (HMAC enable), sha_en (SHA enable), key_swap, digest_swap, endian_swap, digest_size, and key_length. An improper update (e.g., due to missing lock or incorrect write gating) could disable HMAC, enable bypass modes, alter byte swapping for keys/digests, or change digest/key lengths, potentially leading to security bypass or incorrect cryptographic computation. The assumption that cfg_block prevents post-configuration changes is critical; if violated, attackers may reconfigure the HMAC engine during operation.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:375-411"
+    "hmac.sv:375-411"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 375,
-  "line_end": 411,
-  "security_implications": ""
+  "line_end": 411
 }

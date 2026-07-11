@@ -17,34 +17,34 @@
     "used": [
       "tl_i.a_valid",
       "tl_o.a_ready",
-      "tl_i.a_opcode",
-      "err_internal",
       "tl_o.d_valid",
       "tl_i.d_ready",
       "hold_d_ack",
+      "tl_i.a_opcode",
+      "err_internal",
       "tl_i.a_data",
       "tl_i.a_mask",
       "tl_i.a_address",
-      "RegAw",
-      "RegDw",
-      "RegBw"
+      "RegAw"
     ],
     "modes": [
-      "RegAw",
-      "AccessLatency"
+      "RegAw"
     ],
     "tags": [
       "handshake",
-      "integrity",
       "parameterization",
-      "error"
+      "error_handling",
+      "address_alignment",
+      "register_interface",
+      "tilelink",
+      "security"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "a_ack is asserted in the same cycle when tl_i.a_valid and tl_o.a_ready are both high, else deasserted.",
+      "claim": "a_ack is the AND of tl_i.a_valid and tl_o.a_ready, providing address-phase handshake acknowledgment.",
       "cond": "always",
       "signals": [
         "a_ack",
@@ -52,7 +52,7 @@
         "tl_o.a_ready"
       ],
       "refs": [
-        "76:76"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:76"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -81,8 +81,8 @@
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "d_ack is asserted when tl_o.d_valid and tl_i.d_ready are both high and hold_d_ack is low, else deasserted.",
-      "cond": "always",
+      "claim": "d_ack is asserted when tl_o.d_valid and tl_i.d_ready are high and hold_d_ack is low, acknowledging the data phase.",
+      "cond": "(tl_o.d_valid & tl_i.d_ready) & ~hold_d_ack",
       "signals": [
         "d_ack",
         "tl_o.d_valid",
@@ -90,7 +90,7 @@
         "hold_d_ack"
       ],
       "refs": [
-        "77:77"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:77"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -110,7 +110,7 @@
           "hold_d_ack"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
+        "antecedent": "(tl_o.d_valid & tl_i.d_ready) & ~hold_d_ack",
         "consequent": "d_ack == (tl_o.d_valid & tl_i.d_ready & ~hold_d_ack)",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -120,15 +120,15 @@
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "wr_req is asserted when a_ack is high and the A-channel opcode indicates a write (PutFullData or PutPartialData), else deasserted.",
-      "cond": "always",
+      "claim": "wr_req is asserted only when a_ack is high and the opcode is PutFullData or PutPartialData; otherwise it is zero.",
+      "cond": "a_ack & ((tl_i.a_opcode == PutFullData) | (tl_i.a_opcode == PutPartialData))",
       "signals": [
         "wr_req",
         "a_ack",
         "tl_i.a_opcode"
       ],
       "refs": [
-        "79:79"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:79"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -147,7 +147,7 @@
           "tl_i.a_opcode"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
+        "antecedent": "a_ack & ((tl_i.a_opcode == PutFullData) | (tl_i.a_opcode == PutPartialData))",
         "consequent": "wr_req == (a_ack & ((tl_i.a_opcode == PutFullData) | (tl_i.a_opcode == PutPartialData)))",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -157,15 +157,15 @@
     {
       "id": "G4",
       "type": "assignment",
-      "claim": "rd_req is asserted when a_ack is high and the A-channel opcode is Get, else deasserted.",
-      "cond": "always",
+      "claim": "rd_req is asserted only when a_ack is high and the opcode is Get; otherwise it is zero.",
+      "cond": "a_ack & (tl_i.a_opcode == Get)",
       "signals": [
         "rd_req",
         "a_ack",
         "tl_i.a_opcode"
       ],
       "refs": [
-        "80:80"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:80"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -184,7 +184,7 @@
           "tl_i.a_opcode"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
+        "antecedent": "a_ack & (tl_i.a_opcode == Get)",
         "consequent": "rd_req == (a_ack & (tl_i.a_opcode == Get))",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -194,15 +194,15 @@
     {
       "id": "G5",
       "type": "assignment",
-      "claim": "we_o is asserted exactly when wr_req is high and err_internal is low; otherwise we_o is low, ensuring write enable is suppressed on internal error.",
-      "cond": "always",
+      "claim": "we_o is high only when wr_req is high and err_internal is low, preventing register writes during an internal error.",
+      "cond": "wr_req & ~err_internal",
       "signals": [
         "we_o",
         "wr_req",
         "err_internal"
       ],
       "refs": [
-        "82:82"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:82"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -221,7 +221,7 @@
           "err_internal"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
+        "antecedent": "wr_req & ~err_internal",
         "consequent": "we_o == (wr_req & ~err_internal)",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -231,15 +231,15 @@
     {
       "id": "G6",
       "type": "assignment",
-      "claim": "re_o is asserted exactly when rd_req is high and err_internal is low; otherwise re_o is low, ensuring read enable is suppressed on internal error.",
-      "cond": "always",
+      "claim": "re_o is high only when rd_req is high and err_internal is low, preventing register reads during an internal error.",
+      "cond": "rd_req & ~err_internal",
       "signals": [
         "re_o",
         "rd_req",
         "err_internal"
       ],
       "refs": [
-        "83:83"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:83"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -258,7 +258,7 @@
           "err_internal"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
+        "antecedent": "rd_req & ~err_internal",
         "consequent": "re_o == (rd_req & ~err_internal)",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -268,14 +268,14 @@
     {
       "id": "G7",
       "type": "assignment",
-      "claim": "wdata_o always equals tl_i.a_data, providing a combinational path for write data.",
+      "claim": "wdata_o always equals tl_i.a_data, independent of handshake or error state.",
       "cond": "always",
       "signals": [
         "wdata_o",
         "tl_i.a_data"
       ],
       "refs": [
-        "84:84"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:84"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -303,14 +303,14 @@
     {
       "id": "G8",
       "type": "assignment",
-      "claim": "be_o always equals tl_i.a_mask, providing a combinational path for byte enables.",
+      "claim": "be_o always equals tl_i.a_mask.",
       "cond": "always",
       "signals": [
         "be_o",
         "tl_i.a_mask"
       ],
       "refs": [
-        "85:85"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:85"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -338,20 +338,20 @@
     {
       "id": "G9",
       "type": "generate_param",
-      "claim": "If RegAw ≤ 2, addr_o is forced to zero; otherwise addr_o is tl_i.a_address with the lower two bits forced to zero, enforcing word-alignment.",
-      "cond": "always (compile-time)",
+      "claim": "When RegAw <= 2, addr_o is forced to 0; otherwise addr_o is the word-aligned version of tl_i.a_address (lower bits zeroed).",
+      "cond": "RegAw <= 2 or RegAw > 2",
       "signals": [
         "addr_o",
         "RegAw",
         "tl_i.a_address"
       ],
       "refs": [
-        "87:91"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:87-91"
       ],
       "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "addr_o == ((RegAw <= 2) ? '0 : {tl_i.a_address[RegAw-1:2], 2'b00})",
+        "temporal_shape": "always",
+        "antecedent": "RegAw <= 2",
+        "consequent": "addr_o == 0",
         "formalizability": "direct"
       },
       "risk": "",
@@ -364,81 +364,9 @@
           "RegAw",
           "tl_i.a_address"
         ],
-        "temporal_shape": "comb",
-        "antecedent": "always (compile-time)",
-        "consequent": "addr_o == ((RegAw <= 2) ? '0 : {tl_i.a_address[RegAw-1:2], 2'b00})",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G10",
-      "type": "mux_case",
-      "claim": "When a_ack is high but the A-channel opcode is neither PutFullData, PutPartialData, nor Get, wr_req and rd_req both remain 0, preventing any request for unsupported opcodes.",
-      "cond": "a_ack && (opcode not in {PutFullData, PutPartialData, Get})",
-      "signals": [
-        "wr_req",
-        "rd_req",
-        "a_ack",
-        "tl_i.a_opcode"
-      ],
-      "refs": [
-        "79:80"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "a_ack && (tl_i.a_opcode != PutFullData) && (tl_i.a_opcode != PutPartialData) && (tl_i.a_opcode != Get)",
-        "consequent": "wr_req == 0 && rd_req == 0",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "unsupported",
-        "signals": [
-          "wr_req",
-          "rd_req",
-          "a_ack",
-          "tl_i.a_opcode"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "a_ack && (tl_i.a_opcode != PutFullData) && (tl_i.a_opcode != PutPartialData) && (tl_i.a_opcode != Get)",
-        "consequent": "wr_req == 0 && rd_req == 0",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G11",
-      "type": "error_detection",
-      "claim": "At initialization, the module asserts that AccessLatency is 0 or 1; any other value triggers a fatal error.",
-      "cond": "initialization",
-      "signals": [
-        "AccessLatency"
-      ],
-      "refs": [
-        "56:56"
-      ],
-      "formal": {
         "temporal_shape": "always",
-        "antecedent": "",
-        "consequent": "AccessLatency inside {0, 1}",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "AccessLatency"
-        ],
-        "temporal_shape": "always",
-        "antecedent": "initialization",
-        "consequent": "AccessLatency inside {0, 1}",
+        "antecedent": "RegAw <= 2",
+        "consequent": "addr_o == 0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -448,74 +376,73 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "The TL-UL host must deassert tl_i.a_valid in the cycle after a_ack (or not assert a new request until the transaction completes) to prevent duplicate a_ack and repeated rd_req/wr_req assertions.",
-      "cond": "when a_ack occurs",
-      "risk": "Duplicate register read/write strobes, potentially causing unexpected data over-write or invalid read values.",
+      "type": "producer_contract",
+      "claim": "err_internal must be driven accurately by other parts of the module to reflect any internal error (integrity, instruction, etc.) before it can gate we_o and re_o.",
+      "cond": "during any valid access attempt",
+      "risk": "If err_internal is falsely low, an erroneous write/read could proceed, compromising data integrity or allowing unauthorized register access.",
       "signals": [
-        "tl_i.a_valid",
-        "a_ack"
+        "err_internal",
+        "we_o",
+        "re_o"
       ],
       "refs": [
-        "76:76",
-        "79:80"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:65,82-83"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "a_ack",
-        "consequent": "!tl_i.a_valid",
-        "formalizability": "partial"
+        "temporal_shape": "",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
         "reset": "",
         "signals": [
-          "tl_i.a_valid",
-          "a_ack"
+          "err_internal",
+          "we_o",
+          "re_o"
         ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "a_ack",
-        "consequent": "!tl_i.a_valid",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "temporal_shape": "always",
+        "antecedent": "during any valid access attempt",
+        "consequent": "err_internal must be driven accurately by other parts of the module to reflect any internal error (integrity, instruction, etc.) before it can gate we_o and re_o",
+        "formalizability": "none",
+        "confidence": 0.85,
         "source": "llm"
       }
     },
     {
       "id": "A2",
-      "type": "handshake",
-      "claim": "The TL-UL host must assert tl_i.d_ready when it is ready to accept the response; otherwise d_ack remains low and the response handshake stalls.",
-      "cond": "when tl_o.d_valid is high (response pending)",
-      "risk": "Stall leading to deadlock, preventing completion of the read/write transaction.",
+      "type": "producer_contract",
+      "claim": "hold_d_ack must be properly controlled by other logic so that it is deasserted when a new data-phase acknowledgment is required.",
+      "cond": "whenever a valid response needs to be passed to tl_o",
+      "risk": "If hold_d_ack is stuck high, d_ack will be suppressed, causing TL-UL handshake deadlock and preventing response delivery.",
       "signals": [
-        "tl_i.d_ready",
-        "d_ack",
-        "tl_o.d_valid"
+        "hold_d_ack",
+        "d_ack"
       ],
       "refs": [
-        "77:77"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:62,77"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "tl_o.d_valid",
-        "consequent": "tl_i.d_ready",
-        "formalizability": "partial"
+        "temporal_shape": "",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
         "reset": "",
         "signals": [
-          "tl_i.d_ready",
-          "d_ack",
-          "tl_o.d_valid"
+          "hold_d_ack",
+          "d_ack"
         ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "tl_o.d_valid",
-        "consequent": "tl_i.d_ready",
-        "formalizability": "partial",
-        "confidence": 1.0,
+        "temporal_shape": "always",
+        "antecedent": "whenever a valid response needs to be passed to tl_o",
+        "consequent": "hold_d_ack must be properly controlled by other logic so that it is deasserted when a new data-phase acknowledgment is required",
+        "formalizability": "none",
+        "confidence": 0.85,
         "source": "llm"
       }
     }
@@ -523,28 +450,23 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The combinational gating of we_o and re_o with err_internal assumes err_internal is stable and valid at the time a_ack is asserted. If err_internal is asserted late in the same cycle after a_ack, a transient we_o or re_o pulse may occur, potentially latching a write or read to an erroneous target.",
-      "cond": "wr_req/rd_req high, err_internal changes after a_ack",
-      "risk": "A faulty write/read could be performed despite an internal error, leading to data corruption or security violation.",
+      "claim": "err_internal is used to gate we_o and re_o but no logic within this chunk generates it. Must verify that integrity errors (CmdIntgCheck, etc.) or instruction errors are correctly combined into err_internal before it can safely block register access.",
+      "cond": "when any error condition exists (intg_error, instr_error)",
+      "risk": "If err_internal is not asserted during a real error, we_o/re_o could be incorrectly active, allowing corrupted or unauthorized register transactions.",
       "signals": [
-        "we_o",
-        "re_o",
         "err_internal",
-        "a_ack",
-        "wr_req",
-        "rd_req"
+        "we_o",
+        "re_o"
       ],
       "refs": [
-        "82:83",
-        "76:77",
-        "79:80"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:65,82-83"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "wr_req || rd_req",
-        "consequent": "err_internal remains asserted",
+        "antecedent": "intg_error_o || instr_error",
+        "consequent": "we_o == 0 && re_o == 0",
         "formalizability": "partial"
       },
       "formal_sketch": {
@@ -552,16 +474,13 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "we_o",
-          "re_o",
           "err_internal",
-          "a_ack",
-          "wr_req",
-          "rd_req"
+          "we_o",
+          "re_o"
         ],
         "temporal_shape": "comb",
-        "antecedent": "wr_req || rd_req",
-        "consequent": "err_internal remains asserted",
+        "antecedent": "intg_error_o || instr_error",
+        "consequent": "we_o == 0 && re_o == 0",
         "formalizability": "partial",
         "confidence": 0.95,
         "source": "llm"
@@ -569,100 +488,23 @@
     },
     {
       "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The addr_o generation silently forces word-alignment for RegAw > 2 by setting the lower two bits to zero. It is ambiguous whether misaligned address requests should be rejected with an error instead of being silently aligned, potentially masking a programming error.",
-      "cond": "RegAw > 2, tl_i.a_address low bits non-zero",
-      "risk": "A redundant write/read to an unintended word-aligned address could occur without the requestor being aware, leading to data inconsistency.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The adapter forces the register address to word alignment (lower 2 bits zero) when RegAw > 2, but the addr_align_err signal (declared on line 67) is not assigned in this region. If alignment errors are not flagged before the request reaches the register block, an unaligned TL access could silently access an unintended word, bypassing address-range or access-policy checks.",
+      "cond": "when tl_i.a_address[1:0] != 0 and a_ack is high",
+      "risk": "Potential security bypass: an attacker could craft an unaligned address to access registers out of the intended scope, or cause a double-word misalignment that corrupts state.",
       "signals": [
         "addr_o",
-        "tl_i.a_address",
-        "RegAw"
+        "addr_align_err",
+        "tl_i.a_address"
       ],
       "refs": [
-        "87:91"
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:67,87-91"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "addr_o",
-          "tl_i.a_address",
-          "RegAw"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "RegAw > 2, tl_i.a_address low bits non-zero",
-        "consequent": "The addr_o generation silently forces word-alignment for RegAw > 2 by setting the lower two bits to zero. It is ambiguous whether misaligned address requests should be rejected with an error instead of being silently aligned, potentially ma",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "Parameters CmdIntgCheck, EnableRspIntgGen, and EnableDataIntgGen are declared but not used in this chunk. Their settings control command/response/data integrity checks and generation, which are critical for security and error handling, but the actual enforcement happens outside this region.",
-      "cond": "unknown (depends on rest of the module)",
-      "risk": "Misconfiguration of these parameters could go undetected in this chunk, potentially leaving integrity features disabled while other logic expects them, leading to silent data corruption or weak security posture.",
-      "signals": [
-        "CmdIntgCheck",
-        "EnableRspIntgGen",
-        "EnableDataIntgGen"
-      ],
-      "refs": [
-        "23:25"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "CmdIntgCheck",
-          "EnableRspIntgGen",
-          "EnableDataIntgGen"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "unknown (depends on rest of the module)",
-        "consequent": "Parameters CmdIntgCheck, EnableRspIntgGen, and EnableDataIntgGen are declared but not used in this chunk. Their settings control command/response/data integrity checks and generation, which are critical for security and error handling, but",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U4",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "d_ack is computed as (tl_o.d_valid & tl_i.d_ready & ~hold_d_ack). The timing relationship between hold_d_ack and tl_o.d_valid/tl_i.d_ready is not constrained in this chunk. If hold_d_ack is deasserted too early or too late, there could be a window where d_ack is incorrectly asserted or missed, breaking the response handshake.",
-      "cond": "tl_o.d_valid and tl_i.d_ready are high, hold_d_ack toggling",
-      "risk": "Response handshake failure, causing a read to never complete or a spurious handshake that corrupts the TL-UL state.",
-      "signals": [
-        "d_ack",
-        "hold_d_ack",
-        "tl_o.d_valid",
-        "tl_i.d_ready"
-      ],
-      "refs": [
-        "77:77"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "tl_o.d_valid && tl_i.d_ready",
-        "consequent": "hold_d_ack is stable",
+        "antecedent": "a_ack && (tl_i.a_address[1:0] != 2'b00)",
+        "consequent": "addr_align_err && ~we_o && ~re_o",
         "formalizability": "partial"
       },
       "formal_sketch": {
@@ -670,25 +512,60 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "d_ack",
+          "addr_o",
+          "addr_align_err",
+          "tl_i.a_address"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "a_ack && (tl_i.a_address[1:0] != 2'b00)",
+        "consequent": "addr_align_err && ~we_o && ~re_o",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "hold_d_ack is used in the d_ack equation but not assigned in this region; its generation logic (likely from outstanding transaction tracking) must ensure that no response is lost or doubled.",
+      "cond": "when a data-phase response is expected",
+      "risk": "Incorrect hold_d_ack could lead to missing acknowledgments, protocol violation, or transaction loss, impacting overall TL-UL communication integrity.",
+      "signals": [
+        "hold_d_ack",
+        "d_ack"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:62,77"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tl_o.d_valid && tl_i.d_ready",
+        "consequent": "d_ack == ~hold_d_ack",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
           "hold_d_ack",
-          "tl_o.d_valid",
-          "tl_i.d_ready"
+          "d_ack"
         ],
         "temporal_shape": "comb",
         "antecedent": "tl_o.d_valid && tl_i.d_ready",
-        "consequent": "hold_d_ack is stable",
+        "consequent": "d_ack == ~hold_d_ack",
         "formalizability": "partial",
         "confidence": 0.95,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The adapter gates register read/write strobes (re_o, we_o) with err_internal, which is intended to block access on integrity or instruction errors. If err_internal is not correctly asserted (U1), unauthorized register access may occur. Additionally, addr_o is forced to word alignment with no generation of addr_align_err (U2). This could allow an out-of-alignment TileLink request to silently target a different word, bypassing any upstream address-range or access-control checks, potentially leading to data corruption or privilege escalation. The integrity protection parameters (CmdIntgCheck, EnableRspIntgGen, EnableDataIntgGen) indicate that the adapter's error-handling path is security-critical, but the logic driving err_internal is absent from this region.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:5-91"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 5,
-  "line_end": 91,
-  "security_implications": ""
+  "line_end": 91
 }

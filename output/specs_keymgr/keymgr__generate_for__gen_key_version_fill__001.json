@@ -4,75 +4,141 @@
     "module": "keymgr",
     "block_kind": "generate",
     "driven": [
-      "max_key_versions"
+      "max_key_versions[i] for i in range [KeyMgrStages, 2**StageWidth-1]"
     ],
     "used": [
       "KeyMgrStages",
-      "StageWidth"
+      "StageWidth",
+      "max_key_versions (array)"
     ],
     "modes": [
-      "KeyMgrStages",
-      "StageWidth"
+      "parameters KeyMgrStages, StageWidth"
     ],
     "tags": [
       "key",
+      "version",
       "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "generate_param",
-      "claim": "max_key_versions[i] is assigned zero for all genvar i from KeyMgrStages to 2**StageWidth-1.",
-      "cond": "always (continuous assignment)",
+      "type": "assign",
+      "claim": "For all integer i such that KeyMgrStages <= i < 2**StageWidth, max_key_versions[i] is continuously assigned to all zeros ('0).",
+      "cond": "generate loop executes (compile-time range non-empty)",
       "signals": [
-        "max_key_versions",
+        "max_key_versions[i]",
         "KeyMgrStages",
         "StageWidth"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:496-498"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(i >= KeyMgrStages) && (i < (1 << StageWidth)) -> (max_key_versions[i] == '0)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "max_key_versions[i]",
+          "KeyMgrStages",
+          "StageWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "generate loop executes (compile-time range non-empty)",
+        "consequent": "(i >= KeyMgrStages) && (i < (1 << StageWidth)) -> (max_key_versions[i] == '0)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "KeyMgrStages and StageWidth are defined such that indices i in the range [KeyMgrStages, 2**StageWidth-1] are within the declared bounds of the max_key_versions array.",
-      "cond": "during elaboration",
-      "risk": "If the array size does not match 2**StageWidth, this generate may cause an out-of-range index error or leave some upper indices undriven, potentially exposing stale data.",
+      "type": "mode_config",
+      "claim": "Parameter KeyMgrStages must be less than 2**StageWidth to ensure the generate loop body is instantiated and drives max_key_versions entries for all indices from KeyMgrStages up to (2**StageWidth - 1).",
+      "cond": "always (design-time constraint)",
+      "risk": "If KeyMgrStages >= 2**StageWidth, the loop body is never instantiated, leaving entries of max_key_versions at indices >= KeyMgrStages undriven, which may cause simulation X-propagation or synthesis warnings/latches.",
       "signals": [
-        "max_key_versions",
         "KeyMgrStages",
         "StageWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:496-498"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:496"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "KeyMgrStages < (1 << StageWidth)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "KeyMgrStages",
+          "StageWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (design-time constraint)",
+        "consequent": "KeyMgrStages < (1 << StageWidth)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The zeroing of max_key_versions for indices >= KeyMgrStages lacks an explicit security specification; it may be intended to clear unused version slots, but the requirement is not documented in the chunk.",
-      "cond": "unknown (designer intent)",
-      "risk": "If omitted or overridden by other assignments, stale version values could remain and be used in version comparisons, potentially enabling key-version rollback attacks.",
+      "claim": "Filling unused max_key_versions entries with zero may inadvertently grant a valid version number (0) if an out-of-bounds stage index (i >= KeyMgrStages) is ever used elsewhere to read max_key_versions, potentially enabling a version rollback or bypass of version enforcement.",
+      "cond": "If another module or FSM indexes max_key_versions with an index i >= KeyMgrStages (due to a bug or glitch).",
+      "risk": "An attacker controlling the stage index could force max_key_versions to return 0, which might be treated as a legitimate initial or unlocked version, weakening version-based access controls.",
       "signals": [
-        "max_key_versions"
+        "max_key_versions",
+        "KeyMgrStages"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:496-498"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:497"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "read_index >= KeyMgrStages",
+        "consequent": "max_key_versions[read_index] == 0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "max_key_versions",
+          "KeyMgrStages"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "read_index >= KeyMgrStages",
+        "consequent": "max_key_versions[read_index] == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The max_key_versions array stores per-stage maximum version limits. Driving unused entries to zero creates a potential covert path: if an out-of-bounds stage index (i >= KeyMgrStages) reaches a read port, it returns version 0. Depending on usage, version 0 might be considered a valid initial or unlocked state, allowing an adversary to force a downgrade or bypass version enforcement. Formal verification of all index paths against the KeyMgrStages bound is recommended.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:496-498"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 496,
-  "line_end": 498,
-  "security_implications": ""
+  "line_end": 498
 }

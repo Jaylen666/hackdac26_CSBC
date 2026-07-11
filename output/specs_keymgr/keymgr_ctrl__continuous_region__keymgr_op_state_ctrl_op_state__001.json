@@ -4,9 +4,6 @@
     "module": "keymgr_ctrl",
     "block_kind": "mixed",
     "driven": [
-      "op_state_cmd_err",
-      "op_update_sel",
-      "vld_state_change_d",
       "op_ack",
       "op_busy",
       "op_update",
@@ -14,9 +11,12 @@
       "id_en_o",
       "gen_en_o",
       "op_fsm_err",
+      "op_state_cmd_err",
+      "op_update_sel",
+      "vld_state_change_d",
+      "data_fsm_err",
       "data_hw_en_o",
-      "data_sw_en_o",
-      "data_fsm_err"
+      "data_sw_en_o"
     ],
     "used": [
       "adv_req",
@@ -25,195 +25,366 @@
       "gen_req",
       "cdi_cnt",
       "kmac_done_i",
+      "hw_sel_o",
+      "op_done_o",
+      "op_start_i",
+      "advance_sel",
+      "disable_sel",
+      "gen_op",
       "invalid",
       "op_fault_err",
       "disabled",
       "op_err",
       "state_d",
       "state_q",
-      "advance_sel",
-      "disable_sel",
-      "gen_op",
-      "op_ack",
-      "op_update",
-      "hw_sel_o",
-      "op_done_o",
-      "op_start_i"
-    ],
-    "modes": [
       "StCtrlRootKey",
       "StCtrlCreatorRootKey",
       "StCtrlOwnerIntKey",
       "StCtrlOwnerKey",
       "KeyUpdateKmac",
       "KeyUpdateWipe",
-      "KeyUpdateIdle",
-      "invalid",
-      "disabled",
-      "op_fault_err",
-      "op_err"
+      "KeyUpdateIdle"
+    ],
+    "modes": [
+      "StCtrlRootKey",
+      "StCtrlCreatorRootKey",
+      "StCtrlOwnerIntKey",
+      "StCtrlOwnerKey"
     ],
     "tags": [
       "secret",
       "key",
+      "wipe",
       "error",
       "fault",
-      "integrity",
-      "lifecycle"
+      "cross_check",
+      "security_precondition"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "error_detection",
-      "claim": "op_state_cmd_err is asserted when adv_en_o is high but neither advance_sel nor disable_sel is set, or when gen_en_o is high but gen_op is low.",
-      "cond": "always combinatorial",
+      "type": "assignment",
+      "claim": "op_state_cmd_err is asserted when adv_en_o is high and neither advance_sel nor disable_sel is high, OR when gen_en_o is high and gen_op is not high.",
+      "cond": "always",
       "signals": [
-        "op_state_cmd_err",
         "adv_en_o",
         "advance_sel",
         "disable_sel",
         "gen_en_o",
-        "gen_op"
+        "gen_op",
+        "op_state_cmd_err"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:778-779"
-      ]
+        "keymgr_ctrl.sv:778-779"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_state_cmd_err == ( (adv_en_o & !(advance_sel | disable_sel)) | (gen_en_o & !gen_op) )",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_en_o",
+          "advance_sel",
+          "disable_sel",
+          "gen_en_o",
+          "gen_op",
+          "op_state_cmd_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_state_cmd_err == ( (adv_en_o & !(advance_sel | disable_sel)) | (gen_en_o & !gen_op) )",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "mux_case",
-      "claim": "op_update_sel is combinatorially driven as a priority mux: if (op_ack | op_update) and invalid → KeyUpdateKmac; else if (op_ack | op_update) and op_fault_err → KeyUpdateWipe; else if (op_ack | op_update) and disabled → KeyUpdateKmac; else if (op_ack | op_update) and op_err → KeyUpdateIdle; else if (op_ack | op_update) → KeyUpdateKmac; else → KeyUpdateIdle.",
-      "cond": "always combinatorial",
+      "type": "assignment",
+      "claim": "op_update_sel is assigned with a priority chain: if (op_ack | op_update) and invalid, then KeyUpdateKmac; else if (op_ack | op_update) and op_fault_err, then KeyUpdateWipe; else if (op_ack | op_update) and disabled, then KeyUpdateKmac; else if (op_ack | op_update) and op_err, then KeyUpdateIdle; else if (op_ack | op_update), then KeyUpdateKmac; otherwise KeyUpdateIdle.",
+      "cond": "always",
       "signals": [
-        "op_update_sel",
         "op_ack",
         "op_update",
         "invalid",
         "op_fault_err",
         "disabled",
-        "op_err"
+        "op_err",
+        "op_update_sel"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:784-788"
-      ]
+        "keymgr_ctrl.sv:784-788"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_update_sel == ( ( (op_ack | op_update) && invalid ) ? KeyUpdateKmac : ( ( (op_ack | op_update) && op_fault_err ) ? KeyUpdateWipe : ( ( (op_ack | op_update) && disabled ) ? KeyUpdateKmac : ( ( (op_ack | op_update) && op_err ) ? KeyUpdateIdle : ( (op_ack | op_update) ? KeyUpdateKmac : KeyUpdateIdle ))))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_ack",
+          "op_update",
+          "invalid",
+          "op_fault_err",
+          "disabled",
+          "op_err",
+          "op_update_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_update_sel == ( ( (op_ack | op_update) && invalid ) ? KeyUpdateKmac : ( ( (op_ack | op_update) && op_fault_err ) ? KeyUpdateWipe : ( ( (op_ack | op_update) && disabled ) ? KeyUpdateKmac : ( ( (op_ack | op_update) && op_err ) ? KeyUpdateIdle : ( (op_ack | op_update) ? KeyUpdateKmac : KeyUpdateIdle ))))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "vld_state_change_d is asserted when state_d differs from state_q and state_d is inside {StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey}.",
-      "cond": "always combinatorial",
+      "claim": "vld_state_change_d is asserted when state_d differs from state_q and state_d is one of the four key states (StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey).",
+      "cond": "always",
       "signals": [
-        "vld_state_change_d",
         "state_d",
-        "state_q"
+        "state_q",
+        "vld_state_change_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:815-818"
-      ]
+        "keymgr_ctrl.sv:815-818"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "vld_state_change_d == ( (state_d != state_q) && (state_d inside {StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey}) )",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_d",
+          "state_q",
+          "vld_state_change_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "vld_state_change_d == ( (state_d != state_q) && (state_d inside {StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey}) )",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "advance_sel, disable_sel, and gen_op must be valid and correctly reflect the requested operation when adv_en_o or gen_en_o are high.",
-      "cond": "during active operational state cross-check",
-      "risk": "spurious assertion of op_state_cmd_err or failure to detect an illegal command, potentially allowing unauthorized key state transitions.",
+      "claim": "advance_sel and disable_sel must never be both high when adv_en_o is true.",
+      "cond": "when adv_en_o is true",
+      "risk": "If both are high, the cross‑check op_state_cmd_err may fail to detect a command mismatch, potentially allowing an operation with conflicting selects to proceed, leading to incorrect key‑state transitions.",
       "signals": [
-        "advance_sel",
-        "disable_sel",
-        "gen_op",
         "adv_en_o",
-        "gen_en_o"
+        "advance_sel",
+        "disable_sel"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:778-779"
-      ]
+        "keymgr_ctrl.sv:778-779"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "adv_en_o",
+        "consequent": "!(advance_sel && disable_sel)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_en_o",
+          "advance_sel",
+          "disable_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "adv_en_o",
+        "consequent": "!(advance_sel && disable_sel)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "producer_contract",
-      "claim": "invalid, disabled, op_fault_err, and op_err statuses accurately reflect the current operational and fault state of the key manager.",
-      "cond": "when op_update_sel is evaluated during ack or update",
-      "risk": "incorrect key update action (Kmac vs Wipe vs Idle) leading to key corruption, secret exposure, or failed wipe on fault.",
+      "type": "handshake",
+      "claim": "During cycles where (op_ack | op_update) is true, the fault/status signals op_fault_err, disabled, invalid, and op_err must remain stable (unchanged from the previous cycle) to avoid glitches in op_update_sel.",
+      "cond": "when (op_ack | op_update) is true",
+      "risk": "If any of these signals change during the update window, op_update_sel could momentarily select an incorrect key‑update operation (e.g., a spurious wipe or idle), leading to secret leakage or functional failure.",
       "signals": [
-        "invalid",
-        "disabled",
+        "op_ack",
+        "op_update",
         "op_fault_err",
+        "disabled",
+        "invalid",
         "op_err"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:784-788"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "value_domain",
-      "claim": "state_d and state_q encodings must match the enumeration set used in the inside check.",
-      "cond": "continuous evaluation of vld_state_change_d",
-      "risk": "vld_state_change_d may fail to assert for intended transitions or assert erratically, breaking state change tracking.",
-      "signals": [
-        "state_d",
-        "state_q"
+        "keymgr_ctrl.sv:784-788"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:815-818"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "(op_ack | op_update)",
+        "consequent": "$stable(op_fault_err) && $stable(disabled) && $stable(invalid) && $stable(op_err)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_ack",
+          "op_update",
+          "op_fault_err",
+          "disabled",
+          "invalid",
+          "op_err"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "(op_ack | op_update)",
+        "consequent": "$stable(op_fault_err) && $stable(disabled) && $stable(invalid) && $stable(op_err)",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The cross-check for op_state_cmd_err only considers advance and generate operations; an id_en_o without a corresponding id_req condition is not checked, possibly allowing illegal ID operations to proceed undetected.",
-      "cond": "when id_en_o is asserted",
-      "risk": "Unchecked ID operations could lead to unauthorized identity key updates or state corruption.",
+      "claim": "In op_update_sel priority, invalid takes precedence over op_fault_err. If both invalid and op_fault_err are true, KeyUpdateKmac is selected instead of KeyUpdateWipe. Is this intentional override of fault‑based wipe when the state is invalid, or should fault always force KeyUpdateWipe?",
+      "cond": "(op_ack | op_update) && invalid && op_fault_err",
+      "risk": "If a fault should always cause a wipe, the current priority could allow a fault to go un‑wiped while the state is invalid, potentially leaving secret material accessible.",
       "signals": [
-        "id_en_o",
-        "id_req"
+        "invalid",
+        "op_fault_err",
+        "op_update_sel"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:778-779"
-      ]
+        "keymgr_ctrl.sv:784-786"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(op_ack | op_update) && invalid && op_fault_err",
+        "consequent": "op_update_sel == KeyUpdateWipe",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid",
+          "op_fault_err",
+          "op_update_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(op_ack | op_update) && invalid && op_fault_err",
+        "consequent": "op_update_sel == KeyUpdateWipe",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "In op_update_sel priority, invalid state takes precedence over op_fault_err, so a fault occurring while in invalid state selects KeyUpdateKmac instead of KeyUpdateWipe; this may bypass a required wipe under fault.",
-      "cond": "when invalid and op_fault_err are both true during ack or update",
-      "risk": "Could leave key material un-wiped after a fault, potential secret leakage.",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The op_state_cmd_err cross‑check only monitors adv_en_o and gen_en_o. The identity‑enable signal id_en_o is not checked against a corresponding identity operation request. Is this omission intentional, or should id_en_o also be validated?",
+      "cond": "when id_en_o is asserted",
+      "risk": "If id_en_o can be asserted without a legitimate identity request, the inconsistency would not be flagged, possibly allowing an erroneous or malicious identity operation.",
       "signals": [
-        "invalid",
-        "op_fault_err"
+        "id_en_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:784"
-      ]
+        "keymgr_ctrl.sv:778-779"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "id_en_o",
+        "consequent": "op_state_cmd_err",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "id_en_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "id_en_o",
+        "consequent": "op_state_cmd_err",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "vld_state_change_d only asserts on transitions to four specific root-key states; transitions to other states (e.g., StCtrlDisabled, StCtrlInit) are excluded, which may omit necessary tracking for security counters or events.",
-      "cond": "on any other state transition",
-      "risk": "Missed valid state change detection could affect audit or fault logging, weakening traceability.",
+      "claim": "vld_state_change_d is asserted only for transitions into four specific key states (StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey). Its purpose and downstream use are not clear from this chunk. If it is meant to qualify all secure state changes, missing other valid states could create a security bypass.",
+      "cond": "unknown",
+      "risk": "Security‑critical actions gated by vld_state_change_d might be skipped for legitimate transitions, potentially leading to unvalidated key state updates.",
       "signals": [
-        "state_d",
-        "state_q"
+        "vld_state_change_d",
+        "state_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:815-818"
-      ]
+        "keymgr_ctrl.sv:815-818"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "vld_state_change_d",
+          "state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "vld_state_change_d is asserted only for transitions into four specific key states (StCtrlRootKey, StCtrlCreatorRootKey, StCtrlOwnerIntKey, StCtrlOwnerKey). Its purpose and downstream use are not clear from this chunk. If it is meant to qual",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk directly controls key‑update selection based on fault and error conditions. When op_fault_err is detected during an active operation, op_update_sel is set to KeyUpdateWipe to clear secret keys. The op_state_cmd_err cross‑check flags inconsistent operation requests that could indicate an attack or misconfiguration. The priority ordering in op_update_sel (invalid over fault) is a potential security weakness: if a fault occurs while the state is invalid, the wipe may be skipped, possibly leaving secret material exposed.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:756-819"
+    "keymgr_ctrl.sv:756-819"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 756,
-  "line_end": 819,
-  "security_implications": ""
+  "line_end": 819
 }

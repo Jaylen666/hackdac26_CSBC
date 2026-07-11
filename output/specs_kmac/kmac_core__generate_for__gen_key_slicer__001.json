@@ -2,121 +2,397 @@
   "chunk_id": "kmac_core__generate_for__gen_key_slicer__001",
   "header": {
     "module": "kmac_core",
-    "block_kind": "generate",
+    "block_kind": "instance",
     "driven": [
       "key_sliced"
     ],
     "used": [
       "key_index",
-      "encoded_key_block"
+      "encoded_key_block",
+      "Share",
+      "MaxEncodedKeyW",
+      "KeccakMsgAddrW",
+      "MsgWidth"
     ],
     "modes": [],
     "tags": [
+      "secret",
       "key",
-      "mask",
-      "parameterization"
+      "shares",
+      "slicer"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "generate_param",
-      "claim": "For each share i, a prim_slicer instance is generated with InW=MaxEncodedKeyW+16, IndexW=KeccakMsgAddrW, OutW=MsgWidth, connecting sel_i=key_index, data_i=encoded_key_block[i], and data_o=key_sliced[i].",
-      "cond": "always when generate block is active",
+      "claim": "For each share i (0..Share-1), a prim_slicer instance is generated with parameters InW=MaxEncodedKeyW+16, IndexW=KeccakMsgAddrW, OutW=MsgWidth, and ports connected such that key_sliced[i] is driven by the slicer output based on encoded_key_block[i] and key_index.",
+      "cond": "always (generation condition)",
       "signals": [
-        "key_index",
-        "encoded_key_block",
         "key_sliced",
-        "i"
+        "encoded_key_block",
+        "key_index",
+        "Share"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:392-402"
-      ]
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "key_sliced[i] == u_key_slicer.data_o (structural)",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "ports",
+        "signals": [
+          "key_sliced",
+          "encoded_key_block",
+          "key_index",
+          "Share"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (generation condition)",
+        "consequent": "key_sliced[i] == u_key_slicer.data_o (structural)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "key_sliced[i] output width is MsgWidth, as parameterized by .OutW(MsgWidth).",
+      "cond": "always",
+      "signals": [
+        "key_sliced",
+        "MsgWidth"
+      ],
+      "refs": [
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$bits(key_sliced[i]) == MsgWidth",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_sliced",
+          "MsgWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$bits(key_sliced[i]) == MsgWidth",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "encoded_key_block[i] must be exactly MaxEncodedKeyW+16 bits wide.",
-      "cond": "always",
-      "risk": "Width mismatch may cause synthesis error or undefined slicing behavior.",
+      "claim": "key_index is always a valid slice index that does not cause an out-of-bounds access within the InW=MaxEncodedKeyW+16 bits of encoded_key_block[i].",
+      "cond": "when key_sliced is used",
+      "risk": "out-of-bounds index may produce corrupted or undefined slice, potentially exposing secret key material across shares or causing misalignment.",
       "signals": [
-        "encoded_key_block",
-        "MaxEncodedKeyW"
+        "key_index",
+        "MaxEncodedKeyW",
+        "MsgWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:394"
-      ]
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "key_index * MsgWidth + MsgWidth <= MaxEncodedKeyW + 16",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index",
+          "MaxEncodedKeyW",
+          "MsgWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when key_sliced is used",
+        "consequent": "key_index * MsgWidth + MsgWidth <= MaxEncodedKeyW + 16",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "producer_contract",
-      "claim": "key_index must select a MsgWidth-bit slice that lies entirely within the InW input (i.e., key_index must not cause out-of-range access).",
-      "cond": "whenever key_index is applied",
-      "risk": "Out-of-range selection may output X, zero, or wrap-around data, potentially leaking or corrupting key material.",
+      "type": "value_domain",
+      "claim": "KeccakMsgAddrW is sufficiently wide to represent all possible slice indices: ceil(log2(ceil((MaxEncodedKeyW+16)/MsgWidth))) <= KeccakMsgAddrW.",
+      "cond": "always",
+      "risk": "if KeccakMsgAddrW is too narrow, key_index may not address all slices, limiting the usable key slice space.",
       "signals": [
-        "key_index",
         "KeccakMsgAddrW",
         "MaxEncodedKeyW",
         "MsgWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:394-397"
-      ]
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "2**KeccakMsgAddrW >= $ceil(($bits(encoded_key_block[0])) / MsgWidth)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "KeccakMsgAddrW",
+          "MaxEncodedKeyW",
+          "MsgWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "2**KeccakMsgAddrW >= $ceil(($bits(encoded_key_block[0])) / MsgWidth)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
       "type": "value_domain",
-      "claim": "Consumer of key_sliced[i] expects exactly MsgWidth bits per slice.",
-      "cond": "always",
-      "risk": "Width mismatch may cause downstream synthesis errors or data corruption.",
+      "claim": "Share > 0, otherwise no key slicers are generated and key_sliced would be unconnected.",
+      "cond": "elaboration",
+      "risk": "X propagation on key_sliced may corrupt downstream key processing.",
       "signals": [
-        "key_sliced",
-        "MsgWidth"
+        "Share"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:396"
-      ]
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "Share > 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "Share"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "elaboration",
+        "consequent": "Share > 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "The actual width of each encoded_key_block[i] signal exactly matches the InW parameter (MaxEncodedKeyW+16); no implicit truncation occurs.",
+      "cond": "always",
+      "risk": "width mismatch may cause silent truncation or feed invalid bits to the slicer, breaking key alignment.",
+      "signals": [
+        "encoded_key_block",
+        "MaxEncodedKeyW"
+      ],
+      "refs": [
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$bits(encoded_key_block[i]) == MaxEncodedKeyW + 16",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "encoded_key_block",
+          "MaxEncodedKeyW"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$bits(encoded_key_block[i]) == MaxEncodedKeyW + 16",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "key_index (KeccakMsgAddrW bits wide) may take values that select a slice beyond the MaxEncodedKeyW+16 input, and it is unclear if the prim_slicer or surrounding logic handles this safely.",
-      "cond": "when key_index selects a slice that exceeds InW bounds",
-      "risk": "Could produce undefined output, exposing or corrupting secret key slices.",
+      "claim": "The internal behavior of prim_slicer (e.g., out-of-bounds handling, glitch behavior, exact slice range) is unknown. Need to verify it correctly maps key_index to a contiguous slice without introducing X or wrap-around.",
+      "cond": "always",
+      "risk": "incorrect slicing could expose or corrupt secret key material across shares, breaking side-channel resistance.",
       "signals": [
-        "key_index",
-        "MaxEncodedKeyW",
-        "MsgWidth"
+        "prim_slicer"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:394-397"
-      ]
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prim_slicer"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The internal behavior of prim_slicer (e.g., out-of-bounds handling, glitch behavior, exact slice range) is unknown. Need to verify it correctly maps key_index to a contiguous slice without introducing X or wrap-around",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The input width MaxEncodedKeyW+16 adds an extra 16 bits; the purpose is not documented, possibly related to padding or additional metadata.",
+      "priority": "medium",
+      "claim": "The +16 added to MaxEncodedKeyW (InW = MaxEncodedKeyW+16) is unexplained. What do these 16 bits represent? Padding, header, metadata? They could affect slice boundaries and key interpretation.",
       "cond": "unknown",
-      "risk": "Misunderstanding the extra bits could lead to incorrect slicing assumptions or security gaps.",
+      "risk": "misinterpreting the extra bits may cause functional errors or leakage of non-key data.",
       "signals": [
-        "MaxEncodedKeyW"
+        "MaxEncodedKeyW",
+        "InW"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:394"
-      ]
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "MaxEncodedKeyW",
+          "InW"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "The +16 added to MaxEncodedKeyW (InW = MaxEncodedKeyW+16) is unexplained. What do these 16 bits represent? Padding, header, metadata? They could affect slice boundaries and key interpretation",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The exact mapping from key_index to bit positions within encoded_key_block[i] is unknown. Does it select non-overlapping MsgWidth-bit chunks starting at index*MsgWidth? Or is it byte-aligned, or another scheme? Necessary to ensure no unintended overlap or gap.",
+      "cond": "always",
+      "risk": "if the mapping differs from expectations, key slices may overlap or skip bits, potentially revealing key material across slices.",
+      "signals": [
+        "key_index",
+        "encoded_key_block",
+        "key_sliced"
+      ],
+      "refs": [
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index",
+          "encoded_key_block",
+          "key_sliced"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The exact mapping from key_index to bit positions within encoded_key_block[i] is unknown. Does it select non-overlapping MsgWidth-bit chunks starting at index*MsgWidth? Or is it byte-aligned, or another scheme? Necessary to ensure no uninte",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "key_index may change dynamically, causing transient glitches on the combinational key_sliced output. Downstream logic may sample it during a glitch window, capturing an unintended intermediate slice.",
+      "cond": "when key_index changes while encoded_key_block is valid and downstream samples key_sliced on the same cycle",
+      "risk": "potential secret key bits from another slice region could appear transiently, causing leakage or functional errors.",
+      "signals": [
+        "key_index",
+        "key_sliced"
+      ],
+      "refs": [
+        "kmac_core.sv:392-402"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "key_index != $past(key_index)",
+        "consequent": "key_sliced stable before sampling edge",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index",
+          "key_sliced"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "key_index != $past(key_index)",
+        "consequent": "key_sliced stable before sampling edge",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk participates in key slicing for a side-channel resistant KMAC core. The signals encoded_key_block and key_sliced carry secret key shares. Incorrect parameterization or an out-of-bound key_index could cause mis-slicing, potentially correlating shares, leaking key bits, or breaking masking, compromising side-channel protection. Transient glitches on key_sliced (due to combinational path) could also reveal intermediate key values if sampled by downstream logic. The lack of explicit range checking on key_index is a high-risk area.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:392-402"
+    "kmac_core.sv:392-402"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 392,
-  "line_end": 402,
-  "security_implications": ""
+  "line_end": 402
 }

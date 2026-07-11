@@ -9,83 +9,128 @@
     "used": [
       "strength_i"
     ],
-    "modes": [
-      "strength_i",
-      "MaxEncodedKeyLenSize",
-      "Share"
-    ],
+    "modes": [],
     "tags": [
-      "secret",
       "key",
-      "hash",
-      "parameterization"
+      "secret",
+      "parameterization",
+      "strength",
+      "encode"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "encode_bytepad is continuously assigned the 16-bit result of sha3_pkg::encode_bytepad_len(strength_i).",
+      "claim": "encode_bytepad gets the combinatorial result of sha3_pkg::encode_bytepad_len(strength_i) every cycle.",
       "cond": "always",
       "signals": [
         "encode_bytepad",
         "strength_i"
       ],
       "refs": [
-        "file:line 299-300"
-      ]
+        "299-300"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "encode_bytepad == sha3_pkg::encode_bytepad_len(strength_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "encode_bytepad",
+          "strength_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "encode_bytepad == sha3_pkg::encode_bytepad_len(strength_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "Any logic that later consumes encode_keylen must perform an endian swap (spec big‑endian) and, when the secret key is 128 bits, must use only the lower 16 bits of encode_keylen.",
-      "cond": "when the encoded keylen value is read to assemble the full key encoding",
-      "risk": "Without swap, key byte order is reversed; failure to mask unused high bits could inject stale/X values, corrupting the hash or leaking secret material.",
+      "type": "value_domain",
+      "claim": "Input strength_i must be a legal strength enumeration value accepted by sha3_pkg::encode_bytepad_len.",
+      "cond": "always, because encode_bytepad is combinational",
+      "risk": "An illegal strength_i could cause an undefined or corrupted encode_bytepad, breaking the bytepad length and ultimately the KMAC security strength.",
       "signals": [
-        "encode_keylen"
+        "strength_i"
       ],
       "refs": [
-        "file:line 302-308"
-      ]
+        "300"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "strength_i inside {128, 256} // typical KMAC strengths, actual set from package",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strength_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always, because encode_bytepad is combinational",
+        "consequent": "strength_i inside {128, 256} // typical KMAC strengths, actual set from package",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The encode_keylen signal has width (MaxEncodedKeyLenSize+8-1:0), but the comment states that for a 128-bit secret key only the lower 16 bits are valid. The downstream concatenation logic must be verified to select only those valid bits and not propagate the upper unused bits.",
-      "cond": "when secret key length is 128 bits and the encoded keylen is consumed",
-      "risk": "Unwanted upper bits may contain stale or illegal values, leading to incorrect KMAC computations or exposure of internal state.",
+      "claim": "Comment states that for a 128‑bit secret key only the lower 16 bits of encode_keylen are valid. It is unclear whether the upper bits are guaranteed to be zeroed or if they can contain undriven/uninitialized values, which could leak secret‑dependent state when the encoded key is assembled.",
+      "cond": "secret key length == 128 bits",
+      "risk": "If upper bits are not explicitly cleared or masked before concatenation, internal junk bits may enter the security‑critical key encoding stream, violating zeroization or secrecy assumptions.",
       "signals": [
         "encode_keylen"
       ],
       "refs": [
-        "file:line 306-307"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The comment mandates an endian swap for the spec‑correct big‑endian encoded string, but this chunk does not perform the swap. The consumer of encode_keylen must implement the swap; verify that it is done correctly.",
-      "cond": "when encode_keylen is incorporated into the byte‑oriented message",
-      "risk": "Incorrect endianness could reverse key bytes and break protocol conformance and security.",
-      "signals": [
-        "encode_keylen"
+        "302-309"
       ],
-      "refs": [
-        "file:line 308"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_len_i == 128",
+        "consequent": "encode_keylen[MaxEncodedKeyLenSize + 8 - 1:16] == 0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "encode_keylen"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_len_i == 128",
+        "consequent": "encode_keylen[MaxEncodedKeyLenSize + 8 - 1:16] == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "encode_keylen is used for secret key length encoding. If upper bits are not properly masked when a shorter key is used, hardware could inadvertently expose internal state or secret length. Additionally, strength_i directly influences the bytepad length and therefore the effective security strength of the KMAC operation; an unchecked illegal value could weaken the algorithm.",
   "evidence_refs": [
-    "file:line 299-309"
+    "299-309"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 299,
-  "line_end": 309,
-  "security_implications": ""
+  "line_end": 309
 }

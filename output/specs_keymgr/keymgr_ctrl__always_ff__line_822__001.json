@@ -7,22 +7,19 @@
       "vld_state_change_q"
     ],
     "used": [
-      "vld_state_change_d",
+      "rst_ni",
       "clk_i",
-      "rst_ni"
+      "vld_state_change_d"
     ],
     "modes": [],
-    "tags": [
-      "reset",
-      "control"
-    ]
+    "tags": []
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "vld_state_change_q is driven to 0 when rst_ni is low, otherwise it updates to vld_state_change_d on every rising edge of clk_i.",
-      "cond": "always",
+      "claim": "After reset is deasserted, on every rising edge of clk_i, vld_state_change_q is updated to the value of vld_state_change_d that was sampled at the previous clock edge. When rst_ni is low, vld_state_change_q is reset to 0.",
+      "cond": "always at posedge clk_i",
       "signals": [
         "clk_i",
         "rst_ni",
@@ -31,59 +28,40 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:822-828"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "vld_state_change_q == $past(vld_state_change_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "vld_state_change_d",
+          "vld_state_change_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "vld_state_change_q == $past(vld_state_change_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "vld_state_change_d must be stable and glitch-free at the rising edge of clk_i.",
-      "cond": "when rst_ni is high and a clock edge occurs",
-      "risk": "A glitch could cause a spurious valid‑state‑change indication, potentially disrupting security‑critical state machines in the key manager.",
-      "signals": [
-        "vld_state_change_d"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:826"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "lifecycle",
-      "claim": "The asynchronous reset rst_ni must meet standard recovery/removal timing relative to clk_i.",
-      "cond": "when rst_ni deasserts",
-      "risk": "Violation may cause vld_state_change_q to become metastable, leading to unpredictable values and possible illegal state transitions.",
-      "signals": [
-        "rst_ni",
-        "clk_i"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:823-824"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "The width and downstream usage of vld_state_change_q are not shown; if it is intended as a strobe but this register holds the value for a full cycle, multiple triggers may occur.",
-      "cond": "unknown",
-      "risk": "Could cause repeated state‑change events, disrupting control sequencing.",
-      "signals": [
-        "vld_state_change_q"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:826"
-      ]
-    }
-  ],
+  "assumptions": [],
+  "uncertain_points": [],
+  "security_implications": "vld_state_change_q is likely used to validate state transitions in the key manager. If it is corrupted (e.g., by a fault or glitch capture), a false validation could advance the key manager to unintended states, potentially exposing keys or bypassing access controls. The integrity of this register is security-critical.",
   "evidence_refs": [
     "keymgr_ctrl.sv:822-828"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 822,
-  "line_end": 828,
-  "security_implications": ""
+  "line_end": 828
 }

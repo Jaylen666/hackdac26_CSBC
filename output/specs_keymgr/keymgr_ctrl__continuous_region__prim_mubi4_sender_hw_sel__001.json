@@ -13,8 +13,6 @@
       "inv_state"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
       "op_ack",
       "random_ack",
       "op_update",
@@ -32,20 +30,18 @@
       "CntWidth"
     ],
     "tags": [
-      "counter",
-      "handshake",
-      "error",
-      "lifecycle",
-      "sparse_fsm",
-      "integrity"
+      "fault",
+      "integrity",
+      "fsm",
+      "counter"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "When op_req is asserted, op_done_o equals op_ack; otherwise op_done_o equals the logical OR of init_o and invalid_op.",
-      "cond": "continuous",
+      "claim": "op_done_o equals op_ack when op_req is 1, otherwise equals (init_o | invalid_op).",
+      "cond": "always",
       "signals": [
         "op_done_o",
         "op_req",
@@ -55,13 +51,38 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:448-449"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_done_o == (op_req ? op_ack : (init_o | invalid_op))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done_o",
+          "op_req",
+          "op_ack",
+          "init_o",
+          "invalid_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_done_o == (op_req ? op_ack : (init_o | invalid_op))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "adv_state is asserted when op_ack and adv_req are both high and op_err is low.",
-      "cond": "continuous",
+      "claim": "adv_state is asserted when op_ack, adv_req are high and op_err is low.",
+      "cond": "always",
       "signals": [
         "adv_state",
         "op_ack",
@@ -70,13 +91,37 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:459"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_state == (op_ack & adv_req & ~op_err)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_state",
+          "op_ack",
+          "adv_req",
+          "op_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "adv_state == (op_ack & adv_req & ~op_err)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "dis_state is asserted when op_ack and dis_req are both high.",
-      "cond": "continuous",
+      "claim": "dis_state is asserted when both op_ack and dis_req are high.",
+      "cond": "always",
       "signals": [
         "dis_state",
         "op_ack",
@@ -84,153 +129,381 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:460"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dis_state == (op_ack & dis_req)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dis_state",
+          "op_ack",
+          "dis_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "dis_state == (op_ack & dis_req)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "assignment",
-      "claim": "inv_state is the bitwise OR reduction of fault_o; it is asserted whenever any bit of fault_o is high.",
-      "cond": "continuous",
+      "claim": "inv_state is the logical OR of all bits of fault_o.",
+      "cond": "always",
       "signals": [
         "inv_state",
         "fault_o"
       ],
       "refs": [
         "keymgr_ctrl.sv:466"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "inv_state == |fault_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "inv_state",
+          "fault_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "inv_state == |fault_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
-      "type": "assignment",
-      "claim": "The prim_count instance u_cnt has clr_i wired to (op_ack | random_ack) and incr_en_i wired to (op_update | random_req), with decr_en_i tied to 0 and set_i/set_cnt_i tied to 0.",
-      "cond": "always",
+      "type": "instance_behavior",
+      "claim": "prim_count instance u_cnt increments cnt by 1 each cycle when incr_en_i (op_update | random_req) is 1 and clears cnt when clr_i (op_ack | random_ack) is 1; cnt_err is asserted on overflow.",
+      "cond": "every clock cycle",
       "signals": [
-        "u_cnt",
-        "op_ack",
-        "random_ack",
+        "cnt",
+        "cnt_err",
         "op_update",
-        "random_req"
+        "random_req",
+        "op_ack",
+        "random_ack"
       ],
       "refs": [
         "keymgr_ctrl.sv:421-436"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "(op_update | random_req) && !(op_ack | random_ack)",
+        "consequent": "cnt == $past(cnt) + 1",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt",
+          "cnt_err",
+          "op_update",
+          "random_req",
+          "op_ack",
+          "random_ack"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "(op_update | random_req) && !(op_ack | random_ack)",
+        "consequent": "cnt == $past(cnt) + 1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "G6",
-      "type": "assignment",
-      "claim": "The prim_mubi4_sender instance u_hw_sel receives mubi_i = prim_mubi_pkg::mubi4_bool_to_mubi(gen_out_hw_sel) and drives hw_sel_o from its mubi_o output.",
-      "cond": "continuous",
+      "type": "instance_behavior",
+      "claim": "prim_mubi4_sender u_hw_sel drives hw_sel_o as a registered mubi4 signal derived from gen_out_hw_sel via mubi4_bool_to_mubi.",
+      "cond": "always",
       "signals": [
-        "u_hw_sel",
-        "gen_out_hw_sel",
-        "hw_sel_o"
+        "hw_sel_o",
+        "gen_out_hw_sel"
       ],
       "refs": [
         "keymgr_ctrl.sv:439-444"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "hw_sel_o == prim_mubi_pkg::mubi4_bool_to_mubi(gen_out_hw_sel)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw_sel_o",
+          "gen_out_hw_sel"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "always",
+        "consequent": "hw_sel_o == prim_mubi_pkg::mubi4_bool_to_mubi(gen_out_hw_sel)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "adv_req, dis_req, and op_err must be stable and valid around the assertion of op_ack.",
-      "cond": "when op_ack is high",
-      "risk": "Glitches on adv_req or dis_req during op_ack could cause erroneous pulses on adv_state or dis_state, leading to unintended FSM transitions.",
+      "type": "mode_config",
+      "claim": "adv_req and dis_req must not be both high simultaneously while op_ack is high.",
+      "cond": "when op_ack is asserted",
+      "risk": "Both adv_state and dis_state become active, causing FSM to attempt simultaneous conflicting transitions.",
       "signals": [
         "adv_req",
         "dis_req",
-        "op_err",
-        "op_ack",
-        "adv_state",
-        "dis_state"
+        "op_ack"
       ],
       "refs": [
         "keymgr_ctrl.sv:459-460"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_ack",
+        "consequent": "!(adv_req && dis_req)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_req",
+          "dis_req",
+          "op_ack"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_ack",
+        "consequent": "!(adv_req && dis_req)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
+      "type": "value_domain",
+      "claim": "The counter must be cleared via op_ack or random_ack before its count reaches 2^CntWidth-1 to avoid asserting cnt_err spuriously.",
+      "cond": "normal operation (no overflow intended)",
+      "risk": "cnt_err may be set, potentially triggering a fault that is not due to a real error.",
+      "signals": [
+        "cnt",
+        "op_ack",
+        "random_ack",
+        "cnt_err"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:426,429,435"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "cnt == CntWidth'(2^CntWidth-1)",
+        "consequent": "op_ack | random_ack",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt",
+          "op_ack",
+          "random_ack",
+          "cnt_err"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cnt == CntWidth'(2^CntWidth-1)",
+        "consequent": "op_ack | random_ack",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
       "type": "security_precondition",
-      "claim": "The fault_o vector must correctly reflect all fault conditions; any true fault must set the corresponding bit, and the vector must be glitch-free.",
+      "claim": "fault_o signals must be glitch-free and stable to prevent unintended assertion of inv_state.",
       "cond": "always",
-      "risk": "A missed fault bit leaves inv_state low, violating the requirement for immediate invalidation on async faults (SEC_CM: CTRL.FSM.LOCAL_ESC).",
+      "risk": "Spurious inv_state could falsely trigger security escalation.",
       "signals": [
         "fault_o",
         "inv_state"
       ],
       "refs": [
-        "keymgr_ctrl.sv:462-466"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "value_domain",
-      "claim": "gen_out_hw_sel must be a valid 1-bit logic value (0 or 1) when it is sampled.",
-      "cond": "when the prim_mubi4_sender registers the input",
-      "risk": "If gen_out_hw_sel is X or Z, mubi4_bool_to_mubi may produce an invalid multi-bit encoding, causing hw_sel_o to be invalid and downstream components may misinterpret the hardware select signal, breaking integrity.",
-      "signals": [
-        "gen_out_hw_sel",
-        "hw_sel_o"
+        "keymgr_ctrl.sv:466"
       ],
-      "refs": [
-        "keymgr_ctrl.sv:442-443"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$changed(fault_o) -> !$isunknown(fault_o)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fault_o",
+          "inv_state"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "$changed(fault_o) -> !$isunknown(fault_o)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_unhandled_legal_case",
       "priority": "high",
-      "claim": "The SEC_CM comment states 'sync faults only invalidate on transaction boundaries', but the RTL makes inv_state = |fault_o, which would cause immediate invalidation if sync faults are included in fault_o.",
-      "cond": "when a sync fault bit in fault_o becomes high",
-      "risk": "Premature state invalidation may violate a design intent that allows recovery at transaction boundaries, potentially causing unnecessary denial of service or incorrect security state transitions.",
+      "claim": "If adv_req and dis_req are both high when op_ack is asserted, adv_state and dis_state are both active, potentially causing FSM conflict.",
+      "cond": "op_ack & adv_req & dis_req",
+      "risk": "FSM may attempt to transition to both advance and disable states, leading to undefined control behavior.",
       "signals": [
-        "inv_state",
-        "fault_o"
+        "adv_state",
+        "dis_state",
+        "op_ack",
+        "adv_req",
+        "dis_req"
       ],
       "refs": [
-        "keymgr_ctrl.sv:462-466"
-      ]
+        "keymgr_ctrl.sv:459-460"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_ack & adv_req & dis_req",
+        "consequent": "adv_state & dis_state",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_state",
+          "dis_state",
+          "op_ack",
+          "adv_req",
+          "dis_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_ack & adv_req & dis_req",
+        "consequent": "adv_state & dis_state",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The logic driving init_o and invalid_op (used in op_done_o when op_req=0) is not within this chunk; their timing and correctness could cause premature op_done_o assertion.",
+      "cond": "op_req == 0",
+      "risk": "External logic may misinterpret completion and proceed out of sequence.",
+      "signals": [
+        "init_o",
+        "invalid_op",
+        "op_done_o",
+        "op_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:448-449"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_req == 0",
+        "consequent": "op_done_o == (init_o | invalid_op)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "init_o",
+          "invalid_op",
+          "op_done_o",
+          "op_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_req == 0",
+        "consequent": "op_done_o == (init_o | invalid_op)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
       "type": "U_fault_containment_gap",
       "priority": "medium",
-      "claim": "The prim_count instance output cnt_err is driven but not used or checked within this chunk.",
-      "cond": "when u_cnt detects an error condition",
-      "risk": "Counter errors (e.g., overflow) may go undetected, potentially corrupting state-dependent operations (such as timing measurements) without triggering a fault response.",
+      "claim": "cnt_err from the counter is not monitored locally; if an overflow occurs, this error may not be immediately contained or escalated.",
+      "cond": "counter overflow",
+      "risk": "The overflow error could be ignored, allowing an incorrect counter value to propagate to other logic.",
       "signals": [
         "cnt_err"
       ],
       "refs": [
         "keymgr_ctrl.sv:435"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "adv_state is blocked while op_err is high; if op_err remains asserted after a transaction, the FSM may never advance.",
-      "cond": "when op_err is high and not cleared",
-      "risk": "The FSM can deadlock, requiring external reset to recover; this could be exploited or could cause a denial of service.",
-      "signals": [
-        "op_err",
-        "adv_state",
-        "op_ack",
-        "adv_req"
       ],
-      "refs": [
-        "keymgr_ctrl.sv:459"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "cnt_err",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "cnt_err",
+        "consequent": "cnt_err from the counter is not monitored locally; if an overflow occurs, this error may not be immediately contained or escalated",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "hw_sel_o is a mubi4 encoded signal that likely selects hardware resources; tampering or glitches on gen_out_hw_sel could produce an invalid mubi4 encoding, potentially granting unauthorized access. adv_state and dis_state drive FSM transitions; simultaneous assertion (U1) could bypass security-critical separation between states. inv_state is derived directly from fault_o; spurious or glitched faults could trigger security escalation and invalidate the system without real fault.",
   "evidence_refs": [
     "keymgr_ctrl.sv:421-466"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 421,
-  "line_end": 466,
-  "security_implications": ""
+  "line_end": 466
 }

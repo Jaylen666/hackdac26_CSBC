@@ -9,99 +9,251 @@
     "used": [
       "rst_ni",
       "update_en",
-      "working_state_o"
+      "working_state_o",
+      "StReset"
     ],
     "modes": [
       "StReset"
     ],
     "tags": [
-      "lifecycle",
-      "state",
-      "reset"
+      "secret",
+      "reset",
+      "state"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "On negedge of rst_ni, last_working_st is forced to StReset.",
-      "cond": "rst_ni == 0",
+      "type": "reg_update",
+      "claim": "On asynchronous reset (negedge rst_ni), last_working_st is set to StReset.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
-        "last_working_st"
+        "last_working_st",
+        "StReset"
       ],
       "refs": [
-        "file:696-697"
-      ]
+        "keymgr_ctrl.sv:696-697"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "last_working_st == StReset",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "negedge",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "last_working_st",
+          "StReset"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "last_working_st == StReset",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On posedge clk_i when rst_ni is high and update_en is high, last_working_st is updated with the value of working_state_o.",
-      "cond": "rst_ni && update_en",
+      "claim": "When not reset and update_en is high, last_working_st samples working_state_o on the next positive clock edge.",
+      "cond": "!rst_ni && update_en",
       "signals": [
-        "clk_i",
         "update_en",
         "working_state_o",
-        "last_working_st"
+        "last_working_st",
+        "clk_i"
       ],
       "refs": [
-        "file:698-699"
-      ]
+        "keymgr_ctrl.sv:698-699"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "update_en",
+        "consequent": "last_working_st == $past(working_state_o, 1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clk_i",
+        "reset": "reset",
+        "signals": [
+          "update_en",
+          "working_state_o",
+          "last_working_st",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "update_en",
+        "consequent": "last_working_st == $past(working_state_o, 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When not reset and update_en is low, last_working_st retains its current value.",
+      "cond": "!rst_ni && !update_en",
+      "signals": [
+        "update_en",
+        "last_working_st",
+        "clk_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:698-700"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!update_en",
+        "consequent": "$stable(last_working_st)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clk_i",
+        "reset": "reset",
+        "signals": [
+          "update_en",
+          "last_working_st",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!update_en",
+        "consequent": "$stable(last_working_st)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "StReset is a valid member of the working state encoding.",
-      "cond": "always",
-      "risk": "If StReset is not a legal state, other logic using last_working_st may misinterpret the reset state and enter undefined behavior.",
-      "signals": [
-        "StReset"
-      ],
-      "refs": [
-        "file:697"
-      ]
-    },
-    {
-      "id": "A2",
       "type": "producer_contract",
-      "claim": "When update_en is asserted, working_state_o must be stable and represent the intended working state.",
-      "cond": "update_en == 1",
-      "risk": "If working_state_o is transient or invalid during update_en, last_working_st may capture an incorrect state, potentially corrupting state tracking or security-sensitive decisions.",
+      "claim": "working_state_o must be stable and meet setup/hold at the rising clock edge when update_en is asserted. Glitches or metastability may corrupt last_working_st.",
+      "cond": "update_en is high",
+      "risk": "last_working_st captures a transient or corrupt value, leading to incorrect key-manager state history and potential unauthorized key operations.",
       "signals": [
+        "working_state_o",
         "update_en",
-        "working_state_o"
+        "clk_i"
       ],
       "refs": [
-        "file:699"
-      ]
+        "keymgr_ctrl.sv:699"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "update_en",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "working_state_o",
+          "update_en",
+          "clk_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "update_en",
+        "consequent": "working_state_o must be stable and meet setup/hold at the rising clock edge when update_en is asserted. Glitches or metastability may corrupt last_working_st",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "The timing relationship between update_en and working_state_o is not constrained locally; update_en might be asserted while working_state_o is still transitioning.",
-      "cond": "update_en posedge occurs during a state change of working_state_o",
-      "risk": "last_working_st could latch an intermediate or glitched value, leading to an illegal state that could affect key manager state-dependent controls.",
+      "priority": "high",
+      "claim": "When update_en remains deasserted for many cycles, last_working_st may become stale. If downstream logic uses it to gate key access, a stale state could allow operations in an incorrect working state.",
+      "cond": "!update_en for extended cycles",
+      "risk": "Key material may be exposed or misused because the last recorded working state no longer matches the actual hardware state.",
       "signals": [
-        "update_en",
-        "working_state_o",
-        "last_working_st"
+        "last_working_st",
+        "update_en"
       ],
       "refs": [
-        "file:698-699"
-      ]
+        "keymgr_ctrl.sv:699-700"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!update_en [*N]",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "last_working_st",
+          "update_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!update_en [*N]",
+        "consequent": "last_working_st may become stale. If downstream logic uses it to gate key access, a stale state could allow operations in an incorrect working state",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Reset value of last_working_st is StReset. It must be verified that StReset is a safe state that does not enable any key operations, else an attacker could exploit reset conditions to access secrets before proper initialization.",
+      "cond": "on reset",
+      "risk": "Unauthorized key access or state-machine bypass during or immediately after reset.",
+      "signals": [
+        "last_working_st",
+        "StReset"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:697"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "last_working_st == StReset",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "StReset",
+        "signals": [
+          "last_working_st",
+          "StReset"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "last_working_st == StReset",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "last_working_st stores the previous working state of the key manager. If corrupted by a sampling glitch or left stale (update_en low for long periods), the stored state may not reflect the actual operational condition. This could allow secret-key operations in an unauthorized state, leading to key exposure or misuse. Additionally, the reset value StReset must be a strictly restricted state; any oversight could permit key access before secure initialization, constituting a severe security vulnerability.",
   "evidence_refs": [
-    "file:695-701"
+    "keymgr_ctrl.sv:695-701"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 695,
-  "line_end": 701,
-  "security_implications": ""
+  "line_end": 701
 }

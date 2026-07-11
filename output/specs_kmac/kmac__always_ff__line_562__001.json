@@ -7,43 +7,63 @@
       "idle_o"
     ],
     "used": [
-      "rst_ni",
       "sha3_fsm",
       "msgfifo_empty",
-      "SecIdleAcceptSwMsg"
+      "SecIdleAcceptSwMsg",
+      "rst_ni",
+      "clk_i"
     ],
     "modes": [
-      "StIdle",
-      "SecIdleAcceptSwMsg"
+      "sha3_pkg::StIdle"
     ],
     "tags": [
+      "reset",
       "handshake",
       "fifo",
-      "fsm",
-      "reset",
-      "security",
-      "multi_bit_encoded"
+      "security"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (negedge rst_ni), idle_o is assigned MuBi4True.",
-      "cond": "negedge rst_ni",
+      "claim": "When reset is asserted (rst_ni low), idle_o is driven to prim_mubi_pkg::MuBi4True asynchronously.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "idle_o"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:563-564"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4True",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "idle_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4True",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When not in reset and sha3_fsm equals StIdle and (msgfifo_empty or SecIdleAcceptSwMsg is true), idle_o is assigned MuBi4True.",
-      "cond": "(sha3_fsm == sha3_pkg::StIdle) && (msgfifo_empty || SecIdleAcceptSwMsg)",
+      "claim": "When not in reset and sha3_fsm is StIdle with either msgfifo_empty or SecIdleAcceptSwMsg true, idle_o is set to MuBi4True on the next clock edge.",
+      "cond": "rst_ni && sha3_fsm == sha3_pkg::StIdle && (msgfifo_empty || SecIdleAcceptSwMsg)",
       "signals": [
         "sha3_fsm",
         "msgfifo_empty",
@@ -52,60 +72,263 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565-566"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && sha3_fsm == sha3_pkg::StIdle && (msgfifo_empty || SecIdleAcceptSwMsg)",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4True",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clock",
+        "reset": "reset",
+        "signals": [
+          "sha3_fsm",
+          "msgfifo_empty",
+          "SecIdleAcceptSwMsg",
+          "idle_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && sha3_fsm == sha3_pkg::StIdle && (msgfifo_empty || SecIdleAcceptSwMsg)",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4True",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "default_fallback",
-      "claim": "In all other cases (not in reset and the above condition is false), idle_o is assigned MuBi4False.",
-      "cond": "else (not reset and not (sha3_fsm == StIdle && (msgfifo_empty || SecIdleAcceptSwMsg)))",
+      "claim": "In all other cases (reset inactive and not the idle condition), idle_o is driven to MuBi4False on the next clock edge.",
+      "cond": "rst_ni && !(sha3_fsm == sha3_pkg::StIdle && (msgfifo_empty || SecIdleAcceptSwMsg))",
       "signals": [
+        "rst_ni",
+        "sha3_fsm",
+        "msgfifo_empty",
+        "SecIdleAcceptSwMsg",
         "idle_o"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:567-568"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(sha3_fsm == sha3_pkg::StIdle && (msgfifo_empty || SecIdleAcceptSwMsg))",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4False",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "sha3_fsm",
+          "msgfifo_empty",
+          "SecIdleAcceptSwMsg",
+          "idle_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(sha3_fsm == sha3_pkg::StIdle && (msgfifo_empty || SecIdleAcceptSwMsg))",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4False",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "When sha3_fsm is StIdle, the combination of msgfifo_empty and SecIdleAcceptSwMsg must accurately reflect that the KMAC pipeline is ready to accept a software message; specifically, SecIdleAcceptSwMsg must only be asserted if it is safe to accept a new message even if the FIFO is not empty (as dictated by higher-level security policy).",
-      "cond": "sha3_fsm == StIdle",
-      "risk": "If SecIdleAcceptSwMsg is incorrectly asserted high while msgfifo_empty is low, idle_o will indicate ready (MuBi4True) while the FIFO still contains data, potentially allowing a software message to be accepted before the FIFO is drained, leading to data corruption or security state violation.",
+      "claim": "The signals sha3_fsm, msgfifo_empty, and SecIdleAcceptSwMsg must be correct and stable when evaluated at the rising clock edge (outside reset).",
+      "cond": "rst_ni high",
+      "risk": "If sha3_fsm falsely indicates StIdle or msgfifo_empty/SecIdleAcceptSwMsg are incorrectly true, idle_o will be erroneously asserted, potentially allowing a new message to be accepted while the core is processing, leading to data corruption or protocol violation.",
       "signals": [
-        "SecIdleAcceptSwMsg",
+        "sha3_fsm",
         "msgfifo_empty",
-        "idle_o"
+        "SecIdleAcceptSwMsg"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565-566"
-      ]
-    }
-  ],
-  "uncertain_points": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clock",
+        "reset": "reset",
+        "signals": [
+          "sha3_fsm",
+          "msgfifo_empty",
+          "SecIdleAcceptSwMsg"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni high",
+        "consequent": "The signals sha3_fsm, msgfifo_empty, and SecIdleAcceptSwMsg must be correct and stable when evaluated at the rising clock edge (outside reset)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
     {
-      "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "medium",
-      "claim": "SecIdleAcceptSwMsg directly influences the idle output without visible qualification or error/fault containment. The intended security semantics (e.g., whether it bypasses standard idle policy or is controlled by a locked configuration) are unclear.",
-      "cond": "always",
-      "risk": "If SecIdleAcceptSwMsg is incorrectly configured or glitchable, it could force idle_o True prematurely, allowing message injection during a non-secure idle period, potentially undermining data integrity or protocol sequencing.",
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "SecIdleAcceptSwMsg must always be a valid MUBI encoding (prim_mubi_pkg::MuBi4True or MuBi4False).",
+      "cond": "rst_ni high",
+      "risk": "If SecIdleAcceptSwMsg has an invalid MUBI value, the logical OR `msgfifo_empty || SecIdleAcceptSwMsg` may evaluate as true even when msgfifo_empty is false, incorrectly driving idle_o to True and potentially accepting a message when not idle.",
       "signals": [
         "SecIdleAcceptSwMsg",
         "idle_o"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "SecIdleAcceptSwMsg",
+          "idle_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni high",
+        "consequent": "SecIdleAcceptSwMsg must always be a valid MUBI encoding (prim_mubi_pkg::MuBi4True or MuBi4False)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "SecIdleAcceptSwMsg is a multi-bit (MUBI) security-relevant signal but is used directly in a logical OR without an explicit MUBI validity check. An invalid encoding (transient fault) could cause idle_o to incorrectly assert true.",
+      "cond": "When SecIdleAcceptSwMsg receives an invalid MUBI value neither True nor False.",
+      "risk": "Erroneous idle_o assertion may allow a new message to be accepted in a non-idle state, potentially bypassing integrity or exposing state.",
+      "signals": [
+        "SecIdleAcceptSwMsg",
+        "idle_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "SecIdleAcceptSwMsg != prim_mubi_pkg::MuBi4True && SecIdleAcceptSwMsg != prim_mubi_pkg::MuBi4False",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4True",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "SecIdleAcceptSwMsg",
+          "idle_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "SecIdleAcceptSwMsg != prim_mubi_pkg::MuBi4True && SecIdleAcceptSwMsg != prim_mubi_pkg::MuBi4False",
+        "consequent": "idle_o == prim_mubi_pkg::MuBi4True",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "idle_o is forced to MuBi4True during reset. It is unclear if downstream logic consumes idle_o during reset and whether this could inadvertently allow operations (e.g., key loading) while the core is not properly initialized.",
+      "cond": "During reset (rst_ni low).",
+      "risk": "Could allow security-sensitive actions to proceed when the core should be held in a safe state.",
+      "signals": [
+        "idle_o",
+        "rst_ni"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:564"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "idle_o",
+          "rst_ni"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "During reset (rst_ni low)",
+        "consequent": "idle_o is forced to MuBi4True during reset. It is unclear if downstream logic consumes idle_o during reset and whether this could inadvertently allow operations (e.g., key loading) while the core is not properly initialized",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "msgfifo_empty is evaluated without apparent synchronization or double flopping; a change near the clock edge could cause a race, resulting in idle_o being updated with stale FIFO status.",
+      "cond": "When msgfifo_empty transitions near the sampling clock edge.",
+      "risk": "idle_o may be asserted or deasserted incorrectly for one cycle, violating the handshake and potentially causing overrun or stall.",
+      "signals": [
+        "msgfifo_empty",
+        "idle_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:565"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "msgfifo_empty",
+          "idle_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "When msgfifo_empty transitions near the sampling clock edge",
+        "consequent": "msgfifo_empty is evaluated without apparent synchronization or double flopping; a change near the clock edge could cause a race, resulting in idle_o being updated with stale FIFO status",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "idle_o is a multi-bit encoded gating signal that indicates when the KMAC core is ready to accept new messages. Erroneous assertion due to invalid SecIdleAcceptSwMsg encoding or during reset could allow unauthorized message injection, potentially compromising integrity or enabling side-channel leakage via the hash engine.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:562-570"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 562,
-  "line_end": 570,
-  "security_implications": ""
+  "line_end": 570
 }

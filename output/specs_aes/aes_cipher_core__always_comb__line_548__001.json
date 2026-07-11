@@ -10,52 +10,129 @@
       "key_mix_columns_out",
       "NumShares"
     ],
-    "modes": [
-      "NumShares"
-    ],
+    "modes": [],
     "tags": [
+      "parameterization",
+      "secret",
       "key",
-      "parameterization"
+      "mask"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "unused_key_mix_columns_out is continuously assigned to the XOR reduction of all bits of key_mix_columns_out[s] for s in [0, NumShares-1]; if NumShares <= 0, it remains 0.",
-      "cond": "always (combinational)",
+      "claim": "unused_key_mix_columns_out is driven combinationally to the XOR of the bitwise XOR reductions of all shares of key_mix_columns_out.",
+      "cond": "always",
       "signals": [
         "unused_key_mix_columns_out",
-        "key_mix_columns_out"
+        "key_mix_columns_out",
+        "NumShares"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:548-553"
-      ]
+        "aes_cipher_core.sv:548-553"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "unused_key_mix_columns_out == XOR_{s=0}^{NumShares-1} ( ^{key_mix_columns_out[s]} )",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_key_mix_columns_out",
+          "key_mix_columns_out",
+          "NumShares"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "unused_key_mix_columns_out == XOR_{s=0}^{NumShares-1} ( ^{key_mix_columns_out[s]} )",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "NumShares must be at least 1 for the loop to execute.",
+      "cond": "always",
+      "risk": "If NumShares=0, unused_key_mix_columns_out remains 0 and does not reflect key material, allowing dead code or silent optimization.",
+      "signals": [
+        "NumShares"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:550"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "NumShares >= 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumShares"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "NumShares >= 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "key_mix_columns_out appears only in this dummy reduction to unused_key_mix_columns_out; its actual bits may not propagate to any functional logic, potentially leaving key material unapplied.",
-      "cond": "If no other block consumes key_mix_columns_out beyond this always_comb",
-      "risk": "Missing connection of key mixing output could break encryption data flow or security guarantees.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "It is unclear whether unused_key_mix_columns_out is read elsewhere or only used as a dummy sink to prevent lint warnings. If it is actually connected to an output or debug path, the 1‑bit XOR could leak information about the key material.",
+      "cond": "unknown",
+      "risk": "Potential key leakage if the signal is observable; otherwise, wasted logic and no functional effect.",
       "signals": [
-        "key_mix_columns_out",
         "unused_key_mix_columns_out"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:548-553"
-      ]
+        "aes_cipher_core.sv:548-553"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_key_mix_columns_out"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "It is unclear whether unused_key_mix_columns_out is read elsewhere or only used as a dummy sink to prevent lint warnings. If it is actually connected to an output or debug path, the 1‑bit XOR could leak information about the key material",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The combinational block reduces all bits of all key mix columns shares into a single bit (unused_key_mix_columns_out). If this signal is connected to any observable net (e.g., output pin, debug register, status bit), an attacker could extract a 1‑bit parity of key‑related material, weakening side‑channel resistance.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:548-553"
+    "aes_cipher_core.sv:548-553"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 548,
-  "line_end": 553,
-  "security_implications": ""
+  "line_end": 553
 }

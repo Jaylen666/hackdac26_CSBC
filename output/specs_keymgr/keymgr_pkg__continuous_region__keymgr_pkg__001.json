@@ -5,121 +5,136 @@
     "block_kind": "declaration",
     "driven": [],
     "used": [
+      "prim_util_pkg::vbits",
       "keymgr_reg_pkg::NumSwBindingReg",
+      "keymgr_reg_pkg::NumSaltReg",
       "edn_pkg::ENDPOINT_BUS_WIDTH",
-      "prim_util_pkg::vbits"
-    ],
-    "modes": [
-      "KeyWidth",
-      "CDIs",
-      "KeyMgrStages",
+      "$clog2",
       "SwBindingWidth",
       "SaltWidth",
+      "KeyWidth",
       "Shares",
-      "EdnWidth",
-      "KeyVersionWidth",
-      "HealthStateWidth",
-      "DevIdWidth",
-      "MaxWidth",
       "LfsrWidth",
       "RandWidth",
-      "KDFMaxWidth"
+      "DigestWidth",
+      "OtbnKeyWidth"
+    ],
+    "modes": [
+      "keymgr_stage_e",
+      "keymgr_key_dest_e",
+      "keymgr_sideload_slot_idx_e",
+      "keymgr_gen_out_e",
+      "keymgr_ops_e",
+      "keymgr_working_state_e",
+      "keymgr_op_status_e",
+      "keymgr_sync_error_e",
+      "keymgr_async_error_e",
+      "keymgr_sync_fault_e",
+      "keymgr_async_fault_e",
+      "keymgr_err_pos_e",
+      "keymgr_fault_pos_e",
+      "keymgr_key_update_e",
+      "keymgr_sideload_clr_e",
+      "keymgr_lc_en_usage_e"
     ],
     "tags": [
-      "secret",
       "key",
-      "digest",
-      "mask",
+      "secret",
+      "seed",
       "entropy",
+      "lfsr",
+      "integrity",
+      "fault",
       "lifecycle",
+      "security",
       "parameterization"
     ]
   },
   "guarantees": [],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "HealthStateWidth (128) must equal the actual Life Cycle health state vector width.",
-      "cond": "When AdvDataWidth (line 78) is used to pack data for the KDF.",
-      "risk": "Mismatch causes incorrect AdvDataWidth calculation, leading to malformed KDF input and potential data corruption or security degradation.",
-      "signals": [
-        "HealthStateWidth",
-        "AdvDataWidth"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:24-24,78-78"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "DevIdWidth (256) must equal the actual device ID width.",
-      "cond": "When AdvDataWidth is used.",
-      "risk": "Mismatch yields wrong AdvDataWidth, corrupting KDF input packing.",
-      "signals": [
-        "DevIdWidth",
-        "AdvDataWidth"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:25-25,78-78"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "value_domain",
-      "claim": "SwBindingWidth (32 * keymgr_reg_pkg::NumSwBindingReg) must correctly reflect the number of software binding registers provided by the register package.",
-      "cond": "Always, as AdvDataWidth and GenDataWidth depend on SwBindingWidth/SaltWidth.",
-      "risk": "Incorrect SwBindingWidth leads to wrong data widths and possible data truncation or security bypass in binding checks.",
-      "signals": [
-        "SwBindingWidth",
-        "AdvDataWidth"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:17-17,78-78"
-      ]
-    }
-  ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "Parameters HealthStateWidth, DevIdWidth, MaxWidth are defined locally with a comment stating they should be sourced from another module. If the true life cycle module uses different values, all dependent width calculations (AdvDataWidth, etc.) become inconsistent.",
-      "cond": "unknown",
-      "risk": "Silent width mismatch causing data misalignment, potentially leaking or corrupting key material.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Default key values in HW_KEY_REQ_DEFAULT and OTBN_KEY_REQ_DEFAULT are set to a known constant 32'hDEADBEEF. If these default values are ever used as actual key material (e.g., when valid is set but the key field is not overridden), an attacker could exploit the predictable key.",
+      "cond": "A signal of type hw_key_req_t or otbn_key_req_t is instantiated with the default value and its key field is propagated to a security-critical path without being overwritten.",
+      "risk": "Exposure of a well-known key that completely undermines confidentiality/integrity of any data protected with it.",
       "signals": [
-        "HealthStateWidth",
-        "DevIdWidth",
-        "MaxWidth"
+        "HW_KEY_REQ_DEFAULT.key",
+        "OTBN_KEY_REQ_DEFAULT.key"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:23-26"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:242-250"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_pkg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "HW_KEY_REQ_DEFAULT.key",
+          "OTBN_KEY_REQ_DEFAULT.key"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "A signal of type hw_key_req_t or otbn_key_req_t is instantiated with the default value and its key field is propagated to a security-critical path without being overwritten",
+        "consequent": "Default key values in HW_KEY_REQ_DEFAULT and OTBN_KEY_REQ_DEFAULT are set to a known constant 32'hDEADBEEF. If these default values are ever used as actual key material (e.g., when valid is set but the key field is not overridden), an attac",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_width_param_hazard",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "KDFMaxWidth (1984) is an arbitrary upper limit, but AdvDataWidth can exceed it if keymgr_reg_pkg::NumSwBindingReg is programmed to a value where 32*NumSwBindingReg + 2*256 + 256 + 128 > 1984 (i.e., NumSwBindingReg > 34). No local check prevents this.",
-      "cond": "When NumSwBindingReg > 34.",
-      "risk": "KDF input may overflow the maximum allowed width, causing undefined behavior, truncation, or hardware fault.",
+      "claim": "Parameters HealthStateWidth and DevIdWidth are defined locally as 128 and 256, but comments indicate they should be sourced from another module's package. A mismatch between the actual hardware configuration and these local defaults could lead to incorrect width calculations (AdvDataWidth, etc.) and silent truncation or overflow.",
+      "cond": "The upstream definition of HealthStateWidth or DevIdWidth differs from the local parameters.",
+      "risk": "Data loss, silent corruption of health or identity information, or generation of wrong binding values.",
       "signals": [
-        "KDFMaxWidth",
-        "AdvDataWidth",
-        "SwBindingWidth"
+        "HealthStateWidth",
+        "DevIdWidth",
+        "AdvDataWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:14-17,78-87"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:24-26",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:78"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_pkg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "HealthStateWidth",
+          "DevIdWidth",
+          "AdvDataWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "The upstream definition of HealthStateWidth or DevIdWidth differs from the local parameters",
+        "consequent": "Parameters HealthStateWidth and DevIdWidth are defined locally as 128 and 256, but comments indicate they should be sourced from another module's package. A mismatch between the actual hardware configuration and these local defaults could l",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "All default seed constants (RndCnstRevisionSeedDefault, RndCnstCreatorIdentitySeedDefault, etc.) are hardcoded into the package. There is no provision for runtime injection or secret protection, which may conflict with requirements for fresh, unpredictable secrets in key derivation.",
-      "cond": "When these seeds are used as inputs to cryptographic operations.",
-      "risk": "Static known seeds reduce entropy and could compromise the security of derived keys, violating DICE or similar requirements.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Hard-coded RndCnst*SeedDefault parameters are static compile-time constants. It is unclear whether these seeds are intended only as placeholders replaced during manufacturing/test or whether they represent a real security root. If they cannot be altered post-synthesis and are exposed, the system's key derivation may be deterministic and weak.",
+      "cond": "The synthesizable RTL uses these seed parameters without a runtime overwrite mechanism.",
+      "risk": "Predictable root keys and loss of all derived key material confidentiality.",
       "signals": [
         "RndCnstRevisionSeedDefault",
         "RndCnstCreatorIdentitySeedDefault",
@@ -131,32 +146,48 @@
         "RndCnstAesSeedDefault",
         "RndCnstKmacSeedDefault",
         "RndCnstOtbnSeedDefault",
-        "RndCnstCdiDefault"
+        "RndCnstCdiDefault",
+        "RndCnstLfsrSeedDefault",
+        "RndCnstLfsrPermDefault",
+        "RndCnstRandPermDefault"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:31-55"
-      ]
-    },
-    {
-      "id": "U4",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The keymgr_lc_en_usage_e enum is defined locally but the comment states it should be sourced from another module. If the life cycle module encoding differs, the enable bits will be misinterpreted.",
-      "cond": "When life cycle enable signals are decoded using this enum.",
-      "risk": "Key manager operations may be incorrectly enabled or disabled, leading to security violations or functional lockout.",
-      "signals": [
-        "keymgr_lc_en_usage_e"
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:28-74"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:252-261"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_pkg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "RndCnstRevisionSeedDefault",
+          "RndCnstCreatorIdentitySeedDefault",
+          "RndCnstOwnerIntIdentitySeedDefault",
+          "RndCnstOwnerIdentitySeedDefault",
+          "RndCnstSoftOutputSeedDefault",
+          "RndCnstHardOutputSeedDefault",
+          "RndCnstNoneSeedDefault",
+          "RndCnstAesSeedDefault"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "The synthesizable RTL uses these seed parameters without a runtime overwrite mechanism",
+        "consequent": "Hard-coded RndCnst*SeedDefault parameters are static compile-time constants. It is unclear whether these seeds are intended only as placeholders replaced during manufacturing/test or whether they represent a real security root. If they cann",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This package defines security-critical constants (256-bit seeds for key derivation, LFSR seeds/permutations, default hardware key values). The HW_KEY_REQ_DEFAULT and OTBN_KEY_REQ_DEFAULT structs contain a known default key 32'hDEADBEEF; if these default values are used in any active key path without being overwritten, the resulting keys would be completely predictable, exposing all data protected by them. The seed parameters provide the root entropy for the key manager; any ability to read or modify those seeds post-manufacture would allow an attacker to compute all derived secret keys. The local definitions of HealthStateWidth and DevIdWidth risk width mismatches that could corrupt critical identity and health inputs, potentially allowing bypass of security checks or integrity failures.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv:8-261"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv",
   "line_start": 8,
-  "line_end": 261,
-  "security_implications": ""
+  "line_end": 261
 }

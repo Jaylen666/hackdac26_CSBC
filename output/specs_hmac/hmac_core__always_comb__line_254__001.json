@@ -7,124 +7,259 @@
       "txcount_d"
     ],
     "used": [
-      "txcount",
       "clr_txcount",
       "load_txcount",
-      "message_length_i",
       "digest_size_i",
-      "inc_txcount"
+      "message_length_i",
+      "inc_txcount",
+      "txcount",
+      "BlockSizeSHA256in64",
+      "BlockSizeSHA512in64"
     ],
     "modes": [
-      "digest_size_i=SHA2_256",
-      "digest_size_i=SHA2_384",
-      "digest_size_i=SHA2_512",
-      "default"
+      "SHA2_256",
+      "SHA2_384",
+      "SHA2_512"
     ],
     "tags": [
       "digest",
       "counter",
-      "parameterization",
-      "control"
+      "key",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "When clr_txcount is asserted, txcount_d is driven to 0 regardless of other control signals.",
+      "claim": "When clr_txcount is high, txcount_d is assigned to 0, overriding any other condition.",
       "cond": "clr_txcount == 1",
       "signals": [
         "clr_txcount",
         "txcount_d"
       ],
       "refs": [
-        "line 256-257"
-      ]
+        "hmac_core.sv:256-257"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "clr_txcount == 1",
+        "consequent": "txcount_d == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "clr_txcount",
+          "txcount_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "clr_txcount == 1",
+        "consequent": "txcount_d == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "When clr_txcount is deasserted and load_txcount is asserted, txcount_d is set to message_length_i plus a block-size constant: BlockSizeSHA256in64 for SHA2_256, BlockSizeSHA512in64 for SHA2_384 or SHA2_512, and 0 for any other digest_size_i.",
-      "cond": "clr_txcount == 0 and load_txcount == 1",
+      "claim": "When load_txcount is high and clr_txcount is low, txcount_d is the sum of message_length_i and the block size in 64-bit words depending on digest_size_i; for SHA2_256 it adds BlockSizeSHA256in64, for SHA2_384 and SHA2_512 it adds BlockSizeSHA512in64, and for any other value it adds 0.",
+      "cond": "load_txcount && !clr_txcount",
       "signals": [
         "load_txcount",
-        "message_length_i",
         "digest_size_i",
+        "message_length_i",
         "txcount_d",
         "BlockSizeSHA256in64",
         "BlockSizeSHA512in64"
       ],
       "refs": [
-        "line 258-266"
-      ]
+        "hmac_core.sv:258-265"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "load_txcount && !clr_txcount",
+        "consequent": "txcount_d == message_length_i + (digest_size_i == SHA2_256 ? BlockSizeSHA256in64 : (digest_size_i == SHA2_384 || digest_size_i == SHA2_512 ? BlockSizeSHA512in64 : 0))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "load_txcount",
+          "digest_size_i",
+          "message_length_i",
+          "txcount_d",
+          "BlockSizeSHA256in64",
+          "BlockSizeSHA512in64"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "load_txcount && !clr_txcount",
+        "consequent": "txcount_d == message_length_i + (digest_size_i == SHA2_256 ? BlockSizeSHA256in64 : (digest_size_i == SHA2_384 || digest_size_i == SHA2_512 ? BlockSizeSHA512in64 : 0))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "When neither clr_txcount nor load_txcount is asserted and inc_txcount is asserted, txcount_d is assigned the value of txcount with bits [63:5] incremented by 1, effectively increasing the counter by 32 while preserving the five least-significant bits.",
-      "cond": "clr_txcount == 0 and load_txcount == 0 and inc_txcount == 1",
+      "claim": "When inc_txcount is high and both clr_txcount and load_txcount are low, txcount_d bits [63:5] are incremented by 1 (adding 32 to the word count), while bits [4:0] retain the value from txcount.",
+      "cond": "inc_txcount && !clr_txcount && !load_txcount",
       "signals": [
         "inc_txcount",
-        "txcount",
-        "txcount_d"
+        "txcount_d",
+        "txcount"
       ],
       "refs": [
-        "line 267-269",
-        "line 255"
-      ]
+        "hmac_core.sv:267-268"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "inc_txcount && !clr_txcount && !load_txcount",
+        "consequent": "txcount_d[63:5] == txcount[63:5] + 1 && txcount_d[4:0] == txcount[4:0]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "inc_txcount",
+          "txcount_d",
+          "txcount"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "inc_txcount && !clr_txcount && !load_txcount",
+        "consequent": "txcount_d[63:5] == txcount[63:5] + 1 && txcount_d[4:0] == txcount[4:0]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "default_fallback",
-      "claim": "When clr_txcount, load_txcount, and inc_txcount are all deasserted, txcount_d is equal to txcount (hold).",
-      "cond": "clr_txcount == 0, load_txcount == 0, inc_txcount == 0",
+      "claim": "When none of clr_txcount, load_txcount, inc_txcount is high, txcount_d retains the current value of txcount.",
+      "cond": "!clr_txcount && !load_txcount && !inc_txcount",
       "signals": [
         "txcount_d",
         "txcount"
       ],
       "refs": [
-        "line 255"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "mode_config",
-      "claim": "When load_txcount is asserted, digest_size_i must be SHA2_256, SHA2_384, or SHA2_512; the default case adds zero block size, which would produce an incorrect total message length used in HMAC computation.",
-      "cond": "load_txcount == 1",
-      "risk": "HMAC tag computed with wrong message length, potentially compromising integrity or security.",
-      "signals": [
-        "digest_size_i",
-        "load_txcount"
+        "hmac_core.sv:255"
       ],
-      "refs": [
-        "line 261-266"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!clr_txcount && !load_txcount && !inc_txcount",
+        "consequent": "txcount_d == txcount",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "txcount_d",
+          "txcount"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!clr_txcount && !load_txcount && !inc_txcount",
+        "consequent": "txcount_d == txcount",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_unhandled_legal_case",
       "priority": "high",
-      "claim": "The default case for digest_size_i under load_txcount adds zero block size. If the HMAC module can operate with digest sizes other than SHA2_256, SHA2_384, SHA2_512 (e.g., future SHA-2 variants or misconfiguration), the message length will lack the required inner-pad block size, leading to an incorrect HMAC result.",
-      "cond": "load_txcount == 1 and digest_size_i not in {SHA2_256, SHA2_384, SHA2_512}",
-      "risk": "Incorrect HMAC tag, potential security bypass.",
+      "claim": "The default case for digest_size_i in the load_txcount branch adds 0 to message_length_i, which may be incorrect for other valid hash algorithms (e.g., SHA2_224, SM3) that require a non-zero block size. This could lead to a wrong txcount and incorrect HMAC length encoding.",
+      "cond": "load_txcount is active and digest_size_i is neither SHA2_256, SHA2_384, nor SHA2_512",
+      "risk": "If a legitimate but unsupported digest size is used, the block size addition becomes 0, causing a mismatch in the internal message length and potentially enabling HMAC forgeries or operational errors.",
       "signals": [
         "digest_size_i",
+        "message_length_i",
         "txcount_d"
       ],
       "refs": [
-        "line 265"
-      ]
+        "hmac_core.sv:261-266"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "load_txcount && !clr_txcount && !(digest_size_i inside {SHA2_256, SHA2_384, SHA2_512})",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_size_i",
+          "message_length_i",
+          "txcount_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "load_txcount && !clr_txcount && !(digest_size_i inside {SHA2_256, SHA2_384, SHA2_512})",
+        "consequent": "The default case for digest_size_i in the load_txcount branch adds 0 to message_length_i, which may be incorrect for other valid hash algorithms (e.g., SHA2_224, SM3) that require a non-zero block size. This could lead to a wrong txcount an",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal 'b1' is listed in the chunk dependencies but does not appear in the code. It may be a stale reference, an unreachable constant, or an unused leftover.",
+      "cond": "unknown",
+      "risk": "Low risk of functional bug, but may indicate incomplete cleanup or dead logic that should be removed for clarity.",
+      "signals": [
+        "b1"
+      ],
+      "refs": [
+        "hmac_core.sv:254-270"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "b1"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "Signal 'b1' is listed in the chunk dependencies but does not appear in the code. It may be a stale reference, an unreachable constant, or an unused leftover",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The txcount directly feeds into the HMAC finalization length field. The default case in the digest-size multiplexer (adding 0 instead of the correct block size) could be triggered by a misconfigured or malicious digest_size_i, causing the internal message length to be miscalculated. In HMAC, this can allow length extension attacks or signature forgeries because the appended internal padding and key block may not be accounted for. The comment explicitly states that the load operation must include the inner-pad key block, making the default error a high-severity security bug.",
   "evidence_refs": [
-    "line 254-270"
+    "hmac_core.sv:254-270"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
   "line_start": 254,
-  "line_end": 270,
-  "security_implications": ""
+  "line_end": 270
 }

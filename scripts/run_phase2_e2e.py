@@ -56,6 +56,15 @@ def _save_ckpt(out_root: Path, ip: str, channel: str, data):
     )
 
 
+def _as_dict(f):
+    """Normalise a finding to a plain dict.
+
+    After ref matching, `merged` holds dicts; before it, `Finding` objects.
+    This lets downstream blocks (solver, phase3) accept either form.
+    """
+    return f.to_dict() if hasattr(f, "to_dict") else f
+
+
 def _select_channel_f_candidates(
     *,
     ag_pairing_mode: str,
@@ -125,6 +134,16 @@ def main() -> None:
                         help="Run bounded formal checks on top-N findings after fusion")
     parser.add_argument("--formal-check-depth", type=int, default=20,
                         help="Bounded model-check depth for formal checks")
+    parser.add_argument("--no-ref-augment", action="store_true",
+                        help="Disable ref retrieval augmentation (LLM ref extraction + "
+                             "bidirectional ref_match) after fusion")
+    parser.add_argument("--ref-out-dir", default=None,
+                        help="Dir for ref atom extraction outputs "
+                             "(default: <out-root>/ref_out)")
+    parser.add_argument("--ref-workers", type=int, default=4,
+                        help="Parallel workers for LLM ref extraction (default: 4)")
+    parser.add_argument("--ref-fresh", action="store_true",
+                        help="Ignore ref extraction checkpoints and re-extract")
     parser.add_argument("--trace", action="store_true",
                         help="Write per-finding traceability sidecar trace_<ip>.jsonl (no LLM cost)")
     parser.add_argument("--channel-f", action="store_true",
@@ -140,8 +159,8 @@ def main() -> None:
                         help="Timeout per SVA in seconds (default: 300)")
     parser.add_argument("--force", action="store_true",
                         help="Ignore checkpoints, re-run all channels")
-    parser.add_argument("--channels", default="B,C,D,L2",
-                        help="Comma-separated channels to run: B,C,D,L2 (default: B,C,D,L2)")
+    parser.add_argument("--channels", default="B",
+                        help="Comma-separated channels to run; current pipeline uses B (default: B)")
     args = parser.parse_args()
     channels_to_run = set(c.strip() for c in args.channels.split(",") if c.strip())
     ip = args.ip
@@ -383,6 +402,83 @@ def main() -> None:
     )
     print_summary(merged)
 
+    # ── Ref matching: LLM ref extraction + bidirectional match ─────
+    # Replaces the old rule-based ref_library + single-direction attach_refs.
+    # Extraction is LLM-based, one-shot & checkpointed (auto-run if the raw
+    # atom file is missing). Matching binds specific/general ref_clues onto
+    # EVERY finding (specific layer first, general layer after).
+    #
+    # Unknown gate: if the ref atoms still carry `unknown` (kind neither
+    # specific nor general), extraction has not been human-adjudicated yet.
+    # We STOP here and print what needs manual review — no downstream match.
+    if not args.no_ref_augment:
+        from rtl_bug_agent.phase2 import ref_extract, ref_match
+
+        ref_out_dir = Path(args.ref_out_dir) if args.ref_out_dir else out_root / "ref_out"
+        raw_path = ref_out_dir / f"{ip}_ref_raw.json"
+
+        if ip in ref_extract.SKIP_MODULES:
+            print(f"\nRef matching: {ip} in SKIP_MODULES (no official spec), skipped")
+        else:
+            # 1) auto-extract if raw atoms missing (or forced fresh)
+            if args.ref_fresh or not raw_path.exists():
+                print("\n" + "=" * 60)
+                print(f"Ref extraction (LLM, one-shot + checkpointed): {ip}")
+                print("=" * 60)
+                raw_path = ref_extract.extract_refs(
+                    ip, ref_out_dir,
+                    workers=args.ref_workers, fresh=args.ref_fresh,
+                    client=client,
+                )
+            else:
+                print(f"\nRef extraction: reuse existing {raw_path}")
+
+            if raw_path is None or not Path(raw_path).exists():
+                print("  [warn] no ref atoms produced; skipping ref matching")
+            else:
+                atoms = ref_match.load_atoms(str(raw_path))
+                unknowns = ref_match.unknown_atoms(atoms)
+                if unknowns:
+                    # HARD STOP — human must adjudicate unknown atoms first.
+                    print("\n" + "!" * 60)
+                    print(f"STOP: {len(unknowns)} ref atom(s) are still `unknown` "
+                          f"and need manual specific/general adjudication before matching.")
+                    print(f"  Edit {raw_path} — set each atom's ref_kind to "
+                          f"'specific' or 'general', then re-run.")
+                    print("!" * 60)
+                    for a in unknowns:
+                        print(f"  - {a.get('ref_id')}  kw={a.get('keywords')}")
+                        print(f"      {str(a.get('ref_content', ''))[:160]}")
+                    # Persist findings so far (no ref_clues), then exit non-zero.
+                    out_path.write_text(
+                        json.dumps(
+                            {"_stats": client.stats(),
+                             "_ref_matching": "halted_unknown_atoms",
+                             "findings": [f.to_dict() for f in merged]},
+                            ensure_ascii=False, indent=2,
+                        ),
+                        encoding="utf-8",
+                    )
+                    print(f"\nWrote findings (without ref_clues) → {out_path}")
+                    sys.exit(2)
+
+                # 2) bidirectional match — bind ref_clues onto ALL findings.
+                #    Work on dicts so ref_clues survives into the final output.
+                print("\n" + "=" * 60)
+                print(f"Ref matching (bidirectional): {ip}")
+                print("=" * 60)
+                ref_cfg = SemanticAgConfig(
+                    model_name=args.semantic_model,
+                    hf_home=args.semantic_hf_home,
+                    offline=not args.semantic_online_download_model,
+                    batch_size=args.semantic_batch_size,
+                )
+                merged_dicts = [f.to_dict() for f in merged]
+                ref_match.match(merged_dicts, atoms, sem_config=ref_cfg, verbose=True)
+                n_with = sum(1 for f in merged_dicts if f.get("ref_clues"))
+                print(f"  ref_clues attached: {n_with}/{len(merged_dicts)} findings")
+                merged = merged_dicts   # downstream now consumes dicts
+
     # ── Formal Solver ──────────────────────────────────────────────
     if args.run_solver:
         print("\n" + "=" * 60)
@@ -391,8 +487,9 @@ def main() -> None:
         # Collect RTL files from the IP directory.
         rtl_files = list(Path(args.rtl_root).rglob("*.sv")) + list(Path(args.rtl_root).rglob("*.v"))
         solver_work_dir = out_root / "formal_runner"
-        # Convert to dicts for solver API.
-        merged_dicts = [f.to_dict() for f in merged]
+        # Convert to dicts for solver API (merged may already be dicts after
+        # ref matching; _as_dict handles both Finding objects and dicts).
+        merged_dicts = [_as_dict(f) for f in merged]
         updated_dicts = run_formal_solver(
             merged_dicts,
             rtl_files=rtl_files,
@@ -400,10 +497,13 @@ def main() -> None:
             timeout_per_sva=args.solver_timeout,
             depth=args.solver_depth,
         )
-        # Backfill formal_result from updated dicts into Finding objects.
+        # Backfill formal_result into merged (works for both dicts and objects).
         for finding, updated in zip(merged, updated_dicts):
             if "formal_result" in updated:
-                finding.formal_result = updated["formal_result"]
+                if hasattr(finding, "formal_result"):
+                    finding.formal_result = updated["formal_result"]
+                else:
+                    finding["formal_result"] = updated["formal_result"]
 
     # ── Per-channel stats ───────────────────────────────────────
     elapsed_total = time.monotonic() - t_start
@@ -428,7 +528,10 @@ def main() -> None:
         print("\n" + "=" * 60)
         print(f"Phase 3: Source-Level Verification (top {args.phase3_top_n})")
         print("=" * 60)
-        merged_dicts = [f.to_dict() for f in merged]
+        # ref_clues were already attached (bidirectional ref_match) right after
+        # fusion, so merged findings carry them into Phase 3 unchanged.
+        merged_dicts = [_as_dict(f) for f in merged]
+
         verified = verify_top_findings(
             merged_dicts, graph, client_gpt,
             top_n=args.phase3_top_n,

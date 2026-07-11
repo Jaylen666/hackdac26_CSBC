@@ -25,15 +25,15 @@
       "SocControlAddr (default)"
     ],
     "tags": [
-      "handshake",
-      "bus_mux"
+      "access_control",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "When src_asid equals OtInternalAddr, read_gnt = dma_host_tlul_gnt, read_rsp_valid = dma_host_tlul_rsp_valid, read_rsp_error = dma_host_tlul_rsp_err.",
+      "claim": "When src_asid == OtInternalAddr, read_gnt, read_rsp_valid, and read_rsp_error are directly driven from the DMA host TLUL interface.",
       "cond": "src_asid == OtInternalAddr",
       "signals": [
         "src_asid",
@@ -45,7 +45,7 @@
         "dma_host_tlul_rsp_err"
       ],
       "refs": [
-        "file:571-577"
+        "dma.sv:571-578"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -78,7 +78,7 @@
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "When src_asid equals SocSystemAddr, read_gnt = 1'b1, read_rsp_valid = sys_resp_q.read_data_vld, read_rsp_error = sys_resp_q.error_vld.",
+      "claim": "When src_asid == SocSystemAddr, read_gnt is always 1 (no wait), and read_rsp_valid / read_rsp_error are driven from sys_resp_q fields.",
       "cond": "src_asid == SocSystemAddr",
       "signals": [
         "src_asid",
@@ -89,7 +89,7 @@
         "sys_resp_q.error_vld"
       ],
       "refs": [
-        "file:579-582"
+        "dma.sv:579-583"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -121,8 +121,8 @@
     {
       "id": "G3",
       "type": "default_fallback",
-      "claim": "For any src_asid not matching OtInternalAddr or SocSystemAddr (default), read_gnt = dma_ctn_tlul_gnt, read_rsp_valid = dma_ctn_tlul_rsp_valid, read_rsp_error = dma_ctn_tlul_rsp_err.",
-      "cond": "src_asid != OtInternalAddr && src_asid != SocSystemAddr",
+      "claim": "For any other src_asid value (intended for SocControlAddr), read_gnt, read_rsp_valid, and read_rsp_error are driven from the DMA control TLUL interface.",
+      "cond": "src_asid not equal to OtInternalAddr or SocSystemAddr",
       "signals": [
         "src_asid",
         "read_gnt",
@@ -133,11 +133,11 @@
         "dma_ctn_tlul_rsp_err"
       ],
       "refs": [
-        "file:586-590"
+        "dma.sv:586-590"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "(src_asid != OtInternalAddr) && (src_asid != SocSystemAddr)",
+        "antecedent": "!(src_asid == OtInternalAddr || src_asid == SocSystemAddr)",
         "consequent": "read_gnt == dma_ctn_tlul_gnt && read_rsp_valid == dma_ctn_tlul_rsp_valid && read_rsp_error == dma_ctn_tlul_rsp_err",
         "formalizability": "direct"
       },
@@ -156,7 +156,7 @@
           "dma_ctn_tlul_rsp_err"
         ],
         "temporal_shape": "comb",
-        "antecedent": "(src_asid != OtInternalAddr) && (src_asid != SocSystemAddr)",
+        "antecedent": "!(src_asid == OtInternalAddr || src_asid == SocSystemAddr)",
         "consequent": "read_gnt == dma_ctn_tlul_gnt && read_rsp_valid == dma_ctn_tlul_rsp_valid && read_rsp_error == dma_ctn_tlul_rsp_err",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -168,19 +168,20 @@
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "src_asid is restricted to OtInternalAddr, SocSystemAddr, or the remaining value intended for SocControlAddr (handled by default), enforced by configuration validation external to this block.",
+      "claim": "The src_asid input is restricted to OtInternalAddr, SocSystemAddr, and SocControlAddr by external configuration validation; no other ASID values are driven.",
       "cond": "always",
-      "risk": "If src_asid takes an unexpected value, read_gnt/read_rsp_valid/read_rsp_error may be driven by the wrong bus interface, leading to data corruption or protocol violation.",
+      "risk": "If an illegal src_asid appears, it falls into the default case and uses the DMA control interface, potentially causing incorrect DMA behavior, data corruption, or unauthorized access to control registers.",
       "signals": [
         "src_asid"
       ],
       "refs": [
-        "file:585-586"
+        "dma.sv:586-590",
+        "comment at 584-585"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "src_asid inside {OtInternalAddr, SocSystemAddr, <SocControlAddr>}",
+        "consequent": "src_asid inside {OtInternalAddr, SocSystemAddr, SocControlAddr}",
         "formalizability": "partial"
       },
       "formal_sketch": {
@@ -192,9 +193,9 @@
         ],
         "temporal_shape": "always",
         "antecedent": "always",
-        "consequent": "src_asid inside {OtInternalAddr, SocSystemAddr, <SocControlAddr>}",
+        "consequent": "src_asid inside {OtInternalAddr, SocSystemAddr, SocControlAddr}",
         "formalizability": "partial",
-        "confidence": 0.95,
+        "confidence": 1.0,
         "source": "llm"
       }
     }
@@ -202,20 +203,20 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The default case is meant to handle SocControlAddr, but the parameter or enumeration for SocControlAddr is not visible in this chunk. Verify that configuration validation prevents any other value from reaching this logic.",
-      "cond": "src_asid not matching OtInternalAddr or SocSystemAddr",
-      "risk": "An unexpected src_asid could cause an unintended bus interface connection, potentially corrupting read responses.",
+      "claim": "The configuration validation that prevents illegal src_asid values is not in this chunk; a flaw in that validation could allow an attacker to force the default (control) interface path.",
+      "cond": "unknown whether external validation is robust",
+      "risk": "Unauthorized access to control TLUL or misinterpretation of DMA source leading to integrity violation.",
       "signals": [
         "src_asid"
       ],
       "refs": [
-        "file:585-590"
+        "dma.sv:584-590"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "(src_asid != OtInternalAddr) && (src_asid != SocSystemAddr)",
+        "antecedent": "",
         "consequent": "",
         "formalizability": "none"
       },
@@ -227,57 +228,19 @@
           "src_asid"
         ],
         "temporal_shape": "comb",
-        "antecedent": "(src_asid != OtInternalAddr) && (src_asid != SocSystemAddr)",
-        "consequent": "The default case is meant to handle SocControlAddr, but the parameter or enumeration for SocControlAddr is not visible in this chunk. Verify that configuration validation prevents any other value from reaching this logic",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "In SocSystemAddr mode, read_gnt is tied high (1'b1), permanently granting read requests. Verify that the connected system interface (sys_resp_q) can always accept a transaction without backpressure; otherwise data may be lost or the protocol violated.",
-      "cond": "src_asid == SocSystemAddr",
-      "risk": "If the system interface requires flow control via gnt, downstream logic may be overflowed or transactions dropped.",
-      "signals": [
-        "read_gnt",
-        "src_asid",
-        "sys_resp_q"
-      ],
-      "refs": [
-        "file:580"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "src_asid == SocSystemAddr",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "read_gnt",
-          "src_asid",
-          "sys_resp_q"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "src_asid == SocSystemAddr",
-        "consequent": "In SocSystemAddr mode, read_gnt is tied high (1'b1), permanently granting read requests. Verify that the connected system interface (sys_resp_q) can always accept a transaction without backpressure; otherwise data may be lost or the protoco",
+        "antecedent": "unknown whether external validation is robust",
+        "consequent": "The configuration validation that prevents illegal src_asid values is not in this chunk; a flaw in that validation could allow an attacker to force the default (control) interface path",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The src_asid signal selects the DMA read-response source interface. If an attacker could inject an illegal ASID value (e.g., through a register misconfiguration), the default case would route control TLUL responses as data, potentially allowing the DMA to interpret control-register values as read data and write them to an arbitrary destination, violating data integrity and potentially leaking sensitive information. The assumption that only legal ASID values are driven relies on external configuration validation, making this a critical security dependency.",
   "evidence_refs": [
-    "file:569-592"
+    "dma.sv:569-592"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 569,
-  "line_end": 592,
-  "security_implications": ""
+  "line_end": 592
 }

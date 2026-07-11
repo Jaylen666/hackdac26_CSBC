@@ -2,18 +2,19 @@
   "chunk_id": "aes_cipher_core__generate_for__gen_shares_add_round_key__001",
   "header": {
     "module": "aes_cipher_core",
-    "block_kind": "generate",
+    "block_kind": "generate_for",
     "driven": [
-      "add_round_key_out"
+      "add_round_key_out[s]"
     ],
     "used": [
-      "add_round_key_in",
-      "round_key"
+      "add_round_key_in[s]",
+      "round_key[s]"
     ],
     "modes": [
       "NumShares"
     ],
     "tags": [
+      "secret",
       "key",
       "mask",
       "parameterization"
@@ -23,73 +24,121 @@
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "add_round_key_out[s] equals add_round_key_in[s] bitwise XOR round_key[s] for each share index s from 0 to NumShares-1.",
-      "cond": "always (combinational)",
+      "claim": "For each share index s from 0 to NumShares-1, add_round_key_out[s] is assigned the combinational XOR of add_round_key_in[s] and round_key[s] every cycle.",
+      "cond": "always",
       "signals": [
-        "add_round_key_out",
-        "add_round_key_in",
-        "round_key"
+        "add_round_key_out[s]",
+        "add_round_key_in[s]",
+        "round_key[s]"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:429"
-      ]
+        "aes_cipher_core.sv:428-430"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "add_round_key_out[s] == add_round_key_in[s] ^ round_key[s]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "add_round_key_out[s]",
+          "add_round_key_in[s]",
+          "round_key[s]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "add_round_key_out[s] == add_round_key_in[s] ^ round_key[s]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "Parameter NumShares must be at least 1; otherwise the generate for loop produces no assignment to add_round_key_out.",
-      "cond": "when NumShares == 0",
-      "risk": "add_round_key_out is left undriven, causing X propagation or synthesis errors.",
-      "signals": [
-        "NumShares",
-        "add_round_key_out"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:428-430"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The arrays add_round_key_in, round_key, and add_round_key_out must each be declared with a dimension of at least NumShares elements.",
+      "type": "mode_config",
+      "claim": "NumShares must be a positive integer greater than 0.",
       "cond": "always",
-      "risk": "Out-of-bounds bit selection during the generate loop may cause simulation warnings/errors or unintended X propagation.",
+      "risk": "If NumShares is 0, the generate loop produces no logic, leaving add_round_key_out undriven and the cipher data path broken.",
       "signals": [
-        "add_round_key_in",
-        "round_key",
-        "add_round_key_out",
         "NumShares"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:428-430"
-      ]
+        "aes_cipher_core.sv:428"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "NumShares > 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumShares"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "NumShares > 0",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The XOR of share vectors is intended to compute the masked round-key addition, but the specific masking scheme (e.g., DOM) and any required resharing or randomness injection are not defined here.",
-      "cond": "when the design is used in a side-channel resistant context",
-      "risk": "If share independence is not guaranteed by the surrounding logic, the masking may be ineffective.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The combinational XOR assignment may cause glitches that temporarily expose unmasked round key values, violating non-completeness and enabling side-channel leakage.",
+      "cond": "always when performing add_round_key",
+      "risk": "Secret key material may be recovered via power/timing analysis if glitch propagation is not mitigated by cell-level constraints or registered outputs.",
       "signals": [
-        "add_round_key_in",
-        "round_key",
-        "add_round_key_out"
+        "add_round_key_out[s]",
+        "add_round_key_in[s]",
+        "round_key[s]"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:428-430"
-      ]
+        "aes_cipher_core.sv:428-430"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "temporarily",
+        "signals": [
+          "add_round_key_out[s]",
+          "add_round_key_in[s]",
+          "round_key[s]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always when performing add_round_key",
+        "consequent": "The combinational XOR assignment may cause glitches that temporarily expose unmasked round key values, violating non-completeness and enabling side-channel leakage",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk performs the add_round_key step in a masked AES implementation by XORing each share s of add_round_key_in with round_key[s]. The combinational XOR could produce intermediate glitches that partially unmask the round key, potentially leaking secret key material. Post-synthesis glitches and transition densities must be evaluated.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:428-430"
+    "aes_cipher_core.sv:428-430"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 428,
-  "line_end": 430,
-  "security_implications": ""
+  "line_end": 430
 }

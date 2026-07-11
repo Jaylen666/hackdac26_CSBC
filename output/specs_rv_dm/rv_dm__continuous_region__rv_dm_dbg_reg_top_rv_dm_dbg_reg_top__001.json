@@ -1,50 +1,556 @@
 {
   "chunk_id": "rv_dm__continuous_region__rv_dm_dbg_reg_top_rv_dm_dbg_reg_top__001",
-  "summary": "根据 UseDmiInterface 生成配置选择 TL-UL 或 JTAG 调试模块接口，并实现安全门控、内存总线适配和 dm_top 例化。",
-  "behavior": "本片段首先通过组合逻辑将 debug_req 与 debug_req_en 相与产生 debug_req_o（443）。随后，根据 UseDmiInterface 参数在两个互斥分支中生成调试接口。若为 DMI 模式（`gen_dmi_gating`），在未定义 DMIDirectTAP 时，例化 rv_dm_dbg_reg_top 和 rv_dm_dmi_gate，将 TL-UL 输入 dbg_tl_d_i 经寄存器块转化为 DMI 请求/响应信号（dmi_req_valid、dmi_req、dmi_rsp_ready、dmi_rsp 等），同时产生 dmi_intg_error；dmi_rst_n 直接等于 rst_ni。若定义了 DMIDirectTAP，则 dmi_intg_error 固定为 0，dbg_tl_d_o 使用默认值。该分支还将 jtag_o 设为全零，并将 jtag_i、scan_rst_ni 和 pinmux_hw_debug_en_i 异或后丢弃（unused_signals）。若为 JTAG 模式（`gen_jtag_gating`），首先通过 prim_lc_sync 同步 pinmux_hw_debug_en_i，产生多份 lc_tx_t 用于门控。利用 lc_tx_test_true_strict 检测使能状态：控制 jtag_in_int（jtag_i 或 0）、jtag_o（jtag_out_int 或 0）以及 dmi_en（仅当 PmEnDmiReq 有效时使能）。在未定义 DMIDirectTAP 时，例化两个 prim_clock_mux2（由 testmode 选择 JTAG 时钟 tck 或系统时钟 clk_i、JTAG 复位 trst_n 或 scan_rst_ni）以及 dmi_jtag TAP，生成原始 DMI 请求/响应有效和就绪信号（dmi_req_valid_raw、dmi_rsp_ready_raw），这些信号再与 dmi_en 按位与得到最终 dmi_req_valid 和 dmi_rsp_ready，形成门控。同时，将 dmi_intg_error 和 dbg_intg_error 固定为 0，dbg_tl_d_o 设为默认值，并将未使用的 dbg_tl_d_i 等信号异或丢弃。公共部分（601-703）首先通过 tlul_lc_gate 根据 lc_hw_debug_en_gated[LcEnRom] 对内存 TL-UL 窗口（mem_tl_win_h2d/mem_tl_win_d2h）进行门控，并以 ndmreset_req 作为 flush 请求产生 ndmreset_req_qual。然后将 lc_hw_debug_en_gated[LcEnFetch] 经 mubi4_bool_to_mubi 转换为 MUBI 编码的 en_ifetch。随后通过 tlul_adapter_reg 将门控后的 TL-UL 转换为 device 侧请求/响应信号（device_re、device_we、device_addr 等），并接收 en_ifetch 以产生 rom_intg_error。最后例化 dm_top，连接调试请求、非调试模块复位、DMI 信号、device 接口以及主机侧信号，构成完整的调试子系统。所有 assign 均为组合逻辑，模块实例内部时序由子模块定义。",
+  "header": {
+    "module": "rv_dm",
+    "block_kind": "mixed",
+    "driven": [
+      "debug_req_o",
+      "jtag_o",
+      "dmi_rst_n",
+      "dmi_req_valid",
+      "dmi_rsp_ready",
+      "en_ifetch",
+      "device_req",
+      "rom_intg_error",
+      "rom_gate_intg_error",
+      "dbg_intg_error",
+      "device_addr",
+      "device_we",
+      "device_wdata",
+      "device_be",
+      "ndmreset_req_qual"
+    ],
+    "used": [
+      "debug_req",
+      "debug_req_en",
+      "rst_ni",
+      "clk_i",
+      "pinmux_hw_debug_en_i",
+      "lc_hw_debug_en_gated",
+      "lc_tx_test_true_strict",
+      "mubi4_bool_to_mubi",
+      "mem_tl_win_h2d",
+      "mem_tl_win_d2h",
+      "ndmreset_req",
+      "testmode",
+      "jtag_i",
+      "dmi_req_valid_raw",
+      "dmi_rsp_ready_raw",
+      "scan_rst_ni",
+      "tlul_pkg"
+    ],
+    "modes": [
+      "UseDmiInterface",
+      "DMIDirectTAP",
+      "testmode",
+      "lc_gated_debug_enable"
+    ],
+    "tags": [
+      "lifecycle",
+      "debug",
+      "gating",
+      "MUBI",
+      "integrity",
+      "access_control",
+      "fifo",
+      "handshake"
+    ]
+  },
   "guarantees": [
     {
-      "property": "debug_req_o 始终等于 debug_req 与 debug_req_en 按位与的结果。",
-      "output_signals": [
-        "debug_req_o"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "debug_req_o is asserted only when both debug_req and debug_req_en are high.",
+      "cond": "always",
+      "signals": [
+        "debug_req_o",
+        "debug_req",
+        "debug_req_en"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:443"
-      ]
+      "refs": [
+        "443"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "debug_req_o == (debug_req & debug_req_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "debug_req_o",
+          "debug_req",
+          "debug_req_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "debug_req_o == (debug_req & debug_req_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "property": "在 JTAG 模式下（UseDmiInterface 为假）且未定义 DMIDirectTAP 时，dmi_req_valid <= dmi_req_valid_raw & dmi_en，dmi_rsp_ready <= dmi_rsp_ready_raw & dmi_en；当 dmi_en 为 0 时，两个信号强制为 0。",
-      "output_signals": [
-        "dmi_req_valid",
-        "dmi_rsp_ready"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When DMI interface is used and DMIDirectTAP is not defined, DMI reset (dmi_rst_n) is directly driven by system reset rst_ni.",
+      "cond": "UseDmiInterface && !DMIDirectTAP",
+      "signals": [
+        "dmi_rst_n",
+        "rst_ni"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:586-587"
-      ]
-    }
-  ],
-  "security_implications": "多条 SEC_CM 标注意图指示安全相关设计：DM_EN.CTRL.LC_GATED 通过 lc_tx_test_true_strict 和 pinmux_hw_debug_en 门控 DMI/JTAG 接口，防止在未授权调试状态下访问；MEM_TL_LC_GATE.FSM.SPARSE 使用 tlul_lc_gate 对内存接口进行访问控制，并受 lc_hw_debug_en_gated 限制；EXEC.CTRL.MUBI 将指令提取使能编码为 mubi4，确保信号完整性和抗瞬态翻转特性，从而保护处理器执行安全。",
-  "assumptions": [
+      "refs": [
+        "492"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dmi_rst_n == rst_ni",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "dmi_rst_n",
+        "signals": [
+          "dmi_rst_n",
+          "rst_ni"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "UseDmiInterface && !DMIDirectTAP",
+        "consequent": "dmi_rst_n == rst_ni",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
     {
-      "constraint": "同步后的 pinmux_hw_debug_en 必须在需要调试功能时使能相应的位（PmEnDmiReq、PmEnJtagIn、PmEnJtagOut 等），否则 dmi_en 或 JTAG 门控会关闭接口。",
-      "bug_relevance": "若使能信号意外未置位，则 dmi_req_valid 被强制为 0，JTAG 输入/输出也被门控为 0，导致调试器无法访问目标系统，功能完全失效。",
-      "related_signals": [
-        "pinmux_hw_debug_en_i",
-        "pinmux_hw_debug_en",
+      "id": "G3",
+      "type": "assignment",
+      "claim": "In DMI mode (UseDmiInterface), the JTAG output jtag_o is always tied to zero.",
+      "cond": "UseDmiInterface",
+      "signals": [
+        "jtag_o"
+      ],
+      "refs": [
+        "499"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "jtag_o == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "jtag_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "UseDmiInterface",
+        "consequent": "jtag_o == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "In JTAG mode, dmi_en is asserted only when lifecycle controller allows debug DMIs (pinmux_hw_debug_en[PmEnDmiReq] strictly true).",
+      "cond": "!UseDmiInterface",
+      "signals": [
+        "dmi_en",
+        "pinmux_hw_debug_en"
+      ],
+      "refs": [
+        "530"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dmi_en == lc_tx_test_true_strict(pinmux_hw_debug_en[PmEnDmiReq])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_en",
+          "pinmux_hw_debug_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!UseDmiInterface",
+        "consequent": "dmi_en == lc_tx_test_true_strict(pinmux_hw_debug_en[PmEnDmiReq])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "In JTAG mode without DMIDirectTAP, DMI request valid and response ready are gated with dmi_en: dmi_req_valid = dmi_req_valid_raw & dmi_en and dmi_rsp_ready = dmi_rsp_ready_raw & dmi_en.",
+      "cond": "!UseDmiInterface && !DMIDirectTAP",
+      "signals": [
+        "dmi_req_valid",
+        "dmi_req_valid_raw",
+        "dmi_rsp_ready",
+        "dmi_rsp_ready_raw",
         "dmi_en"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:524-530"
-      ]
+      "refs": [
+        "586-587"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dmi_req_valid == (dmi_req_valid_raw & dmi_en) && dmi_rsp_ready == (dmi_rsp_ready_raw & dmi_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_req_valid",
+          "dmi_req_valid_raw",
+          "dmi_rsp_ready",
+          "dmi_rsp_ready_raw",
+          "dmi_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!UseDmiInterface && !DMIDirectTAP",
+        "consequent": "dmi_req_valid == (dmi_req_valid_raw & dmi_en) && dmi_rsp_ready == (dmi_rsp_ready_raw & dmi_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "en_ifetch is MUBI4-encoded from the lifecycle-gated fetch enable: en_ifetch = mubi4_bool_to_mubi(lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnFetch])).",
+      "cond": "always",
+      "signals": [
+        "en_ifetch",
+        "lc_hw_debug_en_gated",
+        "lc_tx_test_true_strict",
+        "mubi4_bool_to_mubi"
+      ],
+      "refs": [
+        "624"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "en_ifetch == mubi4_bool_to_mubi(lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnFetch]))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "en_ifetch",
+          "lc_hw_debug_en_gated",
+          "lc_tx_test_true_strict",
+          "mubi4_bool_to_mubi"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "en_ifetch == mubi4_bool_to_mubi(lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnFetch]))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "generate_param",
+      "claim": "The tlul_adapter_reg instance i_tlul_adapter_reg is configured with CmdIntgCheck=1, EnableRspIntgGen=1, EnableDataIntgGen=1, enforcing command integrity check and response/data integrity generation on the debug module memory window.",
+      "cond": "always (static configuration)",
+      "signals": [
+        "rom_intg_error",
+        "device_addr",
+        "device_wdata",
+        "device_rdata",
+        "device_be"
+      ],
+      "refs": [
+        "627-629"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rom_intg_error",
+          "device_addr",
+          "device_wdata",
+          "device_rdata",
+          "device_be"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (static configuration)",
+        "consequent": "The tlul_adapter_reg instance i_tlul_adapter_reg is configured with CmdIntgCheck=1, EnableRspIntgGen=1, EnableDataIntgGen=1, enforcing command integrity check and response/data integrity generation on the debug module memory window",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:443-703"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The lifecycle debug enable signals (pinmux_hw_debug_en_i and lc_hw_debug_en_gated) are correctly synchronized and deliver clean, multibit encoded values. lc_tx_test_true_strict accurately identifies the authorized debug state.",
+      "cond": "when debug access is allowed or denied",
+      "risk": "If the encoded signal is corrupted or incorrectly interpreted, the gating (dmi_en, jtag_o gating) may incorrectly enable debug features, allowing unauthorized memory/register access, or incorrectly disable them, causing debug failure.",
+      "signals": [
+        "pinmux_hw_debug_en_i",
+        "lc_hw_debug_en_gated",
+        "lc_tx_test_true_strict",
+        "pinmux_hw_debug_en"
+      ],
+      "refs": [
+        "514-530"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "pinmux_hw_debug_en_i",
+          "lc_hw_debug_en_gated",
+          "lc_tx_test_true_strict",
+          "pinmux_hw_debug_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when debug access is allowed or denied",
+        "consequent": "The lifecycle debug enable signals (pinmux_hw_debug_en_i and lc_hw_debug_en_gated) are correctly synchronized and deliver clean, multibit encoded values. lc_tx_test_true_strict accurately identifies the authorized debug state",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The external TL-UL bus (dbg_tl_d_i) driving the DMI register top adheres to the TL-UL protocol and integrity requirements.",
+      "cond": "when dbg_tl_d_i is used (UseDmiInterface && !DMIDirectTAP)",
+      "risk": "Protocol violations or integrity errors on dbg_tl_d_i could cause the rv_dm_dbg_reg_top to produce incorrect or undefined outputs, potentially leading to data corruption or security bypass in the debug interface.",
+      "signals": [
+        "dbg_tl_d_i"
+      ],
+      "refs": [
+        "456-464"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dbg_tl_d_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when dbg_tl_d_i is used (UseDmiInterface && !DMIDirectTAP)",
+        "consequent": "The external TL-UL bus (dbg_tl_d_i) driving the DMI register top adheres to the TL-UL protocol and integrity requirements",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "When testmode is active, the clock mux selects jtag_in_int.tck (and trst_n) which must be a valid, stable clock/reset.",
+      "cond": "testmode == 1",
+      "risk": "If jtag_in_int.tck is not a proper clock or trst_n is glitchy, the JTAG TAP (dmi_jtag) may malfunction, causing incorrect DMI transactions or state corruption, potentially leaking data or halting debug.",
+      "signals": [
+        "testmode",
+        "jtag_in_int.tck",
+        "jtag_in_int.trst_n",
+        "tck_muxed",
+        "trst_n_muxed"
+      ],
+      "refs": [
+        "539-555"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clock",
+        "reset": "jtag_in_int.trst_n",
+        "signals": [
+          "testmode",
+          "jtag_in_int.tck",
+          "jtag_in_int.trst_n",
+          "tck_muxed",
+          "trst_n_muxed"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "testmode == 1",
+        "consequent": "the clock mux selects jtag_in_int.tck (and trst_n) which must be a valid, stable clock/reset",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
   "uncertain_points": [
-    "当定义 DMIDirectTAP 时，DMI 和 JTAG 信号由外部 DPI 模块驱动，但本片段未包含替换 TAP 和 DMI 接口的实现，因此 dmi_req_valid、dmi_req_ready 等信号的实际连接不明确。",
-    "scan_rst_ni 的作用仅限于在 testmode 时多路选择为 JTAG 复位源，其具体用法需结合测试架构理解。",
-    "DMI 模式下 ifndef DMIDirectTAP 块内未覆盖 DMIDirectTAP 定义情况下的 dmi_rst_n 来源，复位信号可能存在未驱动风险。"
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "In JTAG mode, if dmi_en deasserts while dmi_req_valid_raw is high, dmi_req_valid will drop immediately. This may truncate an in-flight DMI request to dm_top, potentially violating the DMI protocol and leaving the system in an undefined state.",
+      "cond": "dmi_en falls while dmi_req_valid_raw==1",
+      "risk": "Truncated DMI transfers could cause dm_top state machine deadlock, lost debug commands, or incomplete data writes, possibly resulting in functional failure or security-relevant misbehavior.",
+      "signals": [
+        "dmi_en",
+        "dmi_req_valid_raw",
+        "dmi_req_valid"
+      ],
+      "refs": [
+        "586"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "dmi_en == 0 && dmi_req_valid_raw == 1",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_en",
+          "dmi_req_valid_raw",
+          "dmi_req_valid"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "dmi_en == 0 && dmi_req_valid_raw == 1",
+        "consequent": "In JTAG mode, if dmi_en deasserts while dmi_req_valid_raw is high, dmi_req_valid will drop immediately. This may truncate an in-flight DMI request to dm_top, potentially violating the DMI protocol and leaving the system in an undefined stat",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "Gating dmi_rsp_ready with dmi_en (dmi_rsp_ready = dmi_rsp_ready_raw & dmi_en) can block the dm_top from completing a response handshake when dmi_en is low, potentially causing a stall in the DMI response channel.",
+      "cond": "dmi_en falls while dm_top expects dmi_rsp_ready to complete a response",
+      "risk": "A stalled response channel could deadlock debug communications or leak internal state if not properly drained.",
+      "signals": [
+        "dmi_rsp_ready",
+        "dmi_en",
+        "dmi_rsp_ready_raw"
+      ],
+      "refs": [
+        "587"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "dmi_en == 0 && dmi_rsp_ready_raw == 1",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_rsp_ready",
+          "dmi_en",
+          "dmi_rsp_ready_raw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "dmi_en == 0 && dmi_rsp_ready_raw == 1",
+        "consequent": "Gating dmi_rsp_ready with dmi_en (dmi_rsp_ready = dmi_rsp_ready_raw & dmi_en) can block the dm_top from completing a response handshake when dmi_en is low, potentially causing a stall in the DMI response channel",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "In DMI mode, dmi_rst_n is tied to rst_ni (system reset). The comment states the JTAG DTM drains the FIFO, but in this configuration (gen_dmi_gating) there is no JTAG DTM. Residual data in the DMI FIFO could survive a debug session disable/re-enable without system reset, potentially exposing sensitive data from a previous session.",
+      "cond": "UseDmiInterface after a warm debug disable/enable cycle without rst_ni assertion",
+      "risk": "Sensitive data (keys, debugger state) left in the DMI FIFO could be read by a later debug session, violating confidentiality.",
+      "signals": [
+        "dmi_rst_n",
+        "rst_ni"
+      ],
+      "refs": [
+        "489-492"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "dmi_rst_n",
+        "signals": [
+          "dmi_rst_n",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "UseDmiInterface after a warm debug disable/enable cycle without rst_ni assertion",
+        "consequent": "In DMI mode, dmi_rst_n is tied to rst_ni (system reset). The comment states the JTAG DTM drains the FIFO, but in this configuration (gen_dmi_gating) there is no JTAG DTM. Residual data in the DMI FIFO could survive a debug session disable/r",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "Signals debug_req_o, dmi_req_valid, jtag_o, en_ifetch are gated by lifecycle debug enable (lc_hw_debug_en_gated, pinmux_hw_debug_en). Unauthorized assertion of debug enable or failure of the gating logic (e.g., due to lifecycle signal glitch or incorrect encoding) could grant JTAG or DMI access to a powered-on device, exposing secrets in registers/memory or allowing execution injection. The MUBI encoding on en_ifetch provides single-bit fault resistance, but an attacker with physical access could attempt to flip multiple bits; integrity errors (rom_intg_error, dbg_intg_error) generated by the TL-UL adapters may indicate tampering, but if not escalated to an alert, integrity breaches could persist undetected. Additionally, residual DMI FIFO data across debug session re-enable (U3) could leak sensitive information if not cleared.",
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:443-703"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
   "line_start": 443,

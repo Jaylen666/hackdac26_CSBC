@@ -2,7 +2,7 @@
   "chunk_id": "keymgr_reseed_ctrl__continuous_region__keymgr_reseed_ctrl__001",
   "header": {
     "module": "keymgr_reseed_ctrl",
-    "block_kind": "assign",
+    "block_kind": "mixed",
     "driven": [
       "edn_done",
       "local_req"
@@ -13,17 +13,23 @@
       "reseed_cnt",
       "reseed_interval_i"
     ],
-    "modes": [],
+    "modes": [
+      "reseed",
+      "interval"
+    ],
     "tags": [
+      "entropy",
+      "key",
       "handshake",
-      "counter"
+      "counter",
+      "reseed"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "edn_done is driven to the logical AND of edn_req and edn_ack",
+      "claim": "edn_done is asserted when edn_req and edn_ack are both high.",
       "cond": "always",
       "signals": [
         "edn_done",
@@ -32,12 +38,35 @@
       ],
       "refs": [
         "keymgr_reseed_ctrl.sv:43"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "edn_done == (edn_req && edn_ack)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "edn_done",
+          "edn_req",
+          "edn_ack"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "edn_done == (edn_req && edn_ack)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "local_req is asserted when reseed_cnt is greater than or equal to reseed_interval_i",
+      "claim": "local_req is asserted when reseed_cnt is greater than or equal to reseed_interval_i.",
       "cond": "always",
       "signals": [
         "local_req",
@@ -46,32 +75,223 @@
       ],
       "refs": [
         "keymgr_reseed_ctrl.sv:46"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "local_req == (reseed_cnt >= reseed_interval_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "local_req",
+          "reseed_cnt",
+          "reseed_interval_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "local_req == (reseed_cnt >= reseed_interval_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "reseed_interval_i must be programmed to a non‑zero value to prevent continuous local_req assertion.",
+      "cond": "when reseed_cnt is initialized at 0",
+      "risk": "Continuous reseed requests may drain entropy or cause timing/jitter issues.",
+      "signals": [
+        "reseed_interval_i",
+        "local_req",
+        "reseed_cnt"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:46"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reseed_interval_i == 16'h0",
+        "consequent": "local_req == 1'b1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reseed_interval_i",
+          "local_req",
+          "reseed_cnt"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reseed_interval_i == 16'h0",
+        "consequent": "local_req == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "reseed_cnt is incremented correctly and reset when appropriate, so that reseed_cnt >= reseed_interval_i only occurs when a new reseed is required.",
+      "cond": "during normal operation",
+      "risk": "Missed or spurious reseed requests, potentially causing entropy starvation or unnecessary EDN traffic.",
+      "signals": [
+        "reseed_cnt",
+        "local_req",
+        "reseed_interval_i"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:46"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "local_req implies reseed_cnt >= reseed_interval_i",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "reseed_cnt",
+          "local_req",
+          "reseed_interval_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during normal operation",
+        "consequent": "local_req implies reseed_cnt >= reseed_interval_i",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "The reseed_cnt generation logic (not present in this chunk) directly determines local_req; if the counter does not increment or reset according to the intended keymgr reseed interval policy, local_req may be asserted at incorrect times.",
-      "cond": "when reseed_cnt logic deviates from expected count/reset behavior",
-      "risk": "Premature or delayed reseed requests could disrupt key manager security timing, potentially allowing weak keys or missing reseed cycles.",
+      "claim": "The maximum legal value for reseed_interval_i is not documented; an excessively large value (e.g., 0xFFFF) could severely delay reseeds, leading to entropy staleness.",
+      "cond": "unknown",
+      "risk": "Key material may be derived from insufficiently fresh entropy.",
       "signals": [
-        "reseed_cnt",
-        "local_req"
+        "reseed_interval_i"
       ],
       "refs": [
-        "keymgr_reseed_ctrl.sv:40-46"
-      ]
+        "keymgr_reseed_ctrl.sv:22",
+        "keymgr_reseed_ctrl.sv:46"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reseed_interval_i == 16'hFFFF",
+        "consequent": "",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reseed_interval_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reseed_interval_i == 16'hFFFF",
+        "consequent": "The maximum legal value for reseed_interval_i is not documented; an excessively large value (e.g., 0xFFFF) could severely delay reseeds, leading to entropy staleness",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "cnt_err_o is declared but not driven in this chunk; the conditions and timing under which it signals an error are unclear, raising concerns about whether entropy or reseed errors are properly communicated.",
+      "cond": "unknown",
+      "risk": "A corrupted or failed entropy fetch may go unreported, allowing weak keys or unprotected operations.",
+      "signals": [
+        "cnt_err_o"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:34"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "cnt_err_o is declared but not driven in this chunk; the conditions and timing under which it signals an error are unclear, raising concerns about whether entropy or reseed errors are properly communicated",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "edn_done is purely combinational; a glitch on edn_req or edn_ack (e.g., due to unsynchronized clock domain crossings) could create a spurious done pulse.",
+      "cond": "when any of edn_req or edn_ack toggle",
+      "risk": "A false edn_done may advance the reseed state machine prematurely, leading to race conditions or replay of old entropy.",
+      "signals": [
+        "edn_done",
+        "edn_req",
+        "edn_ack"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:43"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "edn_done",
+          "edn_req",
+          "edn_ack"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when any of edn_req or edn_ack toggle",
+        "consequent": "edn_done is purely combinational; a glitch on edn_req or edn_ack (e.g., due to unsynchronized clock domain crossings) could create a spurious done pulse",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk determines when to request a reseed from the entropy distribution network to refresh the LFSR/key manager seed. If reseed_interval_i is programmed to 0, local_req will be constantly asserted, potentially causing excessive entropy consumption or synchronization issues. If it is too large, the seed may become stale, reducing key entropy. The EDN handshake signals (edn_req, edn_ack) are not synchronized here; a glitch could produce a false edn_done, corrupting the reseed protocol. The cnt_err_o error output is declared but not driven in this chunk, leaving open the question of whether entropy failures are properly handled, which is critical for key integrity.",
   "evidence_refs": [
-    "keymgr_reseed_ctrl.sv:8-46"
+    "keymgr_reseed_ctrl.sv:43",
+    "keymgr_reseed_ctrl.sv:46"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
   "line_start": 8,
-  "line_end": 46,
-  "security_implications": ""
+  "line_end": 46
 }

@@ -24,73 +24,99 @@
       "key_full_q",
       "prd_key_expand"
     ],
-    "modes": [
-      "AES192Enable",
-      "SecMasking",
-      "SecSBoxImpl"
-    ],
+    "modes": [],
     "tags": [
       "key",
-      "secret",
       "mask",
-      "error"
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "key_expand_prd_we is assigned 1 when key_full_we equals SP2V_HIGH, otherwise 0.",
-      "cond": "always (combinational)",
+      "claim": "key_expand_prd_we is driven combinatorially to 1 when key_full_we equals SP2V_HIGH; otherwise it is 0.",
+      "cond": "always",
       "signals": [
-        "key_full_we",
-        "SP2V_HIGH",
-        "key_expand_prd_we"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:491"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "Whenever the data/mask inputs of the S‑Boxes update, key_full_we must be equal to SP2V_HIGH so that key_expand_prd_we is asserted and the internally buffered PRD is updated in sync.",
-      "cond": "When data/mask inputs change (external event)",
-      "risk": "If key_full_we does not match SP2V_HIGH, key_expand_prd_we stays 0, PRD is not updated, leading to mask desynchronization and potential leakage of side‑channel information.",
-      "signals": [
-        "key_full_we",
-        "SP2V_HIGH",
-        "key_expand_prd_we"
-      ],
-      "refs": [
-        "output/aes_cipher_core.sv:489-491"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The comparison key_full_we == SP2V_HIGH assumes a specific multi‑bit token; the width of key_full_we and the definition of SP2V_HIGH are not apparent from this chunk. It is unclear whether other legal values of key_full_we also require a PRD update.",
-      "cond": "When key_full_we takes a value different from SP2V_HIGH but a data/mask update occurs.",
-      "risk": "If a valid update condition is missed, the PRD will not be refreshed in time, potentially breaking the masking scheme.",
-      "signals": [
+        "key_expand_prd_we",
         "key_full_we",
         "SP2V_HIGH"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:491"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:491"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "key_expand_prd_we == (key_full_we == SP2V_HIGH)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_expand_prd_we",
+          "key_full_we",
+          "SP2V_HIGH"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_expand_prd_we == (key_full_we == SP2V_HIGH)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "evidence_refs": [
-    "output/aes_cipher_core.sv:487-514"
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "The comment intends that key_expand_prd_we is asserted only when key data (key_full_q) is valid, but the assignment only depends on key_full_we being SP2V_HIGH. If key_full_we is asserted when key_full_q is stale or transitioning, the PRD write to the key expansion module may occur with incorrect data, breaking synchronization with the S-Box masking scheme.",
+      "cond": "key_full_we == SP2V_HIGH",
+      "risk": "Masking (PRD) integrity can be violated, potentially leaking secret key material or weakening side‑channel resistance.",
+      "signals": [
+        "key_full_we",
+        "key_full_q",
+        "key_expand_prd_we"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:489-491"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_full_we",
+          "key_full_q",
+          "key_expand_prd_we"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_full_we == SP2V_HIGH",
+        "consequent": "The comment intends that key_expand_prd_we is asserted only when key data (key_full_q) is valid, but the assignment only depends on key_full_we being SP2V_HIGH. If key_full_we is asserted when key_full_q is stale or transitioning, the PRD w",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "security_implications": "This chunk connects the key expansion instance (aes_key_expand) and generates its prd_we signal. The PRD (pseudo‑random data for masking) is written into the key expansion module whenever key_full_we is asserted (equals SP2V_HIGH). If that signal is mis‑timed relative to the actual key data (key_full_q), the masking update may be out of sync, creating a window where internal S‑Box masked values are inconsistent. This could compromise the side‑channel countermeasure and expose secret key material. The key expansion outputs (key_expand_out, key_expand_err) also carry security‑sensitive data and error flags.",
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:489-491",
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:494-514"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 487,
-  "line_end": 514,
-  "security_implications": ""
+  "line_end": 514
 }

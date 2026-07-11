@@ -10,10 +10,7 @@
     "used": [
       "otp_key_i.creator_seed",
       "otp_key_i.creator_seed_valid",
-      "flash_i.seeds",
-      "flash_ctrl_pkg::CreatorSeedIdx",
-      "UseOtpSeedsInsteadOfFlash",
-      "KeyWidth"
+      "flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]"
     ],
     "modes": [
       "UseOtpSeedsInsteadOfFlash"
@@ -21,95 +18,270 @@
     "tags": [
       "secret",
       "key",
+      "seed",
       "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "generate_param",
-      "claim": "When UseOtpSeedsInsteadOfFlash is true, creator_seed is continuously assigned from otp_key_i.creator_seed; otherwise from flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx].",
-      "cond": "always",
+      "type": "assignment",
+      "claim": "When UseOtpSeedsInsteadOfFlash is true, creator_seed is combinational assigned from otp_key_i.creator_seed.",
+      "cond": "UseOtpSeedsInsteadOfFlash == 1",
       "signals": [
         "creator_seed",
-        "UseOtpSeedsInsteadOfFlash",
-        "otp_key_i.creator_seed",
-        "flash_i.seeds",
-        "flash_ctrl_pkg::CreatorSeedIdx"
+        "otp_key_i.creator_seed"
       ],
       "refs": [
-        "keymgr.sv:415-422"
-      ]
+        "keymgr.sv:418"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "creator_seed == otp_key_i.creator_seed",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "creator_seed",
+          "otp_key_i.creator_seed"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1",
+        "consequent": "creator_seed == otp_key_i.creator_seed",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "unused_creator_seed is assigned a reduced XOR of flash_i.seeds[CreatorSeedIdx] and otp_key_i.creator_seed_valid when UseOtpSeedsInsteadOfFlash is true, otherwise a reduced XOR of otp_key_i.creator_seed and otp_key_i.creator_seed_valid.",
+      "claim": "When UseOtpSeedsInsteadOfFlash is false, creator_seed is combinational assigned from flash_i.seeds[CreatorSeedIdx].",
+      "cond": "UseOtpSeedsInsteadOfFlash == 0",
+      "signals": [
+        "creator_seed",
+        "flash_i.seeds[CreatorSeedIdx]"
+      ],
+      "refs": [
+        "keymgr.sv:422"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "creator_seed == flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "creator_seed",
+          "flash_i.seeds[CreatorSeedIdx]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 0",
+        "consequent": "creator_seed == flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "unused_creator_seed is always driven to absorb the alternate seed bus and creator_seed_valid to prevent lint warnings, using XOR reduction of the side not selected for creator_seed.",
       "cond": "always",
       "signals": [
         "unused_creator_seed",
+        "otp_key_i.creator_seed",
         "otp_key_i.creator_seed_valid",
-        "flash_i.seeds",
-        "otp_key_i.creator_seed"
+        "flash_i.seeds[CreatorSeedIdx]"
       ],
       "refs": [
-        "keymgr.sv:416-421"
-      ]
+        "keymgr.sv:416-417,420-421"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(UseOtpSeedsInsteadOfFlash) ? (unused_creator_seed == ^(flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx] ^ otp_key_i.creator_seed_valid)) : (unused_creator_seed == ^(otp_key_i.creator_seed ^ otp_key_i.creator_seed_valid))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_creator_seed",
+          "otp_key_i.creator_seed",
+          "otp_key_i.creator_seed_valid",
+          "flash_i.seeds[CreatorSeedIdx]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(UseOtpSeedsInsteadOfFlash) ? (unused_creator_seed == ^(flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx] ^ otp_key_i.creator_seed_valid)) : (unused_creator_seed == ^(otp_key_i.creator_seed ^ otp_key_i.creator_seed_valid))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "When UseOtpSeedsInsteadOfFlash is true, the external logic driving otp_key_i.creator_seed must ensure the seed is valid before it is consumed by downstream key derivation; this block does not gate on otp_key_i.creator_seed_valid.",
-      "cond": "when UseOtpSeedsInsteadOfFlash is active",
-      "risk": "Invalid or uninitialized seed values could be used for key derivation, leading to deterministic or weak keys.",
+      "type": "value_domain",
+      "claim": "When UseOtpSeedsInsteadOfFlash is true, otp_key_i.creator_seed must be a valid digital value (no X, stable).",
+      "cond": "UseOtpSeedsInsteadOfFlash == 1",
+      "risk": "If otp_key_i.creator_seed is invalid, creator_seed may be X or unprogrammed OTP value, leading to weak or predictable key derivation.",
       "signals": [
-        "otp_key_i.creator_seed",
-        "otp_key_i.creator_seed_valid"
+        "otp_key_i.creator_seed"
       ],
       "refs": [
-        "keymgr.sv:415-418"
-      ]
+        "keymgr.sv:418"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1",
+        "consequent": "!$isunknown(otp_key_i.creator_seed)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "otp_key_i.creator_seed"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1",
+        "consequent": "!$isunknown(otp_key_i.creator_seed)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "When UseOtpSeedsInsteadOfFlash is false, flash_i.seeds[CreatorSeedIdx] must be a valid digital value (no X, stable).",
+      "cond": "UseOtpSeedsInsteadOfFlash == 0",
+      "risk": "If flash seed is invalid, creator_seed may carry corrupt data, causing weak or incorrect key derivation.",
+      "signals": [
+        "flash_i.seeds[CreatorSeedIdx]"
+      ],
+      "refs": [
+        "keymgr.sv:422"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 0",
+        "consequent": "!$isunknown(flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx])",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "flash_i.seeds[CreatorSeedIdx]"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 0",
+        "consequent": "!$isunknown(flash_i.seeds[flash_ctrl_pkg::CreatorSeedIdx])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "otp_key_i.creator_seed_valid is only XORed into unused_creator_seed but does not gate creator_seed. If the OTP seed is not yet valid, creator_seed still propagates to key derivation, bypassing a validity check.",
-      "cond": "when UseOtpSeedsInsteadOfFlash is true and otp_key_i.creator_seed_valid is false",
-      "risk": "A bad or glitching OTP seed may be used in key creation, potentially yielding compromised or unpredictable keys.",
+      "claim": "creator_seed_valid is only wired into unused_creator_seed to avoid lint warnings, but it never qualifies creator_seed. It is unclear whether the design intends to trust the seed unconditionally or if an external validity check exists.",
+      "cond": "creator_seed_valid == 0 while the corresponding seed source is selected",
+      "risk": "If creator_seed_valid is low and the seed is invalid, creator_seed may still be used for key derivation, potentially yielding a predictable or zero key.",
       "signals": [
-        "otp_key_i.creator_seed",
-        "otp_key_i.creator_seed_valid",
+        "creator_seed_valid",
         "creator_seed"
       ],
       "refs": [
-        "keymgr.sv:415-418"
-      ]
+        "keymgr.sv:416-418,420-422"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1 && otp_key_i.creator_seed_valid == 0",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "creator_seed_valid",
+          "creator_seed"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1 && otp_key_i.creator_seed_valid == 0",
+        "consequent": "creator_seed_valid is only wired into unused_creator_seed to avoid lint warnings, but it never qualifies creator_seed. It is unclear whether the design intends to trust the seed unconditionally or if an external validity check exists",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_dead_or_unused_signal",
+      "type": "U_width_param_hazard",
       "priority": "low",
-      "claim": "unused_creator_seed is assigned but its value appears unused within this generate block; it may be a dead signal or only provided for external debug visibility.",
-      "cond": "unknown",
-      "risk": "No direct security risk, but an unreferenced assignment may mask intended checks or cause synthesis/simulation mismatches.",
+      "claim": "If KeyWidth does not equal the width of the selected seed source, truncation or zero-extension may occur, potentially corrupting the seed.",
+      "cond": "UseOtpSeedsInsteadOfFlash == 1 && KeyWidth != $bits(otp_key_i.creator_seed)",
+      "risk": "Silent truncation or extension could weaken the seed entropy or inject constant bits.",
       "signals": [
-        "unused_creator_seed"
+        "creator_seed",
+        "otp_key_i.creator_seed",
+        "flash_i.seeds[CreatorSeedIdx]"
       ],
       "refs": [
-        "keymgr.sv:416-417,420-421"
-      ]
+        "keymgr.sv:413,418,422"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1 && KeyWidth != $bits(otp_key_i.creator_seed)",
+        "consequent": "0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "creator_seed",
+          "otp_key_i.creator_seed",
+          "flash_i.seeds[CreatorSeedIdx]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "UseOtpSeedsInsteadOfFlash == 1 && KeyWidth != $bits(otp_key_i.creator_seed)",
+        "consequent": "0",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "creator_seed is a critical seed for key derivation. The selection mux has no validity check; creator_seed_valid is only used to suppress lint warnings. If the chosen seed source is invalid (e.g. OTP unprogrammed with creator_seed_valid=0), the derived key could be predictable or zero, leading to key leakage or system compromise. Additionally, width mismatches between seed sources and KeyWidth could silently corrupt the seed.",
   "evidence_refs": [
     "keymgr.sv:413-423"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 413,
-  "line_end": 423,
-  "security_implications": ""
+  "line_end": 423
 }

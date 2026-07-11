@@ -4,90 +4,199 @@
     "module": "aes_cipher_core",
     "block_kind": "generate",
     "driven": [
-      "unused_prd_msbs"
+      "unused_prd_msbs[3:0]"
     ],
     "used": [
-      "prd_masking",
-      "WidthPRDRow",
-      "aes_prd_get_msbs"
+      "prd_masking"
     ],
-    "modes": [],
+    "modes": [
+      "WidthPRDRow"
+    ],
     "tags": [
       "mask",
-      "parameterization",
-      "generate_for"
+      "entropy"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For each i from 0 to 3, unused_prd_msbs[i] is assigned the value of function aes_prd_get_msbs applied to the WidthPRDRow-bit slice prd_masking[i*WidthPRDRow +: WidthPRDRow].",
+      "claim": "Each bit/field unused_prd_msbs[i] (i=0..3) is combinationally assigned to the result of aes_prd_get_msbs applied to the corresponding WidthPRDRow slice of prd_masking.",
       "cond": "always",
       "signals": [
         "unused_prd_msbs",
-        "prd_masking",
-        "WidthPRDRow",
-        "aes_prd_get_msbs"
+        "prd_masking"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:919-921"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "unused_prd_msbs[i] == aes_prd_get_msbs(prd_masking[i * WidthPRDRow +: WidthPRDRow])  // for all i in [0:3]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_prd_msbs",
+          "prd_masking"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "unused_prd_msbs[i] == aes_prd_get_msbs(prd_masking[i * WidthPRDRow +: WidthPRDRow]) // for all i in [0:3]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "prd_masking must have a total width of at least 4*WidthPRDRow to support the part-select indexes used in the loop.",
-      "cond": "when this generate block is synthesized/used",
-      "risk": "If prd_masking is narrower, part-select range is out-of-bounds, leading to undefined behaviour or X propagation.",
+      "claim": "prd_masking has total bit width at least 4 * WidthPRDRow to support the four indexed part-selects.",
+      "cond": "all configurations",
+      "risk": "Bit-select out of range leads to synthesis/simulation errors or silent truncation.",
       "signals": [
-        "prd_masking",
-        "WidthPRDRow"
+        "prd_masking"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:920"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$bits(prd_masking) >= 4 * WidthPRDRow",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "support",
+        "signals": [
+          "prd_masking"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "all configurations",
+        "consequent": "$bits(prd_masking) >= 4 * WidthPRDRow",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Function aes_prd_get_msbs returns a value whose bit width equals the width of each unused_prd_msbs element (likely 1 bit); otherwise truncation or width expansion occurs.",
+      "cond": "always",
+      "risk": "Mismatched widths could cause unintended truncation of MSB information or pad with zeroes, potentially affecting observability.",
+      "signals": [
+        "unused_prd_msbs"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:920"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$bits(aes_prd_get_msbs(…)) == $bits(unused_prd_msbs[0])",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_prd_msbs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "$bits(aes_prd_get_msbs(…)) == $bits(unused_prd_msbs[0])",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
-      "priority": "low",
-      "claim": "Signal unused_prd_msbs is assigned but its name suggests it is not consumed downstream. It is unclear whether this is a dead signal or used elsewhere for monitoring.",
-      "cond": "always (after elaboration)",
-      "risk": "Wasted logic; if truly unused, it may be removed by synthesis but indicates potentially incomplete design intent.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Signal unused_prd_msbs is driven by mask MSBs but its name suggests it is unused. If it is connected to an external pin or readable register it could leak pseudo-random mask bits.",
+      "cond": "unknown connection of unused_prd_msbs",
+      "risk": "Observability of mask bits compromises masking-based side-channel countermeasures.",
       "signals": [
         "unused_prd_msbs"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:919-921"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_prd_msbs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown connection of unused_prd_msbs",
+        "consequent": "Signal unused_prd_msbs is driven by mask MSBs but its name suggests it is unused. If it is connected to an external pin or readable register it could leak pseudo-random mask bits",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_width_param_hazard",
       "priority": "medium",
-      "claim": "The function aes_prd_get_msbs is not defined here; its implementation may involve extraction of mask bits from prd_masking. The correctness of the masking scheme depends on its behavior.",
-      "cond": "when analyzing the masking logic",
-      "risk": "If the function mis-extracts MSBs or is incorrectly implemented, the masked values may be inconsistent, compromising side-channel resistance.",
+      "claim": "The return width of aes_prd_get_msbs is not evident from this chunk; if it returns a vector wider than 1 bit and unused_prd_msbs is a scalar per index, multiple MSB bits are collapsed to one.",
+      "cond": "if aes_prd_get_msbs returns more than one bit",
+      "risk": "Loss of granularity could hide which MSB part is actually observed.",
       "signals": [
-        "aes_prd_get_msbs",
-        "prd_masking",
         "unused_prd_msbs"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:920"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_prd_msbs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "if aes_prd_get_msbs returns more than one bit",
+        "consequent": "The return width of aes_prd_get_msbs is not evident from this chunk; if it returns a vector wider than 1 bit and unused_prd_msbs is a scalar per index, multiple MSB bits are collapsed to one",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The block extracts MSBs from prd_masking (pseudo-random masking material) and drives them to unused_prd_msbs. If unused_prd_msbs is routed to an observable external pin, debug bus, or readable CSR, an attacker could observe mask bits, weakening the DPA/EM side-channel resistance of the AES core. The 'unused' name suggests these signals may be intentionally left floating or tied off; verification must confirm they are not externally accessible. Even if they go to an unconnected output port, synthesis could optimize them away unless preserved, but any exposure is a high-risk security flaw.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:919-921"
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:919-921"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 919,
-  "line_end": 921,
-  "security_implications": ""
+  "line_end": 921
 }

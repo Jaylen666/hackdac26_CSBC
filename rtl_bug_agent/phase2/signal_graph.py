@@ -485,9 +485,15 @@ def build_signal_graph(
 
     # Load all specs
     for json_path in sorted(spec_dir.glob("*.json")):
-        spec = json.loads(json_path.read_text(encoding="utf-8"))
+        if json_path.name.startswith("."):
+            continue  # skip hidden files (checkpoints, temp files)
         if json_path.name.startswith("_"):
             continue  # skip manifest / stats / sidecar metadata
+        if json_path.name.startswith("findings_"):
+            continue  # skip findings output
+        if json_path.name.startswith("semantic_"):
+            continue  # skip semantic AG shadow files
+        spec = json.loads(json_path.read_text(encoding="utf-8"))
         if not isinstance(spec, dict):
             continue  # skip batch lists and other non-spec JSON artifacts
         if "error" in spec:

@@ -23,22 +23,22 @@
     "modes": [
       "OtInternalAddr",
       "SocSystemAddr",
-      "default (SocControlAddr)"
+      "SocControlAddr"
     ],
     "tags": [
+      "access_control",
       "handshake",
       "error",
-      "access_control"
+      "mux"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "When dst_asid is OtInternalAddr, write_gnt = dma_host_tlul_gnt, write_rsp_valid = dma_host_tlul_rsp_valid, write_rsp_error = dma_host_tlul_rsp_err.",
+      "claim": "When dst_asid equals OtInternalAddr, write_gnt, write_rsp_valid, and write_rsp_error are assigned from dma_host_tlul_gnt, dma_host_tlul_rsp_valid, and dma_host_tlul_rsp_err respectively.",
       "cond": "dst_asid == OtInternalAddr",
       "signals": [
-        "dst_asid",
         "write_gnt",
         "write_rsp_valid",
         "write_rsp_error",
@@ -47,7 +47,7 @@
         "dma_host_tlul_rsp_err"
       ],
       "refs": [
-        "dma.sv:545-552"
+        "543-552"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -61,7 +61,6 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "dst_asid",
           "write_gnt",
           "write_rsp_valid",
           "write_rsp_error",
@@ -80,10 +79,9 @@
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "When dst_asid is SocSystemAddr, write_gnt = 1'b1, write_rsp_valid = (sys_resp_q.grant_vec[SysCmdWrite] | sys_resp_q.error_vld), write_rsp_error = sys_resp_q.error_vld.",
+      "claim": "When dst_asid equals SocSystemAddr, write_gnt is driven to 1'b1; write_rsp_valid is driven to (sys_resp_q.grant_vec[SysCmdWrite] | sys_resp_q.error_vld); write_rsp_error is driven to sys_resp_q.error_vld.",
       "cond": "dst_asid == SocSystemAddr",
       "signals": [
-        "dst_asid",
         "write_gnt",
         "write_rsp_valid",
         "write_rsp_error",
@@ -92,7 +90,7 @@
         "SysCmdWrite"
       ],
       "refs": [
-        "dma.sv:553-557"
+        "553-557"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -106,7 +104,6 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "dst_asid",
           "write_gnt",
           "write_rsp_valid",
           "write_rsp_error",
@@ -125,10 +122,9 @@
     {
       "id": "G3",
       "type": "default_fallback",
-      "claim": "For any dst_asid not equal to OtInternalAddr or SocSystemAddr, write_gnt = dma_ctn_tlul_gnt, write_rsp_valid = dma_ctn_tlul_rsp_valid, write_rsp_error = dma_ctn_tlul_rsp_err.",
-      "cond": "dst_asid != OtInternalAddr && dst_asid != SocSystemAddr",
+      "claim": "In the default case (dst_asid not OtInternalAddr and not SocSystemAddr), write_gnt, write_rsp_valid, and write_rsp_error are assigned from dma_ctn_tlul_gnt, dma_ctn_tlul_rsp_valid, and dma_ctn_tlul_rsp_err.",
+      "cond": "!(dst_asid inside {OtInternalAddr, SocSystemAddr})",
       "signals": [
-        "dst_asid",
         "write_gnt",
         "write_rsp_valid",
         "write_rsp_error",
@@ -137,11 +133,11 @@
         "dma_ctn_tlul_rsp_err"
       ],
       "refs": [
-        "dma.sv:560-564"
+        "558-564"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "dst_asid != OtInternalAddr && dst_asid != SocSystemAddr",
+        "antecedent": "!(dst_asid inside {OtInternalAddr, SocSystemAddr})",
         "consequent": "write_gnt == dma_ctn_tlul_gnt && write_rsp_valid == dma_ctn_tlul_rsp_valid && write_rsp_error == dma_ctn_tlul_rsp_err",
         "formalizability": "direct"
       },
@@ -151,7 +147,6 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "dst_asid",
           "write_gnt",
           "write_rsp_valid",
           "write_rsp_error",
@@ -160,7 +155,7 @@
           "dma_ctn_tlul_rsp_err"
         ],
         "temporal_shape": "comb",
-        "antecedent": "dst_asid != OtInternalAddr && dst_asid != SocSystemAddr",
+        "antecedent": "!(dst_asid inside {OtInternalAddr, SocSystemAddr})",
         "consequent": "write_gnt == dma_ctn_tlul_gnt && write_rsp_valid == dma_ctn_tlul_rsp_valid && write_rsp_error == dma_ctn_tlul_rsp_err",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -172,20 +167,20 @@
     {
       "id": "A1",
       "type": "mode_config",
-      "claim": "dst_asid is restricted to OtInternalAddr, SocSystemAddr, or SocControlAddr by external configuration validation; no other values reach this block.",
+      "claim": "Configuration validation ensures dst_asid takes only values OtInternalAddr, SocSystemAddr, or SocControlAddr, so that the default case correctly handles the SocControlAddr destination.",
       "cond": "always",
-      "risk": "An illegal dst_asid value would fall into the default branch and drive write handshake using dma_ctn_tlul interface, potentially misrouting writes to the control address space and violating address isolation.",
+      "risk": "If an illegal ASID value reaches this mux, write grant/response signals will be unintentionally routed to the dma_ctn_tlul interface, potentially bypassing TLUL access controls or mixing traffic from different address spaces.",
       "signals": [
         "dst_asid"
       ],
       "refs": [
-        "dma.sv:559"
+        "558-559"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
         "consequent": "dst_asid inside {OtInternalAddr, SocSystemAddr, SocControlAddr}",
-        "formalizability": "direct"
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "dma",
@@ -197,8 +192,8 @@
         "temporal_shape": "always",
         "antecedent": "always",
         "consequent": "dst_asid inside {OtInternalAddr, SocSystemAddr, SocControlAddr}",
-        "formalizability": "direct",
-        "confidence": 1.0,
+        "formalizability": "partial",
+        "confidence": 0.95,
         "source": "llm"
       }
     }
@@ -206,58 +201,21 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "For SocSystemAddr, write_gnt is hardwired to 1, bypassing all flow control. Is this safe for every system-address write target?",
-      "cond": "dst_asid == SocSystemAddr",
-      "risk": "A target that cannot accept a write might miss the transaction or corrupt data because grant is always asserted.",
-      "signals": [
-        "write_gnt",
-        "dst_asid"
-      ],
-      "refs": [
-        "dma.sv:554"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "dst_asid == SocSystemAddr",
-        "consequent": "write_gnt == 1'b1",
-        "formalizability": "direct"
-      },
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "write_gnt",
-          "dst_asid"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "dst_asid == SocSystemAddr",
-        "consequent": "write_gnt == 1'b1",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The default branch is intended for SocControlAddr only, with other ASID values blocked by external configuration. The correctness of this mux depends on that external enforcement.",
-      "cond": "unknown external configuration logic",
-      "risk": "If an illegal dst_asid reaches this block, writes would be steered through dma_ctn_tlul, breaking address-space separation and possibly causing a security violation.",
+      "priority": "high",
+      "claim": "The default case is intended for SocControlAddr, but depends on external configuration validation to prevent any other ASID value from appearing. It must be verified that the validation logic covering dst_asid is airtight.",
+      "cond": "dst_asid not in {OtInternalAddr, SocSystemAddr, SocControlAddr}",
+      "risk": "A glitched or misconfigured ASID could cause writes intended for internal or system address spaces to be routed to the control TLUL interface (dma_ctn_tlul), violating access control and potentially leaking or corrupting control-plane data.",
       "signals": [
         "dst_asid"
       ],
       "refs": [
-        "dma.sv:559",
-        "dma.sv:560-564"
+        "558-560"
       ],
       "formal": {
         "temporal_shape": "always",
-        "antecedent": "dst_asid != OtInternalAddr && dst_asid != SocSystemAddr && dst_asid != SocControlAddr",
-        "consequent": "write_gnt == 0 && write_rsp_valid == 0",
+        "antecedent": "",
+        "consequent": "dst_asid inside {OtInternalAddr, SocSystemAddr, SocControlAddr}",
         "formalizability": "partial"
       },
       "formal_sketch": {
@@ -268,19 +226,55 @@
           "dst_asid"
         ],
         "temporal_shape": "always",
-        "antecedent": "dst_asid != OtInternalAddr && dst_asid != SocSystemAddr && dst_asid != SocControlAddr",
-        "consequent": "write_gnt == 0 && write_rsp_valid == 0",
+        "antecedent": "dst_asid not in {OtInternalAddr, SocSystemAddr, SocControlAddr}",
+        "consequent": "dst_asid inside {OtInternalAddr, SocSystemAddr, SocControlAddr}",
         "formalizability": "partial",
-        "confidence": 1.0,
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "For SocSystemAddr, write_gnt is hardwired to 1 regardless of downstream system-side readiness. It is unclear whether the system response queue (sys_resp_q) is guaranteed to always accept writes immediately without backpressure.",
+      "cond": "dst_asid == SocSystemAddr",
+      "risk": "If the system side cannot keep up, writes may be dropped or cause a protocol deadlock (e.g., FIFO overflow without flow control), leading to data loss or DMA stall.",
+      "signals": [
+        "write_gnt",
+        "sys_resp_q"
+      ],
+      "refs": [
+        "554"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "dst_asid == SocSystemAddr",
+        "consequent": "write_gnt == 1'b1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "write_gnt",
+          "sys_resp_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "dst_asid == SocSystemAddr",
+        "consequent": "write_gnt == 1'b1",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The chunk routes write grant and response signals from three different TLUL interfaces based on dst_asid. An illegal dst_asid that slips past configuration validation would map traffic to the wrong interface (e.g., routing a system write to the control TLUL path), potentially bypassing TLUL access controls and allowing an untrusted master to interact with a protected address space. Additionally, the hardwired write_gnt = 1 for SocSystemAddr eliminates backpressure; if the system side cannot absorb writes at full rate, it could be used for denial-of-service or trigger internal protocol errors.",
   "evidence_refs": [
-    "dma.sv:543-566"
+    "543-566"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 543,
-  "line_end": 566,
-  "security_implications": ""
+  "line_end": 566
 }

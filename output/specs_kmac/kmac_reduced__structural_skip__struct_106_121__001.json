@@ -12,44 +12,38 @@
       "clk_i",
       "rst_ni",
       "msg_valid_i",
-      "msg_i[0]",
-      "msg_ready",
-      "clr_i"
+      "msg_i",
+      "msg_ready"
     ],
     "modes": [
-      "ClearOnRead=1",
       "MsgLen",
-      "sha3_pkg::MsgWidth"
+      "sha3_pkg::MsgWidth",
+      "ClearOnRead=1"
     ],
     "tags": [
+      "packer",
       "fifo",
-      "secret",
-      "mask",
-      "wipe",
-      "handshake"
+      "handshake",
+      "clear_on_read",
+      "message"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "instance_connection",
-      "claim": "The packer output rdata_o is directly connected to msg[0], rvalid_o to msg_valid_shares[0], and wready_o to msg_ready_shares[0].",
+      "claim": "The clear input of u_msg_unpacker_share0 is tied to 1'b0, preventing any external clear assertion.",
       "cond": "always",
       "signals": [
-        "msg[0]",
-        "msg_valid_shares[0]",
-        "msg_ready_shares[0]",
-        "rdata_o",
-        "rvalid_o",
-        "wready_o"
+        "u_msg_unpacker_share0.clr_i"
       ],
       "refs": [
-        "kmac_reduced.sv:116-118"
+        "kmac_reduced.sv:113"
       ],
       "formal": {
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "msg[0] == u_msg_unpacker_share0.rdata_o && msg_valid_shares[0] == u_msg_unpacker_share0.rvalid_o && msg_ready_shares[0] == u_msg_unpacker_share0.wready_o",
+        "consequent": "u_msg_unpacker_share0.clr_i == 0",
         "formalizability": "direct"
       },
       "risk": "",
@@ -58,16 +52,11 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "msg[0]",
-          "msg_valid_shares[0]",
-          "msg_ready_shares[0]",
-          "rdata_o",
-          "rvalid_o",
-          "wready_o"
+          "u_msg_unpacker_share0.clr_i"
         ],
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "always",
-        "consequent": "msg[0] == u_msg_unpacker_share0.rdata_o && msg_valid_shares[0] == u_msg_unpacker_share0.rvalid_o && msg_ready_shares[0] == u_msg_unpacker_share0.wready_o",
+        "consequent": "u_msg_unpacker_share0.clr_i == 0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -75,19 +64,53 @@
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "The packer's synchronous clear input clr_i is tied to 1'b0, permanently disabling the input.",
+      "type": "instance_connection",
+      "claim": "The depth_o output is unconnected, so the FIFO depth is not monitored in kmac_reduced.",
       "cond": "always",
       "signals": [
-        "clr_i"
+        "u_msg_unpacker_share0.depth_o"
       ],
       "refs": [
-        "kmac_reduced.sv:113"
+        "kmac_reduced.sv:120"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "depth_o_unconnected",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_msg_unpacker_share0.depth_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "depth_o_unconnected",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "instance_connection",
+      "claim": "msg_ready_shares[0] is driven by the FIFO's wready_o, indicating backpressure from this share's input path.",
+      "cond": "always_comb",
+      "signals": [
+        "msg_ready_shares[0]",
+        "u_msg_unpacker_share0.wready_o"
+      ],
+      "refs": [
+        "kmac_reduced.sv:116"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "clr_i == 1'b0",
+        "consequent": "msg_ready_shares[0] == u_msg_unpacker_share0.wready_o",
         "formalizability": "direct"
       },
       "risk": "",
@@ -96,11 +119,12 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "clr_i"
+          "msg_ready_shares[0]",
+          "u_msg_unpacker_share0.wready_o"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
-        "consequent": "clr_i == 1'b0",
+        "antecedent": "always_comb",
+        "consequent": "msg_ready_shares[0] == u_msg_unpacker_share0.wready_o",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -111,57 +135,20 @@
     {
       "id": "A1",
       "type": "security_precondition",
-      "claim": "The prim_packer_fifo with ClearOnRead=1 must clear its internal storage (including any masked shares) after a successful read handshake (rvalid_o && rready_i).",
-      "cond": "ClearOnRead is set to 1",
-      "risk": "If clearing is not implemented, sensitive msg bits may persist in the FIFO and become observable to an attacker.",
+      "claim": "The prim_packer_fifo module correctly implements ClearOnRead=1 by zeroizing the read data location after a successful read (rvalid_o && rready_i).",
+      "cond": "any read operation",
+      "risk": "If the FIFO fails to clear (e.g., uses functional gating instead of zeroization), secret message data may persist in the FIFO and leak to subsequent reads or via side-channels.",
       "signals": [
-        "ClearOnRead",
-        "rvalid_o",
-        "rready_i"
+        "u_msg_unpacker_share0.rvalid_o",
+        "u_msg_unpacker_share0.rready_i"
       ],
       "refs": [
         "kmac_reduced.sv:109"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "u_msg_unpacker_share0.rvalid_o && msg_ready",
-        "consequent": "/* internal state zeroized */",
-        "formalizability": "partial"
-      },
-      "formal_sketch": {
-        "scope": "kmac_reduced",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "ClearOnRead",
-          "rvalid_o",
-          "rready_i"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "u_msg_unpacker_share0.rvalid_o && msg_ready",
-        "consequent": "/* internal state zeroized */",
-        "formalizability": "partial",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "The parameters MsgLen and sha3_pkg::MsgWidth must be such that the packer can correctly unpack data without truncation or alignment errors.",
-      "cond": "always",
-      "risk": "Data corruption or incorrect message width could result in protocol failures or security vulnerabilities.",
-      "signals": [
-        "MsgLen",
-        "sha3_pkg::MsgWidth"
-      ],
-      "refs": [
-        "kmac_reduced.sv:107-108"
-      ],
-      "formal": {
-        "temporal_shape": "always",
-        "antecedent": "",
-        "consequent": "MsgLen == <valid value for operation>",
+        "antecedent": "msg_valid_shares[0] && msg_ready",
+        "consequent": "internal_clear_asserted",
         "formalizability": "none"
       },
       "formal_sketch": {
@@ -169,47 +156,45 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "MsgLen",
-          "sha3_pkg::MsgWidth"
+          "u_msg_unpacker_share0.rvalid_o",
+          "u_msg_unpacker_share0.rready_i"
         ],
-        "temporal_shape": "always",
-        "antecedent": "always",
-        "consequent": "MsgLen == <valid value for operation>",
+        "temporal_shape": "next_cycle",
+        "antecedent": "msg_valid_shares[0] && msg_ready",
+        "consequent": "internal_clear_asserted",
         "formalizability": "none",
         "confidence": 0.85,
         "source": "llm"
       }
     },
     {
-      "id": "A3",
-      "type": "mode_config",
-      "claim": "The packer must not rely on the clr_i input for any functional or security-critical operation; rst_ni must fully reset the internal state.",
-      "cond": "clr_i tied to 0",
-      "risk": "If the packer requires clr_i for explicit clearing beyond reset, the internal state may not be properly initialized or cleared.",
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The signal msg_i[0] must be a vector of width equal to parameter MsgLen, matching the InW of the FIFO.",
+      "cond": "always",
+      "risk": "If width mismatches, width truncation or sign extension may cause data corruption.",
       "signals": [
-        "clr_i",
-        "rst_ni"
+        "msg_i"
       ],
       "refs": [
-        "kmac_reduced.sv:113"
+        "kmac_reduced.sv:107,115"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "clr_i == 1'b0",
+        "consequent": "$size(msg_i[0]) == MsgLen",
         "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "kmac_reduced",
         "clock": "",
-        "reset": "rst_ni",
+        "reset": "",
         "signals": [
-          "clr_i",
-          "rst_ni"
+          "msg_i"
         ],
         "temporal_shape": "always",
-        "antecedent": "clr_i tied to 0",
-        "consequent": "clr_i == 1'b0",
+        "antecedent": "always",
+        "consequent": "$size(msg_i[0]) == MsgLen",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -219,13 +204,47 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
-      "priority": "medium",
-      "claim": "The depth_o output of the packer is left unconnected. This signal likely indicates FIFO occupancy and could be used to detect overflow or underflow conditions.",
-      "cond": "unknown if depth is needed for error detection",
-      "risk": "If an overflow or underflow occurs, the absence of depth_o prevents monitoring, possibly leading to silent data corruption.",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "ClearOnRead=1 is intended to wipe read data, but the FIFO's internal clear mechanism may not guarantee full zeroization of all storage bits, potentially leaving residual data.",
+      "cond": "after any read from the FIFO",
+      "risk": "Sensitive message data could be retrieved later by an attacker reading the FIFO after an error or via a scan chain.",
       "signals": [
-        "depth_o"
+        "u_msg_unpacker_share0.rdata_o"
+      ],
+      "refs": [
+        "kmac_reduced.sv:109"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "msg_valid_shares[0] && msg_ready",
+        "consequent": "all bits of the read location are zero",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_msg_unpacker_share0.rdata_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "msg_valid_shares[0] && msg_ready",
+        "consequent": "all bits of the read location are zero",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The depth_o output provides the number of entries currently stored, but it is left unconnected, possibly masking overflow/premature-full conditions.",
+      "cond": "when FIFO is storing data",
+      "risk": "If the FIFO overflows and no monitoring exists, message data could be lost or corrupted without detection.",
+      "signals": [
+        "u_msg_unpacker_share0.depth_o"
       ],
       "refs": [
         "kmac_reduced.sv:120"
@@ -233,7 +252,7 @@
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "",
+        "consequent": "depth_o is not observed",
         "formalizability": "none"
       },
       "formal_sketch": {
@@ -241,96 +260,22 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "depth_o"
+          "u_msg_unpacker_share0.depth_o"
         ],
         "temporal_shape": "always",
-        "antecedent": "unknown if depth is needed for error detection",
-        "consequent": "The depth_o output of the packer is left unconnected. This signal likely indicates FIFO occupancy and could be used to detect overflow or underflow conditions",
+        "antecedent": "when FIFO is storing data",
+        "consequent": "depth_o is not observed",
         "formalizability": "none",
         "confidence": 0.85,
         "source": "llm"
       }
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "Only share0 (msg_i[0] -> msg[0]) is unpacked in this instance. Multi-share masking requires that all shares be cleared on read. The handling of other shares and their ClearOnRead synchronization must be verified.",
-      "cond": "when shared sensitive data is used",
-      "risk": "Incomplete clearing across shares could expose partial secrets through the side channel or later reads.",
-      "signals": [
-        "msg_i[0]",
-        "msg[0]",
-        "ClearOnRead"
-      ],
-      "refs": [
-        "kmac_reduced.sv:109,115,118"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "kmac_reduced",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "msg_i[0]",
-          "msg[0]",
-          "ClearOnRead"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "when shared sensitive data is used",
-        "consequent": "Only share0 (msg_i[0] -> msg[0]) is unpacked in this instance. Multi-share masking requires that all shares be cleared on read. The handling of other shares and their ClearOnRead synchronization must be verified",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U3",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "MsgLen and sha3_pkg::MsgWidth may not be evenly divisible. If MsgLen is not a multiple of OutW, the packer's behavior for the final partial word could lead to incomplete data transfer.",
-      "cond": "MsgLen % sha3_pkg::MsgWidth != 0",
-      "risk": "Incomplete or misaligned data could cause protocol errors or security weaknesses in the downstream KMAC operation.",
-      "signals": [
-        "MsgLen",
-        "sha3_pkg::MsgWidth"
-      ],
-      "refs": [
-        "kmac_reduced.sv:107-108"
-      ],
-      "formal": {
-        "temporal_shape": "always",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "kmac_reduced",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "MsgLen",
-          "sha3_pkg::MsgWidth"
-        ],
-        "temporal_shape": "always",
-        "antecedent": "MsgLen % sha3_pkg::MsgWidth != 0",
-        "consequent": "MsgLen and sha3_pkg::MsgWidth may not be evenly divisible. If MsgLen is not a multiple of OutW, the packer's behavior for the final partial word could lead to incomplete data transfer",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
     }
   ],
+  "security_implications": "The msg unpacker FIFO for share 0 processes potentially secret message data. ClearOnRead is enabled, requiring that the FIFO reliably zeroizes any read data to prevent leakage. Failure to thoroughly clear all storage bits (e.g., due to functional gating or resetless flops) could leave secret residues that persist across operations, leading to data exposure when the FIFO is later read or scanned. The unconnected depth_o output may prevent detection of overflow conditions that could corrupt or drop message data, though the impact may be limited to integrity rather than secrecy.",
   "evidence_refs": [
     "kmac_reduced.sv:106-121"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 106,
-  "line_end": 121,
-  "security_implications": ""
+  "line_end": 121
 }

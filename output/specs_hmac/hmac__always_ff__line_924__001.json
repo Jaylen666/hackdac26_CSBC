@@ -14,90 +14,232 @@
     ],
     "modes": [],
     "tags": [
-      "handshake",
-      "reset"
+      "digest",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, in_process is assigned to 0.",
+      "claim": "On reset (rst_ni low), in_process is cleared to 0.",
       "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "in_process"
       ],
       "refs": [
-        "file:925"
-      ]
+        "hmac.sv:925-925"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "in_process == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "in_process"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "in_process == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When rst_ni is high and (hash_process or reg_hash_stop) is high, in_process is set to 1, ignoring reg_hash_done.",
+      "claim": "When hash_process or reg_hash_stop is high (and not in reset), in_process is set to 1.",
       "cond": "rst_ni && (hash_process || reg_hash_stop)",
       "signals": [
-        "in_process",
         "hash_process",
-        "reg_hash_stop"
+        "reg_hash_stop",
+        "in_process"
       ],
       "refs": [
-        "file:926"
-      ]
+        "hmac.sv:926-926"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (hash_process || reg_hash_stop)",
+        "consequent": "in_process == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "hash_process",
+          "reg_hash_stop",
+          "in_process"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (hash_process || reg_hash_stop)",
+        "consequent": "in_process == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When rst_ni is high, neither hash_process nor reg_hash_stop is high, and reg_hash_done is high, in_process is cleared to 0.",
+      "claim": "When reg_hash_done is high, and neither hash_process nor reg_hash_stop is high (and not in reset), in_process is cleared to 0.",
       "cond": "rst_ni && !(hash_process || reg_hash_stop) && reg_hash_done",
       "signals": [
-        "in_process",
         "reg_hash_done",
-        "hash_process",
-        "reg_hash_stop"
+        "in_process"
       ],
       "refs": [
-        "file:927"
-      ]
+        "hmac.sv:927-927"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(hash_process || reg_hash_stop) && reg_hash_done",
+        "consequent": "in_process == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "reg_hash_done",
+          "in_process"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(hash_process || reg_hash_stop) && reg_hash_done",
+        "consequent": "in_process == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "default_fallback",
-      "claim": "When none of the reset, set, or clear conditions are true, in_process retains its previous value.",
-      "cond": "otherwise",
+      "claim": "When no set or clear condition is active and not in reset, in_process retains its previous value.",
+      "cond": "rst_ni && !(hash_process || reg_hash_stop) && !reg_hash_done",
       "signals": [
         "in_process"
       ],
       "refs": [
-        "file:924-928"
-      ]
+        "hmac.sv:924-928"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(hash_process || reg_hash_stop) && !reg_hash_done",
+        "consequent": "$stable(in_process)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "in_process"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(hash_process || reg_hash_stop) && !reg_hash_done",
+        "consequent": "$stable(in_process)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "reg_hash_stop and reg_hash_done are mutually exclusive and will not be high in the same cycle.",
+      "cond": "always",
+      "risk": "If both are high, the priority logic sets in_process to 1, potentially ignoring the done condition and leaving the process stuck high, which could hang the HMAC state machine and expose intermediate data.",
+      "signals": [
+        "reg_hash_stop",
+        "reg_hash_done"
+      ],
+      "refs": [
+        "hmac.sv:926-927"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "!(reg_hash_stop && reg_hash_done)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg_hash_stop",
+          "reg_hash_done"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "!(reg_hash_stop && reg_hash_done)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "reg_hash_stop, alongside hash_process, sets in_process to 1. The signal name suggests a stop request, yet the logic treats it as an active processing condition, possibly to block new operations during a stop sequence. The design intent is unclear: if in_process is used for security gating (e.g., preventing key/state access), an incorrect state could compromise security.",
-      "cond": "when reg_hash_stop is asserted",
-      "risk": "If in_process is used to gate access to secret hash state or keys, an erroneous high state during stop could either block legitimate access or allow access when intended to be blocked, leading to data leakage or corruption.",
+      "claim": "Whether the driving logic ensures that reg_hash_stop and reg_hash_done are never simultaneously asserted.",
+      "cond": "reg_hash_stop && reg_hash_done",
+      "risk": "Simultaneous assertion would set in_process to 1 (instead of clearing it), potentially corrupting the HMAC control flow and violating security-critical sequencing (e.g., allowing access while processing).",
       "signals": [
-        "in_process",
         "reg_hash_stop",
-        "hash_process"
+        "reg_hash_done"
       ],
       "refs": [
-        "file:926"
-      ]
+        "hmac.sv:926-927"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reg_hash_stop && reg_hash_done",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg_hash_stop",
+          "reg_hash_done"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reg_hash_stop && reg_hash_done",
+        "consequent": "Whether the driving logic ensures that reg_hash_stop and reg_hash_done are never simultaneously asserted",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "in_process indicates whether the HMAC engine is busy. Incorrect in_process state (e.g., cleared prematurely while sensitive data is still being processed, or stuck high blocking completion) could leak intermediate digest values, expose key material, or allow unauthorized access to hash state. The mutual-exclusion assumption on reg_hash_stop and reg_hash_done is critical to avoid priority-induced misbehavior that could violate security guarantees.",
   "evidence_refs": [
-    "file:924-928"
+    "hmac.sv:924-928"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 924,
-  "line_end": 928,
-  "security_implications": ""
+  "line_end": 928
 }

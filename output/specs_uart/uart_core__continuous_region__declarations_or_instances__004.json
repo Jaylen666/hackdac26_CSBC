@@ -7,7 +7,15 @@
       "rx_in_maj",
       "rx_in_mx",
       "rx_in",
-      "rx_fifo_wvalid"
+      "rx_valid",
+      "rx_fifo_data",
+      "rx_uart_idle",
+      "event_rx_frame_err",
+      "event_rx_parity_err",
+      "rx_fifo_wready",
+      "rx_fifo_depth",
+      "rx_fifo_rvalid",
+      "uart_rdata"
     ],
     "used": [
       "rx_sync",
@@ -17,30 +25,41 @@
       "sys_loopback",
       "tx_out",
       "line_loopback",
+      "reg2hw.ctrl.parity_en.q",
+      "reg2hw.ctrl.parity_odd.q",
+      "rx_tick_baud",
       "rx_valid",
       "event_rx_frame_err",
-      "event_rx_parity_err"
+      "event_rx_parity_err",
+      "rx_fifo_data",
+      "uart_fifo_rxrst",
+      "reg2hw.rdata.re",
+      "clk_i",
+      "rst_ni",
+      "rx_enable",
+      "tick_baud_x16"
     ],
     "modes": [
+      "rxnf_enable",
       "sys_loopback",
       "line_loopback",
-      "rxnf_enable",
-      "parity_enable"
+      "rx_enable",
+      "parity_enable",
+      "parity_odd",
+      "RxFifoDepth"
     ],
     "tags": [
+      "handshake",
       "fifo",
       "error",
-      "fault",
-      "reset",
-      "parameterization",
-      "handshake"
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "rx_in_maj is the majority vote of rx_sync, rx_sync_q1, and rx_sync_q2.",
+      "claim": "rx_in_maj is high if at least two of rx_sync, rx_sync_q1, rx_sync_q2 are high; otherwise low.",
       "cond": "always",
       "signals": [
         "rx_in_maj",
@@ -50,12 +69,36 @@
       ],
       "refs": [
         "uart_core.sv:257-259"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "rx_in_maj == ((rx_sync && rx_sync_q1) || (rx_sync && rx_sync_q2) || (rx_sync_q1 && rx_sync_q2))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_in_maj",
+          "rx_sync",
+          "rx_sync_q1",
+          "rx_sync_q2"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "rx_in_maj == ((rx_sync && rx_sync_q1) || (rx_sync && rx_sync_q2) || (rx_sync_q1 && rx_sync_q2))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "rx_in_mx selects rx_in_maj when rxnf_enable is high, otherwise selects rx_sync.",
+      "claim": "When rxnf_enable is high, rx_in_mx equals rx_in_maj; else equals rx_sync.",
       "cond": "always",
       "signals": [
         "rx_in_mx",
@@ -65,12 +108,36 @@
       ],
       "refs": [
         "uart_core.sv:260"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "rx_in_mx == (rxnf_enable ? rx_in_maj : rx_sync)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_in_mx",
+          "rxnf_enable",
+          "rx_in_maj",
+          "rx_sync"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "rx_in_mx == (rxnf_enable ? rx_in_maj : rx_sync)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "rx_in selects tx_out when sys_loopback=1, 1'b1 when line_loopback=1, and rx_in_mx otherwise.",
+      "claim": "If sys_loopback is high, rx_in equals tx_out; else if line_loopback is high, rx_in equals 1'b1; else equals rx_in_mx.",
       "cond": "always",
       "signals": [
         "rx_in",
@@ -81,11 +148,84 @@
       ],
       "refs": [
         "uart_core.sv:262-264"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(sys_loopback ? rx_in == tx_out : (line_loopback ? rx_in == 1'b1 : rx_in == rx_in_mx))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_in",
+          "sys_loopback",
+          "tx_out",
+          "line_loopback",
+          "rx_in_mx"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(sys_loopback ? rx_in == tx_out : (line_loopback ? rx_in == 1'b1 : rx_in == rx_in_mx))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
-      "type": "assignment",
+      "type": "instance",
+      "claim": "The uart_rx receiver is instantiated with rx input = rx_in, parity control from register interface, tick_baud = rx_tick_baud, and outputs rx_valid, rx_fifo_data, rx_uart_idle, event_rx_frame_err, event_rx_parity_err are connected.",
+      "cond": "always",
+      "signals": [
+        "rx_in",
+        "reg2hw.ctrl.parity_en.q",
+        "reg2hw.ctrl.parity_odd.q",
+        "rx_tick_baud",
+        "rx_valid",
+        "rx_fifo_data",
+        "rx_uart_idle",
+        "event_rx_frame_err",
+        "event_rx_parity_err"
+      ],
+      "refs": [
+        "uart_core.sv:266-280"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_in",
+          "reg2hw.ctrl.parity_en.q",
+          "reg2hw.ctrl.parity_odd.q",
+          "rx_tick_baud",
+          "rx_valid",
+          "rx_fifo_data",
+          "rx_uart_idle",
+          "event_rx_frame_err"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "The uart_rx receiver is instantiated with rx input = rx_in, parity control from register interface, tick_baud = rx_tick_baud, and outputs rx_valid, rx_fifo_data, rx_uart_idle, event_rx_frame_err, event_rx_parity_err are connected",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "error_detection",
       "claim": "rx_fifo_wvalid is asserted only when rx_valid is high and both event_rx_frame_err and event_rx_parity_err are low.",
       "cond": "always",
       "signals": [
@@ -96,139 +236,183 @@
       ],
       "refs": [
         "uart_core.sv:282"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "instance",
-      "claim": "uart_rx instance connects .rx(rx_in) and .parity_enable(reg2hw.ctrl.parity_en.q), driving rx_valid, rx_fifo_data, event_rx_frame_err, event_rx_parity_err, and idle.",
-      "cond": "always",
-      "signals": [
-        "rx_in",
-        "reg2hw.ctrl.parity_en.q",
-        "rx_valid",
-        "rx_fifo_data",
-        "event_rx_frame_err",
-        "event_rx_parity_err",
-        "rx_uart_idle"
       ],
-      "refs": [
-        "uart_core.sv:266-280"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "rx_fifo_wvalid == (rx_valid && !event_rx_frame_err && !event_rx_parity_err)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_fifo_wvalid",
+          "rx_valid",
+          "event_rx_frame_err",
+          "event_rx_parity_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "rx_fifo_wvalid == (rx_valid && !event_rx_frame_err && !event_rx_parity_err)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G6",
       "type": "instance",
-      "claim": "prim_fifo_sync instance connects wvalid_i to rx_fifo_wvalid, wdata_i to rx_fifo_data, rready_i to reg2hw.rdata.re, rdata_o to uart_rdata, rvalid_o to rx_fifo_rvalid, depth_o to rx_fifo_depth, clr_i to uart_fifo_rxrst; full_o and err_o are left unconnected.",
+      "claim": "The RX FIFO is 8-bit wide, pass-through disabled, depth parameterized by RxFifoDepth, writes data from rx_fifo_data when rx_fifo_wvalid is high, and reads triggered by reg2hw.rdata.re.",
       "cond": "always",
       "signals": [
         "rx_fifo_wvalid",
         "rx_fifo_data",
         "reg2hw.rdata.re",
         "uart_rdata",
-        "rx_fifo_rvalid",
-        "rx_fifo_depth",
-        "uart_fifo_rxrst",
-        "full_o",
-        "err_o"
+        "RxFifoDepth"
       ],
       "refs": [
         "uart_core.sv:284-301"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_fifo_wvalid",
+          "rx_fifo_data",
+          "reg2hw.rdata.re",
+          "uart_rdata",
+          "RxFifoDepth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "The RX FIFO is 8-bit wide, pass-through disabled, depth parameterized by RxFifoDepth, writes data from rx_fifo_data when rx_fifo_wvalid is high, and reads triggered by reg2hw.rdata.re",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "uart_rx module generates event_rx_frame_err and event_rx_parity_err synchronously with rx_valid.",
-      "cond": "while rx_valid is asserted",
-      "risk": "rx_fifo_wvalid may incorrectly gate data, causing spurious writes or loss of valid data.",
+      "type": "handshake",
+      "claim": "When rx_fifo_wvalid is asserted, rx_fifo_wready must be high to accept the write into the FIFO.",
+      "cond": "rx_fifo_wvalid == 1",
+      "risk": "If rx_fifo_wready is low, the received byte is dropped silently, causing data loss.",
       "signals": [
-        "rx_valid",
-        "event_rx_frame_err",
-        "event_rx_parity_err"
+        "rx_fifo_wvalid",
+        "rx_fifo_wready"
       ],
       "refs": [
-        "uart_core.sv:282"
-      ]
+        "uart_core.sv:282",
+        "uart_core.sv:293"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rx_fifo_wvalid == 1",
+        "consequent": "rx_fifo_wready == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_fifo_wvalid",
+          "rx_fifo_wready"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rx_fifo_wvalid == 1",
+        "consequent": "rx_fifo_wready == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "mode_config",
-      "claim": "rxnf_enable, sys_loopback, and line_loopback are stable during reception and do not toggle mid-character.",
-      "cond": "during active reception",
-      "risk": "rx_in may glitch, corrupting bits and leading to false frame/parity errors.",
+      "type": "producer_contract",
+      "claim": "rx_tick_baud provides a valid baud rate tick timed to the UART bit period.",
+      "cond": "during uart_rx operation",
+      "risk": "Incorrect tick timing leads to mis-sampling, frame errors, or data corruption.",
       "signals": [
-        "rxnf_enable",
-        "sys_loopback",
-        "line_loopback"
+        "rx_tick_baud"
       ],
       "refs": [
-        "uart_core.sv:260-264"
-      ]
+        "uart_core.sv:273"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_tick_baud"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during uart_rx operation",
+        "consequent": "rx_tick_baud provides a valid baud rate tick timed to the UART bit period",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
-      "type": "mode_config",
-      "claim": "CSR fields reg2hw.ctrl.parity_en.q and parity_odd.q provide the correct parity configuration before reception starts.",
-      "cond": "when parity_enable is asserted",
-      "risk": "incorrect parity checking may cause false parity error detections or missed errors.",
-      "signals": [
-        "reg2hw.ctrl.parity_en.q",
-        "reg2hw.ctrl.parity_odd.q"
-      ],
-      "refs": [
-        "uart_core.sv:271-272"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "producer_contract",
-      "claim": "RxFifoDepth is a legal parameter supported by prim_fifo_sync and fits the resource constraints.",
-      "cond": "always",
-      "risk": "FIFO behavior becomes undefined, leading to data corruption or functional failure.",
-      "signals": [
-        "RxFifoDepth"
-      ],
-      "refs": [
-        "uart_core.sv:287"
-      ]
-    },
-    {
-      "id": "A5",
-      "type": "handshake",
-      "claim": "reg2hw.rdata.re is only asserted when rx_fifo_rvalid is high, preventing an empty read from the FIFO.",
-      "cond": "when reading from the FIFO",
-      "risk": "err_o unconnected; an empty read could go undetected, potentially yielding stale data.",
-      "signals": [
-        "reg2hw.rdata.re",
-        "rx_fifo_rvalid",
-        "err_o"
-      ],
-      "refs": [
-        "uart_core.sv:298,297,300"
-      ]
-    },
-    {
-      "id": "A6",
       "type": "lifecycle",
-      "claim": "uart_fifo_rxrst is asserted appropriately to clear the FIFO when required.",
-      "cond": "after a reset or error event",
-      "risk": "stale data may remain in the FIFO, causing incorrect reads.",
+      "claim": "uart_fifo_rxrst is asserted appropriately to reset the RX FIFO state.",
+      "cond": "at reset or protocol flush",
+      "risk": "If not asserted or glitchy, stale data may persist, causing reads of incorrect bytes.",
       "signals": [
         "uart_fifo_rxrst"
       ],
       "refs": [
         "uart_core.sv:291"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "uart_fifo_rxrst",
+        "signals": [
+          "uart_fifo_rxrst"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "at reset or protocol flush",
+        "consequent": "uart_fifo_rxrst is asserted appropriately to reset the RX FIFO state",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
-      "id": "A7",
-      "type": "producer_contract",
-      "claim": "rx_sync, rx_sync_q1, and rx_sync_q2 are adequately synchronized and represent stable sampled values of the external RX line.",
+      "id": "A4",
+      "type": "value_domain",
+      "claim": "rx_sync, rx_sync_q1, rx_sync_q2 are properly synchronized and represent the same input line.",
       "cond": "always",
-      "risk": "metastability or incorrect sampling can cause false edges and corrupt the majority vote.",
+      "risk": "Poor synchronization may cause metastability or glitches in the majority voter, corrupting the received bit.",
       "signals": [
         "rx_sync",
         "rx_sync_q1",
@@ -236,80 +420,148 @@
       ],
       "refs": [
         "uart_core.sv:257-259"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_sync",
+          "rx_sync_q1",
+          "rx_sync_q2"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "rx_sync, rx_sync_q1, rx_sync_q2 are properly synchronized and represent the same input line",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_dead_or_unused_signal",
       "priority": "medium",
-      "claim": "prim_fifo_sync full_o and err_o are left unconnected; overflow or error conditions are not detected or handled in this chunk.",
-      "cond": "when FIFO becomes full or an illegal operation occurs",
-      "risk": "data loss from overflow or undetected FIFO errors compromising data integrity.",
+      "claim": "The FIFO error output (err_o) and full output (full_o) are left unconnected, potentially masking overflow or internal error conditions.",
+      "cond": "always",
+      "risk": "FIFO overflow or internal faults are not detected or reported, possibly leading to undetected data loss.",
       "signals": [
-        "full_o",
-        "err_o"
+        ".full_o()",
+        ".err_o()"
       ],
       "refs": [
-        "uart_core.sv:296,300"
-      ]
+        "uart_core.sv:296",
+        "uart_core.sv:300"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          ".full_o()",
+          ".err_o()"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "The FIFO error output (err_o) and full output (full_o) are left unconnected, potentially masking overflow or internal error conditions",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_unhandled_legal_case",
+      "type": "U_fault_containment_gap",
       "priority": "medium",
-      "claim": "In sys_loopback mode with parity_enable=1, uart_rx may assert parity errors on looped data, causing rx_fifo_wvalid to de-assert and data to be lost. The design does not bypass error checking for loopback.",
-      "cond": "sys_loopback=1 and parity_enable=1",
-      "risk": "loopback test data loss, functional failure during loopback operations.",
+      "claim": "rx_fifo_wvalid is not gated by rx_fifo_wready, so a full FIFO causes silent data loss because the write is ignored.",
+      "cond": "rx_fifo_wvalid == 1 && rx_fifo_wready == 0",
+      "risk": "A received byte is discarded without any error flag, corrupting the data stream.",
       "signals": [
-        "sys_loopback",
-        "parity_enable",
-        "event_rx_parity_err",
-        "rx_fifo_wvalid"
+        "rx_fifo_wvalid",
+        "rx_fifo_wready"
       ],
       "refs": [
-        "uart_core.sv:262,271,282"
-      ]
+        "uart_core.sv:282",
+        "uart_core.sv:293"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rx_fifo_wvalid && !rx_fifo_wready",
+        "consequent": "/* byte is not stored */",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_fifo_wvalid",
+          "rx_fifo_wready"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rx_fifo_wvalid && !rx_fifo_wready",
+        "consequent": "/* byte is not stored */",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "rx_fifo_wready from prim_fifo_sync is connected to rx_fifo_wready but is not used in this chunk to gate rx_fifo_wvalid or throttle the receiver; backpressure might be missing.",
-      "cond": "when FIFO is full and cannot accept writes",
-      "risk": "data loss due to overflow because the receiver continues to assert writes.",
-      "signals": [
-        "rx_fifo_wready",
-        "rx_fifo_wvalid"
-      ],
-      "refs": [
-        "uart_core.sv:293,292"
-      ]
-    },
-    {
-      "id": "U4",
       "type": "U_temporal_window",
-      "priority": "low",
-      "claim": "rx_fifo_wvalid is a combinational expression of rx_valid and error flags; misalignment between these signals could cause glitched writes.",
-      "cond": "timing skew between rx_valid and error flags",
-      "risk": "spurious FIFO entries or missed write opportunities.",
+      "priority": "medium",
+      "claim": "Parity enable and odd/even settings from registers may be changed during a byte reception, leading to spurious parity errors.",
+      "cond": "when reg2hw.ctrl.parity_en.q or parity_odd.q changes while a byte is being received",
+      "risk": "A valid byte may be flagged with a parity error, causing it to be dropped or mis-handled.",
       "signals": [
-        "rx_fifo_wvalid",
-        "rx_valid",
-        "event_rx_frame_err",
-        "event_rx_parity_err"
+        "reg2hw.ctrl.parity_en.q",
+        "reg2hw.ctrl.parity_odd.q"
       ],
       "refs": [
-        "uart_core.sv:282"
-      ]
+        "uart_core.sv:271-272"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.ctrl.parity_en.q",
+          "reg2hw.ctrl.parity_odd.q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when reg2hw.ctrl.parity_en.q or parity_odd.q changes while a byte is being received",
+        "consequent": "Parity enable and odd/even settings from registers may be changed during a byte reception, leading to spurious parity errors",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "",
   "evidence_refs": [
     "uart_core.sv:257-301"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 257,
-  "line_end": 301,
-  "security_implications": ""
+  "line_end": 301
 }

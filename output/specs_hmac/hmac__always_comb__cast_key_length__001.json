@@ -9,80 +9,146 @@
     "used": [
       "key_length_supplied"
     ],
-    "modes": [
-      "Key_None",
-      "Key_128",
-      "Key_256",
-      "Key_384",
-      "Key_512",
-      "Key_1024"
-    ],
+    "modes": [],
     "tags": [
       "key",
-      "error"
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "key_length is assigned the value of key_length_supplied if it matches a supported key length (Key_128, Key_256, Key_384, Key_512, Key_1024); for any other value, key_length is assigned Key_None.",
+      "claim": "For key_length_supplied equal to any of the enumerated values Key_128, Key_256, Key_384, Key_512, Key_1024, key_length is assigned the same value; for any other value, key_length is assigned Key_None.",
       "cond": "always",
       "signals": [
-        "key_length",
         "key_length_supplied",
+        "key_length",
+        "Key_None",
         "Key_128",
         "Key_256",
         "Key_384",
         "Key_512",
-        "Key_1024",
+        "Key_1024"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:320-334"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(key_length_supplied inside {Key_128, Key_256, Key_384, Key_512, Key_1024}) ? (key_length == key_length_supplied) : (key_length == Key_None)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_length_supplied",
+          "key_length",
+          "Key_None",
+          "Key_128",
+          "Key_256",
+          "Key_384",
+          "Key_512",
+          "Key_1024"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(key_length_supplied inside {Key_128, Key_256, Key_384, Key_512, Key_1024}) ? (key_length == key_length_supplied) : (key_length == Key_None)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "Unsupported key_length_supplied values are silently mapped to Key_None.",
+      "cond": "key_length_supplied not in {Key_128, Key_256, Key_384, Key_512, Key_1024}",
+      "signals": [
+        "key_length_supplied",
+        "key_length",
         "Key_None"
       ],
       "refs": [
-        "file:320-334"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "security_precondition",
-      "claim": "Downstream control logic must detect when key_length equals Key_None (due to an unsupported key_length_supplied) and prevent the HMAC core from starting operation, also signaling an error to software.",
-      "cond": "when key_length_supplied is an unsupported value and a subsequent HMAC start is triggered",
-      "risk": "HMAC may be activated with an unsupported key length, potentially leading to cryptographic weakness, data corruption, or side-channel leakage.",
-      "signals": [
-        "key_length",
-        "HMAC start signal",
-        "error signal"
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:329-332"
       ],
-      "refs": [
-        "file:329-331"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!(key_length_supplied inside {Key_128, Key_256, Key_384, Key_512, Key_1024})",
+        "consequent": "key_length == Key_None",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "Unsupported",
+        "signals": [
+          "key_length_supplied",
+          "key_length",
+          "Key_None"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!(key_length_supplied inside {Key_128, Key_256, Key_384, Key_512, Key_1024})",
+        "consequent": "key_length == Key_None",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The comment asserts that starting HMAC with a key length mapped to Key_None is blocked and an error is signaled to software, but this chunk only performs the mapping. The existence and correctness of the downstream blocking/error logic must be verified elsewhere.",
-      "cond": "when key_length_supplied is unsupported and an HMAC start trigger occurs",
-      "risk": "If the blocking logic is missing or flawed, an unsupported key length could be used, compromising the security of HMAC operations.",
+      "claim": "Downstream HMAC control logic (outside this chunk) is expected to block operation start and signal an error when key_length == Key_None, as per comments; verification needed to confirm the error detection and blocking path exists.",
+      "cond": "HMAC operation triggered with key_length == Key_None (i.e., unsupported key_length_supplied)",
+      "risk": "If blocking is missing, unsupported key lengths could allow HMAC to proceed with a default or unknown key, potentially breaking integrity or security properties.",
       "signals": [
         "key_length",
+        "Key_None",
         "hmac_start",
-        "error_output"
+        "error"
       ],
       "refs": [
-        "file:329-331"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:330-332"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "hmac_start && key_length == Key_None",
+        "consequent": "error || !operation_proceed",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_length",
+          "Key_None",
+          "hmac_start",
+          "error"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "hmac_start && key_length == Key_None",
+        "consequent": "error || !operation_proceed",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This block maps key length to an internal representation Key_None for unsupported values. If the downstream logic does not properly block HMAC operations when key_length == Key_None, the design may operate with an undefined key length, potentially reducing security strength or enabling incorrect HMAC computations. The mapping itself is safe, but the security property relies on external block/enforcement.",
   "evidence_refs": [
-    "file:320-334"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:320-334"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 320,
-  "line_end": 334,
-  "security_implications": ""
+  "line_end": 334
 }

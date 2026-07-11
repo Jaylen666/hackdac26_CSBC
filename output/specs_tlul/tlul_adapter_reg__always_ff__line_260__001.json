@@ -7,48 +7,48 @@
       "intg_error_q"
     ],
     "used": [
+      "intg_error",
       "rst_ni",
-      "intg_error"
+      "clk_i"
     ],
     "modes": [],
     "tags": [
       "error",
       "integrity",
-      "sticky",
-      "csr"
+      "fault"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "intg_error_q is cleared to 0 when reset is asserted (rst_ni low).",
-      "cond": "!rst_ni",
+      "claim": "On asynchronous reset (rst_ni low), intg_error_q is cleared to 0 on the next clock edge.",
+      "cond": "rst_ni == 0",
       "signals": [
-        "intg_error_q",
-        "rst_ni"
+        "rst_ni",
+        "intg_error_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:261-262"
+        "tlul_adapter_reg.sv:260-266"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "next_cycle",
         "antecedent": "!rst_ni",
-        "consequent": "intg_error_q == 1'b0",
+        "consequent": "intg_error_q == 0",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "",
+        "clock": "clock",
         "reset": "rst_ni",
         "signals": [
-          "intg_error_q",
-          "rst_ni"
+          "rst_ni",
+          "intg_error_q"
         ],
-        "temporal_shape": "always",
+        "temporal_shape": "next_cycle",
         "antecedent": "!rst_ni",
-        "consequent": "intg_error_q == 1'b0",
+        "consequent": "intg_error_q == 0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -57,38 +57,73 @@
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When not in reset and intg_error is high, intg_error_q is set to 1 on the next clock edge and remains 1 until reset.",
-      "cond": "intg_error && rst_ni",
+      "claim": "When not in reset and intg_error is high, intg_error_q is set to 1 on the next cycle.",
+      "cond": "rst_ni && intg_error",
       "signals": [
-        "intg_error_q",
         "intg_error",
-        "clk_i",
+        "intg_error_q",
         "rst_ni"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:263-264"
+        "tlul_adapter_reg.sv:260-266"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "intg_error && rst_ni",
-        "consequent": "intg_error_q == 1'b1",
+        "antecedent": "rst_ni && intg_error",
+        "consequent": "intg_error_q == 1",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "clk_i",
+        "clock": "",
         "reset": "rst_ni",
         "signals": [
-          "intg_error_q",
           "intg_error",
-          "clk_i",
+          "intg_error_q",
           "rst_ni"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "intg_error && rst_ni",
-        "consequent": "intg_error_q == 1'b1",
+        "antecedent": "rst_ni && intg_error",
+        "consequent": "intg_error_q == 1",
         "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When not in reset and intg_error is low, intg_error_q holds its previous value.",
+      "cond": "rst_ni && !intg_error",
+      "signals": [
+        "intg_error",
+        "intg_error_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:260-266"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !intg_error",
+        "consequent": "$stable(intg_error_q)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "intg_error",
+          "intg_error_q",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !intg_error",
+        "consequent": "$stable(intg_error_q)",
+        "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
       }
@@ -98,80 +133,46 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_security_intent_gap",
       "priority": "medium",
-      "claim": "The sticky integrity error flag intg_error_q can only be cleared by a hardware reset. There is no software-clear mechanism or bus-writable path through the TL-UL adapter register interface.",
-      "cond": "When a software clear is desired after handling an error.",
-      "risk": "Fault handling software may be unable to reset the flag without a full system reset, complicating error recovery or causing repeated spurious interrupts.",
+      "claim": "intg_error_q is set on intg_error but has no clear path other than reset, creating a permanent sticky error flag.",
+      "cond": "any cycle after intg_error assertion",
+      "risk": "A transient integrity error permanently forces the module into an error state, potentially causing denial of service or masking later errors.",
       "signals": [
-        "intg_error_q"
+        "intg_error_q",
+        "intg_error"
       ],
       "refs": [
         "tlul_adapter_reg.sv:260-266"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
+        "antecedent": "intg_error_q && !intg_error && rst_ni",
+        "consequent": "intg_error_q == 1",
+        "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "reset.",
-        "signals": [
-          "intg_error_q"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "When a software clear is desired after handling an error",
-        "consequent": "The sticky integrity error flag intg_error_q can only be cleared by a hardware reset. There is no software-clear mechanism or bus-writable path through the TL-UL adapter register interface",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The only path to clear intg_error_q is a full reset. If an attacker can trigger a reset or if the chip enters reset for other reasons, the integrity error indication is lost, potentially masking repeated integrity attacks.",
-      "cond": "After an integrity error is latched.",
-      "risk": "Loss of error history and possible masking of subsequent integrity violations, weakening hardware security monitoring.",
-      "signals": [
-        "intg_error_q",
-        "rst_ni"
-      ],
-      "refs": [
-        "tlul_adapter_reg.sv:261-262"
-      ],
-      "formal": {
-        "temporal_shape": "always",
-        "antecedent": "intg_error_q && !rst_ni",
-        "consequent": "intg_error_q == 1'b0",
-        "formalizability": "partial"
-      },
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "rst_ni",
+        "reset": "reset",
         "signals": [
           "intg_error_q",
-          "rst_ni"
+          "intg_error"
         ],
-        "temporal_shape": "always",
-        "antecedent": "intg_error_q && !rst_ni",
-        "consequent": "intg_error_q == 1'b0",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "temporal_shape": "next_cycle",
+        "antecedent": "intg_error_q && !intg_error && rst_ni",
+        "consequent": "intg_error_q == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "intg_error_q is sticky-once-set; only reset clears it. This could cause permanent loss of availability after any transient integrity error, potentially disabling security-critical functions or masking subsequent errors.",
   "evidence_refs": [
     "tlul_adapter_reg.sv:260-266"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 260,
-  "line_end": 266,
-  "security_implications": ""
+  "line_end": 266
 }

@@ -7,77 +7,171 @@
       "enables_q"
     ],
     "used": [
-      "rst_ni",
       "cnt_set",
       "enables_d"
     ],
     "modes": [],
-    "tags": []
+    "tags": [
+      "handshake",
+      "parameterization",
+      "key",
+      "access_control"
+    ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low (reset), enables_q is cleared to all zeros.",
-      "cond": "rst_ni == 0 (on posedge clk_i or negedge rst_ni)",
+      "claim": "On active-low reset (!rst_ni), enables_q resets to all zero on the next clock edge.",
+      "cond": "always",
       "signals": [
         "rst_ni",
         "enables_q"
       ],
       "refs": [
-        "file:364-365"
-      ]
+        "keymgr_kmac_if.sv:364-365"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "enables_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "enables_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "enables_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When cnt_set is asserted and not in reset, enables_q takes the value of enables_d.",
-      "cond": "!rst_ni is false (high) and cnt_set == 1",
+      "claim": "When cnt_set is asserted, enables_q loads enables_d on the next positive clock edge.",
+      "cond": "cnt_set == 1'b1",
       "signals": [
         "cnt_set",
         "enables_d",
         "enables_q"
       ],
       "refs": [
-        "file:366-367"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "reg_update",
-      "claim": "When not in reset and cnt_set is deasserted, enables_q holds its previous value.",
-      "cond": "rst_ni high and cnt_set == 0",
-      "signals": [
-        "enables_q",
-        "cnt_set"
+        "keymgr_kmac_if.sv:366-367"
       ],
-      "refs": [
-        "file:363-369"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "cnt_set",
+        "consequent": "enables_q == enables_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "cnt_set",
+          "enables_d",
+          "enables_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "cnt_set",
+        "consequent": "enables_q == enables_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "enables_d must be valid and stable when cnt_set is asserted to ensure correct sampled value.",
-      "cond": "cnt_set == 1 at a rising edge of clk_i",
-      "risk": "If enables_d changes during the cycle cnt_set is high, the captured enables_q could be a glitch or intermediate value, causing unexpected behavior in dependant logic.",
+      "claim": "cnt_set must be asserted only as a single-cycle strobe, and enables_d must be stable while cnt_set is high.",
+      "cond": "any cycle where cnt_set == 1'b1",
+      "risk": "If cnt_set stays high for multiple cycles or enables_d toggles, enables_q could load unintended intermediate values, potentially enabling incorrect key manager operations.",
       "signals": [
         "cnt_set",
         "enables_d"
       ],
       "refs": [
-        "file:366-367"
-      ]
+        "keymgr_kmac_if.sv:366-367"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cnt_set",
+        "consequent": "$stable(enables_d)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_set",
+          "enables_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cnt_set",
+        "consequent": "$stable(enables_d)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "If cnt_set remains high for more than one cycle, enables_q may be written multiple times with consecutive enables_d values. Is this multi-cycle write behavior intended?",
+      "cond": "cnt_set asserted for >1 cycle",
+      "risk": "Unintended sequential changes to enables_q could violate handshake semantics or cause transient enable glitches.",
+      "signals": [
+        "cnt_set",
+        "enables_q"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:366-367"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cnt_set",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_set",
+          "enables_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cnt_set",
+        "consequent": "enables_q may be written multiple times with consecutive enables_d values. Is this multi-cycle write behavior intended?",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The enables_q register likely controls enablement of KMAC operations (which may involve key material or digest computations). If cnt_set or enables_d suffer glitches or timing violations, enables_q could be corrupted, potentially leading to unintended activation of key outputs or KMAC transactions that could leak secrets.",
   "evidence_refs": [
-    "file:363-369"
+    "keymgr_kmac_if.sv:363-369"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 363,
-  "line_end": 369,
-  "security_implications": ""
+  "line_end": 369
 }

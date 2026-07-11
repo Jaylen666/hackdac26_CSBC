@@ -13,23 +13,21 @@
     ],
     "modes": [
       "KEY_DEC_EXPAND",
-      "KEY_DEC_CLEAR",
-      "default"
+      "KEY_DEC_CLEAR"
     ],
     "tags": [
       "key",
       "secret",
-      "decryption",
       "mux",
-      "security"
+      "security_precondition"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "key_dec_d is assigned key_expand_out when key_dec_sel equals KEY_DEC_EXPAND or KEY_DEC_CLEAR; otherwise assigned prd_clearing_key_i.",
-      "cond": "always (combinational case)",
+      "claim": "key_dec_d is assigned key_expand_out when key_dec_sel is KEY_DEC_EXPAND or KEY_DEC_CLEAR; otherwise it becomes prd_clearing_key_i.",
+      "cond": "always",
       "signals": [
         "key_dec_d",
         "key_dec_sel",
@@ -37,24 +35,69 @@
         "prd_clearing_key_i"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:459-465"
-      ]
+        "aes_cipher_core.sv:459-465"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "key_dec_d == ( (key_dec_sel inside {KEY_DEC_EXPAND, KEY_DEC_CLEAR}) ? key_expand_out : prd_clearing_key_i )",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_dec_d",
+          "key_dec_sel",
+          "key_expand_out",
+          "prd_clearing_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_dec_d == ( (key_dec_sel inside {KEY_DEC_EXPAND, KEY_DEC_CLEAR}) ? key_expand_out : prd_clearing_key_i )",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "When key_dec_sel takes a value other than KEY_DEC_EXPAND or KEY_DEC_CLEAR, prd_clearing_key_i must provide a safe cleared key value.",
-      "cond": "key_dec_sel not in {KEY_DEC_EXPAND, KEY_DEC_CLEAR}",
-      "risk": "If prd_clearing_key_i is not a safe cleared key, key_dec_d may output sensitive material or invalid key data.",
+      "claim": "key_dec_sel must be driven only to KEY_DEC_EXPAND or KEY_DEC_CLEAR whenever key_dec_d is used for live cipher operations.",
+      "cond": "when cipher decryption key is required",
+      "risk": "if key_dec_sel falls into the default state, key_dec_d becomes prd_clearing_key_i, potentially using a non-secret or predictable value as the decryption key, breaking encryption integrity or enabling key injection.",
       "signals": [
-        "prd_clearing_key_i",
+        "key_dec_sel",
         "key_dec_d"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:463"
-      ]
+        "aes_cipher_core.sv:463-464"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_dec_sel",
+          "key_dec_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when cipher decryption key is required",
+        "consequent": "key_dec_sel must be driven only to KEY_DEC_EXPAND or KEY_DEC_CLEAR whenever key_dec_d is used for live cipher operations",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -62,25 +105,44 @@
       "id": "U1",
       "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "KEY_DEC_CLEAR mode selects key_expand_out, which may contain sensitive key material, contradicting the likely intent to output a cleared key (e.g., prd_clearing_key_i).",
+      "claim": "The KEY_DEC_CLEAR state selects key_expand_out, which is the same output as the KEY_DEC_EXPAND state. The name CLEAR suggests a key- clearing operation, yet no clearing value is assigned; this may indicate a bug or a missing zeroization path.",
       "cond": "key_dec_sel == KEY_DEC_CLEAR",
-      "risk": "Sensitive key data may be passed to key_dec_d when clearing was expected, leading to potential key leakage.",
+      "risk": "If CLEAR mode should zeroize key material but instead passes key_expand_out, residual key may be used or exposed, violating wipe / clear guarantees.",
       "signals": [
         "key_dec_sel",
-        "key_expand_out",
-        "prd_clearing_key_i",
-        "key_dec_d"
+        "key_expand_out"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:460-462"
-      ]
+        "aes_cipher_core.sv:462"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_dec_sel == KEY_DEC_CLEAR",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_dec_sel",
+          "key_expand_out"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_dec_sel == KEY_DEC_CLEAR",
+        "consequent": "The KEY_DEC_CLEAR state selects key_expand_out, which is the same output as the KEY_DEC_EXPAND state. The name CLEAR suggests a key- clearing operation, yet no clearing value is assigned; this may indicate a bug or a missing zeroization pat",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Key material handled directly: key_dec_d feeds the decryption key schedule. The default path uses prd_clearing_key_i, which may be a clearing value but its properties are undefined; a corrupted key_dec_sel would inject this potentially non-zero value. Additionally, KEY_DEC_CLEAR duplicates KEY_DEC_EXPAND, possibly omitting a required zeroization, risking exposure of expanded key data.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:459-465"
+    "aes_cipher_core.sv:459-465"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 459,
-  "line_end": 465,
-  "security_implications": ""
+  "line_end": 465
 }

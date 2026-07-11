@@ -1,27 +1,348 @@
 {
   "chunk_id": "rv_dm_dmi_gate__continuous_region__rv_dm_dmi_gate__001",
-  "summary": "该区域声明了 rv_dm_dmi_gate 模块的接口，包括参数、端口和 `include，但不包含任何具体的行为逻辑。",
-  "behavior": "模块通过 `include \"prim_assert.sv\"` 引入断言宏（行 11）。参数 SecVolatileRawUnlockEn（默认 0，行 16）为 1 时启用 volatile unlock 测试功能，否则 strap_en_override_i 不被使用（行 25-26）。端口包括：时钟 clk_i 与复位 rst_ni（行 18-19）；strap_en_override_i（行 30，仅 SecVolatileRawUnlockEn=1 时有效，需由外部跨时钟域同步至本模块）；strap_en_i（行 32）；三个 LC 信号 lc_hw_debug_en_i、lc_check_byp_en_i、lc_escalate_en_i（行 34-36），类型为 lc_ctrl_pkg::lc_tx_t，用于 DMI 资格判定；TL-UL DMI 接口 dbg_tl_h2d_win_i / dbg_tl_d2h_win_o（行 39-40）；门控后的握手链路 dmi_req_valid_o、dmi_req_ready_i、dmi_req_o、dmi_rsp_valid_i、dmi_rsp_ready_o、dmi_rsp_i（行 43-48），请求/响应类型来自 dm 包；以及完整性错误输出 intg_error_o（行 51）。本片段仅完成接口声明，未给出任何组合或时序赋值逻辑。",
+  "header": {
+    "module": "rv_dm_dmi_gate",
+    "block_kind": "declaration",
+    "driven": [
+      "dbg_tl_d2h_win_o",
+      "dmi_req_valid_o",
+      "dmi_req_o",
+      "dmi_rsp_ready_o",
+      "intg_error_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "strap_en_override_i",
+      "strap_en_i",
+      "lc_hw_debug_en_i",
+      "lc_check_byp_en_i",
+      "lc_escalate_en_i",
+      "dbg_tl_h2d_win_i",
+      "dmi_req_ready_i",
+      "dmi_rsp_valid_i",
+      "dmi_rsp_i"
+    ],
+    "modes": [
+      "SecVolatileRawUnlockEn=0",
+      "SecVolatileRawUnlockEn=1"
+    ],
+    "tags": [
+      "parameterization",
+      "access_control",
+      "lifecycle",
+      "debug",
+      "error",
+      "integrity",
+      "security_precondition"
+    ]
+  },
   "guarantees": [],
-  "security_implications": "SecVolatileRawUnlockEn 是一个编译时安全开关，注释明确其为仅用于测试芯片的 volatile unlock 特性，生产设备中将被禁用（行 20-23, 31）。LC 信号（lc_hw_debug_en_i 等）用于调试访问授权，错误处理或旁路检测涉及生命周期控制，具有安全意义。",
   "assumptions": [
     {
-      "constraint": "当 SecVolatileRawUnlockEn=0 时，strap_en_override_i 不被使用，其电平无影响。",
-      "bug_relevance": "若外部逻辑错误地驱动该信号或依赖其值，在禁用该功能的设计中将造成无意义信号，但不影响模块功能；设计上不可发生。",
-      "related_signals": [
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "Parameter SecVolatileRawUnlockEn must be 0 for production devices, as intended by the comment that this is a test-only feature to mitigate a broken OTP macro.",
+      "cond": "Always true for production builds",
+      "risk": "If the parameter is mistakenly set to 1 in production, the external strap_en_override_i could bypass lifecycle debug gating, leading to unauthorized debug access.",
+      "signals": [
+        "SecVolatileRawUnlockEn",
         "strap_en_override_i"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:25-26"
-      ]
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:16",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:21-23"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "SecVolatileRawUnlockEn == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "SecVolatileRawUnlockEn",
+          "strap_en_override_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Always true for production builds",
+        "consequent": "SecVolatileRawUnlockEn == 0",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Lifecycle signals lc_hw_debug_en_i, lc_check_byp_en_i, and lc_escalate_en_i must carry valid lc_ctrl_pkg::lc_tx_t encodings that represent meaningful debug qualification states.",
+      "cond": "At all times during operation",
+      "risk": "Invalid or corrupted encodings could cause the DMI gate to incorrectly permit or deny debug access, breaking the security policy.",
+      "signals": [
+        "lc_hw_debug_en_i",
+        "lc_check_byp_en_i",
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:34-36"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "lc_hw_debug_en_i inside {lc_ctrl_pkg::On, lc_ctrl_pkg::Off}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_i",
+          "lc_check_byp_en_i",
+          "lc_escalate_en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "At all times during operation",
+        "consequent": "lc_hw_debug_en_i inside {lc_ctrl_pkg::On, lc_ctrl_pkg::Off}",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "handshake",
+      "claim": "The debug TL-UL interface (dbg_tl_h2d_win_i, dbg_tl_d2h_win_o) must conform to the TL-UL protocol, with valid/ready handshake and stable data when asserted.",
+      "cond": "When DMI transactions are in progress",
+      "risk": "Protocol violations could cause deadlock, data corruption, or missed DMI requests, potentially locking the debug interface.",
+      "signals": [
+        "dbg_tl_h2d_win_i",
+        "dbg_tl_d2h_win_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:39-40"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "dbg_tl_h2d_win_i.a_valid",
+        "consequent": "dbg_tl_h2d_win_i.a_ready || !dbg_tl_h2d_win_i.a_valid",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dbg_tl_h2d_win_i",
+          "dbg_tl_d2h_win_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "dbg_tl_h2d_win_i.a_valid",
+        "consequent": "dbg_tl_h2d_win_i.a_ready || !dbg_tl_h2d_win_i.a_valid",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "strap_en_override_i (when used, i.e., SecVolatileRawUnlockEn=1) must be externally synchronized to clk_i and rise monotonically (0->1 and stay high) before being sampled, as indicated by the comment about synchronization and edge detection.",
+      "cond": "SecVolatileRawUnlockEn == 1",
+      "risk": "Unsynchronized or glitchy strap_en_override_i could cause multiple sampling pulses, incorrectly enabling debug override or causing metastability.",
+      "signals": [
+        "strap_en_override_i",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:25-29"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "strap_en_override_i == $past(strap_en_override_i) || strap_en_override_i == 1'b1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "strap_en_override_i",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "SecVolatileRawUnlockEn == 1",
+        "consequent": "strap_en_override_i == $past(strap_en_override_i) || strap_en_override_i == 1'b1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The internal gating logic that actually qualifies dmi_req_valid_o, dmi_rsp_ready_o, and intg_error_o based on lifecycle signals, strap_en_i, and TL-UL transactions is not visible in this chunk. Without seeing the rest of the module, it is impossible to verify that debug is correctly blocked when lc_escalate_en_i is active or when hw_debug is off.",
+      "cond": "Any lifecycle or escalate assertion",
+      "risk": "A missing gate could allow DMI transactions even when security state demands blocking (e.g., during escalation or debug lock).",
+      "signals": [
+        "dmi_req_valid_o",
+        "dmi_rsp_ready_o",
+        "lc_hw_debug_en_i",
+        "lc_check_byp_en_i",
+        "lc_escalate_en_i",
+        "strap_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:42-49"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate_en_i == On",
+        "consequent": "dmi_req_valid_o == 0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_req_valid_o",
+          "dmi_rsp_ready_o",
+          "lc_hw_debug_en_i",
+          "lc_check_byp_en_i",
+          "lc_escalate_en_i",
+          "strap_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate_en_i == On",
+        "consequent": "dmi_req_valid_o == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The SecVolatileRawUnlockEn parameter and strap_en_override_i port suggest a backdoor for debug unlock in test chips. Although comments state it will be disabled for production, there is no compile-time assertion or synthesis-time check within this chunk (or in the declaration) to enforce that this parameter is set to 0 in production tapeouts.",
+      "cond": "Production build configuration",
+      "risk": "A production chip with SecVolatileRawUnlockEn left at 1 could allow a physical strap to permanently enable debug, bypassing all lifecycle checks.",
+      "signals": [
+        "SecVolatileRawUnlockEn",
+        "strap_en_override_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:16",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:21-30"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "SecVolatileRawUnlockEn == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "SecVolatileRawUnlockEn",
+          "strap_en_override_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Production build configuration",
+        "consequent": "SecVolatileRawUnlockEn == 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The module relies on a properly synchronized edge detector for strap_en_override_i (when used). The comment mentions that the signal goes 0->1 and stays high, and that synchronization logic can detect the edge internally. The actual implementation of this synchronization is not shown, so there is a risk of glitch-induced multiple pulses or metastability.",
+      "cond": "SecVolatileRawUnlockEn == 1 and strap_en_override_i transitions",
+      "risk": "A glitch on strap_en_override_i could be misinterpreted as a valid edge, leading to spurious debug unlock.",
+      "signals": [
+        "strap_en_override_i",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:25-29"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(strap_en_override_i)",
+        "consequent": "unlock_pulse == 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "strap_en_override_i",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(strap_en_override_i)",
+        "consequent": "unlock_pulse == 1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "intg_error_o is declared as an output but no generation logic is visible. If it is intended to flag DMI integrity errors (e.g., on dmi_req_o or dmi_rsp_i), it is critical to understand how and when it is asserted to prevent silent data corruption.",
+      "cond": "Integrity check failure on DMI payloads",
+      "risk": "Silent data corruption on DMI transactions could go undetected, leading to incorrect debug operation.",
+      "signals": [
+        "intg_error_o",
+        "dmi_req_o",
+        "dmi_rsp_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:51"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "integrity_failure_event",
+        "consequent": "intg_error_o == 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "understand",
+        "signals": [
+          "intg_error_o",
+          "dmi_req_o",
+          "dmi_rsp_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "integrity_failure_event",
+        "consequent": "intg_error_o == 1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "This module gates the DMI (debug memory interface) based on lifecycle signals (hw_debug_en, check_byp_en, escalation) and a strap override. Misconfiguration of the SecVolatileRawUnlockEn parameter could create a permanent backdoor, bypassing all debug access controls. Integrity errors on DMI payloads must be reported to avoid silent corruption. The chunk itself only declares the interface; absent logic leaves high uncertainty about actual gating enforcement and integrity error handling.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:11-52"
-  ],
-  "uncertain_points": [
-    "本片段仅包含模块接口声明，无任何行为逻辑，无法确定 DMI 门控或信号处理的具体实现。",
-    "strap_en_override_i 在 SecVolatileRawUnlockEn=1 时的同步与采样逻辑未在本片段体现。"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv",
   "line_start": 11,

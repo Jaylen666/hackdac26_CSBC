@@ -4,92 +4,214 @@
     "module": "aes_cipher_control_fsm",
     "block_kind": "mixed",
     "driven": [
+      "num_rounds_regular",
       "unused_cfg_valid",
-      "unused_prng_reseed",
-      "num_rounds_regular"
+      "unused_prng_reseed"
     ],
     "used": [
+      "num_rounds_q",
       "cfg_valid_i",
-      "prng_reseed_i",
-      "num_rounds_q"
+      "prng_reseed_i"
     ],
     "modes": [
-      "SecMasking"
+      "SecMasking",
+      "SecSBoxImpl"
     ],
     "tags": [
+      "secret",
+      "key",
+      "error",
+      "masking",
+      "handshake",
       "parameterization",
-      "masking"
+      "alert"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "num_rounds_regular is always assigned to num_rounds_q minus 1 (unsigned 4-bit subtraction).",
+      "claim": "num_rounds_regular is always assigned num_rounds_q - 1, with wrap-around on 4-bit unsigned arithmetic if num_rounds_q is 0.",
       "cond": "always",
       "signals": [
         "num_rounds_regular",
         "num_rounds_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:103"
-      ]
-    }
-  ],
-  "assumptions": [],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_dead_or_unused_signal",
-      "priority": "medium",
-      "claim": "cfg_valid_i is only tied to an unused wire (unused_cfg_valid), intended for SVAs; if assertions are not compiled, the input is functionally dead, potentially masking missing control-path usage.",
-      "cond": "cfg_valid_i toggles but does not affect any output.",
-      "risk": "Verification coverage may be missed; control-path error may go undetected.",
-      "signals": [
-        "cfg_valid_i",
-        "unused_cfg_valid"
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:103"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:82-84"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "num_rounds_regular == num_rounds_q - 4'd1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "num_rounds_regular",
+          "num_rounds_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "num_rounds_regular == num_rounds_q - 4'd1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "U2",
-      "type": "U_dead_or_unused_signal",
-      "priority": "medium",
-      "claim": "When SecMasking=0, prng_reseed_i is tied to a local wire but not used anywhere, making it dead; any reseed request will be silently ignored.",
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "When SecMasking = 0, the prng_reseed_i input is tied to an unused signal unused_prng_reseed and ignored.",
       "cond": "SecMasking == 0",
-      "risk": "If external logic relies on reseed acknowledgment or effect, the module’s behavior is mismatched.",
       "signals": [
         "prng_reseed_i",
-        "SecMasking",
         "unused_prng_reseed"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:87-90"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:87-90"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "SecMasking == 0",
+        "consequent": "unused_prng_reseed == prng_reseed_i",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_reseed_i",
+          "unused_prng_reseed"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "SecMasking == 0",
+        "consequent": "unused_prng_reseed == prng_reseed_i",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "U3",
-      "type": "U_temporal_window",
+      "id": "G3",
+      "type": "assignment",
+      "claim": "cfg_valid_i is assigned to unused_cfg_valid, providing a tie-off for SVA use; no functional path.",
+      "cond": "always",
+      "signals": [
+        "unused_cfg_valid",
+        "cfg_valid_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:84"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "unused_cfg_valid == cfg_valid_i",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_cfg_valid",
+          "cfg_valid_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "unused_cfg_valid == cfg_valid_i",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "num_rounds_q must be greater than 0 whenever the derived num_rounds_regular is used, otherwise the subtraction yields a wrapped value of 15.",
+      "cond": "always, when num_rounds_regular is consumed",
+      "risk": "A zero num_rounds_q causes num_rounds_regular = 15, which could lead to processing too many or too few rounds, breaking AES integrity and potentially leaking data or causing a security bypass.",
+      "signals": [
+        "num_rounds_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:103"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "num_rounds_q > 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "num_rounds_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always, when num_rounds_regular is consumed",
+        "consequent": "num_rounds_q > 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_unhandled_legal_case",
       "priority": "high",
-      "claim": "num_rounds_regular = num_rounds_q - 1; if num_rounds_q can ever be 0 (e.g., due to error or initialization), the subtract wraps to 15, corrupting round count.",
+      "claim": "The assignment num_rounds_regular = num_rounds_q - 4'd1 wraps to 15 when num_rounds_q is 0. It is unclear whether num_rounds_q can legally reach 0, and whether this wrap is handled by downstream logic.",
       "cond": "num_rounds_q == 0",
-      "risk": "AES round count corruption may lead to under- or over-encryption, breaking cipher security.",
+      "risk": "If num_rounds_q ever becomes 0 (e.g., during state transitions, error recovery, or reset), an incorrect round count may cause early termination or an excessive number of rounds, leading to incorrect or incomplete encryption, possible data corruption, and security compromise.",
       "signals": [
         "num_rounds_q",
         "num_rounds_regular"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:103"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:103"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "num_rounds_q == 0",
+        "consequent": "num_rounds_regular == 4'd15",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "num_rounds_q",
+          "num_rounds_regular"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "num_rounds_q == 0",
+        "consequent": "num_rounds_regular == 4'd15",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The subtraction that generates num_rounds_regular wraps on a zero input, potentially causing an incorrect AES round count. This can break encryption/decryption integrity, leak information, or allow a security bypass. The module also interfaces with key clear, data clear, error, and alert signals; mishandling of round count could propagate into these security-critical outputs. The parameter SecMasking controls whether the PRNG reseed input is used; when masking is disabled, prng_reseed_i is tied off, which may affect reseeding behavior in non-masked configurations.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:82-103"
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:9-103"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_control_fsm.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv",
   "line_start": 9,
-  "line_end": 103,
-  "security_implications": ""
+  "line_end": 103
 }

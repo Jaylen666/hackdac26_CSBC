@@ -2,171 +2,414 @@
   "chunk_id": "kmac_reduced__continuous_region__kmac_reduced__001",
   "header": {
     "module": "kmac_reduced",
-    "block_kind": "mixed",
-    "driven": [
-      "msg_ready_o",
-      "msg_valid",
-      "msg",
-      "msg_ready_shares[0]",
-      "msg_ready_shares[1]",
-      "msg_valid_shares[0]",
-      "msg_valid_shares[1]"
-    ],
-    "used": [
-      "clk_i",
-      "rst_ni",
-      "msg_valid_i",
-      "msg_i",
-      "msg_ready",
-      "msg_ready_shares",
-      "msg_valid_shares"
-    ],
+    "block_kind": "declaration",
+    "driven": [],
+    "used": [],
     "modes": [
-      "EnMasking",
-      "NumShares"
+      "EnMasking=1 (masking enabled)",
+      "EnMasking=0 (masking disabled)",
+      "MsgLen=128",
+      "EntropyWidth=32"
     ],
     "tags": [
-      "masking",
-      "fifo",
-      "handshake",
-      "parameterization"
+      "parameterization",
+      "secret",
+      "entropy",
+      "mask",
+      "lifecycle",
+      "error"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "instance",
-      "claim": "Message share inputs msg_i[0] and msg_i[1] are connected to prim_packer_fifo instances that pack from MsgLen to MsgWidth with ClearOnRead enabled and clr_i deasserted.",
-      "cond": "always",
+      "type": "generate_param",
+      "claim": "Parameter NumShares is derived from EnMasking: NumShares = (EnMasking) ? 2 : 1.",
+      "cond": "always (compile time)",
       "signals": [
-        "msg_i[0]",
-        "msg_i[1]",
-        "u_msg_unpacker_share0",
-        "u_msg_unpacker_share1"
+        "EnMasking",
+        "NumShares"
       ],
       "refs": [
-        "106-121",
-        "123-138"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "instance_connection",
-      "claim": "msg_valid_i drives write-valid of both share FIFOs, and both FIFOs share the same read-ready signal msg_ready.",
-      "cond": "always",
-      "signals": [
-        "msg_valid_i",
-        "msg_ready",
-        "u_msg_unpacker_share0",
-        "u_msg_unpacker_share1"
+        "16-17"
       ],
-      "refs": [
-        "114",
-        "119",
-        "131",
-        "136"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "assignment",
-      "claim": "msg_ready_o is the logical AND of the write-ready outputs from both share FIFOs.",
-      "cond": "always",
-      "signals": [
-        "msg_ready_o",
-        "msg_ready_shares"
-      ],
-      "refs": [
-        "141"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "msg_valid is the logical AND of the read-valid outputs from both share FIFOs.",
-      "cond": "always",
-      "signals": [
-        "msg_valid",
-        "msg_valid_shares"
-      ],
-      "refs": [
-        "142"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "NumShares == (EnMasking ? 2 : 1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "EnMasking",
+          "NumShares"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always (compile time)",
+        "consequent": "NumShares == (EnMasking ? 2 : 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "The external producer must obey the valid/ready handshake: msg_valid_i must be asserted with stable msg_i shares, and must be deasserted after accepted (msg_ready_o asserted).",
-      "cond": "when msg_valid_i is high",
-      "risk": "If the producer violates handshake (e.g., changes data before acceptance or retracts valid), the FIFOs may capture corrupt data or stall indefinitely.",
+      "type": "handshake",
+      "claim": "start_i must be a single-cycle pulse after reseeding PRNG and injecting message, as stated in the comment.",
+      "cond": "when operating the KMAC reduced module",
+      "risk": "If start_i does not pulse correctly, the SHA-3 FSM may not start or may mis-sequence.",
       "signals": [
-        "msg_valid_i",
-        "msg_i",
-        "msg_ready_o"
+        "start_i"
       ],
       "refs": [
-        "100-121",
-        "123-138"
-      ]
+        "39-40"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "process_i && ... (external sequencer)",
+        "consequent": "start_i == 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "start_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "process_i && ... (external sequencer)",
+        "consequent": "start_i == 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "process_i must be a single-cycle pulse after loading message into SHA3.",
+      "cond": "during message processing",
+      "risk": "Absence or mis-timing of process_i could leave the hash engine in an undefined state.",
+      "signals": [
+        "process_i"
+      ],
+      "refs": [
+        "41"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "msg injection complete",
+        "consequent": "process_i == 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "process_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "msg injection complete",
+        "consequent": "process_i == 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "run_i must be driven to 0.",
+      "cond": "always during evaluation",
+      "risk": "A non-zero run_i could enable unintended continuous operation or stall.",
+      "signals": [
+        "run_i"
+      ],
+      "refs": [
+        "42"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "run_i == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "run_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always during evaluation",
+        "consequent": "run_i == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "done_i must be driven to MuBi4True only after absorbed_o has reached MuBi4True.",
+      "cond": "after absorption completes",
+      "risk": "A premature or incorrect done_i value may cause the control logic to skip or repeat operations.",
+      "signals": [
+        "done_i",
+        "absorbed_o"
+      ],
+      "refs": [
+        "43-44"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "absorbed_o == MuBi4True",
+        "consequent": "done_i == MuBi4True",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_i",
+          "absorbed_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "absorbed_o == MuBi4True",
+        "consequent": "done_i == MuBi4True",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A5",
+      "type": "mode_config",
+      "claim": "msg_strb_i must be driven to all-ones.",
+      "cond": "always during message input",
+      "risk": "If byte strobes are not all asserted, message bytes could be partially masked, corrupting the hash.",
+      "signals": [
+        "msg_strb_i"
+      ],
+      "refs": [
+        "64"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "msg_strb_i == {sha3_pkg::MsgStrbW{1'b1}}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_strb_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always during message input",
+        "consequent": "msg_strb_i == {sha3_pkg::MsgStrbW{1'b1}}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A6",
+      "type": "mode_config",
+      "claim": "Several input signals must be held at constant values: msg_mask_en_i=1, entropy_mode_i=EntropyModeEdn, entropy_fast_process_i=0, entropy_in_keyblock_i=1, entropy_seed_update_i=0, entropy_seed_data_i=0, wait_timer_prescaler_i=0, wait_timer_limit_i=EdnWaitTimerW'1, entropy_hash_threshold_i=max, entropy_hash_clr_i=0, err_processed_i=0.",
+      "cond": "always during normal operation",
+      "risk": "Deviation from these constants may disable masking, block entropy, or alter timer behavior, leading to security weakness or functional failure.",
+      "signals": [
+        "msg_mask_en_i",
+        "entropy_mode_i",
+        "entropy_fast_process_i",
+        "entropy_in_keyblock_i",
+        "entropy_seed_update_i",
+        "entropy_seed_data_i",
+        "wait_timer_prescaler_i",
+        "wait_timer_limit_i",
+        "entropy_hash_threshold_i",
+        "entropy_hash_clr_i",
+        "err_processed_i"
+      ],
+      "refs": [
+        "67-76",
+        "85-86",
+        "94"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "msg_mask_en_i == 1 && entropy_mode_i == EntropyModeEdn && entropy_fast_process_i == 0 && entropy_in_keyblock_i == 1 && entropy_seed_update_i == 0 && entropy_seed_data_i == 0 && wait_timer_prescaler_i == 0 && wait_timer_limit_i == EdnWaitTimerW'1 && entropy_hash_threshold_i == '1 && entropy_hash_clr_i == 0 && err_processed_i == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_en_i",
+          "entropy_mode_i",
+          "entropy_fast_process_i",
+          "entropy_in_keyblock_i",
+          "entropy_seed_update_i",
+          "entropy_seed_data_i",
+          "wait_timer_prescaler_i",
+          "wait_timer_limit_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always during normal operation",
+        "consequent": "msg_mask_en_i == 1 && entropy_mode_i == EntropyModeEdn && entropy_fast_process_i == 0 && entropy_in_keyblock_i == 1 && entropy_seed_update_i == 0 && entropy_seed_data_i == 0 && wait_timer_prescaler_i == 0 && wait_timer_limit_i == EdnWaitTimerW'1 && entropy_hash_threshold_i == '1 && entropy_hash_clr_i == 0 && err_processed_i == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
-      "priority": "high",
-      "claim": "When EnMasking=0, NumShares=1, the unconditional instantiation of u_msg_unpacker_share1 references msg_i[1] which is out-of-bounds, causing an elaboration failure.",
-      "cond": "parameter EnMasking=0 (legal value)",
-      "risk": "Design fails to elaborate, preventing use of the security-weak unmasked configuration for evaluation or reset.",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "Inputs such as mode_i, strength_i, ns_prefix_i, msg_strb_i, entropy_* are commented as 'primarily kept to prevent them from being optimized away during synthesis', but the chunk contains no logic using them. If these signals remain unconnected in downstream instances, synthesis may indeed optimize them out, potentially removing intended security or configuration structures.",
+      "cond": "when signals are not driven by actual logic",
+      "risk": "Critical configuration or entropy paths could be eliminated, breaking security hardening.",
       "signals": [
-        "EnMasking",
-        "NumShares",
-        "msg_i"
+        "mode_i",
+        "strength_i",
+        "ns_prefix_i",
+        "msg_strb_i",
+        "msg_mask_en_i",
+        "entropy_mode_i",
+        "entropy_fast_process_i",
+        "entropy_in_keyblock_i",
+        "entropy_seed_update_i",
+        "entropy_seed_data_i",
+        "wait_timer_prescaler_i",
+        "wait_timer_limit_i",
+        "entropy_hash_threshold_i",
+        "entropy_hash_clr_i",
+        "err_processed_i"
       ],
       "refs": [
-        "16-17",
-        "34",
-        "123-138"
-      ]
+        "57-94"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "mode_i",
+          "strength_i",
+          "ns_prefix_i",
+          "msg_strb_i",
+          "msg_mask_en_i",
+          "entropy_mode_i",
+          "entropy_fast_process_i",
+          "entropy_in_keyblock_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when signals are not driven by actual logic",
+        "consequent": "Inputs such as mode_i, strength_i, ns_prefix_i, msg_strb_i, entropy_* are commented as 'primarily kept to prevent them from being optimized away during synthesis', but the chunk contains no logic using them. If these signals remain unconnec",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The signal msg_ready, used as read-ready for both FIFOs, is not driven within this chunk; it must be provided by downstream logic to pop data.",
-      "cond": "when data is ready in FIFOs",
-      "risk": "If msg_ready is never asserted, the unpacked message will never be read and the system stalls.",
+      "priority": "high",
+      "claim": "lc_escalate_en_i is a life‑cycle escalation input; this declaration region does not show its usage or effect on internal logic. Without seeing the instantiation, it is unclear whether this signal gates sensitive operations or is merely passed through to submodules.",
+      "cond": "when lc_escalate_en_i is active",
+      "risk": "If the signal is not properly connected, life‑cycle escalation could be ineffective, violating access‑control requirements.",
       "signals": [
-        "msg_ready"
+        "lc_escalate_en_i"
       ],
       "refs": [
-        "104",
-        "119",
-        "136"
-      ]
+        "90"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when lc_escalate_en_i is active",
+        "consequent": "lc_escalate_en_i is a life‑cycle escalation input; this declaration region does not show its usage or effect on internal logic. Without seeing the instantiation, it is unclear whether this signal gates sensitive operations or is merely pass",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_dead_or_unused_signal",
-      "priority": "medium",
-      "claim": "msg_mask_en is declared but not used; the message (re-)masking block (lines 145-149) has no active logic, leaving masking potentially unimplemented despite the SCA protection intent.",
-      "cond": "always",
-      "risk": "Message shares may not be re-masked before use, weakening differential power analysis resistance.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "EnMasking parameter controls the number of secret shares (1 vs. 2). If EnMasking is set to 0, the internal datapath operates without masking. The comment mentions 'masking security hardening inside keccak_round', but this chunk does not enforce that EnMasking must be 1 for security-critical deployments.",
+      "cond": "when EnMasking == 0",
+      "risk": "Disabling masking may expose the design to side‑channel attacks and violate the intended security posture.",
       "signals": [
-        "msg_mask_en"
+        "EnMasking",
+        "NumShares"
       ],
       "refs": [
-        "147"
-      ]
+        "16-17"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "EnMasking == 0",
+        "consequent": "NumShares == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "EnMasking",
+          "NumShares"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "EnMasking == 0",
+        "consequent": "NumShares == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk declares a masked SHA‑3/KMAC wrapper with entropy and life‑cycle signals. Parameter EnMasking controls masking of secret shares (1 vs. 2). If EnMasking is misconfigured to 0, the entire datapath loses SCA hardening, potentially exposing key/state material. Several entropy and configuration inputs are listed as 'kept to prevent synthesis optimization'; if their actual driving logic is absent, critical security‑related gating (e.g., msg_mask_en, entropy_in_keyblock) could be silently removed from the netlist. The life‑cycle escalation input lc_escalate_en_i, if not properly connected, may allow debug access in secure states. The dependency of internal FSM on handshake signals (start_i, process_i, done_i) means incorrect timing could disrupt state clearing or mask removal, leaving secret residues.",
   "evidence_refs": [
-    "8-149"
+    "8-104"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 8,
-  "line_end": 149,
-  "security_implications": ""
+  "line_end": 104
 }

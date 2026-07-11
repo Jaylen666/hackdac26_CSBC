@@ -13,85 +13,243 @@
       "MaxWidth"
     ],
     "modes": [
-      "NumRomDigestInputs",
-      "MaxWidth"
+      "NumRomDigestInputs (parameter)",
+      "MaxWidth (parameter)"
     ],
     "tags": [
       "digest",
-      "error_detection"
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "rom_digest_vld_o is driven to the AND over k of (rom_digest_i[k].valid && valid_chk(MaxWidth'(rom_digest_i[k].data))) for k from 0 to NumRomDigestInputs-1. When NumRomDigestInputs is 0, rom_digest_vld_o remains 1'b1.",
-      "cond": "always",
+      "claim": "When NumRomDigestInputs > 0, rom_digest_vld_o is 1 if and only if for every index k from 0 to NumRomDigestInputs-1, both rom_digest_i[k].valid is 1 and valid_chk(MaxWidth'(rom_digest_i[k].data)) returns 1; otherwise rom_digest_vld_o is 0.",
+      "cond": "always (combinational)",
       "signals": [
         "rom_digest_vld_o",
         "rom_digest_i",
-        "valid_chk"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:101-106"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "rom_digest_i array has at least NumRomDigestInputs entries; each entry's data width equals MaxWidth so that the cast and valid_chk operate on the intended bit width.",
-      "cond": "always",
-      "risk": "If NumRomDigestInputs > actual array size, out-of-bounds access yields X, propagating to rom_digest_vld_o. If data width mismatch, valid_chk may evaluate incorrect bits (truncation or extension), delivering a false valid or invalid result.",
-      "signals": [
-        "rom_digest_i",
         "NumRomDigestInputs",
+        "valid_chk",
         "MaxWidth"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:101-106"
-      ]
-    }
-  ],
-  "uncertain_points": [
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "rom_digest_vld_o == ((NumRomDigestInputs == 0) ? 1'b1 : (&(genvar k: rom_digest_i[k].valid && valid_chk(MaxWidth'(rom_digest_i[k].data)))))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rom_digest_vld_o",
+          "rom_digest_i",
+          "NumRomDigestInputs",
+          "valid_chk",
+          "MaxWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always (combinational)",
+        "consequent": "rom_digest_vld_o == ((NumRomDigestInputs == 0) ? 1'b1 : (&(genvar k: rom_digest_i[k].valid && valid_chk(MaxWidth'(rom_digest_i[k].data)))))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
     {
-      "id": "U1",
-      "type": "U_unhandled_legal_case",
-      "priority": "high",
-      "claim": "When NumRomDigestInputs = 0, the for loop body never executes, leaving rom_digest_vld_o = 1'b1. This bypasses all digest input validity checks and may incorrectly validate an empty input set.",
-      "cond": "NumRomDigestInputs = 0",
-      "risk": "System may proceed with a digest processing stage assuming valid inputs while none exist, potentially leading to use of unverified or stale digest data in security flows.",
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "When NumRomDigestInputs is 0, the for-loop body is never executed, and the initial assignment rom_digest_vld_o = 1'b1 persists, so the output is always 1.",
+      "cond": "NumRomDigestInputs == 0",
       "signals": [
         "rom_digest_vld_o",
         "NumRomDigestInputs"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:101-106"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "NumRomDigestInputs == 0",
+        "consequent": "rom_digest_vld_o == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rom_digest_vld_o",
+          "NumRomDigestInputs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "NumRomDigestInputs == 0",
+        "consequent": "rom_digest_vld_o == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "The function valid_chk correctly identifies whether the data cast to MaxWidth is a valid ROM digest word; it must be a pure combinational function with no side effects.",
+      "cond": "when valid_chk is called for each rom_digest_i[k].data",
+      "risk": "If valid_chk is too permissive (e.g., accepts zero, constant patterns, or tampered values), rom_digest_vld_o may be asserted even for corrupted digest data, undermining ROM integrity verification and potentially allowing boot‑chain attacks.",
+      "signals": [
+        "valid_chk",
+        "rom_digest_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:103-105"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "valid_chk returns a bit consistent with the expected digest validity criteria",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid_chk",
+          "rom_digest_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when valid_chk is called for each rom_digest_i[k].data",
+        "consequent": "valid_chk returns a bit consistent with the expected digest validity criteria",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
-      "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "rom_digest_i[k].data is cast to MaxWidth' before entering valid_chk. If the actual data width differs from MaxWidth (e.g., parameter override or top-level mismatch), the cast may truncate high bits or sign-extend, feeding a wrong bit pattern to valid_chk.",
-      "cond": "when MaxWidth != actual width of rom_digest_i[k].data",
-      "risk": "valid_chk may report valid for an invalid digest or invalid for a valid one, corrupting the digest validation decision.",
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "Each rom_digest_i[k].valid is asserted only when the corresponding rom_digest_i[k].data holds a complete and stable ROM digest value.",
+      "cond": "always",
+      "risk": "If valid is incorrectly deasserted while data is present, the overall digest valid signal will be forced low, causing a false negative integrity failure; if valid is spuriously asserted without valid data, rom_digest_vld_o may be asserted based on garbage data, potentially passing a garbage check.",
       "signals": [
-        "rom_digest_i",
-        "MaxWidth",
-        "valid_chk"
+        "rom_digest_i[k].valid",
+        "rom_digest_i[k].data"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:104"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "rom_digest_i[k].valid -> data_is_stable_and_valid",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rom_digest_i[k].valid",
+          "rom_digest_i[k].data"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "rom_digest_i[k].valid -> data_is_stable_and_valid",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The function `valid_chk` that determines digest data validity is not defined in this code; its implementation must be reviewed to confirm it robustly rejects corrupted or attacker‑controlled digest words, not only trivial patterns.",
+      "cond": "when any rom_digest_i[k].data is processed",
+      "risk": "A weak check (e.g., only checking non‑zero) could accept a malicious ROM digest, enabling secure‑boot bypass or key‑loader attacks.",
+      "signals": [
+        "valid_chk",
+        "rom_digest_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:104"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "valid_chk rejects all invalid data classes",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid_chk",
+          "rom_digest_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when any rom_digest_i[k].data is processed",
+        "consequent": "valid_chk rejects all invalid data classes",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When `NumRomDigestInputs` is 0, `rom_digest_vld_o` is always 1. It is unclear whether a configuration with zero ROM digest inputs is intended, and if the downstream logic correctly interprets a constant‑high valid in that scenario.",
+      "cond": "NumRomDigestInputs == 0",
+      "risk": "If the system expects a digest for integrity but no inputs are connected, a constant valid signal might convince the key manager that ROM digest verification passed, possibly allowing boot without actual integrity evidence.",
+      "signals": [
+        "NumRomDigestInputs",
+        "rom_digest_vld_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:102-105"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "NumRomDigestInputs == 0",
+        "consequent": "rom_digest_vld_o == 1'b1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumRomDigestInputs",
+          "rom_digest_vld_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "NumRomDigestInputs == 0",
+        "consequent": "rom_digest_vld_o == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The ROM digest validity signal `rom_digest_vld_o` aggregates per‑word validation of ROM digest inputs. If the `valid_chk` function is insufficient (e.g., accepts all‑zero, constant, or tampered patterns), a corrupted ROM digest can pass as valid, breaking ROM integrity and potentially enabling secure‑boot bypass. The fallback behavior when `NumRomDigestInputs == 0` also needs scrutiny: a constant‑high valid in a zero‑input configuration could trick the key manager into assuming successful ROM digest verification when no actual check occurred. The chunk relies on external producers to correctly drive `rom_digest_i[k].valid` only when stable, valid data is present; any violation can lead to false‑positives or false‑negatives in the digest check.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:101-106"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv",
   "line_start": 101,
-  "line_end": 106,
-  "security_implications": ""
+  "line_end": 106
 }

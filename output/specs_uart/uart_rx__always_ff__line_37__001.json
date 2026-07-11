@@ -12,7 +12,6 @@
     ],
     "used": [
       "rst_ni",
-      "clk_i",
       "sreg_d",
       "bit_cnt_d",
       "baud_div_d",
@@ -27,11 +26,10 @@
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "When rst_ni is low, all state registers are forced to their reset values: sreg_q=0, bit_cnt_q=0, baud_div_q=0, tick_baud_q=0, idle_q=1.",
-      "cond": "rst_ni == 0 at the triggering edge of clk_i or negedge rst_ni",
+      "type": "reg_update",
+      "claim": "On asynchronous reset (rst_ni = 0), sreg_q, bit_cnt_q, baud_div_q, tick_baud_q are set to 0 and idle_q is set to 1.",
+      "cond": "rst_ni == 0",
       "signals": [
-        "rst_ni",
         "sreg_q",
         "bit_cnt_q",
         "baud_div_q",
@@ -39,50 +37,91 @@
         "idle_q"
       ],
       "refs": [
-        "uart_rx.sv:38-43"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:38-43"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "$fell(rst_ni)",
+        "consequent": "sreg_q == 0 && bit_cnt_q == 0 && baud_div_q == 0 && tick_baud_q == 0 && idle_q == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_rx",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "sreg_q",
+          "bit_cnt_q",
+          "baud_div_q",
+          "tick_baud_q",
+          "idle_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "$fell(rst_ni)",
+        "consequent": "sreg_q == 0 && bit_cnt_q == 0 && baud_div_q == 0 && tick_baud_q == 0 && idle_q == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When rst_ni is high, on every posedge clk_i, each state register is updated with its corresponding next-state signal: sreg_q <= sreg_d, bit_cnt_q <= bit_cnt_d, baud_div_q <= baud_div_d, tick_baud_q <= tick_baud_d, idle_q <= idle_d.",
-      "cond": "rst_ni == 1 at posedge clk_i",
+      "claim": "When not in reset, on each positive edge of clk_i, the registers are updated with the corresponding next-state signals: sreg_q <= sreg_d, bit_cnt_q <= bit_cnt_d, baud_div_q <= baud_div_d, tick_baud_q <= tick_baud_d, idle_q <= idle_d.",
+      "cond": "posedge clk_i && rst_ni == 1",
       "signals": [
         "sreg_q",
-        "sreg_d",
         "bit_cnt_q",
-        "bit_cnt_d",
         "baud_div_q",
-        "baud_div_d",
         "tick_baud_q",
-        "tick_baud_d",
         "idle_q",
+        "sreg_d",
+        "bit_cnt_d",
+        "baud_div_d",
+        "tick_baud_d",
         "idle_d"
       ],
       "refs": [
-        "uart_rx.sv:44-49"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:45-49"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "sreg_q == sreg_d && bit_cnt_q == bit_cnt_d && baud_div_q == baud_div_d && tick_baud_q == tick_baud_d && idle_q == idle_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_rx",
+        "clock": "clk_i",
+        "reset": "reset",
+        "signals": [
+          "sreg_q",
+          "bit_cnt_q",
+          "baud_div_q",
+          "tick_baud_q",
+          "idle_q",
+          "sreg_d",
+          "bit_cnt_d",
+          "baud_div_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "sreg_q == sreg_d && bit_cnt_q == bit_cnt_d && baud_div_q == baud_div_d && tick_baud_q == tick_baud_d && idle_q == idle_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "rst_ni is properly synchronized to clk_i so that its deassertion does not cause recovery/removal timing violations.",
-      "cond": "deassertion of rst_ni near a clock edge",
-      "risk": "Registers may not exit reset cleanly, potentially entering metastable or unknown states.",
-      "signals": [
-        "rst_ni",
-        "clk_i"
-      ],
-      "refs": []
-    },
-    {
-      "id": "A2",
       "type": "producer_contract",
-      "claim": "The combinational next-state signals (sreg_d, bit_cnt_d, baud_div_d, tick_baud_d, idle_d) are stable and meet setup/hold timing with respect to clk_i.",
-      "cond": "always during non-reset operation",
-      "risk": "Registers may latch glitches or invalid values, leading to state corruption and functional errors.",
+      "claim": "The next-state signals sreg_d, bit_cnt_d, baud_div_d, tick_baud_d, idle_d must be stable and glitch-free at the sampling clock edge (posedge clk_i) when rst_ni is high.",
+      "cond": "rst_ni == 1",
+      "risk": "Unstable or glitchy _d signals may cause the registers to latch incorrect intermediate values, leading to framing errors or wrong data reception.",
       "signals": [
         "sreg_d",
         "bit_cnt_d",
@@ -91,16 +130,83 @@
         "idle_d"
       ],
       "refs": [
-        "uart_rx.sv:45-49"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:45-49"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 1",
+        "consequent": "$stable(sreg_d) && $stable(bit_cnt_d) && $stable(baud_div_d) && $stable(tick_baud_d) && $stable(idle_d)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "uart_rx",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "sreg_d",
+          "bit_cnt_d",
+          "baud_div_d",
+          "tick_baud_d",
+          "idle_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni == 1",
+        "consequent": "$stable(sreg_d) && $stable(bit_cnt_d) && $stable(baud_div_d) && $stable(tick_baud_d) && $stable(idle_d)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The logic generating the next-state signals sreg_d, bit_cnt_d, baud_div_d, tick_baud_d, idle_d is not in this chunk; its correctness is essential for proper sampling, bit timing, start/stop detection, and idle indication.",
+      "cond": "always when rst_ni == 1",
+      "risk": "If the _d logic contains bugs (e.g. incorrect baud division, missing start‑bit detection, improper idle transition), the receiver could sample at wrong times or lose framing, leading to corrupted data or protocol errors.",
+      "signals": [
+        "sreg_d",
+        "bit_cnt_d",
+        "baud_div_d",
+        "tick_baud_d",
+        "idle_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:45-49"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_rx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sreg_d",
+          "bit_cnt_d",
+          "baud_div_d",
+          "tick_baud_d",
+          "idle_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always when rst_ni == 1",
+        "consequent": "The logic generating the next-state signals sreg_d, bit_cnt_d, baud_div_d, tick_baud_d, idle_d is not in this chunk; its correctness is essential for proper sampling, bit timing, start/stop detection, and idle indication",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "",
   "evidence_refs": [
-    "uart_rx.sv:37-51"
+    "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:37-51"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv",
   "line_start": 37,
-  "line_end": 51,
-  "security_implications": ""
+  "line_end": 51
 }

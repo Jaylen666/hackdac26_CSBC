@@ -16,45 +16,89 @@
       "CmdNone"
     ],
     "modes": [
-      "no_cmd_delay_buf"
+      "gen_no_cmd_delay_buf active"
     ],
     "tags": [
-      "handshake",
       "csr",
-      "parameterization"
+      "handshake",
+      "command"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "cmd_update is driven as a direct wire copy of reg2hw.cmd.cmd.qe.",
+      "claim": "cmd_update is combinatorially assigned to reg2hw.cmd.cmd.qe.",
       "cond": "always",
       "signals": [
         "cmd_update",
         "reg2hw.cmd.cmd.qe"
       ],
       "refs": [
-        "kmac.sv:423"
-      ]
+        "file:423-423"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cmd_update == reg2hw.cmd.cmd.qe",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_update",
+          "reg2hw.cmd.cmd.qe"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cmd_update == reg2hw.cmd.cmd.qe",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "cmd_q is assigned the cast kmac_cmd_e'(reg2hw.cmd.cmd.q).",
+      "claim": "cmd_q is combinatorially set to the type-cast value of reg2hw.cmd.cmd.q.",
       "cond": "always",
       "signals": [
         "cmd_q",
         "reg2hw.cmd.cmd.q"
       ],
       "refs": [
-        "kmac.sv:424"
-      ]
+        "file:424-424"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cmd_q == kmac_cmd_e'(reg2hw.cmd.cmd.q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_q",
+          "reg2hw.cmd.cmd.q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cmd_q == kmac_cmd_e'(reg2hw.cmd.cmd.q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "mux_case",
-      "claim": "sw_cmd is cmd_q when cmd_update is true, otherwise CmdNone.",
+      "claim": "sw_cmd is set to cmd_q when cmd_update is high, otherwise falls back to CmdNone.",
       "cond": "always",
       "signals": [
         "sw_cmd",
@@ -63,97 +107,116 @@
         "CmdNone"
       ],
       "refs": [
-        "kmac.sv:428"
-      ]
+        "file:428-428"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sw_cmd == (cmd_update ? cmd_q : CmdNone)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sw_cmd",
+          "cmd_update",
+          "cmd_q",
+          "CmdNone"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sw_cmd == (cmd_update ? cmd_q : CmdNone)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "reg2hw.cmd.cmd.qe produces a glitch-free one-cycle pulse per SW command write, synchronous to local clock.",
-      "cond": "always",
-      "risk": "If qe toggles multiple times or is asynchronous, cmd_update may cause duplicated or missed commands downstream.",
+      "type": "producer_contract",
+      "claim": "The register HW interface (reg2hw) asserts cmd.cmd.qe only when cmd.cmd.q holds a valid kmac_cmd_e encoding and the command write is intentional.",
+      "cond": "when cmd_update is high",
+      "risk": "An invalid command encoding forwarded to sw_cmd could cause the downstream command processing to exhibit undefined behavior, potentially compromising integrity or security.",
       "signals": [
         "reg2hw.cmd.cmd.qe",
+        "reg2hw.cmd.cmd.q",
         "cmd_update"
       ],
       "refs": [
-        "kmac.sv:423"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "reg2hw.cmd.cmd.q must be a legal kmac_cmd_e encoding when reg2hw.cmd.cmd.qe is active.",
-      "cond": "when cmd_update (qe) is high",
-      "risk": "An illegal raw command value would be forwarded as an invalid enum, leading to undefined behavior in downstream command decode.",
-      "signals": [
-        "reg2hw.cmd.cmd.q",
-        "cmd_q",
-        "sw_cmd"
+        "file:423-424"
       ],
-      "refs": [
-        "kmac.sv:424",
-        "kmac.sv:428"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "producer_contract",
-      "claim": "Downstream consumers must capture sw_cmd (or cmd_q) on the cycle when cmd_update is high; after cmd_update deasserts, sw_cmd returns to CmdNone.",
-      "cond": "always",
-      "risk": "If a downstream sink samples sw_cmd later or expects it to persist, it may lose the command and interpret CmdNone as idle, potentially stalling or missing operations.",
-      "signals": [
-        "sw_cmd",
-        "cmd_update",
-        "cmd_q",
-        "CmdNone"
-      ],
-      "refs": [
-        "kmac.sv:428"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cmd_update == 1",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.cmd.cmd.qe",
+          "reg2hw.cmd.cmd.q",
+          "cmd_update"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cmd_update == 1",
+        "consequent": "The register HW interface (reg2hw) asserts cmd.cmd.qe only when cmd.cmd.q holds a valid kmac_cmd_e encoding and the command write is intentional",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
-      "priority": "medium",
-      "claim": "An illegal command value written to reg2hw.cmd.cmd.q is directly forwarded to sw_cmd without error checking when cmd_update is high.",
-      "cond": "when cmd_update=1 and raw q is not a valid kmac_cmd_e",
-      "risk": "Downstream command decoding may misinterpret the illegal value, potentially entering insecure or unexpected states (e.g., inadvertently triggering secret processing or bypassing abort).",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The kmac_cmd_e register can be written with any bit pattern; this RTL does not validate the command id. An unsupported or reserved encoding is forwarded as sw_cmd when cmd_update is asserted, bypassing the CmdNone fallback.",
+      "cond": "cmd_update is high and cmd_q is an invalid/unsupported member of kmac_cmd_e",
+      "risk": "An illegal command may drive the command FSM into unexpected states, potentially leaking internal state or corrupting data processing.",
       "signals": [
-        "reg2hw.cmd.cmd.q",
-        "cmd_q",
         "sw_cmd",
-        "cmd_update"
-      ],
-      "refs": [
-        "kmac.sv:423-428"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "The generate condition determining the `gen_no_cmd_delay_buf` path (else branch) is not visible; this chunk assumes direct combinational forwarding is safe.",
-      "cond": "unknown",
-      "risk": "If the condition is inadvertently true while a delay buffer is needed, the combinational path may violate timing between the SW write and downstream use of cmd_update/cmd_q, potentially causing hold-time violations or missed commands.",
-      "signals": [
-        "cmd_update",
         "cmd_q"
       ],
       "refs": [
-        "kmac.sv:421-425"
-      ]
+        "file:424-428"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "unsupported",
+        "signals": [
+          "sw_cmd",
+          "cmd_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cmd_update is high and cmd_q is an invalid/unsupported member of kmac_cmd_e",
+        "consequent": "The kmac_cmd_e register can be written with any bit pattern; this RTL does not validate the command id. An unsupported or reserved encoding is forwarded as sw_cmd when cmd_update is asserted, bypassing the CmdNone fallback",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The sw_cmd signal directly controls the KMAC internal command handling; an illegal command encoding (e.g., from a glitch or software error) forwarded without sanitization could cause the engine to perform unintended operations, potentially exposing internal state or corrupting digest outputs.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:421-428"
+    "file:421-428"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 421,
-  "line_end": 428,
-  "security_implications": ""
+  "line_end": 428
 }

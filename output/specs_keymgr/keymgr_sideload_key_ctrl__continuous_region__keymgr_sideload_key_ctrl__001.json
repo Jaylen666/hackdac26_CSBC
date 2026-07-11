@@ -28,17 +28,17 @@
     "modes": [
       "keymgr_sideload_clr_e",
       "keymgr_key_dest_e",
-      "prim_mubi_pkg::mubi4_t"
+      "mubi4_t"
     ],
     "tags": [
       "secret",
       "key",
       "wipe",
+      "clear",
       "entropy",
       "error",
-      "fault",
-      "parameterization",
-      "clock_domain"
+      "access_control",
+      "fault"
     ]
   },
   "guarantees": [],
@@ -46,88 +46,193 @@
     {
       "id": "A1",
       "type": "security_precondition",
-      "claim": "hw_key_sel_i must be driven to a valid, non-corrupted mubi4_t encoding.",
-      "cond": "when hw_key_sel_i is used to select a key destination internally",
-      "risk": "invalid encoding may bypass destination checks, leading to key leakage or incorrect key output.",
-      "signals": [
-        "hw_key_sel_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv:17"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "entropy_i must be driven with true randomness during normal operation.",
-      "cond": "when the module uses entropy for prng_en_o or key updates",
-      "risk": "predictable or weak entropy compromises key generation and sideloaded key material.",
+      "claim": "entropy_i must provide sufficient randomness (for Shares shares, each RandWidth bits) on every cycle where key output is derived.",
+      "cond": "when key generation or output relies on entropy_i",
+      "risk": "if entropy_i is weak or predictable, the derived key becomes weak and the encryption/authentication bound to that key is compromised.",
       "signals": [
         "entropy_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv:15"
-      ]
+        "keymgr_sideload_key_ctrl.sv:15"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "entropy_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when key generation or output relies on entropy_i",
+        "consequent": "entropy_i must provide sufficient randomness (for Shares shares, each RandWidth bits) on every cycle where key output is derived",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "hw_key_sel_i must be a valid mubi4_t encoding corresponding to a permitted hardware key selection; otherwise the module will assert sideload_sel_err_o and may not drive a valid key output.",
+      "cond": "when hw_key_sel_i is used to select a key source",
+      "risk": "an invalid or malicious hw_key_sel_i that is not properly flagged could route a key to an unintended destination (AES, KMAC, OTBN) or leave the output unconnected, violating security partitioning.",
+      "signals": [
+        "hw_key_sel_i",
+        "sideload_sel_err_o"
+      ],
+      "refs": [
+        "keymgr_sideload_key_ctrl.sv:17"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!$isunknown(hw_key_sel_i) && hw_key_sel_i not in valid mubi4 set",
+        "consequent": "sideload_sel_err_o == 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw_key_sel_i",
+          "sideload_sel_err_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!$isunknown(hw_key_sel_i) && hw_key_sel_i not in valid mubi4 set",
+        "consequent": "sideload_sel_err_o == 1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "If Shares or RandWidth (from keymgr_pkg) are zero or ill‑configured, array widths like [Shares-1:0][RandWidth-1:0] become invalid or produce zero‑width arrays, breaking entropy_i, data_i, or key outputs.",
-      "cond": "when keymgr_pkg defines Shares=0 or RandWidth=0 inline",
-      "risk": "synthesis failure or functional dead‑lock because required buses collapse.",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The handling of all legal values of dest_sel_i (keymgr_key_dest_e) is not documented; some encodings may lead to an unintended default path or leave certain key outputs undefined.",
+      "cond": "dest_sel_i takes an allowed but not explicitly handled enumeration value",
+      "risk": "a key could be sent to an unvalidated or disabled destination, possibly leaking the key.",
       "signals": [
-        "entropy_i",
-        "data_i",
+        "dest_sel_i",
         "aes_key_o",
         "kmac_key_o",
         "otbn_key_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv:15,20,21,23-25"
-      ]
+        "keymgr_sideload_key_ctrl.sv:16"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "dest_sel_i == undefined_enum_member",
+        "consequent": "aes_key_o valid && kmac_key_o valid && otbn_key_o valid",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dest_sel_i",
+          "aes_key_o",
+          "kmac_key_o",
+          "otbn_key_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "dest_sel_i == undefined_enum_member",
+        "consequent": "aes_key_o valid && kmac_key_o valid && otbn_key_o valid",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "Without the internal logic, it is impossible to verify that wipe_key_i indeed renders sideload keys useless until reboot and that clr_key_i cannot be overridden by a subsequent data transfer.",
-      "cond": "when wipe_key_i or clr_key_i is asserted",
-      "risk": "an implementation flaw could leave key material accessible after a wipe/clear, violating key deletion guarantees.",
+      "claim": "There is no documented priority or mutual exclusion between clr_key_i and wipe_key_i; concurrent or closely-spaced assertions could lead to a key being read out after a clear but before the wipe completes.",
+      "cond": "clr_key_i and wipe_key_i are asserted simultaneously or in unpredictable order",
+      "risk": "sensitive key material may be temporarily accessible on outputs after a wipe command, failing the immediate secure erase requirement.",
       "signals": [
-        "wipe_key_i",
-        "clr_key_i"
+        "clr_key_i",
+        "wipe_key_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv:13-14"
-      ]
+        "keymgr_sideload_key_ctrl.sv:13-14"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "clr_key_i && wipe_key_i",
+        "consequent": "prevents key output",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "clr_key_i",
+          "wipe_key_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "clr_key_i && wipe_key_i",
+        "consequent": "prevents key output",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "No evidence in this chunk that the module detects or signals an error if data_en_i and data_valid_i are de-asserted before a key transfer completes, leaving aes_key_o/kmac_key_o/otbn_key_o in an indeterminate state.",
-      "cond": "during an ongoing key side‑load transaction",
-      "risk": "partial key data could be latched and subsequently used, breaking data‑integrity or leaking secret material.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact reset/initialization sequence required on init_i after power-up or after a wipe is not specified; this may cause state misalignment with the rest of the key manager.",
+      "cond": "after rst_ni deassertion or wipe_key_i event",
+      "risk": "the module may start in an unexpected state, leading to incorrect key handling or error signal suppression.",
       "signals": [
-        "data_en_i",
-        "data_valid_i",
-        "aes_key_o",
-        "kmac_key_o",
-        "otbn_key_o"
+        "init_i",
+        "rst_ni",
+        "wipe_key_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv:18-19,23-25"
-      ]
+        "keymgr_sideload_key_ctrl.sv:12,14"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "init_i",
+          "rst_ni",
+          "wipe_key_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "after rst_ni deassertion or wipe_key_i event",
+        "consequent": "The exact reset/initialization sequence required on init_i after power-up or after a wipe is not specified; this may cause state misalignment with the rest of the key manager",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This module distributes keys to AES, KMAC, and OTBN. Wipe and clear signals control key erasure; any implementation flaw (e.g., race between clear and wipe, incomplete overwrite) can leave key material accessible. The hw_key_sel_i selection, if not rigidly checked, can route a key to an unintended consumer, breaking cryptographic separation. Entropy_i quality directly determines the strength of any generated key. The error outputs (sideload_sel_err_o, fsm_err_o) must be accurately asserted and properly handled by the top-level security controller to prevent silent failures.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv:7-28"
+    "keymgr_sideload_key_ctrl.sv:7-28"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
   "line_start": 7,
-  "line_end": 28,
-  "security_implications": ""
+  "line_end": 28
 }

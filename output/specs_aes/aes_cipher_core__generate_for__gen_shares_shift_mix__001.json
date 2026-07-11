@@ -2,162 +2,357 @@
   "chunk_id": "aes_cipher_core__generate_for__gen_shares_shift_mix__001",
   "header": {
     "module": "aes_cipher_core",
-    "block_kind": "generate_for",
+    "block_kind": "generate",
     "driven": [
       "shift_rows_in[s]",
+      "shift_rows_out[s]",
       "mix_columns_out[s]"
     ],
     "used": [
       "sub_bytes_out",
       "sb_out_mask",
-      "op_i"
+      "op_i",
+      "NumShares"
     ],
     "modes": [
-      "s=0",
-      "s!=0"
+      "s==0 data share",
+      "s>0 mask share"
     ],
     "tags": [
+      "secret",
       "mask",
-      "shares",
-      "encryption"
+      "aes_round",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For share index s==0, shift_rows_in[s] is assigned sub_bytes_out; for s!=0, shift_rows_in[s] is assigned sb_out_mask.",
-      "cond": "always for the generated instance",
+      "claim": "For share 0 (the data share), shift_rows_in[0] is continuously assigned from sub_bytes_out.",
+      "cond": "always",
       "signals": [
-        "shift_rows_in[s]",
-        "sub_bytes_out",
-        "sb_out_mask"
+        "shift_rows_in[0]",
+        "sub_bytes_out"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:400-404"
-      ]
+        "aes_cipher_core.sv:398-400"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "shift_rows_in[0] == sub_bytes_out",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "shift_rows_in[0]",
+          "sub_bytes_out"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "shift_rows_in[0] == sub_bytes_out",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "instance_connection",
-      "claim": "Instance u_aes_shift_rows produces shift_rows_out[s] from shift_rows_in[s] and op_i; instance u_aes_mix_columns produces mix_columns_out[s] from shift_rows_out[s] and op_i.",
+      "type": "assignment",
+      "claim": "For shares s>0 (the mask shares), shift_rows_in[s] is continuously assigned from sb_out_mask.",
       "cond": "always",
       "signals": [
         "shift_rows_in[s]",
-        "shift_rows_out[s]",
-        "mix_columns_out[s]",
-        "op_i"
+        "sb_out_mask"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:406-416"
-      ]
+        "aes_cipher_core.sv:401-404"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "shift_rows_in[s] == sb_out_mask",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "shift_rows_in[s]",
+          "sb_out_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "shift_rows_in[s] == sb_out_mask",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "For each share s, shift_rows_out[s] directly feeds aes_mix_columns, and the internal connections ensure shift_rows_out[s] == u_aes_shift_rows.data_o and mix_columns_out[s] == u_aes_mix_columns.data_o with u_aes_mix_columns.data_i == shift_rows_out[s].",
+      "cond": "for all s from 0 to NumShares-1",
+      "signals": [
+        "shift_rows_out[s]",
+        "mix_columns_out[s]",
+        "u_aes_shift_rows.data_o",
+        "u_aes_mix_columns.data_i",
+        "u_aes_mix_columns.data_o"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:406-416"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_shares_shift_mix[s].u_aes_mix_columns.data_i == shift_rows_out[s] && mix_columns_out[s] == gen_shares_shift_mix[s].u_aes_mix_columns.data_o && shift_rows_out[s] == gen_shares_shift_mix[s].u_aes_shift_rows.data_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "shift_rows_out[s]",
+          "mix_columns_out[s]",
+          "u_aes_shift_rows.data_o",
+          "u_aes_mix_columns.data_i",
+          "u_aes_mix_columns.data_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "for all s from 0 to NumShares-1",
+        "consequent": "gen_shares_shift_mix[s].u_aes_mix_columns.data_i == shift_rows_out[s] && mix_columns_out[s] == gen_shares_shift_mix[s].u_aes_mix_columns.data_o && shift_rows_out[s] == gen_shares_shift_mix[s].u_aes_shift_rows.data_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "generate_param",
+      "claim": "NumShares instances of aes_shift_rows and aes_mix_columns are generated, ensuring all shares are processed.",
+      "cond": "NumShares > 0",
+      "signals": [
+        "NumShares"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:397-417"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumShares"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "NumShares > 0",
+        "consequent": "NumShares instances of aes_shift_rows and aes_mix_columns are generated, ensuring all shares are processed",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "sub_bytes_out provides a correctly masked data share and is valid before being used by the shift_rows stage.",
+      "claim": "sub_bytes_out and sb_out_mask must be valid and stable during the shift/mix phase; they represent the correctly masked data and mask shares from the previous sub‑byte stage.",
       "cond": "during operation",
-      "risk": "Invalid or unmasked data share breaks the masking scheme and may expose secrets.",
-      "signals": [
-        "sub_bytes_out"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:400"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "sb_out_mask provides a valid mask share and is valid before use.",
-      "cond": "during operation",
-      "risk": "A zero or correlated mask share weakens side-channel protection.",
-      "signals": [
-        "sb_out_mask"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:403"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "mode_config",
-      "claim": "op_i is stable and holds a legal encryption/decryption value while data flows through shift_rows and mix_columns.",
-      "cond": "during data propagation",
-      "risk": "Mid-operation change of op_i may produce mixed-round outputs or glitches.",
-      "signals": [
-        "op_i"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:407,413"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "mode_config",
-      "claim": "NumShares is at least 1, otherwise no share instance is generated and mix_columns_out remains undriven.",
-      "cond": "elaboration time",
-      "risk": "Undriven array elements may cause downstream X-propagation or synthesis issues.",
-      "signals": [
-        "mix_columns_out"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:397"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "All mask shares (s != 0) connect to the single signal sb_out_mask. If NumShares > 2 and independent masks are required, sharing the same mask across multiple shares may degrade side-channel resistance.",
-      "cond": "NumShares > 1",
-      "risk": "Reduced noise and leakage independence, potentially weakening DPA/EMA protection.",
-      "signals": [
-        "sb_out_mask",
-        "shift_rows_in[1..NumShares-1]"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:401-404"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_unhandled_legal_case",
-      "priority": "medium",
-      "claim": "If NumShares is 0, the generate loop creates no instances, leaving the mix_columns_out array undriven. The design may require a minimum value or a default connection.",
-      "cond": "NumShares == 0",
-      "risk": "Unconnected output array may cause X-optimism or downstream logic failure.",
-      "signals": [
-        "mix_columns_out"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:397"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The mask share assignment assumes that sb_out_mask is the correct mask for all non-zero shares. Verification requires inspecting the SubBytes stage to confirm how sub_bytes_out and sb_out_mask are generated and whether they satisfy the required sharing scheme.",
-      "cond": "all share indices",
-      "risk": "Mismatched shares could lead to incorrect unmasking or exposure of intermediate values.",
+      "risk": "glitchy or incorrect share inputs propagate directly to mix_columns_out, breaking masked computation and causing data corruption or leakage.",
       "signals": [
         "sub_bytes_out",
         "sb_out_mask"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:400,403"
-      ]
+        "aes_cipher_core.sv:398-404"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sub_bytes_out",
+          "sb_out_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during operation",
+        "consequent": "sub_bytes_out and sb_out_mask must be valid and stable during the shift/mix phase; they represent the correctly masked data and mask shares from the previous sub‑byte stage",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "op_i must be stable and correctly encode the cipher operation (encrypt/decrypt) for all shares.",
+      "cond": "during processing",
+      "risk": "differing shift‑rows direction across shares corrupts the MixColumns input and breaks cipher functional correctness.",
+      "signals": [
+        "op_i"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:407,413"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during processing",
+        "consequent": "op_i must be stable and correctly encode the cipher operation (encrypt/decrypt) for all shares",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "The parameter NumShares must be at least 1.",
+      "cond": "at elaboration",
+      "risk": "if NumShares < 1, no instances are created and mix_columns_out is undriven, leading to X propagation.",
+      "signals": [
+        "NumShares"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:397"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "NumShares >= 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumShares"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "at elaboration",
+        "consequent": "NumShares >= 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:397-417"
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If NumShares is set to 1, only the data share (s=0) is instantiated; the mask share (s>0) does not exist, and sub_bytes_out is processed unmasked through ShiftRows and MixColumns.",
+      "cond": "NumShares == 1",
+      "risk": "Masking is completely bypassed, exposing the secret sub_bytes_out in plaintext and enabling side‑channel attacks.",
+      "signals": [
+        "NumShares",
+        "sub_bytes_out"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:397-404"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "NumShares == 1",
+        "consequent": "no mask share instantiated; sub_bytes_out feeds shift_rows_in[0] without masking",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumShares",
+          "sub_bytes_out"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "NumShares == 1",
+        "consequent": "no mask share instantiated; sub_bytes_out feeds shift_rows_in[0] without masking",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Correctness of masking depends on sub_bytes_out and sb_out_mask being perfectly aligned and corresponding to the same round and share indices.",
+      "cond": "when sub_bytes stage produces shares",
+      "risk": "Desynchronized shares cause incorrect mixing and potential leakage.",
+      "signals": [
+        "sub_bytes_out",
+        "sb_out_mask"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:398-404"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sub_bytes_out",
+          "sb_out_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when sub_bytes stage produces shares",
+        "consequent": "Correctness of masking depends on sub_bytes_out and sb_out_mask being perfectly aligned and corresponding to the same round and share indices",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "security_implications": "The chunk directly handles masked shares: sub_bytes_out (data share) and sb_out_mask (mask share). If NumShares = 1, the mask share is absent, and the secret sub_bytes_out passes unmasked through ShiftRows and MixColumns, completely defeating the masking countermeasure and enabling power/EM side‑channel leakage of the AES state.",
+  "evidence_refs": [
+    "aes_cipher_core.sv:397-417"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 397,
-  "line_end": 417,
-  "security_implications": ""
+  "line_end": 417
 }

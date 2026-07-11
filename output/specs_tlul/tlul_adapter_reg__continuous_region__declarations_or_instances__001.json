@@ -2,41 +2,38 @@
   "chunk_id": "tlul_adapter_reg__continuous_region__declarations_or_instances__001",
   "header": {
     "module": "tlul_adapter_reg",
-    "block_kind": "mixed",
+    "block_kind": "declaration",
     "driven": [
       "__tlul_bug_002_enabled"
     ],
-    "used": [],
+    "used": [
+      "$test$plusargs"
+    ],
     "modes": [
       "AccessLatency_1",
-      "tlul_bug_002_state_e::TlulBug002Idle",
-      "tlul_bug_002_state_e::TlulBug002HoldResp",
-      "tlul_bug_002_state_e::TlulBug002HoldBaseline",
-      "tlul_bug_002_state_e::TlulBug002InjectLateError"
+      "TLUL_BUG_002_INJECT"
     ],
     "tags": [
-      "fault",
       "error",
-      "parameterization"
+      "test"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "At simulation start (time 0), __tlul_bug_002_enabled is set to 0, then conditionally set to 1 if the plusarg TLUL_BUG_002_INJECT is present on the command line.",
-      "cond": "always at initial time 0",
+      "claim": "At simulation start, __tlul_bug_002_enabled is assigned to 1'b1 if the plusarg 'TLUL_BUG_002_INJECT' is present, otherwise it is assigned to 1'b0.",
+      "cond": "Simulation time 0 (initial block execution)",
       "signals": [
-        "__tlul_bug_002_enabled",
-        "TLUL_BUG_002_INJECT (plusarg)"
+        "__tlul_bug_002_enabled"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:128-132"
+        "tlul_adapter_reg.sv:128-132"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "",
+        "consequent": "__tlul_bug_002_enabled == ($test$plusargs(\"TLUL_BUG_002_INJECT\") ? 1'b1 : 1'b0)",
         "formalizability": "none"
       },
       "risk": "",
@@ -45,12 +42,11 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "__tlul_bug_002_enabled",
-          "TLUL_BUG_002_INJECT (plusarg)"
+          "__tlul_bug_002_enabled"
         ],
-        "temporal_shape": "always",
-        "antecedent": "always at initial time 0",
-        "consequent": "At simulation start (time 0), __tlul_bug_002_enabled is set to 0, then conditionally set to 1 if the plusarg TLUL_BUG_002_INJECT is present on the command line",
+        "temporal_shape": "comb",
+        "antecedent": "Simulation time 0 (initial block execution)",
+        "consequent": "__tlul_bug_002_enabled == ($test$plusargs(\"TLUL_BUG_002_INJECT\") ? 1'b1 : 1'b0)",
         "formalizability": "none",
         "confidence": 0.85,
         "source": "llm"
@@ -63,20 +59,20 @@
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The bug-injection control and state signals (__tlul_bug_002_state_q, __tlul_bug_002_read_cnt_q, __tlul_bug_002_late_error) are declared here but not driven. Their driving logic must be implemented elsewhere in the same generate block to form a complete FSM.",
-      "cond": "when `VERILATOR is defined and AccessLatency==1",
-      "risk": "If the driving logic is missing, these signals remain uninitialized or X, potentially corrupting the bug-injection behavior or masking the intended error injection during simulation, reducing test effectiveness.",
+      "claim": "Signals __tlul_bug_002_read_cnt_q, __tlul_bug_002_state_q, and __tlul_bug_002_late_error are declared but their driving logic and error injection behavior are defined elsewhere; improper management may cause incorrect TL-UL responses or livelock when TLUL_BUG_002_INJECT is enabled.",
+      "cond": "When __tlul_bug_002_enabled is 1 and the state machine is active",
+      "risk": "Incorrect state updates could hold an outstanding response forever or inject an error at an illegal time, violating the TL-UL protocol and potentially stalling the bus.",
       "signals": [
         "__tlul_bug_002_state_q",
         "__tlul_bug_002_read_cnt_q",
         "__tlul_bug_002_late_error"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:123-126"
+        "tlul_adapter_reg.sv:123-126"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "",
+        "temporal_shape": "always",
+        "antecedent": "__tlul_bug_002_enabled",
         "consequent": "",
         "formalizability": "none"
       },
@@ -89,9 +85,9 @@
           "__tlul_bug_002_read_cnt_q",
           "__tlul_bug_002_late_error"
         ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "when `VERILATOR is defined and AccessLatency==1",
-        "consequent": "The bug-injection control and state signals (__tlul_bug_002_state_q, __tlul_bug_002_read_cnt_q, __tlul_bug_002_late_error) are declared here but not driven. Their driving logic must be implemented elsewhere in the same generate block to for",
+        "temporal_shape": "always",
+        "antecedent": "__tlul_bug_002_enabled",
+        "consequent": "Signals __tlul_bug_002_read_cnt_q, __tlul_bug_002_state_q, and __tlul_bug_002_late_error are declared but their driving logic and error injection behavior are defined elsewhere; improper management may cause incorrect TL-UL responses or liv",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
@@ -101,18 +97,17 @@
       "id": "U2",
       "type": "U_cross_chunk_dependency",
       "priority": "low",
-      "claim": "The registers wr_req_q and rd_req_q are declared but not assigned in this chunk. They must be driven by combinational or sequential logic elsewhere inside the generate block.",
-      "cond": "always within the AccessLatency==1 generate block",
-      "risk": "If they remain undriven, the adapter may produce undefined response behavior or miss handshake events, leading to TL-UL protocol violations in simulation.",
+      "claim": "Signal __tlul_bug_002_late_error is declared but not used or driven in this region; its purpose and connectivity require cross-chunk analysis.",
+      "cond": "Unknown",
+      "risk": "The signal may be intended for a late‑error injection but is currently unconnected, rendering that test path non‑functional.",
       "signals": [
-        "wr_req_q",
-        "rd_req_q"
+        "__tlul_bug_002_late_error"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:113"
+        "tlul_adapter_reg.sv:126"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
+        "temporal_shape": "always",
         "antecedent": "",
         "consequent": "",
         "formalizability": "none"
@@ -122,23 +117,56 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "wr_req_q",
-          "rd_req_q"
+          "__tlul_bug_002_late_error"
         ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "always within the AccessLatency==1 generate block",
-        "consequent": "The registers wr_req_q and rd_req_q are declared but not assigned in this chunk. They must be driven by combinational or sequential logic elsewhere inside the generate block",
+        "temporal_shape": "always",
+        "antecedent": "Unknown",
+        "consequent": "Signal __tlul_bug_002_late_error is declared but not used or driven in this region; its purpose and connectivity require cross-chunk analysis",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The tlul_bug_002_state_e enum defines HoldResp and HoldBaseline states, but their intended timing and effect on the TL-UL response channel are not documented in this chunk.",
+      "cond": "When the state machine enters these states",
+      "risk": "Misinterpreted hold durations could lead to protocol timeouts or unexpected stalls.",
+      "signals": [
+        "tlul_bug_002_state_e"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:116-121"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tlul_bug_002_state_e"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "When the state machine enters these states",
+        "consequent": "The tlul_bug_002_state_e enum defines HoldResp and HoldBaseline states, but their intended timing and effect on the TL-UL response channel are not documented in this chunk",
         "formalizability": "none",
         "confidence": 0.85,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The TLUL_BUG_002_INJECT feature, when enabled via a Verilator plusarg, alters the TL-UL adapter's response handling; it can inject deliberate errors or hold responses. If ever activated in a non‑test environment (e.g., by accident or misconfiguration), it could cause protocol violations, data corruption, or bus deadlock, impacting availability and integrity.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:112-133"
+    "tlul_adapter_reg.sv:112-133"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 112,
-  "line_end": 133,
-  "security_implications": ""
+  "line_end": 133
 }

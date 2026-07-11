@@ -9,120 +9,280 @@
       "hw2reg.intr_state.hmac_done.d"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
       "hash_done_event",
       "reg2hw.intr_enable.hmac_done.q",
       "reg2hw.intr_test.hmac_done.q",
       "reg2hw.intr_test.hmac_done.qe",
-      "reg2hw.intr_state.hmac_done.q"
+      "reg2hw.intr_state.hmac_done.q",
+      "clk_i",
+      "rst_ni"
     ],
     "modes": [
-      "Width=1"
+      "Width=1 (single interrupt)"
     ],
     "tags": [
       "interrupt",
-      "csr",
-      "handshake",
+      "done",
+      "security",
       "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "generate_param",
-      "claim": "Instantiates prim_intr_hw with Width=1, connecting event_intr_i to hash_done_event and driving intr_hmac_done_o, hw2reg.intr_state.hmac_done.de, and hw2reg.intr_state.hmac_done.d according to the module's implementation.",
+      "type": "assignment",
+      "claim": "intr_hmac_done_o is continuously driven by the intr_o output of the prim_intr_hw instance intr_hw_hmac_done.",
       "cond": "always",
       "signals": [
-        "intr_hmac_done_o",
+        "intr_hmac_done_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:439"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "1'b1",
+        "consequent": "intr_hmac_done_o == intr_hw_hmac_done.gen_intr_hw.intr_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intr_hmac_done_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "1'b1",
+        "consequent": "intr_hmac_done_o == intr_hw_hmac_done.gen_intr_hw.intr_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "hw2reg.intr_state.hmac_done.de and hw2reg.intr_state.hmac_done.d are driven by the corresponding de_o and d_o ports of the prim_intr_hw instance.",
+      "cond": "always",
+      "signals": [
         "hw2reg.intr_state.hmac_done.de",
         "hw2reg.intr_state.hmac_done.d"
       ],
       "refs": [
-        "429-440"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:437-438"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "1'b1",
+        "consequent": "(hw2reg.intr_state.hmac_done.de == intr_hw_hmac_done.gen_intr_hw.de_o) && (hw2reg.intr_state.hmac_done.d == intr_hw_hmac_done.gen_intr_hw.d_o)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "ports",
+        "signals": [
+          "hw2reg.intr_state.hmac_done.de",
+          "hw2reg.intr_state.hmac_done.d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "1'b1",
+        "consequent": "(hw2reg.intr_state.hmac_done.de == intr_hw_hmac_done.gen_intr_hw.de_o) && (hw2reg.intr_state.hmac_done.d == intr_hw_hmac_done.gen_intr_hw.d_o)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "lifecycle",
-      "claim": "clk_i and rst_ni are properly driven and meet prim_intr_hw timing requirements.",
-      "cond": "always",
-      "risk": "If clock or reset are unstable or glitchy, intr_hmac_done_o may not assert correctly or may be metastable.",
-      "signals": [
-        "clk_i",
-        "rst_ni"
-      ],
-      "refs": [
-        "429-430"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "hash_done_event is a valid, synchronized single-cycle pulse representing a completed HMAC operation.",
-      "cond": "when hash_done_event is asserted",
-      "risk": "Missing or spurious pulses cause lost or false interrupts, potentially disrupting software flows.",
+      "type": "producer_contract",
+      "claim": "hash_done_event is asserted for exactly one clock cycle when an HMAC digest completes, and is deasserted thereafter until the next completion.",
+      "cond": "normal HMAC operation completion",
+      "risk": "A multi-cycle or spurious event could cause multiple interrupts or misaligned state, leading to missed done notifications or false interrupts.",
       "signals": [
         "hash_done_event"
       ],
       "refs": [
-        "432"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:432"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "$rose(hash_done_event) |-> ##1 !hash_done_event",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "hash_done_event"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "$rose(hash_done_event) |-> ##1 !hash_done_event",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "A3",
-      "type": "value_domain",
-      "claim": "reg2hw.intr_enable.hmac_done.q and reg2hw.intr_state.hmac_done.q are stable and hold valid (0/1) values during event handling.",
-      "cond": "when interrupt logic samples these registers",
-      "risk": "Unstable or X values may cause incorrect interrupt state transitions or output glitches.",
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The reg2hw control registers (enable, test, state) are stable during the interrupt hardware's event capture and handling window; software changes follow the clearing protocol without races.",
+      "cond": "during interrupt processing",
+      "risk": "Simultaneous writes to enable or state could cause glitches, missed captures, or incorrect interrupt output, potentially causing HMAC completion to go unnoticed.",
       "signals": [
         "reg2hw.intr_enable.hmac_done.q",
+        "reg2hw.intr_test.hmac_done.q",
         "reg2hw.intr_state.hmac_done.q"
       ],
       "refs": [
-        "433-436"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:433-436"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(hash_done_event) || $changed(reg2hw.intr_enable.hmac_done.q) || $changed(reg2hw.intr_state.hmac_done.q)",
+        "consequent": "##1 stable(reg2hw.intr_enable.hmac_done.q) && stable(reg2hw.intr_state.hmac_done.q)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.intr_enable.hmac_done.q",
+          "reg2hw.intr_test.hmac_done.q",
+          "reg2hw.intr_state.hmac_done.q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$rose(hash_done_event) || $changed(reg2hw.intr_enable.hmac_done.q) || $changed(reg2hw.intr_state.hmac_done.q)",
+        "consequent": "##1 stable(reg2hw.intr_enable.hmac_done.q) && stable(reg2hw.intr_state.hmac_done.q)",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "prim_intr_hw correctly implements standard interrupt generation, capture, clearing, and test-mode logic as defined in the OpenTitan library, with no internal glitches or metastability.",
+      "cond": "all operational modes",
+      "risk": "Incorrect behavior inside prim_intr_hw could lead to missed or stuck interrupts, directly impacting HMAC's ability to notify software of completion, and potentially violating security timing requirements.",
+      "signals": [],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:429"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [],
+        "temporal_shape": "always",
+        "antecedent": "all operational modes",
+        "consequent": "prim_intr_hw correctly implements standard interrupt generation, capture, clearing, and test-mode logic as defined in the OpenTitan library, with no internal glitches or metastability",
+        "formalizability": "none",
+        "confidence": 0.6,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The exact interrupt generation, clear-on-read, and test behavior of intr_hmac_done_o depends on prim_intr_hw's RTL; review for timing hazards or race conditions between event and register state.",
-      "cond": "when interrupt is triggered and software may read or write state",
-      "risk": "Could lead to missed interrupts, state corruption, or spurious re-assertion.",
+      "priority": "high",
+      "claim": "The exact timing and state-machine behavior of prim_intr_hw are not visible; an error in its design (e.g., race between event capture and enable deassertion) could cause missed interrupts or spurious assertions.",
+      "cond": "when hash_done_event coincides with enable/state register changes",
+      "risk": "HMAC might fail to signal completion, leaving digest data in the register file beyond the point where software expects it, potentially exposing secrets or violating protocol timing.",
       "signals": [
-        "intr_hmac_done_o",
-        "hw2reg.intr_state.hmac_done.de",
-        "hw2reg.intr_state.hmac_done.d"
+        "hash_done_event",
+        "reg2hw.intr_enable.hmac_done.q",
+        "reg2hw.intr_state.hmac_done.q",
+        "intr_hmac_done_o"
       ],
       "refs": [
-        "429-440"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:432-439"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "$rose(hash_done_event) && reg2hw.intr_enable.hmac_done.q",
+        "consequent": "##1 intr_hmac_done_o",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hash_done_event",
+          "reg2hw.intr_enable.hmac_done.q",
+          "reg2hw.intr_state.hmac_done.q",
+          "intr_hmac_done_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "$rose(hash_done_event) && reg2hw.intr_enable.hmac_done.q",
+        "consequent": "##1 intr_hmac_done_o",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_security_intent_gap",
+      "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "reg2hw.intr_test.hmac_done.qe allows software to force an HMAC done interrupt. If the test register is writable by untrusted software, it could be used to spoof a completed HMAC operation.",
-      "cond": "when intr_test.hmac_done.qe is set",
-      "risk": "Spurious interrupt could deceive firmware into treating data as validly hashed, leading to security bypass.",
+      "claim": "If software clears the interrupt enable (reg2hw.intr_enable.hmac_done.q) exactly when hash_done_event is high, the interrupt output may glitch or remain asserted for an extra cycle; this could cause a missed interrupt in the processor if the processor samples the output at the wrong time.",
+      "cond": "concurrent event and enable write",
+      "risk": "Processor may never see the HMAC done notification, causing a timeout or failure to read the digest, which could stall the system or lead to security policy violations.",
       "signals": [
-        "reg2hw.intr_test.hmac_done.qe"
+        "reg2hw.intr_enable.hmac_done.q",
+        "hash_done_event",
+        "intr_hmac_done_o"
       ],
       "refs": [
-        "435"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:432,433,439"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.intr_enable.hmac_done.q == 0 && hash_done_event",
+        "consequent": "intr_hmac_done_o == 0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.intr_enable.hmac_done.q",
+          "hash_done_event",
+          "intr_hmac_done_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.intr_enable.hmac_done.q == 0 && hash_done_event",
+        "consequent": "intr_hmac_done_o == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The intr_hmac_done_o signal is the HMAC completion notification. A missed or spurious interrupt can cause software to not read the final digest in time, potentially leaving secret key material or intermediate state in the HMAC registers longer than necessary, or causing a deadlock in a security protocol. Additionally, the test mode (reg2hw.intr_test) could be abused to generate fake interrupts if the register interface is not properly protected, leading to denial-of-service or confusion. Therefore, the correctness and integrity of this interrupt path is essential for HMAC's security guarantees.",
   "evidence_refs": [
-    "429-440"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:429-440"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 429,
-  "line_end": 440,
-  "security_implications": ""
+  "line_end": 440
 }

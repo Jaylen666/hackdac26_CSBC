@@ -15,145 +15,309 @@
       "reg_we",
       "addrmiss"
     ],
-    "modes": [
-      "AW=13",
-      "DW=32",
-      "DBW=4"
-    ],
+    "modes": [],
     "tags": [
       "integrity",
       "error",
       "fault",
-      "reset",
-      "handshake"
+      "register_interface"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "tlul_cmd_intg_chk instance continuously checks incoming TL-UL command integrity and asserts intg_err when an integrity violation is detected on tl_i.",
+      "type": "error_detection",
+      "claim": "intg_err is driven by instance u_chk (tlul_cmd_intg_chk), whose err_o output indicates that tl_i failed the TL-UL command integrity check.",
       "cond": "always",
       "signals": [
         "tl_i",
         "intg_err"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:52-56"
-      ]
+        "hmac_reg_top.sv:52-56"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "intg_err == u_chk.err_o",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tl_i",
+          "intg_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "intg_err == u_chk.err_o",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "prim_reg_we_check instance asserts reg_we_err if reg_we_check is not one-hot when reg_we is high and addrmiss is false, flagging spurious write enables.",
-      "cond": "reg_we && !addrmiss",
+      "type": "error_detection",
+      "claim": "reg_we_err is driven by instance u_prim_reg_we_check, which registers a non-one-hot condition on reg_we_check when reg_we && !addrmiss.",
+      "cond": "posedge clk_i or negedge rst_ni",
       "signals": [
+        "clk_i",
+        "rst_ni",
         "reg_we_check",
         "reg_we",
         "addrmiss",
         "reg_we_err"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:61-69"
-      ]
+        "hmac_reg_top.sv:59-69"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg_we && !addrmiss && $countones(reg_we_check) != 1",
+        "consequent": "reg_we_err == 1",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "reg_we_check",
+          "reg_we",
+          "addrmiss",
+          "reg_we_err"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg_we && !addrmiss && $countones(reg_we_check) != 1",
+        "consequent": "reg_we_err == 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "reg_we_check must be driven as a one-hot vector matching the targeted register index; any non-one-hot pattern during a valid write will cause reg_we_err.",
-      "cond": "reg_we && !addrmiss",
-      "risk": "spurious write enable error reported, potentially causing write failure or false positive integrity alert.",
+      "claim": "reg_we_check[58:0] must be driven with a one-hot decoded version of all register write-enable signals so that the one-hot check is meaningful.",
+      "cond": "always",
+      "risk": "If not correctly populated, spurious write-enable detection becomes ineffective and undetected spurious writes could corrupt registers.",
       "signals": [
-        "reg_we_check",
-        "reg_we",
-        "addrmiss"
+        "reg_we_check"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:59-69"
-      ]
+        "hmac_reg_top.sv:60"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg_we_check"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "reg_we_check[58:0] must be driven with a one-hot decoded version of all register write-enable signals so that the one-hot check is meaningful",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "addrmiss must correctly indicate whether the current access does not match a valid register; if erroneously asserted, spurious write detection may be suppressed.",
-      "cond": "when reg_we is active",
-      "risk": "undetected multi-register writes could corrupt configuration or security controls.",
+      "type": "producer_contract",
+      "claim": "addrmiss must be correctly derived from the register address decoder; it must be low only when a valid register address is decoded.",
+      "cond": "during a register access",
+      "risk": "If addrmiss is incorrectly asserted, the write-enable check may be suppressed, allowing spurious writes to go undetected.",
       "signals": [
-        "addrmiss",
-        "reg_we"
+        "addrmiss"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:42",
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:67"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "security_precondition",
-      "claim": "External logic receiving intg_err must discard the current access and/or raise an integrity alert to prevent corrupted data from being used.",
-      "cond": "when intg_err is asserted",
-      "risk": "corrupted access may be treated as valid, compromising register values and system security.",
-      "signals": [
-        "intg_err"
+        "hmac_reg_top.sv:67"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:52-56"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "addrmiss"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during a register access",
+        "consequent": "addrmiss must be correctly derived from the register address decoder; it must be low only when a valid register address is decoded",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "prim_reg_we_check OneHotWidth is hardcoded to 59. If the number of write-enabled registers changes (e.g., due to design update), the one-hot check may become incorrect.",
-      "cond": "if writable register count differs from 59",
-      "risk": "false spurious write errors or missed detection of illegal writes.",
-      "signals": [
-        "reg_we_check"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:59-63"
-      ]
-    },
-    {
-      "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "intg_err internal signal is not visibly connected to output port intg_err_o in this chunk. Need to confirm that connection is implemented later in the register file logic.",
-      "cond": "always",
-      "risk": "if not connected, integrity check failures could be silent and output port would float.",
+      "priority": "high",
+      "claim": "intg_err from u_chk is not visibly propagated or combined into the module's intg_err_o output in this chunk; if left unhandled, integrity errors might be silently ignored.",
+      "cond": "when tl_i fails integrity check",
+      "risk": "Compromised or corrupted TL-UL commands could be accepted without raising an integrity violation, leading to register corruption or security breach.",
       "signals": [
         "intg_err",
         "intg_err_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:24",
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:52-53"
-      ]
+        "hmac_reg_top.sv:24",
+        "hmac_reg_top.sv:52"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "intg_err == 1",
+        "consequent": "intg_err_o == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intg_err",
+          "intg_err_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "intg_err == 1",
+        "consequent": "intg_err_o == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "reg_we_check is declared but not assigned in this chunk; its correctness and one-hot property depend on other logic.",
+      "cond": "always",
+      "risk": "If reg_we_check is not correctly decoded, the write-enable checker may miss spurious writes or generate false alerts.",
+      "signals": [
+        "reg_we_check"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:60"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg_we_check"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "reg_we_check is declared but not assigned in this chunk; its correctness and one-hot property depend on other logic",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
       "type": "U_dead_or_unused_signal",
       "priority": "low",
-      "claim": "logic err_q is declared but not used in this chunk. It may be unused or repurposed later.",
-      "cond": "as per current chunk",
-      "risk": "dead code that could indicate missing functionality or leftover declaration.",
+      "claim": "Signal err_q is declared but not driven or used in this chunk; it may be dead code.",
+      "cond": "unknown",
+      "risk": "If truly unused, it represents unnecessary logic or a missing connection to error handling.",
       "signals": [
         "err_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:71"
-      ]
+        "hmac_reg_top.sv:71"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "Signal err_q is declared but not driven or used in this chunk; it may be dead code",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "The OneHotWidth parameter is hardcoded to 59; if the number of writable registers changes, this width may become mismatched, breaking the one-hot check.",
+      "cond": "when number of registers differs from 59",
+      "risk": "A width mismatch could cause false spurious write detection or, worse, failure to detect real spurious writes.",
+      "signals": [
+        "reg_we_check"
+      ],
+      "refs": [
+        "hmac_reg_top.sv:60",
+        "hmac_reg_top.sv:62"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg_we_check"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when number of registers differs from 59",
+        "consequent": "The OneHotWidth parameter is hardcoded to 59; if the number of writable registers changes, this width may become mismatched, breaking the one-hot check",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "intg_err from tlul_cmd_intg_chk detects command integrity violations; if not properly propagated to intg_err_o, corrupted TL-UL transactions could be accepted, potentially allowing unauthorized writes or data corruption. The reg_we_check spurious write detection relies on correct one-hot encoding of all register write-enable signals; a failure here could allow write strobes to unauthorized registers, bypassing access controls and leading to secret leakage or configuration tampering.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:7-71"
+    "hmac_reg_top.sv:7-71"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
   "line_start": 7,
-  "line_end": 71,
-  "security_implications": ""
+  "line_end": 71
 }

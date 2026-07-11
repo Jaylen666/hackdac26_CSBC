@@ -16,14 +16,14 @@
     "tags": [
       "secret",
       "key",
-      "entropy"
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "valid_o is assigned as the logical AND of valid_q and en_i.",
+      "claim": "valid_o is continuously driven as (valid_q & en_i)",
       "cond": "always",
       "signals": [
         "valid_o",
@@ -31,37 +31,107 @@
         "en_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:29"
-      ]
+        "keymgr_sideload_key.sv:29"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "valid_o == (valid_q & en_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid_o",
+          "valid_q",
+          "en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "valid_o == (valid_q & en_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "key_o is assigned continuously from key_q.",
+      "claim": "key_o is continuously driven as key_q",
       "cond": "always",
       "signals": [
         "key_o",
         "key_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:30"
-      ]
+        "keymgr_sideload_key.sv:30"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "key_o == key_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_o",
+          "key_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_o == key_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "valid_q and key_q are updated elsewhere to hold a valid sideloaded key when valid_q is asserted.",
-      "cond": "when en_i is asserted and valid_o should be high",
-      "risk": "If valid_q is asserted with an invalid or incorrect key, the module will output an incorrect key via key_o.",
+      "claim": "valid_q and key_q are correctly updated by the driving logic so that when valid_q is high, key_q holds a valid key value",
+      "cond": "always",
+      "risk": "valid_o may assert while key_o carries invalid or stale key data, causing downstream to consume a wrong key",
       "signals": [
         "valid_q",
-        "key_q"
+        "key_q",
+        "valid_o",
+        "key_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:29-30"
-      ]
+        "keymgr_sideload_key.sv:29-30"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid_q == 1",
+        "consequent": "key_q is valid",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid_q",
+          "key_q",
+          "valid_o",
+          "key_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid_q == 1",
+        "consequent": "key_q is valid",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -69,40 +139,46 @@
       "id": "U1",
       "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "key_o is not masked or zeroized when en_i is low; key_q might be exposed to output consumers even when valid_o is deasserted.",
-      "cond": "always, because key_o = key_q unconditionally",
-      "risk": "Potential leakage of secret key data to downstream logic or pads when the interface is not intended to output a valid key.",
+      "claim": "key_o is assigned key_q unconditionally, exposing the secret key on the output port even when valid_o is deasserted (en_i low or valid_q low)",
+      "cond": "always",
+      "risk": "an attacker or side-channel observer may read key material during any cycle, breaking key confidentiality",
       "signals": [
         "key_o",
         "key_q",
-        "en_i"
+        "valid_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:30"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "localparam EntropyCopies = Width / RandWidth truncates if Width is not a multiple of RandWidth; downstream logic may rely on exact integer copies.",
-      "cond": "when Width is not divisible by RandWidth",
-      "risk": "Incorrect entropy distribution or alignment in logic that uses EntropyCopies, potentially weakening entropy usage.",
-      "signals": [
-        "EntropyCopies",
-        "Width",
-        "RandWidth"
+        "keymgr_sideload_key.sv:30"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:24"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid_o == 0",
+        "consequent": "key_o == key_q",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "key_o",
+          "key_q",
+          "valid_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid_o == 0",
+        "consequent": "key_o == key_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Even when valid_o is deasserted (valid_o == 0), key_o constantly exposes the internal key_q value (Keys/secrets). This may leak secret key material on every cycle, enabling unauthorized observation or side-channel extraction.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv:7-30"
+    "keymgr_sideload_key.sv:29-30"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key.sv",
   "line_start": 7,
-  "line_end": 30,
-  "security_implications": ""
+  "line_end": 30
 }

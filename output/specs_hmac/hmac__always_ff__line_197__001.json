@@ -7,72 +7,141 @@
       "done_state_q"
     ],
     "used": [
+      "clk_i",
       "rst_ni",
       "done_state_d",
-      "clk_i"
+      "DoneAwaitCmd"
     ],
     "modes": [
       "DoneAwaitCmd"
     ],
     "tags": [
-      "state",
-      "reset"
+      "reset",
+      "fsm"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "The register done_state_q is updated to done_state_d on every positive edge of clk_i, unless rst_ni is low, in which case it is set to DoneAwaitCmd.",
-      "cond": "always",
+      "claim": "When rst_ni is low, done_state_q is immediately forced to DoneAwaitCmd, independent of clk_i.",
+      "cond": "!rst_ni",
       "signals": [
-        "done_state_q",
-        "done_state_d",
         "rst_ni",
+        "done_state_q",
         "DoneAwaitCmd"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:197-203"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:199"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "done_state_q == DoneAwaitCmd",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clk_i.",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "done_state_q",
+          "DoneAwaitCmd"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "done_state_q == DoneAwaitCmd",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not in reset, done_state_q updates to the value of done_state_d at every positive clock edge.",
+      "cond": "rst_ni",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "done_state_d",
+        "done_state_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:201"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "done_state_q == $past(done_state_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "done_state_d",
+          "done_state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "done_state_q == $past(done_state_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
+  "assumptions": [],
+  "uncertain_points": [
     {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "The next-state signal done_state_d must always represent a legal state encoding in the done FSM state space.",
-      "cond": "when rst_ni is high and clock edge occurs",
-      "risk": "If an illegal state value is loaded into done_state_q, the HMAC control logic may behave unpredictably, potentially skipping security-critical steps or causing deadlock.",
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "done_state_d is driven by logic outside this block; its transitions could cause done_state_q to leave the known safe state DoneAwaitCmd and enter unverified states, potentially affecting downstream security-critical logic.",
+      "cond": "rst_ni && (some transition on done_state_d)",
+      "risk": "State machine integrity violation leading to incorrect HMAC operation or side-channel leakage.",
       "signals": [
         "done_state_d",
         "done_state_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:197-203"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "The derivation of done_state_d depends on external combinational or sequential logic not present in this chunk; a full FSM verification requires its source.",
-      "cond": "always, for any state transition",
-      "risk": "Without reviewing that logic, a bug in the next-state logic could cause invalid state transitions or security bypass.",
-      "signals": [
-        "done_state_d"
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:201"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:197-203"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "done_state_q inside {DoneAwaitCmd, ...}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "done_state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "done_state_q inside {DoneAwaitCmd, ...}",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "done_state_q is part of the HMAC control FSM and is reset to DoneAwaitCmd, a known safe state. If done_state_d logic allows illegal or unsupported state encodings, the FSM could enter an unknown state and potentially weaken message authentication, expose intermediate digests, or bypass security checks. Ensuring that done_state_d only produces valid states and that all states are correctly handled is essential for HMAC integrity.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:197-203"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 197,
-  "line_end": 203,
-  "security_implications": ""
+  "line_end": 203
 }

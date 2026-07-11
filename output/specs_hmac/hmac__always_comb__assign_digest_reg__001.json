@@ -10,11 +10,11 @@
     ],
     "used": [
       "digest_size",
+      "conv_endian32",
       "digest_swap",
       "reg2hw.digest",
       "digest",
-      "digest_size_started_q",
-      "conv_endian32"
+      "digest_size_started_q"
     ],
     "modes": [
       "SHA2_256",
@@ -24,10 +24,9 @@
     ],
     "tags": [
       "digest",
-      "csr",
       "wipe",
-      "context_restore",
-      "handshake",
+      "security",
+      "csr",
       "parameterization"
     ]
   },
@@ -35,207 +34,423 @@
     {
       "id": "G1",
       "type": "default_fallback",
-      "claim": "digest_sw, digest_sw_we, and all hw2reg.digest.d are initially driven to 0 before any conditional override.",
-      "cond": "always",
-      "signals": [
-        "digest_sw",
-        "digest_sw_we",
-        "hw2reg.digest"
-      ],
-      "refs": [
-        "hmac.sv:242-245"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "mux_case",
-      "claim": "For each i in 0..7, when digest_size == SHA2_256, digest_sw[i][31:0] = conv_endian32(reg2hw.digest[i].q, digest_swap) and digest_sw_we[i] = reg2hw.digest[i].qe; upper bits of digest_sw[i] remain 0.",
-      "cond": "digest_size == SHA2_256",
-      "signals": [
-        "digest_sw",
-        "digest_sw_we",
-        "digest_size",
-        "reg2hw.digest"
-      ],
-      "refs": [
-        "hmac.sv:251-254"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "mux_case",
-      "claim": "For each i in 0..7, when digest_size is SHA2_384 or SHA2_512, digest_sw[i][63:32] = reg2hw.digest[2*i].qe ? conv_endian32(reg2hw.digest[2*i].q, digest_swap) : digest[i][63:32]; digest_sw[i][31:0] = reg2hw.digest[2*i+1].qe ? conv_endian32(reg2hw.digest[2*i+1].q, digest_swap) : digest[i][31:0]; digest_sw_we[i] = reg2hw.digest[2*i].qe | reg2hw.digest[2*i+1].qe.",
-      "cond": "(digest_size == SHA2_384) || (digest_size == SHA2_512)",
-      "signals": [
-        "digest_sw",
-        "digest_sw_we",
-        "digest_size",
-        "reg2hw.digest",
-        "digest",
-        "conv_endian32",
-        "digest_swap"
-      ],
-      "refs": [
-        "hmac.sv:255-263"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "default_fallback",
-      "claim": "For each i in 0..7, when digest_size is neither SHA2_256 nor SHA2_384 nor SHA2_512, digest_sw[i] and digest_sw_we[i] keep their default value 0 (no SW-to-HW transfer).",
-      "cond": "digest_size != SHA2_256, SHA2_384, SHA2_512",
+      "claim": "When digest_size is neither SHA2_256, SHA2_384, nor SHA2_512, digest_sw[i][31:0] and digest_sw_we[i] are zero for all i in 0..7, remaining at their default values.",
+      "cond": "digest_size != SHA2_256 && digest_size != SHA2_384 && digest_size != SHA2_512",
       "signals": [
         "digest_sw",
         "digest_sw_we",
         "digest_size"
       ],
       "refs": [
-        "hmac.sv:242-243,251,255"
-      ]
+        "file:242-243,251"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "digest_size != SHA2_256 && digest_size != SHA2_384 && digest_size != SHA2_512",
+        "consequent": "digest_sw[i] == 0 && digest_sw_we[i] == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_sw",
+          "digest_sw_we",
+          "digest_size"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "digest_size != SHA2_256 && digest_size != SHA2_384 && digest_size != SHA2_512",
+        "consequent": "digest_sw[i] == 0 && digest_sw_we[i] == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G5",
-      "type": "mux_case",
-      "claim": "For each i in 0..7, when digest_size_started_q == SHA2_256, hw2reg.digest[i].d = conv_endian32(digest[i][31:0], digest_swap) and hw2reg.digest[i+8].d = conv_endian32(digest[i][31:0], digest_swap).",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When digest_size equals SHA2_256, for each i in 0..7, digest_sw[i][31:0] is assigned conv_endian32(reg2hw.digest[i].q, digest_swap) and digest_sw_we[i] is assigned reg2hw.digest[i].qe.",
+      "cond": "digest_size == SHA2_256",
+      "signals": [
+        "digest_sw",
+        "digest_sw_we",
+        "reg2hw.digest",
+        "digest_swap",
+        "conv_endian32"
+      ],
+      "refs": [
+        "file:251-254"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "digest_size == SHA2_256",
+        "consequent": "digest_sw[i][31:0] == conv_endian32(reg2hw.digest[i].q, digest_swap) && digest_sw_we[i] == reg2hw.digest[i].qe",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_sw",
+          "digest_sw_we",
+          "reg2hw.digest",
+          "digest_swap",
+          "conv_endian32"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "digest_size == SHA2_256",
+        "consequent": "digest_sw[i][31:0] == conv_endian32(reg2hw.digest[i].q, digest_swap) && digest_sw_we[i] == reg2hw.digest[i].qe",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When digest_size is SHA2_384 or SHA2_512, for each i, digest_sw[i][63:32] is driven by conv_endian32(reg2hw.digest[2*i].q, digest_swap) if reg2hw.digest[2*i].qe else digest[i][63:32]; digest_sw[i][31:0] is driven by conv_endian32(reg2hw.digest[2*i+1].q, digest_swap) if reg2hw.digest[2*i+1].qe else digest[i][31:0]; digest_sw_we[i] is reg2hw.digest[2*i].qe OR reg2hw.digest[2*i+1].qe.",
+      "cond": "(digest_size == SHA2_384) || (digest_size == SHA2_512)",
+      "signals": [
+        "digest_sw",
+        "digest_sw_we",
+        "reg2hw.digest",
+        "digest",
+        "digest_swap"
+      ],
+      "refs": [
+        "file:255-263"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(digest_size == SHA2_384) || (digest_size == SHA2_512)",
+        "consequent": "digest_sw[i][63:32] == (reg2hw.digest[2*i].qe ? conv_endian32(reg2hw.digest[2*i].q, digest_swap) : digest[i][63:32]) && digest_sw[i][31:0] == (reg2hw.digest[2*i+1].qe ? conv_endian32(reg2hw.digest[2*i+1].q, digest_swap) : digest[i][31:0]) && digest_sw_we[i] == reg2hw.digest[2*i].qe | reg2hw.digest[2*i+1].qe",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_sw",
+          "digest_sw_we",
+          "reg2hw.digest",
+          "digest",
+          "digest_swap"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(digest_size == SHA2_384) || (digest_size == SHA2_512)",
+        "consequent": "digest_sw[i][63:32] == (reg2hw.digest[2*i].qe ? conv_endian32(reg2hw.digest[2*i].q, digest_swap) : digest[i][63:32]) && digest_sw[i][31:0] == (reg2hw.digest[2*i+1].qe ? conv_endian32(reg2hw.digest[2*i+1].q, digest_swap) : digest[i][31:0]) && digest_sw_we[i] == reg2hw.digest[2*i].qe | reg2hw.digest[2*i+1].qe",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When digest_size_started_q equals SHA2_256, hw2reg.digest[i].d and hw2reg.digest[i+8].d are both assigned conv_endian32(digest[i][31:0], digest_swap) for i in 0..7.",
       "cond": "digest_size_started_q == SHA2_256",
       "signals": [
         "hw2reg.digest",
-        "digest_size_started_q",
         "digest",
-        "conv_endian32",
         "digest_swap"
       ],
       "refs": [
-        "hmac.sv:267-272"
-      ]
+        "file:267-272"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "digest_size_started_q == SHA2_256",
+        "consequent": "hw2reg.digest[i].d == conv_endian32(digest[i][31:0], digest_swap) && hw2reg.digest[i+8].d == conv_endian32(digest[i][31:0], digest_swap)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.digest",
+          "digest",
+          "digest_swap"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "digest_size_started_q == SHA2_256",
+        "consequent": "hw2reg.digest[i].d == conv_endian32(digest[i][31:0], digest_swap) && hw2reg.digest[i+8].d == conv_endian32(digest[i][31:0], digest_swap)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G6",
-      "type": "mux_case",
-      "claim": "For each i in 0..7, when digest_size_started_q is SHA2_384 or SHA2_512, hw2reg.digest[2*i].d = conv_endian32(digest[i][63:32], digest_swap) and hw2reg.digest[2*i+1].d = conv_endian32(digest[i][31:0], digest_swap).",
+      "id": "G5",
+      "type": "assignment",
+      "claim": "When digest_size_started_q is SHA2_384 or SHA2_512, hw2reg.digest[2*i].d is assigned conv_endian32(digest[i][63:32], digest_swap) and hw2reg.digest[2*i+1].d is assigned conv_endian32(digest[i][31:0], digest_swap) for i in 0..7.",
       "cond": "(digest_size_started_q == SHA2_384) || (digest_size_started_q == SHA2_512)",
       "signals": [
         "hw2reg.digest",
-        "digest_size_started_q",
         "digest",
-        "conv_endian32",
         "digest_swap"
       ],
       "refs": [
-        "hmac.sv:273-278"
-      ]
+        "file:273-278"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(digest_size_started_q == SHA2_384) || (digest_size_started_q == SHA2_512)",
+        "consequent": "hw2reg.digest[2*i].d == conv_endian32(digest[i][63:32], digest_swap) && hw2reg.digest[2*i+1].d == conv_endian32(digest[i][31:0], digest_swap)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.digest",
+          "digest",
+          "digest_swap"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(digest_size_started_q == SHA2_384) || (digest_size_started_q == SHA2_512)",
+        "consequent": "hw2reg.digest[2*i].d == conv_endian32(digest[i][63:32], digest_swap) && hw2reg.digest[2*i+1].d == conv_endian32(digest[i][31:0], digest_swap)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G7",
-      "type": "mux_case",
-      "claim": "For each i in 0..7, when digest_size_started_q is neither SHA2_256 nor SHA2_384 nor SHA2_512 (e.g. SHA2_None), hw2reg.digest[i].d = conv_endian32(digest[i][31:0], digest_swap) and hw2reg.digest[i+8].d = conv_endian32(digest[i][31:0], digest_swap).",
-      "cond": "digest_size_started_q not in {SHA2_256, SHA2_384, SHA2_512}",
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "When digest_size_started_q is none of SHA2_256, SHA2_384, SHA2_512 (i.e., SHA2_None), hw2reg.digest[i].d and hw2reg.digest[i+8].d are assigned conv_endian32(digest[i][31:0], digest_swap) for i in 0..7.",
+      "cond": "digest_size_started_q != SHA2_256 && digest_size_started_q != SHA2_384 && digest_size_started_q != SHA2_512",
       "signals": [
         "hw2reg.digest",
-        "digest_size_started_q",
         "digest",
-        "conv_endian32",
         "digest_swap"
       ],
       "refs": [
-        "hmac.sv:279-282"
-      ]
+        "file:279-282"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "digest_size_started_q != SHA2_256 && digest_size_started_q != SHA2_384 && digest_size_started_q != SHA2_512",
+        "consequent": "hw2reg.digest[i].d == conv_endian32(digest[i][31:0], digest_swap) && hw2reg.digest[i+8].d == conv_endian32(digest[i][31:0], digest_swap)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.digest",
+          "digest",
+          "digest_swap"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "digest_size_started_q != SHA2_256 && digest_size_started_q != SHA2_384 && digest_size_started_q != SHA2_512",
+        "consequent": "hw2reg.digest[i].d == conv_endian32(digest[i][31:0], digest_swap) && hw2reg.digest[i+8].d == conv_endian32(digest[i][31:0], digest_swap)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "reg2hw.digest array has at least 16 entries (indices 0..15) and each .q/.qe field is properly driven from outside this chunk.",
-      "cond": "when digest_size is SHA2_384 or SHA2_512",
-      "risk": "Out-of-bounds access to reg2hw.digest[2*i] and [2*i+1] for i up to 7, leading to simulation X or synthesis inference.",
+      "type": "mode_config",
+      "claim": "When any reg2hw.digest[*].qe is asserted, digest_size must be consistent with the expected mapping: reg2hw.digest[i].qe → digest_size == SHA2_256; reg2hw.digest[2*i].qe or reg2hw.digest[2*i+1].qe → (digest_size == SHA2_384) || (digest_size == SHA2_512).",
+      "cond": "Any qe bit is high",
+      "risk": "Violation leads to context restore being silently ignored or applied to a wrong register mapping, corrupting the SHA engine state.",
       "signals": [
-        "reg2hw.digest"
+        "reg2hw.digest",
+        "digest_size"
       ],
       "refs": [
-        "hmac.sv:257-263"
-      ]
+        "file:251-263"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.digest[i].qe",
+        "consequent": "digest_size == SHA2_256",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.digest",
+          "digest_size"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.digest[i].qe",
+        "consequent": "digest_size == SHA2_256",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "digest array has at least 8 64‑bit entries (indices 0..7) and is driven from the SHA‑2 engine.",
-      "cond": "during HW‑to‑SW transfer",
-      "risk": "Out-of-bounds read of digest[i] or missing data if size is smaller than expected for SHA2_384/512.",
-      "signals": [
-        "digest"
-      ],
-      "refs": [
-        "hmac.sv:259,262,268,277-278"
-      ]
-    },
-    {
-      "id": "A3",
       "type": "mode_config",
-      "claim": "digest_size_started_q is a stable snapshot of the started digest size that remains valid during the entire transfer.",
-      "cond": "when digest_size_started_q is used to select HW‑to‑SW path",
-      "risk": "If it changes mid‑transfer, the write pattern could switch, leaving some CSR digest words unwritten or written with wrong data, breaking secret wipe or data integrity.",
+      "claim": "digest_size_started_q must correctly reflect the digest size configuration that was active when the SHA engine was started and must remain stable while the digest CSRs are readable.",
+      "cond": "Always during digest readback",
+      "risk": "If incorrect or unstable, the mapping of internal digest 64‑bit words to CSR will be wrong, potentially leaking internal state in wrong registers or causing incomplete context wipe.",
       "signals": [
         "digest_size_started_q"
       ],
       "refs": [
-        "hmac.sav:267,273,279"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "producer_contract",
-      "claim": "conv_endian32() function performs byte‑swap correctly according to digest_swap and does not alter data width or inject corruption.",
-      "cond": "whenever endian conversion is applied",
-      "risk": "Incorrect conversion could scramble digest values fed to the engine or written to CSRs, breaking HMAC output.",
-      "signals": [
-        "conv_endian32",
-        "digest_swap"
+        "file:267-282"
       ],
-      "refs": [
-        "hmac.sav:253,258,261,268,272,277,278,281,282"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_size_started_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "Always during digest readback",
+        "consequent": "digest_size_started_q must correctly reflect the digest size configuration that was active when the SHA engine was started and must remain stable while the digest CSRs are readable",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
-      "priority": "high",
-      "claim": "The for loop’s SW‑to‑HW path only handles digest_size == SHA2_256, SHA2_384, and SHA2_512. If a valid digest_size (e.g., SHA2_512_256) is configured, digest_sw and digest_sw_we remain zero, preventing software from restoring any digest context.",
-      "cond": "digest_size is a legal value other than SHA2_256/384/512",
-      "risk": "Software context restoration silently fails, possibly leading to incorrect HMAC operation or use of stale internal state, which could compromise output integrity or secret handling.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When digest_size is SHA2_None or any value not handled by the explicit branches, the SW context writes are silently ignored (digest_sw/we remain 0). It is unclear whether this is intended or if the CSRs should be blocked at a higher level in this mode.",
+      "cond": "digest_size not in {SHA2_256, SHA2_384, SHA2_512}",
+      "risk": "If the CSRs are still writable by SW in such modes, the software may believe context has been restored when it hasn't, leading to incorrect digest computation.",
       "signals": [
         "digest_size",
         "digest_sw",
         "digest_sw_we"
       ],
       "refs": [
-        "hmac.sav:251-264"
-      ]
+        "file:251"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "digest_size != SHA2_256 && digest_size != SHA2_384 && digest_size != SHA2_512",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_size",
+          "digest_sw",
+          "digest_sw_we"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "digest_size != SHA2_256 && digest_size != SHA2_384 && digest_size != SHA2_512",
+        "consequent": "the SW context writes are silently ignored (digest_sw/we remain 0). It is unclear whether this is intended or if the CSRs should be blocked at a higher level in this mode",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_tag_temporal_window",
-      "priority": "low",
-      "claim": "Combinational paths from digest_size and reg2hw inputs to digest_sw/hw2reg.digest may glitch if digest_size changes asynchronously or during active transfer.",
-      "cond": "when digest_size is not stable",
-      "risk": "Glitches could transiently drive invalid control or data to the SHA‑2 engine or CSRs, but likely captured by synchronous logic downstream; still a low‑level robustness concern.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "In the 384/512 SW restore path, if only one 32‑bit half is written (only one qe is high), the other half retains the current internal digest[i] value, potentially exposing a previous intermediate digest to the readback path before it is cleared.",
+      "cond": "(digest_size == SHA2_384 || digest_size == SHA2_512) && (reg2hw.digest[2*i].qe ^ reg2hw.digest[2*i+1].qe)",
+      "risk": "An attacker with SW write access could partially overwrite context and then read back the unwritten half via the hw2reg CSRs before the engine clobbers the internal digest, leaking a secret intermediate value.",
       "signals": [
-        "digest_size",
-        "digest_sw",
-        "digest_sw_we"
+        "digest",
+        "reg2hw.digest",
+        "digest_sw"
       ],
       "refs": [
-        "hmac.sav:239-285"
-      ]
+        "file:257-262"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(digest_size == SHA2_384 || digest_size == SHA2_512) && reg2hw.digest[2*i].qe && !reg2hw.digest[2*i+1].qe",
+        "consequent": "digest_sw[i][31:0] == digest[i][31:0]",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest",
+          "reg2hw.digest",
+          "digest_sw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(digest_size == SHA2_384 || digest_size == SHA2_512) && reg2hw.digest[2*i].qe && !reg2hw.digest[2*i+1].qe",
+        "consequent": "digest_sw[i][31:0] == digest[i][31:0]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "digest_size may change asynchronously while qe is asserted; a transient glitch could cause incorrect mapping on digest_sw/we, corrupting the context write.",
+      "cond": "any qe bit asserted while digest_size toggles",
+      "risk": "Context corruption, leading to incorrect SHA engine state.",
+      "signals": [
+        "digest_size",
+        "reg2hw.digest"
+      ],
+      "refs": [
+        "file:251-263"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_size",
+          "reg2hw.digest"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "any qe bit asserted while digest_size toggles",
+        "consequent": "digest_size may change asynchronously while qe is asserted; a transient glitch could cause incorrect mapping on digest_sw/we, corrupting the context write",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk manages the reading and writing of digest context between SW (CSRs) and the SHA engine. It includes a security mechanism to replicate the digest value to higher CSR addresses (digest[8..15]) for SHA2_256 to ensure that all digest CSRs are overwritten during wipe_secret, preventing stale secret data from other configurations. However, in the SHA2_384/512 SW restore path, when partial writes occur (only one 32‑bit half written), the other half retains the current internal digest value, which could expose a previous intermediate digest before it is cleared, creating a potential secret leak path via the HW->SW readback interface.",
   "evidence_refs": [
-    "hmac.sav:239-285"
+    "file:239-285"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 239,
-  "line_end": 285,
-  "security_implications": ""
+  "line_end": 285
 }

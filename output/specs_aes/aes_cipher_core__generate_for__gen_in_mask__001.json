@@ -2,109 +2,177 @@
   "chunk_id": "aes_cipher_core__generate_for__gen_in_mask__001",
   "header": {
     "module": "aes_cipher_core",
-    "block_kind": "assign",
+    "block_kind": "generate",
     "driven": [
-      "data_in_mask[0]",
-      "data_in_mask[1]",
-      "data_in_mask[2]",
-      "data_in_mask[3]"
+      "data_in_mask"
     ],
     "used": [
       "prd_sub_bytes",
-      "WidthPRDRow",
-      "aes_prd_get_lsbs"
+      "aes_prd_get_lsbs",
+      "WidthPRDRow"
     ],
     "modes": [
-      "parameter WidthPRDRow"
+      "WidthPRDRow"
     ],
     "tags": [
       "mask",
-      "parameterization",
-      "generate"
+      "secret",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "Each data_in_mask[i] (i=0..3) is continuously assigned the output of function aes_prd_get_lsbs(prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow]).",
-      "cond": "always (combinational)",
+      "claim": "data_in_mask[i] is continuously assigned to aes_prd_get_lsbs applied on the part-select prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow] for all i in 0..3.",
+      "cond": "always",
       "signals": [
         "data_in_mask",
         "prd_sub_bytes",
-        "aes_prd_get_lsbs"
+        "aes_prd_get_lsbs",
+        "WidthPRDRow"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
-      ]
+        "aes_cipher_core.sv:371-373"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "data_in_mask[i] == aes_prd_get_lsbs(prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_in_mask",
+          "prd_sub_bytes",
+          "aes_prd_get_lsbs",
+          "WidthPRDRow"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "data_in_mask[i] == aes_prd_get_lsbs(prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "WidthPRDRow must be a positive integer such that 4*WidthPRDRow does not exceed the bit-width of prd_sub_bytes.",
-      "cond": "during synthesis/simulation",
-      "risk": "Out-of-bounds part-select leads to X or synthesis error, breaking mask generation.",
+      "claim": "prd_sub_bytes has a bit-width of at least 4 * WidthPRDRow to avoid out-of-bounds part-select access.",
+      "cond": "always",
+      "risk": "Out-of-bounds array indexing may propagate X or produce an incorrect mask, compromising side-channel countermeasures.",
       "signals": [
         "prd_sub_bytes",
         "WidthPRDRow"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The function aes_prd_get_lsbs must produce an output width compatible with data_in_mask elements (likely 1-bit per index).",
-      "cond": "always",
-      "risk": "Compilation failure if width mismatch; if masked, unexpected masking bits could propagate.",
-      "signals": [
-        "data_in_mask",
-        "aes_prd_get_lsbs"
+        "aes_cipher_core.sv:371-373"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$bits(prd_sub_bytes) >= 4 * WidthPRDRow",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prd_sub_bytes",
+          "WidthPRDRow"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "$bits(prd_sub_bytes) >= 4 * WidthPRDRow",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_width_param_hazard",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The loop unrolls to 4 iterations using WidthPRDRow as the slice width. If WidthPRDRow is configured larger than allowed by prd_sub_bytes, part-select exceeds bounds.",
-      "cond": "when 4*WidthPRDRow > $bits(prd_sub_bytes)",
-      "risk": "Out-of-range access during mask extraction could corrupt data_in_mask and break S-box masking, enabling side-channel leakage.",
-      "signals": [
-        "prd_sub_bytes",
-        "WidthPRDRow"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The function aes_prd_get_lsbs is not defined in this chunk; its exact behavior (which bits are extracted, function of the input width) is unknown.",
+      "claim": "The function aes_prd_get_lsbs is not defined in this chunk; its implementation must be verified to correctly return the intended mask bits and not to leak side-channel information.",
       "cond": "always",
-      "risk": "If the function does not extract LSBs correctly for mask application, the mask may be incorrect, potentially compromising the side-channel resistance of the AES cipher.",
+      "risk": "If the function returns an incorrect value or introduces bias, the data mask may be ineffective, exposing secret data processed by the AES cipher core.",
       "signals": [
         "aes_prd_get_lsbs"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
-      ]
+        "aes_cipher_core.sv:372"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "aes_prd_get_lsbs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The function aes_prd_get_lsbs is not defined in this chunk; its implementation must be verified to correctly return the intended mask bits and not to leak side-channel information",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If the parameter WidthPRDRow is legally allowed to be 0, the part-select prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow] becomes zero-width, which could lead to an invalid (empty) mask generation.",
+      "cond": "WidthPRDRow == 0",
+      "risk": "A zero-width mask may disable side-channel protection for the affected data path.",
+      "signals": [
+        "WidthPRDRow"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:372"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "WidthPRDRow == 0",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "WidthPRDRow"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "WidthPRDRow == 0",
+        "consequent": "the part-select prd_sub_bytes[i*WidthPRDRow +: WidthPRDRow] becomes zero-width, which could lead to an invalid (empty) mask generation",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk generates a data_in_mask value from prd_sub_bytes using aes_prd_get_lsbs. This mask is likely used for side-channel resistance (e.g., masking or blinding) of AES data. An incorrect mask width, faulty function, or out-of-bounds access would weaken the masking countermeasure, potentially exposing secret processed data.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:371-373"
+    "aes_cipher_core.sv:371-373"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 371,
-  "line_end": 373,
-  "security_implications": ""
+  "line_end": 373
 }

@@ -1,0 +1,213 @@
+{
+  "src_name": "theory_of_operation.md",
+  "src_hash": "25d5d0212e518432",
+  "prompt_hash": "04c02a4c95250289",
+  "ref_atoms": [
+    {
+      "ref_id": "theory_of_operation.md_001",
+      "ref_content": "The AES unit supports both encryption and decryption for AES-128/192/256 in ECB, CBC, CFB, OFB and CTR modes using a single, shared data path. That is, it can either do encryption or decryption but not both at the same time.",
+      "ref_kind": "general",
+      "kind_reason": null,
+      "keywords": []
+    },
+    {
+      "ref_id": "theory_of_operation.md_002",
+      "ref_content": "When the key is changed before ECB/CBC decryption, there is an initial delay while the key expanding mechanism iteratively computes the start key for decryption. The duration equals the latency for encrypting one 16B block: 12/14/16 cycles for AES-128/192/256. Once computed, the start key is stored and switching between encryption/decryption occurs without overhead. For encryption or CFB, OFB, CTR modes, there is no such delay upon key change.",
+      "ref_kind": "specific",
+      "kind_reason": "具体描述了密钥变更后ECB/CBC解密的初始延迟周期数（12/14/16周期）以及加密和其他模式无延迟的行为。",
+      "keywords": [
+        "ECB",
+        "CBC",
+        "CFB",
+        "OFB",
+        "CTR",
+        "AES-128",
+        "AES-192",
+        "AES-256",
+        "key expanding",
+        "16B block",
+        "12/14/16 cycles"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_003",
+      "ref_content": "In automatic mode (MANUAL_OPERATION=0 in CTRL_SHADOWED), the AES unit automatically starts encryption/decryption when the previous operation finished, new input data is available, all input registers written at least once (any order), and in CBC/CFB/OFB/CTR modes the IV is ready (all IV registers written at least once or none since last update; partially updated IV will not start). In manual mode (MANUAL_OPERATION=1), encryption/decryption starts only when the START bit in TRIGGER is set to 1, and START is automatically cleared to 0 once the next operation starts.",
+      "ref_kind": "specific",
+      "kind_reason": "明确的具体寄存器（CTRL_SHADOWED.MANUAL_OPERATION, TRIGGER.START）和启动条件（输入/IV就绪条件），可验证。",
+      "keywords": [
+        "CTRL_SHADOWED",
+        "MANUAL_OPERATION",
+        "TRIGGER",
+        "START",
+        "input registers",
+        "IV registers",
+        "CBC",
+        "CFB",
+        "OFB",
+        "CTR"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_004",
+      "ref_content": "The AES unit indicates output data availability via a status register. A back-pressure mechanism stalls the AES unit when finishing a block but previous output data not yet read by the processor; it hangs, does not drop data, and continues only after the previous output registers are read (any order, each read at least once). In manual mode (MANUAL_OPERATION=1 in CTRL_SHADOWED), the AES unit never stalls and overwrites previous output data regardless of read status.",
+      "ref_kind": "specific",
+      "kind_reason": "描述输出背压机制，涉及状态寄存器、输出寄存器和MANUAL_OPERATION位的具体行为，可验证挂起和覆盖条件。",
+      "keywords": [
+        "status register",
+        "output registers",
+        "MANUAL_OPERATION",
+        "CTRL_SHADOWED"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_005",
+      "ref_content": "In the final round, the internal State register is cleared with pseudo-random data, and the output is forwarded to the output register but not stored back into the State register. Depending on the cipher mode, the output may be XORed with the IV registers (CBC decryption) or previous input data (CFB, OFB, CTR modes).",
+      "ref_kind": "specific",
+      "kind_reason": "详细描述了最后轮中状态寄存器清除伪随机数据的行为，以及输出与IV/前输入数据的XOR逻辑，针对特定模式和寄存器。",
+      "keywords": [
+        "State register",
+        "pseudo-random data",
+        "output register",
+        "IV registers",
+        "previous input data",
+        "CBC",
+        "CFB",
+        "OFB",
+        "CTR"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_006",
+      "ref_content": "The processor can only update the IV registers when the AES unit is idle. In CBC or CTR mode, when the AES unit is busy, it updates the IV registers itself. The IV registers are updated with output data (CBC encryption) or previous input data (CBC decryption); in CFB mode with output data; in OFB mode with the output of the final cipher round before XORing with previous input data.",
+      "ref_kind": "specific",
+      "kind_reason": "明确IV寄存器的更新权限（处理器仅空闲时更新，AES单元在忙碌时自我更新）以及不同模式下的更新数据源，可验证。",
+      "keywords": [
+        "IV registers",
+        "CBC",
+        "CFB",
+        "OFB",
+        "CTR",
+        "output data",
+        "previous input data"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_007",
+      "ref_content": "When the SIDELOAD bit in CTRL_SHADOWED is set to 1, any processor writes to the Initial Key registers (KEY_SHARE0_0 - KEY_SHARE1_7) are ignored. The AES unit only starts encryption/decryption if the sideload key is marked as valid (via key manager valid signal). To use a sideload key, the processor must wait for idle, wait for the key manager to assert valid, then write to CTRL_SHADOWED to start a new message.",
+      "ref_kind": "specific",
+      "kind_reason": "描述了旁路密钥模式下处理器写入被忽略和有效信号要求的具体寄存器（CTRL_SHADOWED.SIDELOAD, KEY_SHARE*寄存器），有明确行为。",
+      "keywords": [
+        "CTRL_SHADOWED",
+        "SIDELOAD",
+        "KEY_SHARE0_0",
+        "KEY_SHARE1_7",
+        "key manager",
+        "valid signal",
+        "Initial Key registers"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_008",
+      "ref_content": "The DOM S-Box has a latency of 5 clock cycles. All other S-Box implementations (Masked Canright, unmasked Canright, LUT) are fully combinational with one S-Box evaluation per clock cycle.",
+      "ref_kind": "specific",
+      "kind_reason": "具体描述了DOM S-Box的5周期延迟和其他实现每周期评估的行为，针对S-Box模块。",
+      "keywords": [
+        "DOM S-Box",
+        "5 clock cycles",
+        "Masked Canright",
+        "unmasked Canright",
+        "LUT",
+        "combinational"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_009",
+      "ref_content": "The masking PRNG is automatically reseeded with fresh entropy from EDN 1) whenever a new key is provided (if CTRL_AUX_SHADOWED.KEY_TOUCH_FORCES_RESEED is enabled) and 2) based on a block counter configured via CTRL_SHADOWED.PRNG_RESEED_RATE. Software can also manually initiate a reseed via TRIGGER.PRNG_RESEED.",
+      "ref_kind": "specific",
+      "kind_reason": "明确PRNG重播种的自动条件和配置寄存器（CTRL_AUX_SHADOWED.KEY_TOUCH_FORCES_RESEED, CTRL_SHADOWED.PRNG_RESEED_RATE, TRIGGER.PRNG_RESEED），可验证。",
+      "keywords": [
+        "PRNG",
+        "EDN",
+        "CTRL_AUX_SHADOWED",
+        "KEY_TOUCH_FORCES_RESEED",
+        "CTRL_SHADOWED",
+        "PRNG_RESEED_RATE",
+        "TRIGGER",
+        "PRNG_RESEED"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_010",
+      "ref_content": "The main control register (CTRL_SHADOWED) is shadowed: software performs two write operations to update, and a shadow copy is constantly compared with the actual register. If a mismatch occurs, a fatal alert is triggered.",
+      "ref_kind": "specific",
+      "kind_reason": "描述影子寄存器的更新机制和比较检测，涉及CTRL_SHADOWED和fatal alert。",
+      "keywords": [
+        "CTRL_SHADOWED",
+        "shadow register",
+        "fatal alert"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_011",
+      "ref_content": "If any countermeasure (shadow register mismatch, sparse encoding fault, multi-rail control logic fault, hardened round counter fault) detects a fault, a fatal alert is triggered. Internal FSMs go to a terminal error state, the AES unit ceases to release data and locks up until a system reset. This condition is reported in STATUS.ALERT_FATAL_FAULT.",
+      "ref_kind": "specific",
+      "kind_reason": "具体描述了故障检测后的致命警报、终端错误状态和锁定行为，涉及STATUS.ALERT_FATAL_FAULT寄存器位。",
+      "keywords": [
+        "fatal alert",
+        "STATUS",
+        "ALERT_FATAL_FAULT",
+        "terminal error state",
+        "FSM"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_012",
+      "ref_content": "Upon reset or if initiated by software, all major key and data registers inside the AES module are cleared with pseudo-random data. The state registers inside the cipher core are also cleared with PRD during the last round of every encryption/decryption.",
+      "ref_kind": "specific",
+      "kind_reason": "明确了寄存器清除伪随机数据的条件和范围，包括复位/软件触发和每轮最后的状态清除。",
+      "keywords": [
+        "pseudo-random data",
+        "key registers",
+        "data registers",
+        "state registers",
+        "PRD"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_013",
+      "ref_content": "The initial key and control register can only be updated by the processor when the AES unit is idle.",
+      "ref_kind": "specific",
+      "kind_reason": "明确处理器更新初始密钥和控制寄存器的空闲条件，可验证。",
+      "keywords": [
+        "initial key",
+        "control register",
+        "idle"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_014",
+      "ref_content": "In CTR mode, the counter module iteratively increments the 128-bit counter value stored in the IV register using a 16-bit counter, requiring 8 clock cycles per increment. The counter value is used in the first round only, so the overall throughput is not affected given the 12/14/16-cycle block latency.",
+      "ref_kind": "specific",
+      "kind_reason": "描述CTR模式下计数器增量所需周期数（8个周期）和用法，可验证。",
+      "keywords": [
+        "CTR",
+        "counter module",
+        "IV register",
+        "16-bit counter",
+        "8 clock cycles"
+      ]
+    },
+    {
+      "ref_id": "theory_of_operation.md_015",
+      "ref_content": "While the AES unit is performing encryption/decryption, the processor can safely write the next input data block into the CSRs or read the previous output data block from the CSRs. The internal State register is not exposed via the bus interface.",
+      "ref_kind": "specific",
+      "kind_reason": "描述流水线操作：处理期间可预写入下一输入和回读上一输出，保护内部状态，可验证。",
+      "keywords": [
+        "input registers",
+        "output registers",
+        "CSRs",
+        "State register"
+      ]
+    }
+  ]
+}

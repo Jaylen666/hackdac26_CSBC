@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CSBC run for a single IP (no formal, no phase3, no fusion/clustering)
+# CSBC run for a single IP: chunk -> spec -> semantic Channel B -> ref
 # Usage: bash scripts/run_csbc.sh <ip_name>
 #        e.g. bash scripts/run_csbc.sh dma
 set -euo pipefail
@@ -37,26 +37,23 @@ PYTHONUNBUFFERED=1 "$VENV_PY" scripts/generate_all_specs.py \
     --out-dir "$SPECS" \
     --workers 8
 
-# Step 3: Phase 2 (all channels + layer2, no formal, no phase3)
-echo ">>> Step 3/3: Phase 2 (B+C+D+L2, semantic AG) ..."
+# Step 3: Channel B only, with ref extraction and bidirectional matching.
+echo ">>> Step 3/3: Channel B (semantic AG) + ref processing ..."
 PYTHONUNBUFFERED=1 "$VENV_PY" \
     scripts/run_phase2_e2e.py \
     --ip "$IP" \
     --specs-dir "$SPECS" \
     --out-root "$OUT" \
-    --channels B,C,D,L2 \
+    --channels B \
     --ag-pairing-mode semantic \
-    --workers 8 \
-    --trace
-
-# Rename shadow file to match expected naming
-mv -f "${OUT}/semantic_ag_shadow_${IP}.json" "${OUT}/semantic_ag_${IP}_new.json" 2>/dev/null || true
+    --semantic-batch-mode guarded \
+    --workers 8
 
 echo "============================================================"
 echo "  Done: ${IP}"
 echo "  Chunks:   ${CHUNKS}"
 echo "  Specs:    ${SPECS}/"
 echo "  Findings: ${OUT}/findings_${IP}.json"
-echo "  Sem AG:   ${OUT}/semantic_ag_${IP}_new.json"
-echo "  Trace:    ${OUT}/trace_${IP}.jsonl"
+echo "  Sem AG:   ${OUT}/semantic_ag_shadow_${IP}.json"
+echo "  Refs:     ${OUT}/ref_out/${IP}_ref_raw.json"
 echo "============================================================"

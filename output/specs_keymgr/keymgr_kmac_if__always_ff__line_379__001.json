@@ -11,16 +11,13 @@
     "used": [
       "one_hot_err_d",
       "kmac_done_err_d",
-      "cmd_consty_err_d",
-      "rst_ni",
-      "clk_i"
+      "cmd_consty_err_d"
     ],
-    "modes": [],
+    "modes": [
+      "reset"
+    ],
     "tags": [
       "error",
-      "fault",
-      "integrity",
-      "key",
       "reset"
     ]
   },
@@ -28,22 +25,47 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, one_hot_err_q, kmac_done_err_q, and cmd_consty_err_q are cleared to 0.",
-      "cond": "rst_ni == 0",
+      "claim": "When rst_ni is low, one_hot_err_q, kmac_done_err_q, and cmd_consty_err_q are all cleared to zero.",
+      "cond": "!rst_ni",
       "signals": [
+        "rst_ni",
         "one_hot_err_q",
         "kmac_done_err_q",
         "cmd_consty_err_q"
       ],
       "refs": [
-        "file:380-383"
-      ]
+        "keymgr_kmac_if.sv:380-383"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "one_hot_err_q == 0 && kmac_done_err_q == 0 && cmd_consty_err_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "one_hot_err_q",
+          "kmac_done_err_q",
+          "cmd_consty_err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "one_hot_err_q == 0 && kmac_done_err_q == 0 && cmd_consty_err_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When rst_ni is high, on every positive edge of clk_i, one_hot_err_q follows one_hot_err_d, kmac_done_err_q follows kmac_done_err_d, and cmd_consty_err_q follows cmd_consty_err_d.",
-      "cond": "rst_ni == 1",
+      "claim": "On every clock when rst_ni is high, one_hot_err_q, kmac_done_err_q, and cmd_consty_err_q are updated with their respective _d inputs.",
+      "cond": "rst_ni",
       "signals": [
         "one_hot_err_q",
         "kmac_done_err_q",
@@ -53,70 +75,43 @@
         "cmd_consty_err_d"
       ],
       "refs": [
-        "file:384-388"
-      ]
+        "keymgr_kmac_if.sv:384-388"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "one_hot_err_q == one_hot_err_d && kmac_done_err_q == kmac_done_err_d && cmd_consty_err_q == cmd_consty_err_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "one_hot_err_q",
+          "kmac_done_err_q",
+          "cmd_consty_err_q",
+          "one_hot_err_d",
+          "kmac_done_err_d",
+          "cmd_consty_err_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "one_hot_err_q == one_hot_err_d && kmac_done_err_q == kmac_done_err_d && cmd_consty_err_q == cmd_consty_err_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "handshake",
-      "claim": "The asynchronous reset input rst_ni must meet standard recovery/removal timing with respect to the clk_i positive edge to avoid metastable error register values.",
-      "cond": "when rst_ni deasserts (rising edge).",
-      "risk": "Metastable one_hot_err_q, kmac_done_err_q, or cmd_consty_err_q could propagate incorrect error status to key manager control logic, potentially causing false error handling or missing real faults.",
-      "signals": [
-        "rst_ni",
-        "clk_i"
-      ],
-      "refs": [
-        "file:379"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The error registers update every cycle without latching; if the _d inputs are combinational error conditions that de-assert after the condition clears, the _q outputs also de-assert immediately. The design intent on error persistence (sticky until cleared) is unclear, risking transient errors being missed by software or error handling logic.",
-      "cond": "When an error event is transient.",
-      "risk": "Transient integrity errors (one-hot, kmac done, command constancy) may be lost, leading to undetected faults during key management operations.",
-      "signals": [
-        "one_hot_err_q",
-        "kmac_done_err_q",
-        "cmd_consty_err_q",
-        "one_hot_err_d",
-        "kmac_done_err_d",
-        "cmd_consty_err_d"
-      ],
-      "refs": [
-        "file:385-388"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "Errors asserted while rst_ni is low will not be captured because the registers are held in reset; after reset deassertion, only error conditions present at or after the first post-reset clock edge are registered. This creates a window where a persistent error active during reset could be missed.",
-      "cond": "When an error condition exists during reset.",
-      "risk": "A latent fault present at startup (e.g., a stuck-at error) may be missed, allowing key management operations to proceed in a faulty state.",
-      "signals": [
-        "one_hot_err_d",
-        "kmac_done_err_d",
-        "cmd_consty_err_d",
-        "rst_ni"
-      ],
-      "refs": [
-        "file:380-383",
-        "file:385-388"
-      ]
-    }
-  ],
+  "assumptions": [],
+  "uncertain_points": [],
+  "security_implications": "The error flags (one_hot_err_q, kmac_done_err_q, cmd_consty_err_q) could represent integrity violations or incorrect state in the KMAC interface; if these latched faults are not properly handled, they may lead to the key manager operating on incorrect key material or control flow, potentially compromising secret data or allowing unauthorized operations.",
   "evidence_refs": [
-    "file:379-389"
+    "keymgr_kmac_if.sv:379-389"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 379,
-  "line_end": 389,
-  "security_implications": ""
+  "line_end": 389
 }

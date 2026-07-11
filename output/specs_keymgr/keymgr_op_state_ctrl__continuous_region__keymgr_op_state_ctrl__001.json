@@ -4,9 +4,9 @@
     "module": "keymgr_op_state_ctrl",
     "block_kind": "mixed",
     "driven": [
-      "state_q",
       "id_en_o",
-      "gen_en_o"
+      "gen_en_o",
+      "state_q"
     ],
     "used": [
       "gen_en",
@@ -17,90 +17,166 @@
       "rst_ni"
     ],
     "modes": [
-      "StIdle",
-      "StAdv",
-      "StAdvAck",
-      "StWait"
+      "OpStateWidth = 8",
+      "state_e (StIdle, StAdv, StAdvAck, StWait)"
     ],
     "tags": [
       "sparse_fsm",
-      "state_machine",
-      "security_control",
-      "key_manager"
+      "keymgr",
+      "reset",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "id_en_o is asserted when both gen_en and id_req_i are high; otherwise it is deasserted.",
-      "cond": "always (continuous assignment)",
+      "claim": "id_en_o is driven as the bitwise AND of gen_en and id_req_i",
+      "cond": "always",
       "signals": [
+        "id_en_o",
         "gen_en",
-        "id_req_i",
-        "id_en_o"
+        "id_req_i"
       ],
       "refs": [
-        "47:47"
-      ]
+        "keymgr_op_state_ctrl.sv:47"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "id_en_o == (gen_en & id_req_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "id_en_o",
+          "gen_en",
+          "id_req_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "id_en_o == (gen_en & id_req_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "gen_en_o is asserted when both gen_en and gen_req_i are high; otherwise it is deasserted.",
-      "cond": "always (continuous assignment)",
+      "claim": "gen_en_o is driven as the bitwise AND of gen_en and gen_req_i",
+      "cond": "always",
       "signals": [
+        "gen_en_o",
         "gen_en",
-        "gen_req_i",
-        "gen_en_o"
+        "gen_req_i"
       ],
       "refs": [
-        "48:48"
-      ]
+        "keymgr_op_state_ctrl.sv:48"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_en_o == (gen_en & gen_req_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "gen_en_o",
+          "gen_en",
+          "gen_req_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_en_o == (gen_en & gen_req_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "gen_en must be driven to a known logic value by external logic within the module.",
+      "type": "producer_contract",
+      "claim": "gen_en must be driven to a valid logic value by logic outside this chunk; otherwise id_en_o and gen_en_o become unknown or stuck",
       "cond": "always",
-      "risk": "If gen_en is undriven, id_en_o and gen_en_o will be X, potentially enabling key operations unintentionally.",
+      "risk": "id_en_o/gen_en_o may be unknown or permanently 0, blocking ID/generation operations",
       "signals": [
-        "gen_en"
+        "gen_en",
+        "id_en_o",
+        "gen_en_o"
       ],
       "refs": [
-        "46:46"
-      ]
+        "keymgr_op_state_ctrl.sv:46-48"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$isunknown(gen_en) == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "gen_en",
+          "id_en_o",
+          "gen_en_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$isunknown(gen_en) == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "producer_contract",
-      "claim": "state_d must be a valid state_e encoding on every clock edge to ensure the FSM remains in a defined state.",
-      "cond": "on positive edge of clk_i when rst_ni is high",
-      "risk": "An invalid state_d value could cause the sparse FSM to enter an illegal state, leading to undefined control behavior.",
+      "type": "security_precondition",
+      "claim": "PRIM_FLOP_SPARSE_FSM macro must correctly implement a sparse FSM register that resets to StIdle and holds state_q; otherwise state integrity is lost",
+      "cond": "whenever state transitions occur",
+      "risk": "illegal state encodings or unrecovered errors can cause unintended key operations",
       "signals": [
+        "state_q",
         "state_d",
-        "state_q"
+        "StIdle"
       ],
       "refs": [
-        "43:44",
-        "44:44"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "handshake",
-      "claim": "id_req_i and gen_req_i must be synchronous and glitch-free with respect to clk_i.",
-      "cond": "always",
-      "risk": "Glitches or asynchronous transitions could produce spurious pulses on id_en_o or gen_en_o, causing unwanted key operations.",
-      "signals": [
-        "id_req_i",
-        "gen_req_i"
+        "keymgr_op_state_ctrl.sv:44"
       ],
-      "refs": [
-        "47:48"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "resets",
+        "signals": [
+          "state_q",
+          "state_d",
+          "StIdle"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "whenever state transitions occur",
+        "consequent": "PRIM_FLOP_SPARSE_FSM macro must correctly implement a sparse FSM register that resets to StIdle and holds state_q; otherwise state integrity is lost",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -108,55 +184,150 @@
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "gen_en has no driver within this chunk; its source and controlling logic are unknown.",
+      "claim": "gen_en is declared but not assigned in this continuous region; its driver is not visible here",
       "cond": "unknown",
-      "risk": "If gen_en is not properly controlled, id_en_o and gen_en_o may be incorrectly asserted or deasserted.",
+      "risk": "if undriven, id_en_o/gen_en_o outputs are always 0, potentially deadlocking key management operations",
       "signals": [
         "gen_en"
       ],
       "refs": [
-        "46:46"
-      ]
+        "keymgr_op_state_ctrl.sv:46"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "gen_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "gen_en is declared but not assigned in this continuous region; its driver is not visible here",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "Outputs op_ack_o, op_busy_o, op_update_o, adv_en_o, and op_fsm_err_o are declared but not driven in this chunk.",
-      "cond": "always",
-      "risk": "If not driven elsewhere in the module, these outputs would be undriven, leading to synthesis warnings or X-propagation.",
+      "priority": "medium",
+      "claim": "op_fsm_err_o is an output but no assignment appears in this chunk; its driver is not visible",
+      "cond": "unknown",
+      "risk": "error reporting may be unconnected, hiding FSM faults",
       "signals": [
-        "op_ack_o",
-        "op_busy_o",
-        "op_update_o",
-        "adv_en_o",
         "op_fsm_err_o"
       ],
       "refs": [
-        "22:31"
-      ]
+        "keymgr_op_state_ctrl.sv:31"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_fsm_err_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "op_fsm_err_o is an output but no assignment appears in this chunk; its driver is not visible",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_fault_containment_gap",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "The state_e enumeration uses a sparse 8-bit encoding, but no illegal-state detection or transition logic is visible in this chunk.",
-      "cond": "on any clock edge",
-      "risk": "A single-event upset could flip state_q into an illegal encoding; without detection or safe fallback, the key manager may enter an unsafe state.",
+      "claim": "PRIM_FLOP_SPARSE_FSM macro behavior is not given; it is unclear whether it detects invalid states or drives op_fsm_err_o",
+      "cond": "any state transition",
+      "risk": "illegal state encodings may go undetected, leading to unauthorized operation",
       "signals": [
         "state_q",
-        "state_e"
+        "op_fsm_err_o"
       ],
       "refs": [
-        "36:41"
-      ]
+        "keymgr_op_state_ctrl.sv:44"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "op_fsm_err_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "any state transition",
+        "consequent": "PRIM_FLOP_SPARSE_FSM macro behavior is not given; it is unclear whether it detects invalid states or drives op_fsm_err_o",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Sparse state encodings are defined but it is unknown if the macro handles and reports errors when state_q becomes an illegal value (e.g., due to SEU)",
+      "cond": "if state_q ∉ {StIdle, StAdv, StAdvAck, StWait}",
+      "risk": "an illegal state could enable ID or generation unexpectedly, compromising key management",
+      "signals": [
+        "state_q",
+        "id_en_o",
+        "gen_en_o"
+      ],
+      "refs": [
+        "keymgr_op_state_ctrl.sv:36-41,44"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!((state_q == StIdle) || (state_q == StAdv) || (state_q == StAdvAck) || (state_q == StWait))",
+        "consequent": "op_fsm_err_o == 1'b1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_op_state_ctrl",
+        "clock": "",
+        "reset": "reports",
+        "signals": [
+          "state_q",
+          "id_en_o",
+          "gen_en_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!((state_q == StIdle) || (state_q == StAdv) || (state_q == StAdvAck) || (state_q == StWait))",
+        "consequent": "op_fsm_err_o == 1'b1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Uses sparse FSM encoding to protect state integrity. Gate signals id_en_o and gen_en_o are controlled by gen_en, whose source is not defined in this chunk; an incorrectly driven gen_en could enable unauthorized ID or generation operations. The macro may lack error reporting, and op_fsm_err_o is undriven here, potentially hiding state corruption. An illegal state (e.g., from SEU) might allow key operations without detection.",
   "evidence_refs": [
-    "8:48"
+    "keymgr_op_state_ctrl.sv:8-48"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_op_state_ctrl.sv",
   "line_start": 8,
-  "line_end": 48,
-  "security_implications": ""
+  "line_end": 48
 }

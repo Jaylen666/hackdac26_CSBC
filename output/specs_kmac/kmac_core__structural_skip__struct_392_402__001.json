@@ -4,21 +4,22 @@
     "module": "kmac_core",
     "block_kind": "generate",
     "driven": [
-      "key_sliced[i]"
+      "key_sliced"
     ],
     "used": [
       "key_index",
-      "encoded_key_block[i]"
-    ],
-    "modes": [
-      "Share",
+      "encoded_key_block",
       "MaxEncodedKeyW",
       "KeccakMsgAddrW",
-      "MsgWidth"
+      "MsgWidth",
+      "Share"
+    ],
+    "modes": [
+      "parameterized widths"
     ],
     "tags": [
-      "secret",
       "key",
+      "secret",
       "slicer",
       "parameterization"
     ]
@@ -26,21 +27,56 @@
   "guarantees": [
     {
       "id": "G1",
-      "type": "generate_param",
-      "claim": "For each i in [0,Share-1], key_sliced[i] is driven by the prim_slicer instance u_key_slicer; the output is a combinational function of key_index and encoded_key_block[i] with widths defined by parameters InW=MaxEncodedKeyW+16, IndexW=KeccakMsgAddrW, OutW=MsgWidth.",
+      "type": "instance_connection",
+      "claim": "For each share i from 0 to Share-1, a prim_slicer instance u_key_slicer is generated and its .data_o port directly drives key_sliced[i].",
       "cond": "always",
       "signals": [
-        "key_sliced",
-        "key_index",
-        "encoded_key_block"
+        "key_sliced[i]",
+        "u_key_slicer.data_o"
       ],
       "refs": [
-        "file:392-402"
+        "kmac_core.sv:392-402"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "key_sliced[i] == prim_slicer_result(key_index, encoded_key_block[i])",
+        "consequent": "key_sliced[i] == u_key_slicer.data_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "key_sliced[i]",
+          "u_key_slicer.data_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_sliced[i] == u_key_slicer.data_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "generate_param",
+      "claim": "The prim_slicer instance parameters are set such that input width equals MaxEncodedKeyW+16, index width equals KeccakMsgAddrW, and output width equals MsgWidth.",
+      "cond": "always",
+      "signals": [
+        "MaxEncodedKeyW",
+        "KeccakMsgAddrW",
+        "MsgWidth"
+      ],
+      "refs": [
+        "kmac_core.sv:393-396"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "InW == MaxEncodedKeyW+16 && IndexW == KeccakMsgAddrW && OutW == MsgWidth",
         "formalizability": "partial"
       },
       "risk": "",
@@ -49,15 +85,15 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "key_sliced",
-          "key_index",
-          "encoded_key_block"
+          "MaxEncodedKeyW",
+          "KeccakMsgAddrW",
+          "MsgWidth"
         ],
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "always",
-        "consequent": "key_sliced[i] == prim_slicer_result(key_index, encoded_key_block[i])",
+        "consequent": "InW == MaxEncodedKeyW+16 && IndexW == KeccakMsgAddrW && OutW == MsgWidth",
         "formalizability": "partial",
-        "confidence": 0.95,
+        "confidence": 1.0,
         "source": "llm"
       }
     }
@@ -66,67 +102,108 @@
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "key_index must stay within the valid addressing range of the slicer (0 to (MaxEncodedKeyW+16)/MsgWidth - 1) so that the selected slice is defined.",
-      "cond": "whenever key_index is used",
-      "risk": "Out-of-range key_index causes the slicer to output undefined or misaligned data, potentially feeding incorrect key material into the KMAC datapath, compromising security.",
+      "claim": "prim_slicer must output on data_o a contiguous slice of data_i of width OutW, selected by sel_i in a bit‑ or word‑aligned manner without latching.",
+      "cond": "always",
+      "risk": "If prim_slicer behaves differently (e.g., latches, shifts incorrectly, outputs stale data), key_sliced[i] may carry wrong or stale key material into the Keccak absorption, compromising integrity of the KMAC operation.",
       "signals": [
-        "key_index"
+        "data_i",
+        "sel_i",
+        "data_o"
       ],
       "refs": [
-        "file:398"
+        "kmac_core.sv:398-400"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "key_index < (MaxEncodedKeyW+16)/MsgWidth",
-        "formalizability": "direct"
+        "consequent": "data_o == data_i[(sel_i*OutW)+:OutW]",
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "kmac_core",
         "clock": "",
         "reset": "",
         "signals": [
-          "key_index"
+          "data_i",
+          "sel_i",
+          "data_o"
         ],
-        "temporal_shape": "always",
-        "antecedent": "whenever key_index is used",
-        "consequent": "key_index < (MaxEncodedKeyW+16)/MsgWidth",
-        "formalizability": "direct",
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "data_o == data_i[(sel_i*OutW)+:OutW]",
+        "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
       "id": "A2",
-      "type": "producer_contract",
-      "claim": "The arrays encoded_key_block and key_sliced must be dimensioned with at least Share entries.",
-      "cond": "generate loop instantiation",
-      "risk": "Index overflow during synthesis or elaboration leading to undefined connections.",
+      "type": "value_domain",
+      "claim": "The sum MaxEncodedKeyW+16 must be at least MsgWidth, and key_index must be within the valid address range (0 to floor((MaxEncodedKeyW+16)/MsgWidth)-1).",
+      "cond": "always",
+      "risk": "A too narrow input width or out‑of‑range sel_i may cause prim_slicer to read beyond the data_i vector or produce X/unknown bits, leading to key corruption or simulation‑X‑pessimism.",
       "signals": [
-        "encoded_key_block",
-        "key_sliced"
+        "MaxEncodedKeyW",
+        "MsgWidth",
+        "key_index"
       ],
       "refs": [
-        "file:392-401"
+        "kmac_core.sv:394-396,398"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "$size(encoded_key_block) >= Share && $size(key_sliced) >= Share",
-        "formalizability": "direct"
+        "consequent": "(MaxEncodedKeyW+16) >= MsgWidth && key_index <= ((MaxEncodedKeyW+16)/MsgWidth - 1)",
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "kmac_core",
         "clock": "",
         "reset": "",
         "signals": [
-          "encoded_key_block",
-          "key_sliced"
+          "MaxEncodedKeyW",
+          "MsgWidth",
+          "key_index"
         ],
         "temporal_shape": "always",
-        "antecedent": "generate loop instantiation",
-        "consequent": "$size(encoded_key_block) >= Share && $size(key_sliced) >= Share",
-        "formalizability": "direct",
+        "antecedent": "always",
+        "consequent": "(MaxEncodedKeyW+16) >= MsgWidth && key_index <= ((MaxEncodedKeyW+16)/MsgWidth - 1)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "The parameter Share must be non‑zero; encoded_key_block must have exactly Share elements, each at least MaxEncodedKeyW+16 bits wide.",
+      "cond": "always",
+      "risk": "Mismatch in array dimensions may cause elaboration errors or silently truncated connections, breaking the secret‑sharing scheme.",
+      "signals": [
+        "Share",
+        "encoded_key_block"
+      ],
+      "refs": [
+        "kmac_core.sv:392,399"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "Share > 0 && $size(encoded_key_block) == Share && $bits(encoded_key_block[0]) >= MaxEncodedKeyW+16",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "Share",
+          "encoded_key_block"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "Share > 0 && $size(encoded_key_block) == Share && $bits(encoded_key_block[0]) >= MaxEncodedKeyW+16",
+        "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
       }
@@ -135,46 +212,48 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "key_index is used directly as the slice select without visible range checking or masking. An attacker-controlled or faulty index could select an unintended key segment, leading to key leakage or incorrect message processing.",
-      "cond": "key_index out of valid range",
-      "risk": "Key material could be exposed through subsequent output or used incorrectly in KMAC, breaking confidentiality/integrity.",
+      "claim": "The behaviour of prim_slicer when sel_i is out‑of‑range or when data_i is partially corrupt is unknown; verify that prim_slicer contains no latches, no glitch‑sensitive logic, and a safe default (e.g., zeroing) for illegal selects.",
+      "cond": "sel_i >= expected_max_index",
+      "risk": "An illegal key_index could expose internal state or inject X/unknown values into key_sliced, which is consumed by the Keccak permutation and may leak secret information or produce incorrect digest.",
       "signals": [
-        "key_index",
-        "key_sliced"
+        "sel_i",
+        "data_o",
+        "key_index"
       ],
       "refs": [
-        "file:398"
+        "kmac_core.sv:398-400"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "key_index >= (MaxEncodedKeyW+16)/MsgWidth",
-        "consequent": "key_sliced[i] == unknown_or_garbage",
-        "formalizability": "partial"
+        "antecedent": "(key_index * MsgWidth) >= (MaxEncodedKeyW+16)",
+        "consequent": "key_sliced == '0",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "kmac_core",
         "clock": "",
         "reset": "",
         "signals": [
-          "key_index",
-          "key_sliced"
+          "sel_i",
+          "data_o",
+          "key_index"
         ],
         "temporal_shape": "comb",
-        "antecedent": "key_index >= (MaxEncodedKeyW+16)/MsgWidth",
-        "consequent": "key_sliced[i] == unknown_or_garbage",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "antecedent": "(key_index * MsgWidth) >= (MaxEncodedKeyW+16)",
+        "consequent": "key_sliced == '0",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "Key material (encoded_key_block) is sliced by key_index across shares. Incorrect slicing (due to glitches, out‑of‑range index, or faulty prim_slicer) could inject wrong key bits into the Keccak absorption path, directly affecting the KMAC tag integrity. If prim_slicer outputs stale or zero data instead of clamping, an attacker might force a known key segment and recover secret information. The design must guarantee that key_sliced is either a correct slice or benign (zero) on any illegal select.",
   "evidence_refs": [
-    "file:392-402"
+    "kmac_core.sv:392-402"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 392,
-  "line_end": 402,
-  "security_implications": ""
+  "line_end": 402
 }

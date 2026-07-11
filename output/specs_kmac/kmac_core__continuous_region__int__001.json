@@ -10,7 +10,9 @@
     "used": [
       "mode_i",
       "key_valid_i",
-      "st_d"
+      "st_d",
+      "kmac_st_e",
+      "StKmacIdle"
     ],
     "modes": [
       "StKmacIdle",
@@ -21,32 +23,16 @@
     ],
     "tags": [
       "secret",
-      "key",
-      "mask",
       "sparse_fsm",
-      "handshake",
-      "parameterization"
+      "error",
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "reg_update",
-      "claim": "st is a registered version of st_d, initialised to StKmacIdle on reset.",
-      "cond": "active clock edge and reset condition de-asserted",
-      "signals": [
-        "st",
-        "st_d",
-        "StKmacIdle"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:162"
-      ]
-    },
-    {
-      "id": "G2",
       "type": "assignment",
-      "claim": "unused_signals is driven by the reduction XOR of mode_i and key_valid_i.",
+      "claim": "unused_signals is driven every cycle to the XOR-reduction of mode_i and key_valid_i.",
       "cond": "always",
       "signals": [
         "unused_signals",
@@ -54,80 +40,197 @@
         "key_valid_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:153"
-      ]
+        "kmac_core.sv:152-153"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "unused_signals == ^ { mode_i, key_valid_i }",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_signals",
+          "mode_i",
+          "key_valid_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "unused_signals == ^ { mode_i, key_valid_i }",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "The state register st is implemented via PRIM_FLOP_SPARSE_FSM, which guarantees that st always holds a valid encoding from kmac_st_e and forces StKmacIdle if an invalid encoding is ever observed.",
+      "cond": "after reset and on every clock edge",
+      "signals": [
+        "st",
+        "st_d",
+        "kmac_st_e",
+        "StKmacIdle"
+      ],
+      "refs": [
+        "kmac_core.sv:92-112",
+        "kmac_core.sv:162"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "st inside {StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "st_d",
+          "kmac_st_e",
+          "StKmacIdle"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "after reset and on every clock edge",
+        "consequent": "st inside {StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "st_d must be a legal kmac_st_e encoding whenever the state register updates.",
-      "cond": "every clock edge where st updates",
-      "risk": "The sparse FSM primitive may flag an error, enter an indeterminate state, or produce unintended control outputs, potentially leaking secrets on the datapath.",
+      "type": "producer_contract",
+      "claim": "st_d must always be driven to a valid kmac_st_e state (one of the five enumerated values) before the next clock edge; otherwise the sparse FSM will detect an error and force the FSM to StKmacIdle, potentially disrupting key/message processing.",
+      "cond": "every cycle",
+      "risk": "If st_d ever becomes an illegal value due to a combinational bug, the state machine may spuriously reset, losing the current operation and possibly leaking or corrupting key material.",
       "signals": [
         "st_d",
         "st",
         "kmac_st_e"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:112,162"
-      ]
+        "kmac_core.sv:92-112",
+        "kmac_core.sv:162"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "1'b1",
+        "consequent": "st_d inside {StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "st_d",
+          "st",
+          "kmac_st_e"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "1'b1",
+        "consequent": "st_d inside {StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
-      "priority": "high",
-      "claim": "The sparse FSM has 6-bit encoding (64 possible states) but only 5 are defined. The behaviour when st takes an illegal value is not defined in this chunk.",
-      "cond": "st receives a value not matching any defined state (e.g. due to SEU or faulty st_d)",
-      "risk": "Secret key or message data may be processed incorrectly, or the FSM may stall permanently, enabling observable side‑channels.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The error counter signals st_err_ct and st_err_ct_d are declared but not driven or bounded here. Their accumulation and overflow behavior (e.g., saturation, escalation) must be reviewed in the driving logic to ensure a persistent SEU leads to a fatal error, not a wrap-around.",
+      "cond": "during state machine operation",
+      "risk": "If st_err_ct rolls over after 256 SEU events without triggering an alert, the core may continue to operate in a degraded state, potentially leaking key material under a sustained fault attack.",
       "signals": [
-        "st",
-        "kmac_st_e"
+        "st_err_ct",
+        "st_err_ct_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:92-112,162"
-      ]
+        "kmac_core.sv:159"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st_err_ct",
+          "st_err_ct_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during state machine operation",
+        "consequent": "The error counter signals st_err_ct and st_err_ct_d are declared but not driven or bounded here. Their accumulation and overflow behavior (e.g., saturation, escalation) must be reviewed in the driving logic to ensure a persistent SEU leads",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_dead_or_unused_signal",
-      "priority": "medium",
-      "claim": "unused_signals is assigned but no reader is visible; the comment says it is used in assertions, but those are not shown. If unused, it is dead logic and may mask that mode_i and key_valid_i are otherwise ignored.",
-      "cond": "unknown usage of unused_signals",
-      "risk": "Security‑relevant inputs mode_i or key_valid_i might be silently ignored, causing a functional gap in key handling or mode checks.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "mode_i and key_valid_i are consumed only by a dummy XOR reduction (unused_signals). If these ports are meant to control the operational mode or validate key data, leaving them unconnected functionally may allow the core to start key processing without valid key data or in an incorrect mode, undermining key management.",
+      "cond": "key loading or mode selection",
+      "risk": "Ignoring key_valid_i could allow the core to begin key absorption with invalid/garbage key material; ignoring mode_i could lead to incorrect operation (e.g., SHA3 vs. KMAC), potentially exposing internal state or producing incorrect digest.",
       "signals": [
-        "unused_signals",
         "mode_i",
-        "key_valid_i"
+        "key_valid_i",
+        "unused_signals"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:151-153"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "process_latched is declared but not assigned or read in this chunk; its correct generation and synchronous usage depend on other regions.",
-      "cond": "when kmac_process assertion rules involve process_latched",
-      "risk": "A mismatch between process_latched generation and usage could cause kmac_process to gate SHA3 processing incorrectly, leading to incomplete hashing.",
-      "signals": [
-        "process_latched",
-        "kmac_process"
+        "kmac_core.sv:152-153"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:141"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "ports",
+        "signals": [
+          "mode_i",
+          "key_valid_i",
+          "unused_signals"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key loading or mode selection",
+        "consequent": "mode_i and key_valid_i are consumed only by a dummy XOR reduction (unused_signals). If these ports are meant to control the operational mode or validate key data, leaving them unconnected functionally may allow the core to start key process",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk defines a sparse-FSM-protected state register that guards the KMAC core's key-loading, message-handling, and flush states. The PRIM_FLOP_SPARSE_FSM ensures that any SEU-induced state corruption immediately forces the FSM to Idle, preventing the core from operating in an undefined state that could skip key absorption, mask application, or digest computation. The error counter st_err_ct (declared but not driven here) is likely part of an escalation path; if its saturation threshold is not properly enforced, repeated SEU attacks could allow prolonged operation in a tampered state. Furthermore, the security-critical ports mode_i and key_valid_i are only tied to a dummy signal, raising a high risk that key validity and mode selection are deliberately or accidentally ignored, possibly enabling key processing with invalid data or in an insecure mode.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:92-162"
+    "kmac_core.sv:92-112",
+    "kmac_core.sv:114-153",
+    "kmac_core.sv:158-159",
+    "kmac_core.sv:162"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 92,
-  "line_end": 162,
-  "security_implications": ""
+  "line_end": 162
 }

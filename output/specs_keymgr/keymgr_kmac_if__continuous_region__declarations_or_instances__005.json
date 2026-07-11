@@ -2,7 +2,7 @@
   "chunk_id": "keymgr_kmac_if__continuous_region__declarations_or_instances__005",
   "header": {
     "module": "keymgr_kmac_if",
-    "block_kind": "mixed",
+    "block_kind": "assign",
     "driven": [
       "cmd_consty_err_d",
       "one_hot_err_d"
@@ -19,128 +19,284 @@
     "tags": [
       "error",
       "fault",
-      "integrity",
-      "latch",
-      "one_hot",
-      "consistency",
-      "sec_cm"
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "error_detection",
-      "claim": "cmd_consty_err_d is a latched consistency error: it asserts when cmd_chk is high and enables_q differs from enables_d, and holds once asserted by OR‑ing the previous cmd_consty_err_q.",
-      "cond": "when cmd_chk is active",
+      "claim": "cmd_consty_err_d is asserted when cmd_chk is high and enables_q differs from enables_d; otherwise it retains the previous error state via cmd_consty_err_q.",
+      "cond": "always",
       "signals": [
+        "cmd_consty_err_d",
         "cmd_chk",
         "enables_q",
         "enables_d",
-        "cmd_consty_err_d",
         "cmd_consty_err_q"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:370-371"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370-371"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cmd_consty_err_d == ((cmd_chk && (enables_q != enables_d)) || cmd_consty_err_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_consty_err_d",
+          "cmd_chk",
+          "enables_q",
+          "enables_d",
+          "cmd_consty_err_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cmd_consty_err_d == ((cmd_chk && (enables_q != enables_d)) || cmd_consty_err_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "error_detection",
-      "claim": "one_hot_err_d is a latched one‑hot error: it asserts when any bit of enables_d is set that also has the corresponding enables_sub bit set, and holds once asserted by OR‑ing the previous one_hot_err_q.",
+      "claim": "one_hot_err_d is asserted when any bit of (enables_d & enables_sub) is high; otherwise it retains the previous error state via one_hot_err_q.",
       "cond": "always",
       "signals": [
+        "one_hot_err_d",
         "enables_d",
         "enables_sub",
-        "one_hot_err_d",
         "one_hot_err_q"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:376-377"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:375-377"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "one_hot_err_d == (|(enables_d & enables_sub) || one_hot_err_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "one_hot_err_d",
+          "enables_d",
+          "enables_sub",
+          "one_hot_err_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "one_hot_err_d == (|(enables_d & enables_sub) || one_hot_err_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "cmd_chk must be asserted only when enables_q and enables_d are stable and represent the intended command‑consistency state.",
-      "cond": "before command processing",
-      "risk": "spurious consistency error latch due to transient mismatch between enables_q and enables_d.",
+      "type": "producer_contract",
+      "claim": "enables_q must be a previously sampled version of enables_d when cmd_chk is asserted, so that the comparison reflects command stability.",
+      "cond": "when cmd_chk is high",
+      "risk": "If enables_q is not the correct snapshot, cmd_consty_err_d may not flag a genuine command inconsistency, allowing corrupted commands.",
       "signals": [
-        "cmd_chk",
         "enables_q",
-        "enables_d"
+        "enables_d",
+        "cmd_chk"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:370"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370-371"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cmd_chk",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "enables_q",
+          "enables_d",
+          "cmd_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cmd_chk",
+        "consequent": "enables_q must be a previously sampled version of enables_d when cmd_chk is asserted, so that the comparison reflects command stability",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "mode_config",
-      "claim": "enables_sub must be a correct mask indicating which bits of enables_d are required to be mutually exclusive (one‑hot).",
+      "type": "producer_contract",
+      "claim": "enables_sub is defined such that (enables_d & enables_sub) != 0 indicates a one-hot violation (multiple enables active).",
       "cond": "always",
-      "risk": "failure to detect one‑hot violations (false negatives) or false one‑hot errors (false positives) compromising the security countermeasure.",
+      "risk": "If enables_sub is incorrectly defined, one_hot_err_d may miss actual one-hot violations or trigger false positives.",
       "signals": [
-        "enables_sub"
+        "enables_sub",
+        "enables_d"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:374-376"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "lifecycle",
-      "claim": "cmd_consty_err_q and one_hot_err_q must be reset to 0 before normal operation.",
-      "cond": "at reset",
-      "risk": "permanent error indication from startup, potentially blocking key‑manager operation.",
-      "signals": [
-        "cmd_consty_err_q",
-        "one_hot_err_q"
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:376-377"
       ],
-      "refs": [
-        "keymgr_kmac_if.sv:370-377"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "enables_sub",
+          "enables_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "enables_sub is defined such that (enables_d & enables_sub) != 0 indicates a one-hot violation (multiple enables active)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The one‑hot error detection `|(enables_d & enables_sub)` asserts when any bit overlap occurs, not only when multiple bits are set. It is unclear whether the intended check is for multiple one‑hot bits, or whether enables_sub itself encodes a different condition, which could leave real one‑hot violations undetected.",
-      "cond": "always",
-      "risk": "false sense of security that one‑hot violations are being latched, potentially allowing illegal command combinations to propagate.",
-      "signals": [
-        "enables_d",
-        "enables_sub",
-        "one_hot_err_d"
-      ],
-      "refs": [
-        "keymgr_kmac_if.sv:374-377"
-      ]
-    },
-    {
-      "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "Both error latches (cmd_consty_err_d, one_hot_err_d) are permanently sticky once set. It is unclear whether a clearing mechanism (reset, software clear, or error‑handler) exists outside this chunk to recover from a transient fault.",
-      "cond": "after an error is latched",
-      "risk": "the key manager could become permanently faulted after a single transient error, causing denial of service or stuck insecure state.",
+      "priority": "high",
+      "claim": "It is not specified how the sticky error flags cmd_consty_err_q and one_hot_err_q are cleared or reset after being asserted.",
+      "cond": "After a command consistency or one-hot error latches.",
+      "risk": "If the errors are not cleared, they may either cause persistent blocking (denial-of-service) or, if ignored, allow subsequent operations with corrupted state.",
       "signals": [
         "cmd_consty_err_q",
         "one_hot_err_q"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:370-377"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370-371",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:375-377"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "cmd_consty_err_q",
+          "one_hot_err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "After a command consistency or one-hot error latches",
+        "consequent": "It is not specified how the sticky error flags cmd_consty_err_q and one_hot_err_q are cleared or reset after being asserted",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The SEC_CM consistency check mechanism relies on the timing relationship between cmd_chk, enables_d, and enables_q, which is not documented in this chunk.",
+      "cond": "When cmd_chk triggers.",
+      "risk": "A glitch or timing attack on enables_d after cmd_chk asserts could bypass the consistency check, allowing a corrupted command to be processed.",
+      "signals": [
+        "cmd_chk",
+        "enables_d",
+        "enables_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370-371"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_chk",
+          "enables_d",
+          "enables_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "When cmd_chk triggers",
+        "consequent": "The SEC_CM consistency check mechanism relies on the timing relationship between cmd_chk, enables_d, and enables_q, which is not documented in this chunk",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "high",
+      "claim": "It is unknown whether the sticky error signals (cmd_consty_err_q, one_hot_err_q) are used outside this module to trigger security responses.",
+      "cond": "Once an error is latched.",
+      "risk": "If these signals are not connected to security interrupts or error handling logic, consistency and one-hot errors will be silently ignored, defeating the countermeasure.",
+      "signals": [
+        "cmd_consty_err_q",
+        "one_hot_err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370-371",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:375-377"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_consty_err_q",
+          "one_hot_err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Once an error is latched",
+        "consequent": "It is unknown whether the sticky error signals (cmd_consty_err_q, one_hot_err_q) are used outside this module to trigger security responses",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk implements sticky error detection for command consistency (enables mismatch) and one-hot violation. These errors are part of a security countermeasure (SEC_CM) to ensure key manager commands are not corrupted and only one sub-command is active. If these error flags are not properly captured, cleared, or acted upon, the key manager could operate on tampered commands, potentially leading to incorrect key derivation, key extraction, or leakage of secret material.",
   "evidence_refs": [
-    "keymgr_kmac_if.sv:370-377"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:370-377"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 370,
-  "line_end": 377,
-  "security_implications": ""
+  "line_end": 377
 }

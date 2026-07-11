@@ -7,94 +7,238 @@
       "rx_val_q"
     ],
     "used": [
-      "rst_ni",
       "tick_baud_x16",
       "rx_in",
-      "rx_val_q"
+      "rst_ni",
+      "clk_i"
     ],
     "modes": [],
     "tags": [
-      "handshake",
-      "reset"
+      "reset",
+      "shift_register",
+      "sampling"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low (asynchronous reset), rx_val_q is set to 16'h0.",
-      "cond": "rst_ni == 0",
+      "claim": "When rst_ni is low, rx_val_q is cleared to 16'h0 on the next clock edge.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "rx_val_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:303-306"
-      ]
+        "uart_core.sv:304"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "rx_val_q == 16'h0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "rx_val_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "rx_val_q == 16'h0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When tick_baud_x16 is high and not in reset, rx_val_q is left-shifted by 1 position and the new LSB is assigned rx_in.",
-      "cond": "tick_baud_x16 == 1",
+      "claim": "When rst_ni is high and tick_baud_x16 is asserted, rx_val_q shifts left and loads rx_in into its LSB.",
+      "cond": "tick_baud_x16 && rst_ni",
       "signals": [
         "tick_baud_x16",
         "rx_val_q",
         "rx_in"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:305-305"
-      ]
+        "uart_core.sv:305"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "tick_baud_x16 && rst_ni",
+        "consequent": "rx_val_q[0] == $past(rx_in) && rx_val_q[15:1] == $past(rx_val_q[14:0])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "tick_baud_x16",
+          "rx_val_q",
+          "rx_in"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "tick_baud_x16 && rst_ni",
+        "consequent": "rx_val_q[0] == $past(rx_in) && rx_val_q[15:1] == $past(rx_val_q[14:0])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When tick_baud_x16 is low and not in reset, rx_val_q retains its previous value.",
-      "cond": "tick_baud_x16 == 0",
+      "claim": "When rst_ni is high and tick_baud_x16 is not asserted, rx_val_q holds its previous value.",
+      "cond": "rst_ni && !tick_baud_x16",
       "signals": [
-        "tick_baud_x16",
-        "rx_val_q"
+        "rx_val_q",
+        "tick_baud_x16"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:303-306"
-      ]
+        "uart_core.sv:303-306"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !tick_baud_x16",
+        "consequent": "$stable(rx_val_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rx_val_q",
+          "tick_baud_x16"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !tick_baud_x16",
+        "consequent": "$stable(rx_val_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "handshake",
-      "claim": "tick_baud_x16 must be a single-cycle pulse synchronous to clk_i; it must not remain high for multiple consecutive cycles.",
+      "claim": "tick_baud_x16 must be a single-cycle pulse whenever asserted; it cannot remain high for consecutive clock cycles.",
       "cond": "always",
-      "risk": "If tick_baud_x16 stays high for multiple cycles, rx_val_q will oversample rx_in multiple times per baud interval, corrupting the captured bit stream and leading to framing errors.",
+      "risk": "If tick_baud_x16 stays high for multiple cycles, rx_val_q will shift multiple times per baud tick, sampling rx_in multiple times and corrupting the frame alignment.",
       "signals": [
         "tick_baud_x16"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:305-305"
-      ]
+        "uart_core.sv:305"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "$rose(tick_baud_x16)",
+        "consequent": "!tick_baud_x16",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "tick_baud_x16"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "$rose(tick_baud_x16)",
+        "consequent": "!tick_baud_x16",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "producer_contract",
-      "claim": "rx_in must be stable when tick_baud_x16 is asserted, or its value must be synchronized externally to avoid metastability.",
-      "cond": "when tick_baud_x16 is high",
-      "risk": "If rx_in changes near the sampling edge, a metastable value may be captured in rx_val_q, leading to indeterminate bits and potential UART data corruption.",
+      "claim": "rx_in must be stable during the entire clock cycle where tick_baud_x16 is high (the sampling window).",
+      "cond": "tick_baud_x16",
+      "risk": "If rx_in changes while tick_baud_x16 is asserted, a meta-stable or incorrect bit value may be shifted into rx_val_q, leading to erroneous data capture.",
       "signals": [
         "rx_in",
         "tick_baud_x16"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:305-305"
-      ]
+        "uart_core.sv:305"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tick_baud_x16",
+        "consequent": "$stable(rx_in)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "rx_in",
+          "tick_baud_x16"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tick_baud_x16",
+        "consequent": "$stable(rx_in)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The timing and pulse-width of tick_baud_x16 are generated outside this always_ff block; the block assumes it arrives as a clean single-cycle strobe. If the baud generator produces glitches or extra pulses, an extra bit may be sampled.",
+      "cond": "glitch or multi-cycle tick_baud_x16",
+      "risk": "Repeated or erroneous shifting can offset the frame boundary, causing all subsequent bytes to be misaligned until a break/resync.",
+      "signals": [
+        "tick_baud_x16"
+      ],
+      "refs": [
+        "uart_core.sv:305"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tick_baud_x16"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "glitch or multi-cycle tick_baud_x16",
+        "consequent": "The timing and pulse-width of tick_baud_x16 are generated outside this always_ff block; the block assumes it arrives as a clean single-cycle strobe. If the baud generator produces glitches or extra pulses, an extra bit may be sampled",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:303-306"
+    "uart_core.sv:303-306"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 303,
-  "line_end": 306,
-  "security_implications": ""
+  "line_end": 306
 }

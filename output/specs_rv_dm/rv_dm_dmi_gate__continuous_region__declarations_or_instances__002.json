@@ -1,37 +1,216 @@
 {
   "chunk_id": "rv_dm_dmi_gate__continuous_region__declarations_or_instances__002",
-  "summary": "根据是否存在 strap 覆盖功能，将 strap_en_override_i 的上升沿转换为 strap_en 的单周期脉冲或直接忽略该输入，同时假定覆盖信号一旦置位就永不释放。",
-  "behavior": "该片段位于 generate 分支内。在 strap 覆盖分支中，strap_en 由 strap_en_i 与 (strap_en_override_d && !strap_en_override_q) 的逻辑或驱动。这里 strap_en_override_d 与 strap_en_override_q 应分别代表覆盖信号当前周期的值（可能经同步）和上一周期的寄存器输出，因此该表达式仅在覆盖信号发生 0→1 跳变时成立，产生一个周期为高的脉冲。无论 strap_en_i 当前电平如何，该脉冲都会将 strap_en 强制拉高一拍，实现“采样覆盖”功能。分支中还包含 `ASSUME(LcCtrlStrapSampleOverrideOnce_A, strap_en_override_i |=> strap_en_override_i)`，约定输入 strap_en_override_i 一旦为高就永远保持为高，从而保证上述上升沿只出现一次，后续不会再次产生脉冲。在无覆盖的 else 分支中，strap_en 直接由 strap_en_i 驱动，strap_en_override_i 被赋给冗余信号以消除 lint 警告，该输入在此模式下无功能影响。",
+  "header": {
+    "module": "rv_dm_dmi_gate",
+    "block_kind": "generate",
+    "driven": [
+      "strap_en",
+      "unused_strap_en_override"
+    ],
+    "used": [
+      "strap_en_i",
+      "strap_en_override_d",
+      "strap_en_override_q",
+      "strap_en_override_i"
+    ],
+    "modes": [],
+    "tags": [
+      "lifecycle",
+      "security",
+      "strap",
+      "override"
+    ]
+  },
   "guarantees": [
     {
-      "property": "在 strap 覆盖模式下，strap_en 只在其正常驱动信号 strap_en_i 为高，或覆盖信号首次出现上升沿（strap_en_override_d 为 1 且 strap_en_override_q 为 0）的单一周期内为高，且该脉冲必然不会重复；在无覆盖模式下，strap_en 始终等于 strap_en_i。",
-      "output_signals": [
-        "strap_en"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "In the generate branch with strap override enabled, strap_en is assigned as strap_en_i OR (strap_en_override_d AND NOT strap_en_override_q).",
+      "cond": "when the generate condition for the override branch is true",
+      "signals": [
+        "strap_en",
+        "strap_en_i",
+        "strap_en_override_d",
+        "strap_en_override_q"
       ],
-      "source_refs": [
-        "rv_dm_dmi_gate.sv:113-121"
-      ]
+      "refs": [
+        "rv_dm_dmi_gate.sv:113"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "strap_en == (strap_en_i || (strap_en_override_d && !strap_en_override_q))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_en",
+          "strap_en_i",
+          "strap_en_override_d",
+          "strap_en_override_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when the generate condition for the override branch is true",
+        "consequent": "strap_en == (strap_en_i || (strap_en_override_d && !strap_en_override_q))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "In the gen_no_strap_override branch, strap_en equals strap_en_i, bypassing any override logic.",
+      "cond": "when the generate block 'gen_no_strap_override' is instantiated",
+      "signals": [
+        "strap_en",
+        "strap_en_i"
+      ],
+      "refs": [
+        "rv_dm_dmi_gate.sv:121"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "strap_en == strap_en_i",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_en",
+          "strap_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when the generate block 'gen_no_strap_override' is instantiated",
+        "consequent": "strap_en == strap_en_i",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "strap 覆盖机制允许一次性强制使能调试访问，且结合 assume 要求覆盖信号不可撤销，从而防止攻击者通过先清除再重新置位来多次触发覆盖脉冲，有助于维持生命周期安全状态的不可逆性。",
   "assumptions": [
     {
-      "constraint": "当使用 strap 覆盖（即 gen_no_strap_override 未激活）时，strap_en_override_i 必须满足 `strap_en_override_i |=> strap_en_override_i`（一旦为 1 则保持为 1）。",
-      "bug_relevance": "若该约束被违反，strap_en_override_i 会在 1 之后变为 0 并再次变 1，从而产生额外的上升沿，导致 strap_en 出现意料之外的多次覆盖脉冲，违背“仅覆盖一次”的设计意图。",
-      "related_signals": [
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "Once strap_en_override_i is asserted, it must remain high forever (sticky behavior).",
+      "cond": "at all times, as a formal verification assumption",
+      "risk": "If strap_en_override_i deasserts, the override pulse mechanism could re-trigger, causing unexpected re-sampling of lifecycle straps and potential security state corruption.",
+      "signals": [
         "strap_en_override_i"
       ],
-      "source_refs": [
+      "refs": [
         "rv_dm_dmi_gate.sv:116"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "strap_en_override_i == 1",
+        "consequent": "strap_en_override_i == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_en_override_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "strap_en_override_i == 1",
+        "consequent": "strap_en_override_i == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Signal unused_strap_en_override is wired to strap_en_override_i but never read; may be intentional unused tie-off but could indicate a placeholder or missing connection.",
+      "cond": "when gen_no_strap_override branch is active",
+      "risk": "If the signal was intended for future functionality, its absence may lead to incomplete feature integration; currently no direct security impact.",
+      "signals": [
+        "unused_strap_en_override",
+        "strap_en_override_i"
+      ],
+      "refs": [
+        "rv_dm_dmi_gate.sv:119-120"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "unused_strap_en_override",
+          "strap_en_override_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when gen_no_strap_override branch is active",
+        "consequent": "Signal unused_strap_en_override is wired to strap_en_override_i but never read; may be intentional unused tie-off but could indicate a placeholder or missing connection",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The origins of strap_en_override_d and strap_en_override_q and their synchronization to strap_en_override_i are not defined in this chunk; the pulse condition (d && !q) must be verified to guarantee a single, glitch-free override window.",
+      "cond": "when strap override branch is active",
+      "risk": "Misalignment or glitches on d/q could cause missed or multiple strap-en assertions, leading to unreliable lifecycle sampling or security state inconsistencies.",
+      "signals": [
+        "strap_en_override_d",
+        "strap_en_override_q",
+        "strap_en_override_i"
+      ],
+      "refs": [
+        "rv_dm_dmi_gate.sv:113"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_en_override_d",
+          "strap_en_override_q",
+          "strap_en_override_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "when strap override branch is active",
+        "consequent": "The origins of strap_en_override_d and strap_en_override_q and their synchronization to strap_en_override_i are not defined in this chunk; the pulse condition (d && !q) must be verified to guarantee a single, glitch-free override window",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The strap_en signal controls when lifecycle configuration straps are sampled. The override path allows forcing a re-sample outside normal conditions. If strap_en_override_i is not properly handled (e.g., not sticky as assumed, or if d/q logic is flawed), an attacker could trigger unauthorized strap sampling, altering device lifecycle state, debug access, or secure boot configurations. The formal assumption A1 ensures stickiness, but its environment must be proven. The unused strap_en_override_i tie-off in the non-override branch could indicate a latent exposed input that might be leveraged if generation configuration is changed.",
   "evidence_refs": [
     "rv_dm_dmi_gate.sv:113-122"
-  ],
-  "uncertain_points": [
-    "strap_en_override_d 和 strap_en_override_q 的确切定义未在此片段内显示，推测它们分别是 strap_en_override_i 的同步版本和同步后的前一周期值，需要上层逻辑确认。",
-    "ASSUME 宏的实际检查机制未展示，其假设可能依赖外部验证工具强制执行，本片段仅声明该属性。"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv",
   "line_start": 113,

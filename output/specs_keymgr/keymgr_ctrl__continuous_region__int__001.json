@@ -32,22 +32,31 @@
       "OpGenHwOut",
       "op_start_i",
       "en_i",
+      "adv_op",
+      "gen_hw_op",
+      "gen_id_op",
+      "gen_sw_op",
+      "dis_op",
       "op_req",
       "op_ack",
-      "op_update",
+      "op_err",
+      "op_fault_err",
+      "valid_data_chk",
+      "kmac_data_i",
       "sync_err",
       "sync_fault",
       "async_fault",
-      "valid_data_chk",
-      "kmac_data_i",
-      "KmacEnMasking",
       "wipe_req",
       "random_req",
       "init_o",
       "op_update_sel",
       "prng_en_dis_inv_set",
       "prng_reseed_done_i",
-      "prng_en_dis_inv_q"
+      "prng_en_dis_inv_q",
+      "KmacEnMasking",
+      "KeyUpdateWipe",
+      "KeyUpdateRandom",
+      "KeyUpdateRoot"
     ],
     "modes": [
       "StCtrlReset",
@@ -60,344 +69,1080 @@
       "StCtrlOwnerKey",
       "StCtrlDisabled",
       "StCtrlWipe",
-      "StCtrlInvalid"
+      "StCtrlInvalid",
+      "KeyUpdateWipe",
+      "KeyUpdateRandom",
+      "KeyUpdateRoot"
     ],
     "tags": [
       "secret",
       "key",
+      "wipe",
+      "mask",
+      "entropy",
       "error",
-      "fault",
       "integrity",
-      "access_control",
-      "lifecycle"
+      "sparse_fsm",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "Operation decode signals are derived combinationally from op_i: adv_op = (op_i == OpAdvance), gen_id_op = (op_i == OpGenId), gen_sw_op = (op_i == OpGenSwOut), gen_hw_op = (op_i == OpGenHwOut), dis_op = (op_i ∉ {OpAdvance,OpGenId,OpGenSwOut,OpGenHwOut}), gen_op = gen_id_op | gen_sw_op | gen_hw_op.",
+      "claim": "adv_op is high exactly when op_i equals OpAdvance.",
       "cond": "always",
       "signals": [
         "op_i",
-        "adv_op",
-        "gen_id_op",
-        "gen_sw_op",
-        "gen_hw_op",
-        "dis_op",
-        "gen_op"
+        "adv_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:150-155"
-      ]
+        "keymgr_ctrl.sv:150"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_op == (op_i == OpAdvance)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i",
+          "adv_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "adv_op == (op_i == OpAdvance)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "advance_sel is asserted when op_start_i=1, adv_op=1, and en_i=1.",
-      "cond": "op_start_i & adv_op & en_i",
+      "claim": "gen_id_op is high exactly when op_i equals OpGenId.",
+      "cond": "always",
       "signals": [
-        "advance_sel",
-        "op_start_i",
-        "adv_op",
-        "en_i"
+        "op_i",
+        "gen_id_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:165"
-      ]
+        "keymgr_ctrl.sv:151"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_id_op == (op_i == OpGenId)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i",
+          "gen_id_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_id_op == (op_i == OpGenId)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "gen_out_hw_sel is asserted when op_start_i=1, gen_hw_op=1, and en_i=1.",
-      "cond": "op_start_i & gen_hw_op & en_i",
+      "claim": "gen_sw_op is high exactly when op_i equals OpGenSwOut.",
+      "cond": "always",
       "signals": [
-        "gen_out_hw_sel",
-        "op_start_i",
-        "gen_hw_op",
-        "en_i"
+        "op_i",
+        "gen_sw_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:166"
-      ]
+        "keymgr_ctrl.sv:152"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_sw_op == (op_i == OpGenSwOut)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i",
+          "gen_sw_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_sw_op == (op_i == OpGenSwOut)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "assignment",
-      "claim": "disable_sel is asserted when (op_start_i & dis_op) or !en_i.",
+      "claim": "gen_hw_op is high exactly when op_i equals OpGenHwOut.",
       "cond": "always",
       "signals": [
-        "disable_sel",
-        "op_start_i",
-        "dis_op",
-        "en_i"
+        "op_i",
+        "gen_hw_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:169"
-      ]
+        "keymgr_ctrl.sv:153"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_hw_op == (op_i == OpGenHwOut)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i",
+          "gen_hw_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_hw_op == (op_i == OpGenHwOut)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
       "type": "assignment",
-      "claim": "adv_req, dis_req, id_req, gen_req are formed by ANDing op_req with the corresponding operation decode: adv_req = op_req & adv_op, dis_req = op_req & dis_op, id_req = op_req & gen_id_op, gen_req = op_req & (gen_sw_op | gen_hw_op).",
+      "claim": "dis_op is high when op_i is not one of {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut} and low otherwise.",
       "cond": "always",
       "signals": [
-        "op_req",
-        "adv_req",
-        "dis_req",
-        "id_req",
-        "gen_req",
-        "adv_op",
-        "dis_op",
-        "gen_id_op",
-        "gen_sw_op",
-        "gen_hw_op"
+        "op_i",
+        "dis_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:185-188"
-      ]
+        "keymgr_ctrl.sv:154"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dis_op == !(op_i inside {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut})",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i",
+          "dis_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "dis_op == !(op_i inside {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut})",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G6",
       "type": "assignment",
-      "claim": "sw_binding_unlock_o is asserted when adv_req=1, op_ack=1, and both op_err and op_fault_err are 0.",
-      "cond": "adv_req & op_ack & ~(op_err | op_fault_err)",
+      "claim": "gen_op is high when any of gen_id_op, gen_sw_op, or gen_hw_op is high.",
+      "cond": "always",
       "signals": [
-        "sw_binding_unlock_o",
-        "adv_req",
-        "op_ack",
-        "op_err",
-        "op_fault_err"
+        "gen_id_op",
+        "gen_sw_op",
+        "gen_hw_op",
+        "gen_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:202"
-      ]
+        "keymgr_ctrl.sv:155"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_op == (gen_id_op || gen_sw_op || gen_hw_op)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "gen_id_op",
+          "gen_sw_op",
+          "gen_hw_op",
+          "gen_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_op == (gen_id_op || gen_sw_op || gen_hw_op)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G7",
-      "type": "error_detection",
-      "claim": "invalid_kmac_out is asserted when (op_update or op_ack) is true and (valid_data_chk(kmac_data_i[0]) fails or (KmacEnMasking is true and valid_data_chk(kmac_data_i[1]) fails)).",
-      "cond": "(op_update | op_ack) & (~valid_data_chk(kmac_data_i[0]) | (KmacEnMasking & ~valid_data_chk(kmac_data_i[1])))",
+      "type": "assignment",
+      "claim": "advance_sel is high when op_start_i, adv_op, and en_i are all high.",
+      "cond": "always",
       "signals": [
-        "invalid_kmac_out",
-        "op_update",
-        "op_ack",
-        "kmac_data_i",
-        "valid_data_chk",
-        "KmacEnMasking"
+        "op_start_i",
+        "adv_op",
+        "en_i",
+        "advance_sel"
       ],
       "refs": [
-        "keymgr_ctrl.sv:207-209"
-      ]
+        "keymgr_ctrl.sv:165"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "advance_sel == (op_start_i && adv_op && en_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_start_i",
+          "adv_op",
+          "en_i",
+          "advance_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "advance_sel == (op_start_i && adv_op && en_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G8",
       "type": "assignment",
-      "claim": "op_err is the bitwise OR reduction of the sync_err vector.",
+      "claim": "gen_out_hw_sel is high when op_start_i, gen_hw_op, and en_i are all high.",
       "cond": "always",
       "signals": [
-        "op_err",
-        "sync_err"
+        "op_start_i",
+        "gen_hw_op",
+        "en_i",
+        "gen_out_hw_sel"
       ],
       "refs": [
-        "keymgr_ctrl.sv:213"
-      ]
+        "keymgr_ctrl.sv:166"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_out_hw_sel == (op_start_i && gen_hw_op && en_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_start_i",
+          "gen_hw_op",
+          "en_i",
+          "gen_out_hw_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_out_hw_sel == (op_start_i && gen_hw_op && en_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G9",
       "type": "assignment",
-      "claim": "op_fault_err is the bitwise OR reduction of the concatenation {sync_fault, async_fault}.",
+      "claim": "disable_sel is high when op_start_i and dis_op are both high, or when en_i is low.",
       "cond": "always",
       "signals": [
-        "op_fault_err",
-        "sync_fault",
-        "async_fault"
+        "op_start_i",
+        "dis_op",
+        "en_i",
+        "disable_sel"
       ],
       "refs": [
-        "keymgr_ctrl.sv:215"
-      ]
+        "keymgr_ctrl.sv:169"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "disable_sel == (op_start_i && dis_op) || !en_i",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_start_i",
+          "dis_op",
+          "en_i",
+          "disable_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "disable_sel == (op_start_i && dis_op) || !en_i",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G10",
-      "type": "mux_case",
-      "claim": "update_sel has a fixed priority: KeyUpdateWipe if wipe_req, else KeyUpdateRandom if random_req, else KeyUpdateRoot if init_o, else op_update_sel.",
+      "type": "assignment",
+      "claim": "adv_req is high when op_req and adv_op are both high.",
       "cond": "always",
       "signals": [
-        "update_sel",
-        "wipe_req",
-        "random_req",
-        "init_o",
-        "op_update_sel"
+        "op_req",
+        "adv_op",
+        "adv_req"
       ],
       "refs": [
-        "keymgr_ctrl.sv:230-232"
-      ]
+        "keymgr_ctrl.sv:185"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_req == (op_req && adv_op)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "adv_op",
+          "adv_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "adv_req == (op_req && adv_op)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G11",
-      "type": "reg_update",
-      "claim": "prng_en_dis_inv_d is set to 2'b11 when prng_en_dis_inv_set is true, else when prng_reseed_done_i is true it shifts in a 0 MSB and retains the previous MSB as LSB (i.e. {1'b0, prng_en_dis_inv_q[1]}), otherwise holds its previous value.",
-      "cond": "always_comb",
+      "type": "assignment",
+      "claim": "dis_req is high when op_req and dis_op are both high.",
+      "cond": "always",
       "signals": [
-        "prng_en_dis_inv_d",
+        "op_req",
+        "dis_op",
+        "dis_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:186"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dis_req == (op_req && dis_op)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "dis_op",
+          "dis_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "dis_req == (op_req && dis_op)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G12",
+      "type": "assignment",
+      "claim": "id_req is high when op_req and gen_id_op are both high.",
+      "cond": "always",
+      "signals": [
+        "op_req",
+        "gen_id_op",
+        "id_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:187"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "id_req == (op_req && gen_id_op)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "gen_id_op",
+          "id_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "id_req == (op_req && gen_id_op)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G13",
+      "type": "assignment",
+      "claim": "gen_req is high when op_req is high and either gen_sw_op or gen_hw_op is high.",
+      "cond": "always",
+      "signals": [
+        "op_req",
+        "gen_sw_op",
+        "gen_hw_op",
+        "gen_req"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:188"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_req == (op_req && (gen_sw_op || gen_hw_op))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_req",
+          "gen_sw_op",
+          "gen_hw_op",
+          "gen_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_req == (op_req && (gen_sw_op || gen_hw_op))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G14",
+      "type": "assignment",
+      "claim": "sw_binding_unlock_o is high only when adv_req and op_ack are both high and neither op_err nor op_fault_err is high.",
+      "cond": "always",
+      "signals": [
+        "adv_req",
+        "op_ack",
+        "op_err",
+        "op_fault_err",
+        "sw_binding_unlock_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:202"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sw_binding_unlock_o == (adv_req && op_ack && !(op_err || op_fault_err))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_req",
+          "op_ack",
+          "op_err",
+          "op_fault_err",
+          "sw_binding_unlock_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sw_binding_unlock_o == (adv_req && op_ack && !(op_err || op_fault_err))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G15",
+      "type": "assignment",
+      "claim": "invalid_kmac_out is high when op_update or op_ack is high and the validity check on kmac_data_i[0] fails, or (if KmacEnMasking is true) the check on kmac_data_i[1] also fails.",
+      "cond": "always",
+      "signals": [
+        "op_update",
+        "op_ack",
+        "valid_data_chk",
+        "kmac_data_i",
+        "KmacEnMasking",
+        "invalid_kmac_out"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:207-209"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "invalid_kmac_out == ( (op_update || op_ack) && ( !valid_data_chk(kmac_data_i[0]) || ( !valid_data_chk(kmac_data_i[1]) && KmacEnMasking ) ) )",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_update",
+          "op_ack",
+          "valid_data_chk",
+          "kmac_data_i",
+          "KmacEnMasking",
+          "invalid_kmac_out"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "invalid_kmac_out == ( (op_update || op_ack) && ( !valid_data_chk(kmac_data_i[0]) || ( !valid_data_chk(kmac_data_i[1]) && KmacEnMasking ) ) )",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G16",
+      "type": "assignment",
+      "claim": "op_err is the bitwise OR-reduction of sync_err.",
+      "cond": "always",
+      "signals": [
+        "sync_err",
+        "op_err"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:213"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_err == (|sync_err)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sync_err",
+          "op_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_err == (|sync_err)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G17",
+      "type": "assignment",
+      "claim": "op_fault_err is the bitwise OR-reduction of the concatenation {sync_fault, async_fault}.",
+      "cond": "always",
+      "signals": [
+        "sync_fault",
+        "async_fault",
+        "op_fault_err"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:215"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_fault_err == (|{sync_fault, async_fault})",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sync_fault",
+          "async_fault",
+          "op_fault_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_fault_err == (|{sync_fault, async_fault})",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G18",
+      "type": "mux_case",
+      "claim": "update_sel is KeyUpdateWipe when wipe_req is high; else KeyUpdateRandom when random_req is high; else KeyUpdateRoot when init_o is high; else equals op_update_sel.",
+      "cond": "always",
+      "signals": [
+        "wipe_req",
+        "random_req",
+        "init_o",
+        "op_update_sel",
+        "update_sel"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:230-232"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(wipe_req -> update_sel == KeyUpdateWipe) && (!wipe_req && random_req -> update_sel == KeyUpdateRandom) && (!wipe_req && !random_req && init_o -> update_sel == KeyUpdateRoot) && (!wipe_req && !random_req && !init_o -> update_sel == op_update_sel)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wipe_req",
+          "random_req",
+          "init_o",
+          "op_update_sel",
+          "update_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(wipe_req -> update_sel == KeyUpdateWipe) && (!wipe_req && random_req -> update_sel == KeyUpdateRandom) && (!wipe_req && !random_req && init_o -> update_sel == KeyUpdateRoot) && (!wipe_req && !random_req && !init_o -> update_sel == op_update_sel)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G19",
+      "type": "assignment",
+      "claim": "prng_en_dis_inv_d is set to 2'b11 when prng_en_dis_inv_set is high; otherwise, when prng_reseed_done_i is high, it shifts in a 0 at the MSB and retains the previous bit[1]; else it holds its previous value.",
+      "cond": "always",
+      "signals": [
         "prng_en_dis_inv_set",
         "prng_reseed_done_i",
-        "prng_en_dis_inv_q"
+        "prng_en_dis_inv_q",
+        "prng_en_dis_inv_d"
       ],
       "refs": [
         "keymgr_ctrl.sv:243-245"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "prng_en_dis_inv_d == (prng_en_dis_inv_set ? 2'b11 : (prng_reseed_done_i ? {1'b0, prng_en_dis_inv_q[1]} : prng_en_dis_inv_q))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_en_dis_inv_set",
+          "prng_reseed_done_i",
+          "prng_en_dis_inv_q",
+          "prng_en_dis_inv_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "prng_en_dis_inv_d == (prng_en_dis_inv_set ? 2'b11 : (prng_reseed_done_i ? {1'b0, prng_en_dis_inv_q[1]} : prng_en_dis_inv_q))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "When en_i=1 and op_start_i=1, op_i must be one of OpAdvance, OpGenId, OpGenSwOut, or OpGenHwOut; any other value will cause dis_op=1 and disable_sel activation.",
-      "cond": "en_i=1 and op_start_i=1",
-      "risk": "Unintended disable operation triggered, potentially changing state or disrupting key management flow.",
+      "claim": "op_i takes only the defined operation encodings; any value not in {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut} is intentionally treated as a disable operation.",
+      "cond": "whenever op_i changes.",
+      "risk": "An unexpected op_i value could unexpectedly trigger a disable state, leading to key wipe or other security-critical transitions.",
       "signals": [
-        "op_i",
-        "en_i",
-        "op_start_i",
-        "dis_op",
-        "disable_sel"
+        "op_i"
       ],
       "refs": [
-        "keymgr_ctrl.sv:154",
-        "keymgr_ctrl.sv:169"
-      ]
+        "keymgr_ctrl.sv:154"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "whenever op_i changes",
+        "consequent": "op_i takes only the defined operation encodings; any value not in {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut} is intentionally treated as a disable operation",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "security_precondition",
-      "claim": "valid_data_chk function correctly validates the integrity of kmac_data_i; otherwise invalid_kmac_out could be suppressed or falsely asserted.",
-      "cond": "when op_update or op_ack is true",
-      "risk": "Invalid KMAC output data may be accepted, leading to corrupted key material and security breach.",
+      "claim": "The function valid_data_chk correctly determines whether kmac_data_i shares are valid; a corrupted share must be detected, and a valid share must not be flagged as erroneous.",
+      "cond": "always",
+      "risk": "If the function misbehaves, invalid KMAC output could go undetected, allowing corrupted key material to be used, or valid data could be incorrectly rejected, causing denial of service.",
       "signals": [
-        "kmac_data_i",
         "valid_data_chk",
-        "invalid_kmac_out"
+        "kmac_data_i"
       ],
       "refs": [
         "keymgr_ctrl.sv:207-209"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid_data_chk",
+          "kmac_data_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The function valid_data_chk correctly determines whether kmac_data_i shares are valid; a corrupted share must be detected, and a valid share must not be flagged as erroneous",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
-      "type": "handshake",
-      "claim": "prng_reseed_done_i pulses once for each completed reseed operation, so that the shift logic correctly decrements the counter.",
-      "cond": "after entering StCtrlDisabled or StCtrlInvalid",
-      "risk": "PRNG may stop advancing earlier or later than intended, affecting randomness refresh requirements.",
+      "type": "producer_contract",
+      "claim": "kmac_data_i is stable and valid whenever op_update or op_ack is asserted; no combinational glitch on these control signals while kmac data is in transit.",
+      "cond": "when op_update || op_ack is true",
+      "risk": "A combinational path may cause invalid_kmac_out to glitch high, falsely reporting an error and potentially aborting an operation.",
       "signals": [
-        "prng_reseed_done_i",
-        "prng_en_dis_inv_q",
-        "prng_en_dis_inv_d"
+        "op_update",
+        "op_ack",
+        "kmac_data_i"
       ],
       "refs": [
-        "keymgr_ctrl.sv:238-245"
-      ]
+        "keymgr_ctrl.sv:207-209"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_update || op_ack",
+        "consequent": "$stable(kmac_data_i)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_update",
+          "op_ack",
+          "kmac_data_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_update || op_ack",
+        "consequent": "$stable(kmac_data_i)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "op_ack and op_err/op_fault_err are stable and never change simultaneously in the same cycle when adv_req is high, to avoid a transient unlock condition.",
+      "cond": "when adv_req is high",
+      "risk": "A glitch on sw_binding_unlock_o could release binding before the error is fully registered, compromising key isolation.",
+      "signals": [
+        "adv_req",
+        "op_ack",
+        "op_err",
+        "op_fault_err",
+        "sw_binding_unlock_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:202"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "adv_req",
+        "consequent": "!($changed(op_ack) && $changed(op_err))",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_req",
+          "op_ack",
+          "op_err",
+          "op_fault_err",
+          "sw_binding_unlock_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "adv_req",
+        "consequent": "!($changed(op_ack) && $changed(op_err))",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A5",
+      "type": "mode_config",
+      "claim": "When wipe_req, random_req, and init_o are all low, op_update_sel must be a valid non-X keymgr_key_update_e value.",
+      "cond": "when !wipe_req && !random_req && !init_o",
+      "risk": "An invalid op_update_sel could cause an undefined key update operation, potentially corrupting key state.",
+      "signals": [
+        "op_update_sel"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:230-232"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!wipe_req && !random_req && !init_o",
+        "consequent": "!$isunknown(op_update_sel)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_update_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!wipe_req && !random_req && !init_o",
+        "consequent": "!$isunknown(op_update_sel)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
-      "priority": "medium",
-      "claim": "signal 'invalid_op' (line 140) is declared but never assigned in this chunk. It may be unused or driven elsewhere; if unused, illegal operations are not separately flagged.",
-      "cond": "unknown",
-      "risk": "Illegal op_i values could be accepted without explicit error detection, potentially allowing bypass of allowed operations.",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "The decode of dis_op treats any op_i outside the four listed operations as a disable. If the full design defines additional legal operations, they would erroneously trigger a disable, potentially causing an unintended key wipe or state transition.",
+      "cond": "when op_i is not in {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut} and such a value is intended to be a legal, non-disable command.",
+      "risk": "An attacker could inject an undefined op_i to force a disable, bypassing normal operation controls and possibly wiping key material.",
       "signals": [
-        "invalid_op"
+        "op_i",
+        "dis_op"
       ],
       "refs": [
-        "keymgr_ctrl.sv:140"
-      ]
+        "keymgr_ctrl.sv:154"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "!((op_i inside legal_non_disable_set) && dis_op)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_i",
+          "dis_op"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when op_i is not in {OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut} and such a value is intended to be a legal, non-disable command",
+        "consequent": "!((op_i inside legal_non_disable_set) && dis_op)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_temporal_window",
       "priority": "high",
-      "claim": "state_intg_err_q and state_intg_err_d are declared but not driven in this chunk; the state integrity check logic is elsewhere. Missing or flawed check could allow state corruption to go undetected.",
-      "cond": "when state value changes",
-      "risk": "Sparse-encoded state corruption may not be detected, leading to unauthorized state transitions and key material exposure.",
+      "claim": "invalid_kmac_out gates on op_update|op_ack. If either signal asserts before kmac_data_i is stable, or kmac_data_i transitions while the gate is high, a combinational glitch may erroneously flag an error.",
+      "cond": "when op_update or op_ack transitions relative to kmac_data_i",
+      "risk": "A false error flag could abort an ongoing operation or enter a fault recovery path that exposes key state.",
       "signals": [
-        "state_intg_err_q",
-        "state_intg_err_d"
+        "op_update",
+        "op_ack",
+        "kmac_data_i",
+        "invalid_kmac_out"
       ],
       "refs": [
-        "keymgr_ctrl.sv:143"
-      ]
+        "keymgr_ctrl.sv:207-209"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(op_update || op_ack) && $changed(kmac_data_i)",
+        "consequent": "invalid_kmac_out == 1'b1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_update",
+          "op_ack",
+          "kmac_data_i",
+          "invalid_kmac_out"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(op_update || op_ack) && $changed(kmac_data_i)",
+        "consequent": "invalid_kmac_out == 1'b1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
       "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "signal init_o is used in the update_sel mux to drive KeyUpdateRoot but is not defined in this chunk. The condition under which init_o is asserted must be verified to avoid unintended root key updates.",
-      "cond": "when init_o=1",
-      "risk": "Incorrect root key update could corrupt the key hierarchy, breaking security guarantees.",
+      "priority": "medium",
+      "claim": "prng_en_dis_inv_set is driven from another part of the design (likely the main FSM upon entering StCtrlDisabled or StCtrlInvalid). Its timing and glitch behavior affect whether the PRNG reseed sequence starts correctly.",
+      "cond": "when entering disabled/invalid state",
+      "risk": "If prng_en_dis_inv_set is asserted too early or glitches, the PRNG may not reseed twice, leaving the PRNG in a non-random state, which could weaken subsequent randomness-dependent operations.",
       "signals": [
-        "init_o",
-        "update_sel"
+        "prng_en_dis_inv_set",
+        "prng_en_dis_inv_d"
       ],
       "refs": [
-        "keymgr_ctrl.sv:232"
-      ]
+        "keymgr_ctrl.sv:243-245"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_en_dis_inv_set",
+          "prng_en_dis_inv_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "when entering disabled/invalid state",
+        "consequent": "prng_en_dis_inv_set is driven from another part of the design (likely the main FSM upon entering StCtrlDisabled or StCtrlInvalid). Its timing and glitch behavior affect whether the PRNG reseed sequence starts correctly",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U4",
-      "type": "U_unhandled_legal_case",
-      "priority": "medium",
-      "claim": "dis_op is defined as true for any op_i not in {OpAdvance,OpGenId,OpGenSwOut,OpGenHwOut}. If the op_i bus can take legal but unlisted values (or undefined glitches), a spurious disable operation may be triggered.",
-      "cond": "op_i has a legal but unlisted value while en_i=1 and op_start_i=1",
-      "risk": "Accidental disable operation could halt or disrupt key manager operations without explicit error reporting.",
-      "signals": [
-        "op_i",
-        "dis_op",
-        "disable_sel"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:154",
-        "keymgr_ctrl.sv:169"
-      ]
-    },
-    {
-      "id": "U5",
       "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "Comment states 'async errors have nothing to do with the operation and thus should not impact operation results', but async_fault is included in op_fault_err, which blocks sw_binding_unlock_o. Either the comment is misleading or the RTL incorrectly includes async faults.",
+      "claim": "The comment (line 211-212) states that async errors should not impact operation results, yet async_fault is included in op_fault_err, which is used to prevent sw_binding_unlock_o. This appears contradictory and may indicate a misaligned security policy.",
       "cond": "when async_fault is asserted",
-      "risk": "If comment is correct, sw_binding_unlock could be incorrectly blocked; if RTL is correct, documentation is wrong, leading to misunderstanding about fault containment.",
+      "risk": "If the intent is that async faults should never block binding unlock, the current logic could incorrectly deny legitimate unlock; conversely, if blocking is intended, the comment is misleading and could lead to a false sense that async faults are benign.",
       "signals": [
         "async_fault",
         "op_fault_err",
         "sw_binding_unlock_o"
       ],
       "refs": [
-        "keymgr_ctrl.sv:211-215",
-        "keymgr_ctrl.sv:202"
-      ]
-    },
-    {
-      "id": "U6",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "invalid_kmac_out is computed but not used in this chunk; it must be connected to fault/error handling logic to prevent key material corruption. Local only declares the signal.",
-      "cond": "when invalid_kmac_out=1",
-      "risk": "If not properly routed, invalid KMAC output could be overlooked, leading to use of corrupted key material.",
-      "signals": [
-        "invalid_kmac_out"
+        "keymgr_ctrl.sv:211-215,202"
       ],
-      "refs": [
-        "keymgr_ctrl.sv:207-209"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "async_fault",
+          "op_fault_err",
+          "sw_binding_unlock_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when async_fault is asserted",
+        "consequent": "The comment (line 211-212) states that async errors should not impact operation results, yet async_fault is included in op_fault_err, which is used to prevent sw_binding_unlock_o. This appears contradictory and may indicate a misaligned sec",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "sw_binding_unlock_o is a critical security gate that releases key material binding only on a successful advance with no errors. If op_err or op_fault_err are masked, or if op_ack/error timing glitches occur, binding could be unlocked prematurely, exposing secret keys. The dis_op decoding treats any undefined op_i as a disable, which could be exploited by an attacker to force a disable/wipe transition. invalid_kmac_out checks data integrity of KMAC output; a bypass or glitch in this check could allow corrupted key material to propagate into key state. The update_sel priority mux ensures wipe/random take precedence, but a priority error or race could cause incorrect key updates. The sparse FSM encoding relies on state_q staying within defined encodings; a single-bit flip could produce an invalid state, potentially enabling unauthorized operations.",
   "evidence_refs": [
     "keymgr_ctrl.sv:109-245"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 109,
-  "line_end": 245,
-  "security_implications": ""
+  "line_end": 245
 }

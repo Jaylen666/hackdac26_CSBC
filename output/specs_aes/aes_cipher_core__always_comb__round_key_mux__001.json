@@ -14,112 +14,211 @@
     ],
     "modes": [
       "ROUND_KEY_DIRECT",
-      "ROUND_KEY_MIXED",
-      "CiphOpFwdOnly"
+      "ROUND_KEY_MIXED"
     ],
     "tags": [
       "key",
-      "mux",
-      "fault",
-      "round_key"
+      "secret",
+      "mux"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "When round_key_sel equals ROUND_KEY_DIRECT, round_key is assigned key_bytes.",
+      "claim": "When round_key_sel is ROUND_KEY_DIRECT, round_key is driven by key_bytes.",
       "cond": "round_key_sel == ROUND_KEY_DIRECT",
       "signals": [
+        "round_key",
         "round_key_sel",
-        "key_bytes",
-        "round_key"
+        "key_bytes"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:539"
-      ]
+        "aes_cipher_core.sv:538-539"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel == ROUND_KEY_DIRECT",
+        "consequent": "round_key == key_bytes",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "round_key",
+          "round_key_sel",
+          "key_bytes"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel == ROUND_KEY_DIRECT",
+        "consequent": "round_key == key_bytes",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "When round_key_sel equals ROUND_KEY_MIXED, round_key is assigned key_mix_columns_out if CiphOpFwdOnly is low; otherwise key_bytes.",
+      "claim": "When round_key_sel is ROUND_KEY_MIXED, round_key is key_mix_columns_out if CiphOpFwdOnly is false, otherwise key_bytes.",
       "cond": "round_key_sel == ROUND_KEY_MIXED",
       "signals": [
+        "round_key",
         "round_key_sel",
         "CiphOpFwdOnly",
         "key_mix_columns_out",
-        "key_bytes",
-        "round_key"
+        "key_bytes"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:540"
-      ]
+        "aes_cipher_core.sv:540"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel == ROUND_KEY_MIXED",
+        "consequent": "round_key == (CiphOpFwdOnly ? key_bytes : key_mix_columns_out)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "round_key",
+          "round_key_sel",
+          "CiphOpFwdOnly",
+          "key_mix_columns_out",
+          "key_bytes"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel == ROUND_KEY_MIXED",
+        "consequent": "round_key == (CiphOpFwdOnly ? key_bytes : key_mix_columns_out)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "default_fallback",
-      "claim": "For any other value of round_key_sel (default), round_key is assigned key_bytes.",
-      "cond": "round_key_sel not equal to ROUND_KEY_DIRECT or ROUND_KEY_MIXED",
+      "claim": "For any other value of round_key_sel (not ROUND_KEY_DIRECT or ROUND_KEY_MIXED), round_key defaults to key_bytes.",
+      "cond": "round_key_sel != ROUND_KEY_DIRECT && round_key_sel != ROUND_KEY_MIXED",
       "signals": [
+        "round_key",
         "round_key_sel",
-        "key_bytes",
-        "round_key"
+        "key_bytes"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:541"
-      ]
+        "aes_cipher_core.sv:541"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel != ROUND_KEY_DIRECT && round_key_sel != ROUND_KEY_MIXED",
+        "consequent": "round_key == key_bytes",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "round_key",
+          "round_key_sel",
+          "key_bytes"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel != ROUND_KEY_DIRECT && round_key_sel != ROUND_KEY_MIXED",
+        "consequent": "round_key == key_bytes",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "round_key_sel is always a legal value (ROUND_KEY_DIRECT or ROUND_KEY_MIXED) and not both simultaneously.",
-      "cond": "always during normal operation",
-      "risk": "Unique case violation in simulation, or synthesis default selection may cause round_key to be key_bytes when mixed key is expected, weakening the cipher.",
+      "claim": "round_key_sel is expected to take only the two defined enumerations (ROUND_KEY_DIRECT or ROUND_KEY_MIXED); no other stable values should appear during normal operation.",
+      "cond": "always",
+      "risk": "An illegal value causes the default branch to output key_bytes, potentially using the raw key bytes in a round where mixed key material is expected, which may weaken the cipher and bypass internal key schedule hardening.",
       "signals": [
         "round_key_sel"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:538-542"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "key_mix_columns_out provides a valid, stable value when round_key_sel == ROUND_KEY_MIXED and CiphOpFwdOnly is low.",
-      "cond": "round_key_sel == ROUND_KEY_MIXED and CiphOpFwdOnly == 0",
-      "risk": "If key_mix_columns_out is X or incorrect, round_key gets corrupted, leading to wrong round key and potential data corruption.",
-      "signals": [
-        "key_mix_columns_out"
+        "aes_cipher_core.sv:538-542"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:540"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "round_key_sel == ROUND_KEY_DIRECT || round_key_sel == ROUND_KEY_MIXED",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "round_key_sel"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "round_key_sel == ROUND_KEY_DIRECT || round_key_sel == ROUND_KEY_MIXED",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "If a fault corrupts round_key_sel to an illegal value, the default branch drives round_key = key_bytes, bypassing the mix-columns step even in modes that require it.",
-      "cond": "round_key_sel is neither ROUND_KEY_DIRECT nor ROUND_KEY_MIXED, or multiple cases match",
-      "risk": "Cipher may use an unmixed round key, undermining encryption/decryption strength and potentially exposing key material.",
+      "type": "U_unhandled_legal_case",
+      "priority": "medium",
+      "claim": "The unique case has a default branch that silently uses key_bytes when round_key_sel takes an illegal value; it is unclear if the design intends to tolerate or flag such states.",
+      "cond": "round_key_sel has a value other than ROUND_KEY_DIRECT or ROUND_KEY_MIXED (e.g., due to an SEU or a control-path bug).",
+      "risk": "An undetected illegal selector could cause raw key bytes to be used as a round key, bypassing key mixing and potentially enabling key-recovery attacks or weakening the cipher.",
       "signals": [
         "round_key_sel",
-        "round_key"
+        "round_key",
+        "key_bytes"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:541"
-      ]
+        "aes_cipher_core.sv:541"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel != ROUND_KEY_DIRECT && round_key_sel != ROUND_KEY_MIXED",
+        "consequent": "round_key == key_bytes",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "round_key_sel",
+          "round_key",
+          "key_bytes"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "round_key_sel != ROUND_KEY_DIRECT && round_key_sel != ROUND_KEY_MIXED",
+        "consequent": "round_key == key_bytes",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The block selects round_key for AES rounds. If round_key_sel is corrupted to an illegal value, the default branch exposes raw key_bytes as round_key, potentially skipping key-mixing measures. Furthermore, the unique case default conceals the illegal condition without an alert, reducing the ability to detect fault attacks on the control path.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:537-543"
+    "aes_cipher_core.sv:537-543"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 537,
-  "line_end": 543,
-  "security_implications": ""
+  "line_end": 543
 }

@@ -14,64 +14,167 @@
     "modes": [],
     "tags": [
       "mask",
-      "security"
+      "permutation",
+      "secret"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "msg_mask_permuted is driven to a permuted version of msg_mask: for each i from 0 to MsgWidth-1, msg_mask_permuted[i] = msg_mask[RndCnstMsgPerm[i]]; bits beyond MsgWidth-1 are set to 0 by the initial '0 assignment.",
+      "claim": "msg_mask_permuted is a bitwise permuted version of msg_mask using the static permutation vector RndCnstMsgPerm: for each i in 0..sha3_pkg::MsgWidth-1, msg_mask_permuted[i] = msg_mask[RndCnstMsgPerm[i]].",
       "cond": "always",
       "signals": [
         "msg_mask_permuted",
         "msg_mask",
         "RndCnstMsgPerm",
+        "i",
         "sha3_pkg::MsgWidth"
       ],
       "refs": [
-        "kmac_reduced.sv:152-158"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:152-158"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "forall i in {0..sha3_pkg::MsgWidth-1} : msg_mask_permuted[i] == msg_mask[RndCnstMsgPerm[i]]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted",
+          "msg_mask",
+          "RndCnstMsgPerm",
+          "i",
+          "sha3_pkg::MsgWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "forall i in {0..sha3_pkg::MsgWidth-1} : msg_mask_permuted[i] == msg_mask[RndCnstMsgPerm[i]]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "All elements of RndCnstMsgPerm must be within the range 0 to sha3_pkg::MsgWidth-1, ensuring the index into msg_mask is valid.",
-      "cond": "always",
-      "risk": "Out-of-bounds indexing of msg_mask causes undefined behavior (X propagation in simulation, unknown synthesis result), which can corrupt the mask and break side-channel protection.",
+      "type": "security_precondition",
+      "claim": "RndCnstMsgPerm is a valid permutation of indices 0 to sha3_pkg::MsgWidth-1, i.e., each index appears exactly once.",
+      "cond": "always (compile-time parameter)",
+      "risk": "If RndCnstMsgPerm is not a proper permutation, msg_mask_permuted may have duplicated or missing bits, corrupting masking and enabling side-channel leakage.",
       "signals": [
-        "RndCnstMsgPerm",
-        "msg_mask"
+        "RndCnstMsgPerm"
       ],
       "refs": [
-        "kmac_reduced.sv:156"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:156"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "unique {RndCnstMsgPerm} && forall i RndCnstMsgPerm[i] inside {[0:MsgWidth-1]}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "RndCnstMsgPerm"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (compile-time parameter)",
+        "consequent": "unique {RndCnstMsgPerm} && forall i RndCnstMsgPerm[i] inside {[0:MsgWidth-1]}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "RndCnstMsgPerm must be a full permutation of {0..MsgWidth-1} to preserve masking entropy; duplicates or omissions would weaken side-channel resistance.",
-      "cond": "unknown how RndCnstMsgPerm is generated; requires inspection of sha3_pkg definition.",
-      "risk": "A non-bijective permutation could create bit correlations in the permuted mask, reducing masking effectiveness and exposing secret data to power/timing attacks.",
+      "claim": "The permutation constant RndCnstMsgPerm may not provide sufficient diffusion for side-channel resistance if it is not a strong permutation; the security of the masking scheme depends on its quality.",
+      "cond": "unknown (depends on constant definition)",
+      "risk": "Insufficient diffusion could leak secret data through power/EM side-channels.",
       "signals": [
         "RndCnstMsgPerm",
+        "msg_mask",
         "msg_mask_permuted"
       ],
       "refs": [
-        "kmac_reduced.sv:156"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:156"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "RndCnstMsgPerm",
+          "msg_mask",
+          "msg_mask_permuted"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown (depends on constant definition)",
+        "consequent": "The permutation constant RndCnstMsgPerm may not provide sufficient diffusion for side-channel resistance if it is not a strong permutation; the security of the masking scheme depends on its quality",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The definition of RndCnstMsgPerm in sha3_pkg must be verified to be a valid permutation and appropriate for masking.",
+      "cond": "always",
+      "risk": "If the constant is incorrect or not a permutation, the masking scheme is broken, potentially exposing secret data.",
+      "signals": [
+        "RndCnstMsgPerm"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:156"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "RndCnstMsgPerm"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "The definition of RndCnstMsgPerm in sha3_pkg must be verified to be a valid permutation and appropriate for masking",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "msg_mask_permuted is a permuted version of msg_mask using RndCnstMsgPerm. This permutation is part of a masking countermeasure. If RndCnstMsgPerm is not a proper bijection or lacks sufficient diffusion, the masking may fail, allowing side-channel leakage of secret data handled by KMAC.",
   "evidence_refs": [
-    "kmac_reduced.sv:152-158"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:152-158"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 152,
-  "line_end": 158,
-  "security_implications": ""
+  "line_end": 158
 }

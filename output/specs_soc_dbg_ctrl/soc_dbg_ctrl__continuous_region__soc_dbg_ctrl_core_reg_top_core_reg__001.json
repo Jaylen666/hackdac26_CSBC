@@ -4,44 +4,45 @@
     "module": "soc_dbg_ctrl",
     "block_kind": "mixed",
     "driven": [
-      "not_valid",
-      "core_hw2reg.debug_policy_category_shadowed.d",
-      "policy_shadowed_update_err",
-      "policy_shadowed_storage_err",
       "core_tl_o",
+      "jtag_tl_o",
       "shadowed_storage_err",
       "shadowed_update_err",
       "core_tl_intg_err",
-      "jtag_tl_o",
-      "jtag_tl_intg_err"
+      "jtag_tl_intg_err",
+      "policy_shadowed_update_err",
+      "policy_shadowed_storage_err",
+      "core_hw2reg.debug_policy_category_shadowed.d"
     ],
     "used": [
-      "core_reg2hw.debug_policy_valid_shadowed.q",
-      "core_reg2hw.debug_policy_category_shadowed.qe",
-      "core_reg2hw.debug_policy_category_shadowed.re",
-      "core_reg2hw.debug_policy_category_shadowed.q",
       "clk_i",
       "rst_ni",
       "rst_shadowed_ni",
       "core_tl_i",
-      "jtag_tl_i"
+      "jtag_tl_i",
+      "core_reg2hw.debug_policy_valid_shadowed.q",
+      "core_reg2hw.debug_policy_category_shadowed.re",
+      "core_reg2hw.debug_policy_category_shadowed.qe",
+      "core_reg2hw.debug_policy_category_shadowed.q"
     ],
     "modes": [
-      "DbgCategoryLocked",
-      "Mubi4 False"
+      "Mubi4 validation: debug_policy_valid_shadowed.q == False -> not_valid = 1",
+      "debug policy writable when not_valid = 1",
+      "shadow register parameters: DW=$bits(dbg_category_e), SwAccessRW, RESVAL={DbgCategoryLocked}"
     ],
     "tags": [
-      "access_control",
+      "shadow",
       "integrity",
+      "access_control",
       "error",
-      "fault"
+      "csr"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "not_valid is assigned the result of a strict Mubi4 false test on core_reg2hw.debug_policy_valid_shadowed.q.",
+      "claim": "not_valid is asserted combinatorially when the Mubi4 encoding of debug_policy_valid_shadowed.q is False.",
       "cond": "always",
       "signals": [
         "not_valid",
@@ -76,7 +77,7 @@
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "The write-enable to debug_policy_category_shadowed is the logical AND of the hardware write request and not_valid.",
+      "claim": "The write-enable of the debug_policy_category shadow register is gated by (qe & not_valid).",
       "cond": "always",
       "signals": [
         "core_reg2hw.debug_policy_category_shadowed.qe",
@@ -89,7 +90,7 @@
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "u_debug_policy_category_shadowed.we == core_reg2hw.debug_policy_category_shadowed.qe & not_valid",
+        "consequent": "u_debug_policy_category_shadowed.we == (core_reg2hw.debug_policy_category_shadowed.qe & not_valid)",
         "formalizability": "direct"
       },
       "risk": "",
@@ -104,7 +105,7 @@
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "u_debug_policy_category_shadowed.we == core_reg2hw.debug_policy_category_shadowed.qe & not_valid",
+        "consequent": "u_debug_policy_category_shadowed.we == (core_reg2hw.debug_policy_category_shadowed.qe & not_valid)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -112,20 +113,20 @@
     },
     {
       "id": "G3",
-      "type": "default_fallback",
-      "claim": "The hardware read and write paths for debug_policy_category_shadowed are hardwired to de=0 and d='0, preventing hardware-initiated accesses.",
+      "type": "assignment",
+      "claim": "Hardware write access to the shadow register is permanently disabled (de=0, d='0).",
       "cond": "always",
       "signals": [
-        "de",
-        "d"
+        "u_debug_policy_category_shadowed.de",
+        "u_debug_policy_category_shadowed.d"
       ],
       "refs": [
         "soc_dbg_ctrl.sv:140-141"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "de == 1'b0 && d == '0",
+        "consequent": "u_debug_policy_category_shadowed.de == 1'b0 && u_debug_policy_category_shadowed.d == '0",
         "formalizability": "direct"
       },
       "risk": "",
@@ -134,12 +135,12 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "de",
-          "d"
+          "u_debug_policy_category_shadowed.de",
+          "u_debug_policy_category_shadowed.d"
         ],
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "de == 1'b0 && d == '0",
+        "consequent": "u_debug_policy_category_shadowed.de == 1'b0 && u_debug_policy_category_shadowed.d == '0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -148,20 +149,20 @@
     {
       "id": "G4",
       "type": "assignment",
-      "claim": "Shadowed storage and update errors for debug_policy_category_shadowed are routed to policy_shadowed_storage_err and policy_shadowed_update_err.",
+      "claim": "core_hw2reg.debug_policy_category_shadowed.d continuously reflects the current value of the shadow register.",
       "cond": "always",
       "signals": [
-        "policy_shadowed_storage_err",
-        "policy_shadowed_update_err"
+        "core_hw2reg.debug_policy_category_shadowed.d",
+        "u_debug_policy_category_shadowed.q"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:147-148"
+        "soc_dbg_ctrl.sv:143"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "policy_shadowed_storage_err == u_debug_policy_category_shadowed.err_storage && policy_shadowed_update_err == u_debug_policy_category_shadowed.err_update",
-        "formalizability": "partial"
+        "consequent": "core_hw2reg.debug_policy_category_shadowed.d == u_debug_policy_category_shadowed.q",
+        "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
@@ -169,46 +170,52 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "policy_shadowed_storage_err",
-          "policy_shadowed_update_err"
+          "core_hw2reg.debug_policy_category_shadowed.d",
+          "u_debug_policy_category_shadowed.q"
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "policy_shadowed_storage_err == u_debug_policy_category_shadowed.err_storage && policy_shadowed_update_err == u_debug_policy_category_shadowed.err_update",
-        "formalizability": "partial",
+        "consequent": "core_hw2reg.debug_policy_category_shadowed.d == u_debug_policy_category_shadowed.q",
+        "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
       "id": "G5",
-      "type": "reg_update",
-      "claim": "After reset, the debug_policy_category_shadowed register holds the reset value DbgCategoryLocked.",
-      "cond": "after reset release",
+      "type": "assignment",
+      "claim": "policy_shadowed_update_err and policy_shadowed_storage_err are directly driven by the shadow register's error outputs.",
+      "cond": "always",
       "signals": [
-        "core_hw2reg.debug_policy_category_shadowed.d"
+        "policy_shadowed_update_err",
+        "policy_shadowed_storage_err",
+        "u_debug_policy_category_shadowed.err_update",
+        "u_debug_policy_category_shadowed.err_storage"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:130"
+        "soc_dbg_ctrl.sv:147-148"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "core_hw2reg.debug_policy_category_shadowed.d == DbgCategoryLocked after reset",
-        "formalizability": "partial"
+        "consequent": "policy_shadowed_update_err == u_debug_policy_category_shadowed.err_update && policy_shadowed_storage_err == u_debug_policy_category_shadowed.err_storage",
+        "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "soc_dbg_ctrl",
         "clock": "",
-        "reset": "reset",
+        "reset": "",
         "signals": [
-          "core_hw2reg.debug_policy_category_shadowed.d"
+          "policy_shadowed_update_err",
+          "policy_shadowed_storage_err",
+          "u_debug_policy_category_shadowed.err_update",
+          "u_debug_policy_category_shadowed.err_storage"
         ],
-        "temporal_shape": "always",
-        "antecedent": "after reset release",
-        "consequent": "core_hw2reg.debug_policy_category_shadowed.d == DbgCategoryLocked after reset",
-        "formalizability": "partial",
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "policy_shadowed_update_err == u_debug_policy_category_shadowed.err_update && policy_shadowed_storage_err == u_debug_policy_category_shadowed.err_storage",
+        "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
@@ -218,19 +225,19 @@
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "core_reg2hw.debug_policy_valid_shadowed.q always presents a valid Mubi4 encoding (True or False) with no invalid bits.",
+      "claim": "core_reg2hw.debug_policy_valid_shadowed.q must always carry a valid Mubi4 encoding.",
       "cond": "always",
-      "risk": "An invalid or corrupted encoding could cause not_valid to be computed incorrectly, potentially allowing unauthorized writes to the debug policy when the policy is already valid.",
+      "risk": "A corrupted or non-Mubi4 value causes mubi4_test_false_strict to misbehave, potentially allowing debug policy writes when they should be locked.",
       "signals": [
         "core_reg2hw.debug_policy_valid_shadowed.q"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:123-124"
+        "soc_dbg_ctrl.sv:122-124"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "core_reg2hw.debug_policy_valid_shadowed.q inside {Mubi4::True, Mubi4::False}",
+        "consequent": "// core_reg2hw.debug_policy_valid_shadowed.q is a valid Mubi4 value",
         "formalizability": "partial"
       },
       "formal_sketch": {
@@ -240,9 +247,9 @@
         "signals": [
           "core_reg2hw.debug_policy_valid_shadowed.q"
         ],
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "core_reg2hw.debug_policy_valid_shadowed.q inside {Mubi4::True, Mubi4::False}",
+        "consequent": "// core_reg2hw.debug_policy_valid_shadowed.q is a valid Mubi4 value",
         "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
@@ -250,43 +257,10 @@
     },
     {
       "id": "A2",
-      "type": "security_precondition",
-      "claim": "The prim_mubi_pkg::mubi4_test_false_strict function returns 1 if and only if the input is the exact Mubi4 False encoding, and returns 0 for all other valid encodings.",
-      "cond": "always",
-      "risk": "If the test function misbehaves, the write gate may be violated, allowing writes to the category register when the policy is already valid.",
-      "signals": [
-        "not_valid"
-      ],
-      "refs": [
-        "soc_dbg_ctrl.sv:122-124"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "soc_dbg_ctrl",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "not_valid"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "always",
-        "consequent": "The prim_mubi_pkg::mubi4_test_false_strict function returns 1 if and only if the input is the exact Mubi4 False encoding, and returns 0 for all other valid encodings",
-        "formalizability": "none",
-        "confidence": 0.85,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "A3",
       "type": "producer_contract",
-      "claim": "core_reg2hw.debug_policy_category_shadowed.qe is a clean write-enable pulse that is asserted only when software performs a legal write to the register and is not spuriously toggling.",
-      "cond": "during a write operation",
-      "risk": "Spurious or constant assertion of qe could trigger unintended writes when not_valid is high, corrupting the debug policy.",
+      "claim": "core_reg2hw.debug_policy_category_shadowed.qe is asserted only during valid TLUL register writes and is glitch-free.",
+      "cond": "when a write transaction occurs",
+      "risk": "A spurious or glitchy qe could cause an unwanted write to the debug policy register, breaking access control.",
       "signals": [
         "core_reg2hw.debug_policy_category_shadowed.qe"
       ],
@@ -294,10 +268,10 @@
         "soc_dbg_ctrl.sv:137"
       ],
       "formal": {
-        "temporal_shape": "none",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
+        "consequent": "// core_reg2hw.debug_policy_category_shadowed.qe is properly qualified by bus protocol",
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "soc_dbg_ctrl",
@@ -306,11 +280,46 @@
         "signals": [
           "core_reg2hw.debug_policy_category_shadowed.qe"
         ],
-        "temporal_shape": "always",
-        "antecedent": "during a write operation",
-        "consequent": "core_reg2hw.debug_policy_category_shadowed.qe is a clean write-enable pulse that is asserted only when software performs a legal write to the register and is not spuriously toggling",
+        "temporal_shape": "comb",
+        "antecedent": "when a write transaction occurs",
+        "consequent": "// core_reg2hw.debug_policy_category_shadowed.qe is properly qualified by bus protocol",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "RESVAL parameter {DbgCategoryLocked} is a valid Mubi4 encoding matching DW = $bits(dbg_category_e).",
+      "cond": "at reset / power-up",
+      "risk": "Width mismatch or invalid encoding could leave the shadow register in an illegal state after reset, bypassing debug category checks.",
+      "signals": [
+        "DW",
+        "RESVAL"
+      ],
+      "refs": [
+        "soc_dbg_ctrl.sv:128,130"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "// DW == width of {DbgCategoryLocked} and the value is a legal Mubi4 encoding",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "DW",
+          "RESVAL"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "at reset / power-up",
+        "consequent": "// DW == width of {DbgCategoryLocked} and the value is a legal Mubi4 encoding",
         "formalizability": "none",
-        "confidence": 0.8,
+        "confidence": 0.85,
         "source": "llm"
       }
     }
@@ -319,10 +328,44 @@
     {
       "id": "U1",
       "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The source and update conditions for core_reg2hw.debug_policy_valid_shadowed.q are not visible in this chunk. If the VALID register can be reset to False after having become True, the write protection can be re-opened.",
+      "cond": "debug_policy_valid_shadowed.q transitions from non‑False to False",
+      "risk": "An attacker who can manipulate the VALID register could regain write access to the debug policy and change the debug category.",
+      "signals": [
+        "core_reg2hw.debug_policy_valid_shadowed.q"
+      ],
+      "refs": [
+        "soc_dbg_ctrl.sv:122-124"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "core_reg2hw.debug_policy_valid_shadowed.q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "debug_policy_valid_shadowed.q transitions from non‑False to False",
+        "consequent": "The source and update conditions for core_reg2hw.debug_policy_valid_shadowed.q are not visible in this chunk. If the VALID register can be reset to False after having become True, the write protection can be re-opened",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
       "priority": "medium",
-      "claim": "The shadowed error signals policy_shadowed_update_err and policy_shadowed_storage_err are generated here but their handling in the rest of the design is not shown. They may need to feed an alert or interrupt for error containment.",
-      "cond": "when a shadowed error is asserted",
-      "risk": "Unhandled shadow errors could allow silent data corruption in the debug policy register.",
+      "claim": "policy_shadowed_update_err and policy_shadowed_storage_err are output but are not acted upon locally (no alert, interrupt, or fatal escalation in this chunk). It is unclear whether downstream logic handles these errors.",
+      "cond": "when shadow error is asserted",
+      "risk": "Silent corruption of the shadow register could cause the debug policy to diverge from the intended value, undermining security.",
       "signals": [
         "policy_shadowed_update_err",
         "policy_shadowed_storage_err"
@@ -331,7 +374,7 @@
         "soc_dbg_ctrl.sv:147-148"
       ],
       "formal": {
-        "temporal_shape": "none",
+        "temporal_shape": "comb",
         "antecedent": "",
         "consequent": "",
         "formalizability": "none"
@@ -344,20 +387,92 @@
           "policy_shadowed_update_err",
           "policy_shadowed_storage_err"
         ],
-        "temporal_shape": "always",
-        "antecedent": "when a shadowed error is asserted",
-        "consequent": "The shadowed error signals policy_shadowed_update_err and policy_shadowed_storage_err are generated here but their handling in the rest of the design is not shown. They may need to feed an alert or interrupt for error containment",
+        "temporal_shape": "comb",
+        "antecedent": "when shadow error is asserted",
+        "consequent": "policy_shadowed_update_err and policy_shadowed_storage_err are output but are not acted upon locally (no alert, interrupt, or fatal escalation in this chunk). It is unclear whether downstream logic handles these errors",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
       }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The we signal is formed as a combinational AND of qe and not_valid. If not_valid falls while qe is still high, the timing of the resulting glitch could violate prim_subreg_shadow’s setup/hold requirements.",
+      "cond": "not_valid falls (VALID becomes non‑False) while qe == 1",
+      "risk": "An undefined write may occur on the edge of locking, leaving the debug policy in an unexpected state.",
+      "signals": [
+        "not_valid",
+        "core_reg2hw.debug_policy_category_shadowed.qe"
+      ],
+      "refs": [
+        "soc_dbg_ctrl.sv:137"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "not_valid",
+          "core_reg2hw.debug_policy_category_shadowed.qe"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "not_valid falls (VALID becomes non‑False) while qe == 1",
+        "consequent": "The we signal is formed as a combinational AND of qe and not_valid. If not_valid falls while qe is still high, the timing of the resulting glitch could violate prim_subreg_shadow’s setup/hold requirements",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "DW is set to $bits(dbg_category_e) and RESVAL is {DbgCategoryLocked}. It must be verified that the width of DbgCategoryLocked equals DW, otherwise the reset value is misaligned.",
+      "cond": "when parameter is instantiated with mismatched width",
+      "risk": "Width mismatch leads to simulation/synthesis mismatches or truncated/extended reset value, potentially creating an illegal Mubi encoding.",
+      "signals": [
+        "DW",
+        "RESVAL"
+      ],
+      "refs": [
+        "soc_dbg_ctrl.sv:128,130"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "DW",
+          "RESVAL"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when parameter is instantiated with mismatched width",
+        "consequent": "DW is set to $bits(dbg_category_e) and RESVAL is {DbgCategoryLocked}. It must be verified that the width of DbgCategoryLocked equals DW, otherwise the reset value is misaligned",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk implements the debug policy register with write access control gated by a Mubi4 VALID register. If the not_valid check fails (e.g., due to a corrupted Mubi4 value), the debug policy could be written after it should have been locked, allowing an attacker to change the debug category and gain unauthorized debug access, exposing secrets and system state. Furthermore, the shadow register integrity errors (policy_shadowed_update_err/storage_err) are forwarded but not locally handled; if ignored, a corrupted debug policy could persist undetected, weakening the security posture. The BUS.INTEGRITY errors from the core and JTAG register blocks are also output and require appropriate system-level response.",
   "evidence_refs": [
     "soc_dbg_ctrl.sv:89-149"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv",
   "line_start": 89,
-  "line_end": 149,
-  "security_implications": ""
+  "line_end": 149
 }

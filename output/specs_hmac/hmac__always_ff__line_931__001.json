@@ -7,6 +7,7 @@
       "initiated"
     ],
     "used": [
+      "clk_i",
       "rst_ni",
       "hash_start_or_continue",
       "hash_process",
@@ -15,117 +16,203 @@
     "modes": [],
     "tags": [
       "handshake",
-      "reset"
+      "state"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "initiated is cleared to 1'b0 when reset (rst_ni low)",
-      "cond": "!rst_ni",
+      "claim": "When rst_ni is low, initiated is cleared to 0 on the next clock edge.",
+      "cond": "rst_ni == 0",
       "signals": [
-        "rst_ni",
-        "initiated"
+        "initiated",
+        "rst_ni"
       ],
       "refs": [
-        "hmac.sv:932"
-      ]
+        "931-932"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "initiated == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "initiated",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "initiated == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "initiated is set to 1'b1 on hash_start_or_continue assertion, regardless of hash_process or reg_hash_stop",
-      "cond": "hash_start_or_continue && rst_ni",
+      "claim": "When hash_start_or_continue is active and reset is deasserted, initiated is set to 1 on the next clock edge.",
+      "cond": "rst_ni == 1 && hash_start_or_continue == 1",
       "signals": [
+        "initiated",
         "hash_start_or_continue",
-        "initiated"
+        "rst_ni"
       ],
       "refs": [
-        "hmac.sv:933"
-      ]
+        "931-933"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && hash_start_or_continue",
+        "consequent": "initiated == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "initiated",
+          "hash_start_or_continue",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && hash_start_or_continue",
+        "consequent": "initiated == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "initiated is cleared to 1'b0 when hash_process or reg_hash_stop is asserted and hash_start_or_continue is not active",
-      "cond": "(hash_process || reg_hash_stop) && !hash_start_or_continue && rst_ni",
+      "claim": "When hash_start_or_continue is inactive and either hash_process or reg_hash_stop is active, initiated is cleared to 0 on the next clock edge.",
+      "cond": "rst_ni == 1 && hash_start_or_continue == 0 && (hash_process || reg_hash_stop)",
       "signals": [
+        "initiated",
+        "hash_start_or_continue",
+        "hash_process",
+        "reg_hash_stop"
+      ],
+      "refs": [
+        "931-934"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !hash_start_or_continue && (hash_process || reg_hash_stop)",
+        "consequent": "initiated == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "initiated",
+          "hash_start_or_continue",
+          "hash_process",
+          "reg_hash_stop"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !hash_start_or_continue && (hash_process || reg_hash_stop)",
+        "consequent": "initiated == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "When none of the explicit conditions are true (reset deasserted, no start, no process, no stop), initiated holds its current value.",
+      "cond": "rst_ni && !hash_start_or_continue && !hash_process && !reg_hash_stop",
+      "signals": [
+        "initiated"
+      ],
+      "refs": [
+        "931-935"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !hash_start_or_continue && !hash_process && !reg_hash_stop",
+        "consequent": "$stable(initiated)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "initiated"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !hash_start_or_continue && !hash_process && !reg_hash_stop",
+        "consequent": "$stable(initiated)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "When hash_start_or_continue and (hash_process or reg_hash_stop) are both asserted, the register sets initiated to 1 due to if-else priority, which may conflict with the intent that a stop or process event should clear the flag.",
+      "cond": "hash_start_or_continue == 1 && (hash_process || reg_hash_stop) == 1",
+      "risk": "A simultaneous start and stop/handshake could leave the signal stuck in the started state, potentially blocking a clean shutdown or causing the FSM to remain in the wrong phase.",
+      "signals": [
+        "hash_start_or_continue",
         "hash_process",
         "reg_hash_stop",
         "initiated"
       ],
       "refs": [
-        "hmac.sv:934"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "reg_update",
-      "claim": "initiated holds its current value when no condition triggers (no reset, no start, no process/stop)",
-      "cond": "rst_ni && !hash_start_or_continue && !(hash_process || reg_hash_stop)",
-      "signals": [
-        "initiated"
+        "932-934"
       ],
-      "refs": [
-        "hmac.sv:931-935"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "hash_start_or_continue && (hash_process || reg_hash_stop)",
+        "consequent": "initiated == 1'b1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hash_start_or_continue",
+          "hash_process",
+          "reg_hash_stop",
+          "initiated"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "hash_start_or_continue && (hash_process || reg_hash_stop)",
+        "consequent": "initiated == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "External logic must not assert hash_start_or_continue simultaneously with hash_process or reg_hash_stop if the intent is to clear initiated, because the start condition takes priority and keeps initiated high",
-      "cond": "hash_start_or_continue concurrently with hash_process or reg_hash_stop",
-      "risk": "initiated remains 1, hash core may not enter the expected state, leading to control mismatch",
-      "signals": [
-        "hash_start_or_continue",
-        "hash_process",
-        "reg_hash_stop"
-      ],
-      "refs": [
-        "hmac.sv:933-934"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_unhandled_legal_case",
-      "priority": "high",
-      "claim": "initiated is not cleared on error conditions. If an error occurs while initiated is high and neither hash_process nor reg_hash_stop is later asserted, initiated will remain high indefinitely, potentially stalling the hash engine or preventing recovery",
-      "cond": "any error event without subsequent hash_process or reg_hash_stop",
-      "risk": "hash engine stuck in initiated state, blocking new operations or causing security monitor failure",
-      "signals": [
-        "initiated"
-      ],
-      "refs": [
-        "hmac.sv:931-935"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "initiated transitions to 0 when hash_process or reg_hash_stop asserts. If the hash core still needs initiated high for internal handshake completion, premature clearing could cause state inconsistency.",
-      "cond": "hash_process or reg_hash_stop asserted before internal operation fully finishes",
-      "risk": "initiated deasserted too early, desynchronizing from downstream logic relying on it",
-      "signals": [
-        "initiated",
-        "hash_process",
-        "reg_hash_stop"
-      ],
-      "refs": [
-        "hmac.sv:934"
-      ]
-    }
-  ],
+  "security_implications": "",
   "evidence_refs": [
-    "hmac.sv:931-935"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:931-935"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 931,
-  "line_end": 935,
-  "security_implications": ""
+  "line_end": 935
 }

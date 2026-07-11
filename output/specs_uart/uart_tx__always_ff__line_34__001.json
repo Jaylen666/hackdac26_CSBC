@@ -9,18 +9,24 @@
     ],
     "used": [
       "tick_baud_x16",
-      "baud_div_q"
+      "rst_ni",
+      "clk_i"
     ],
-    "modes": [],
+    "modes": [
+      "reset",
+      "baud_enabled",
+      "baud_disabled"
+    ],
     "tags": [
-      "counter"
+      "counter",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, baud_div_q and tick_baud_q are synchronously cleared to 0.",
+      "claim": "When rst_ni is low, baud_div_q and tick_baud_q are cleared to 0.",
       "cond": "rst_ni == 0",
       "signals": [
         "rst_ni",
@@ -29,102 +35,182 @@
       ],
       "refs": [
         "uart_tx.sv:35-37"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "baud_div_q == 0 && tick_baud_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "baud_div_q",
+          "tick_baud_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "baud_div_q == 0 && tick_baud_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When tick_baud_x16 is high, {tick_baud_q, baud_div_q} is updated to {1'b0, baud_div_q} + 5'h1. This increments baud_div_q by 1 and sets tick_baud_q to '1' only when baud_div_q overflows from 4'hF, otherwise tick_baud_q is cleared to 0.",
-      "cond": "tick_baud_x16 == 1",
+      "claim": "When not in reset and tick_baud_x16 is high, {tick_baud_q, baud_div_q} increments by 1; tick_baud_q is 1 only when baud_div_q rolls over from 15 to 0.",
+      "cond": "rst_ni && tick_baud_x16",
       "signals": [
         "tick_baud_x16",
         "baud_div_q",
         "tick_baud_q"
       ],
       "refs": [
-        "uart_tx.sv:39"
-      ]
+        "uart_tx.sv:38-39"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && tick_baud_x16",
+        "consequent": "{tick_baud_q, baud_div_q} == $past({1'b0, baud_div_q}) + 5'd1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "tick_baud_x16",
+          "baud_div_q",
+          "tick_baud_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && tick_baud_x16",
+        "consequent": "{tick_baud_q, baud_div_q} == $past({1'b0, baud_div_q}) + 5'd1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "default_fallback",
-      "claim": "When tick_baud_x16 is low and rst_ni is high, tick_baud_q is forced to 0, and baud_div_q retains its previous value.",
-      "cond": "tick_baud_x16 == 0 and rst_ni == 1",
+      "type": "reg_update",
+      "claim": "When not in reset and tick_baud_x16 is low, tick_baud_q is forced to 0 and baud_div_q retains its previous value.",
+      "cond": "rst_ni && !tick_baud_x16",
       "signals": [
         "tick_baud_x16",
         "tick_baud_q",
         "baud_div_q"
       ],
       "refs": [
-        "uart_tx.sv:41"
-      ]
+        "uart_tx.sv:40-42"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !tick_baud_x16",
+        "consequent": "tick_baud_q == 0 && baud_div_q == $past(baud_div_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "tick_baud_x16",
+          "tick_baud_q",
+          "baud_div_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !tick_baud_x16",
+        "consequent": "tick_baud_q == 0 && baud_div_q == $past(baud_div_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "tick_baud_x16 must be a glitch-free, single-cycle pulse that asserts for exactly one clk_i period per baud interval.",
-      "cond": "every assertion of tick_baud_x16",
-      "risk": "If tick_baud_x16 is multi-cycle or glitchy, the counter will increment multiple times per intended baud period, causing false tick_baud_q pulses and incorrect baud rate generation.",
+      "claim": "tick_baud_x16 must be a single-cycle pulse; it cannot remain high for two consecutive cycles. If it stays high, the counter increments every cycle, corrupting the baud timing.",
+      "cond": "always",
+      "risk": "Baud rate generation may run faster than intended, leading to incorrect UART timing and data corruption.",
       "signals": [
         "tick_baud_x16"
       ],
       "refs": [
-        "uart_tx.sv:38-39"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "lifecycle",
-      "claim": "rst_ni must be asserted low for at least one full clk_i cycle and deasserted with proper recovery/removal timing relative to clk_i.",
-      "cond": "during reset entry / exit",
-      "risk": "Improper reset could leave baud_div_q or tick_baud_q in a meta-stable or unknown state, leading to incorrect baud generation.",
-      "signals": [
-        "rst_ni"
+        "uart_tx.sv:38"
       ],
-      "refs": [
-        "uart_tx.sv:35-37"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "tick_baud_x16",
+        "consequent": "##1 !tick_baud_x16",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tick_baud_x16"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "tick_baud_x16",
+        "consequent": "##1 !tick_baud_x16",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The block relies on tick_baud_x16 being a single-cycle pulse. If the external logic driving it asserts the signal for multiple consecutive clk_i cycles, the counter will increment repeatedly within a baud period, generating spurious tick_baud_q pulses.",
-      "cond": "tick_baud_x16 high for >1 cycle",
-      "risk": "Incorrect baud rate leads to corrupted UART data.",
+      "priority": "medium",
+      "claim": "The intended pulse width of tick_baud_x16 is not documented in this block. If the upstream generator issues multi-cycle pulses, the counter will run too fast.",
+      "cond": "tick_baud_x16 remains high for >1 cycle",
+      "risk": "Baud rate error leading to UART frame misalignment or data loss.",
       "signals": [
         "tick_baud_x16"
       ],
       "refs": [
-        "uart_tx.sv:38-43"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The divisor ratio is hard-coded to 16 (baud_div_q 4‑bit wrap). If the UART requires configurable oversampling or different baud rates, this fixed ratio may be insufficient.",
-      "cond": "when configuration requires divisor != 16",
-      "risk": "Incorrect baud rate selection, causing protocol mismatch.",
-      "signals": [
-        "baud_div_q",
-        "tick_baud_q"
+        "uart_tx.sv:38"
       ],
-      "refs": [
-        "uart_tx.sv:36",
-        "uart_tx.sv:39"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "tick_baud_x16",
+        "consequent": "##1 !tick_baud_x16",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tick_baud_x16"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "tick_baud_x16",
+        "consequent": "##1 !tick_baud_x16",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "",
   "evidence_refs": [
     "uart_tx.sv:34-43"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv",
   "line_start": 34,
-  "line_end": 43,
-  "security_implications": ""
+  "line_end": 43
 }

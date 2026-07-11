@@ -4,78 +4,150 @@
     "module": "kmac",
     "block_kind": "generate",
     "driven": [
-      "msg_data_masked"
+      "msg_data_masked[i]"
     ],
     "used": [
-      "msg_data",
+      "msg_data[i]",
       "cfg_msg_mask",
       "static_mask",
       "MsgWidth"
     ],
     "modes": [
-      "i (0..Share-1)"
+      "Share",
+      "MsgWidth"
     ],
     "tags": [
       "mask",
-      "security",
-      "parameterization",
-      "secret"
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For each share i, msg_data_masked[i] is assigned the bitwise XOR of msg_data[i] with the bitwise AND of {MsgWidth{cfg_msg_mask}} and static_mask.",
-      "cond": "always (combinational)",
+      "claim": "对于每个 i，msg_data_masked[i] 被组合赋值为 msg_data[i] ^ ({MsgWidth{cfg_msg_mask}} & static_mask)",
+      "cond": "always",
       "signals": [
         "msg_data_masked[i]",
         "msg_data[i]",
         "cfg_msg_mask",
-        "static_mask"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:925-926"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "security_precondition",
-      "claim": "static_mask and cfg_msg_mask must be configured so that static_mask is not all-zeros and cfg_msg_mask provides sufficient randomness to achieve effective data masking.",
-      "cond": "when the optimized masking scheme is intended to protect secret msg_data",
-      "risk": "If either static_mask is zero or cfg_msg_mask is fixed, msg_data_masked equals msg_data, exposing plaintext and defeating side-channel resistance.",
-      "signals": [
         "static_mask",
-        "cfg_msg_mask"
+        "MsgWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:925-926"
-      ]
+        "kmac.sv:925-926"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "msg_data_masked[i] == msg_data[i] ^ ({MsgWidth{cfg_msg_mask}} & static_mask)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_data_masked[i]",
+          "msg_data[i]",
+          "cfg_msg_mask",
+          "static_mask",
+          "MsgWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "msg_data_masked[i] == msg_data[i] ^ ({MsgWidth{cfg_msg_mask}} & static_mask)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_spec_gap",
       "priority": "high",
-      "claim": "It is unclear from the local RTL whether static_mask is guaranteed to be non-zero in all legal configurations. If it can be zero, the masking is effectively disabled, which may conflict with the 'optimized masking scheme' intent.",
-      "cond": "if static_mask is allowed to be zero",
-      "risk": "Plaintext msg_data would be passed to downstream logic without masking, potentially violating security requirements for side-channel protections.",
+      "claim": "如果 static_mask 为零或 cfg_msg_mask 为零，掩码被禁用，msg_data_masked 直接等于 msg_data，消息数据以明文通过",
+      "cond": "static_mask == 0 || cfg_msg_mask == 0",
+      "risk": "消息数据未掩码，可能增加侧信道信息泄漏风险，尤其是若 msg_data 携带秘密/敏感载荷",
       "signals": [
+        "msg_data",
+        "msg_data_masked",
+        "cfg_msg_mask",
         "static_mask"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:925-926"
-      ]
+        "kmac.sv:925-926"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "static_mask == 0 || cfg_msg_mask == 0",
+        "consequent": "msg_data_masked == msg_data",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_data",
+          "msg_data_masked",
+          "cfg_msg_mask",
+          "static_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "static_mask == 0 || cfg_msg_mask == 0",
+        "consequent": "msg_data_masked == msg_data",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "low",
+      "claim": "如果 static_mask 的实际位宽不等于参数 MsgWidth，复制后的掩码向量与 static_mask 按位与时位宽不匹配，可能导致逻辑错误或部分掩码失效",
+      "cond": "$bits(static_mask) != MsgWidth",
+      "risk": "掩码操作可能被错误应用于不同位宽的向量，导致功能错误或部分数据未受掩码保护",
+      "signals": [
+        "static_mask",
+        "MsgWidth"
+      ],
+      "refs": [
+        "kmac.sv:925-926"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "$bits(static_mask) != MsgWidth",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "static_mask",
+          "MsgWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "$bits(static_mask) != MsgWidth",
+        "consequent": "位宽不匹配，可能导致逻辑错误或部分掩码失效",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "若 cfg_msg_mask 为 0 或 static_mask 全零，则 msg_data_masked 等于 msg_data，消息数据明文传播，未施加任何掩码。若 msg_data 中包含密钥、明文或其他秘密信息，则可能通过侧信道泄漏。",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927"
+    "kmac.sv:923-927"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 923,
-  "line_end": 927,
-  "security_implications": ""
+  "line_end": 927
 }

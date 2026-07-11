@@ -7,133 +7,330 @@
       "sw_key_data_reg[1]"
     ],
     "used": [
-      "reg2hw.key_share1[j].qe",
-      "reg2hw.key_share1[j].q",
-      "engine_stable",
       "clk_i",
       "rst_ni",
+      "engine_stable",
+      "MaxKeyLen",
+      "reg2hw.key_share1[j].qe",
+      "reg2hw.key_share1[j].q"
+    ],
+    "modes": [
       "MaxKeyLen"
     ],
-    "modes": [],
     "tags": [
-      "key",
       "secret",
+      "key",
+      "wipe",
       "handshake",
-      "reset",
-      "parameterization"
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, sw_key_data_reg[1] is cleared to zero on the next clock edge.",
+      "claim": "When rst_ni is low, sw_key_data_reg[1] is asynchronously cleared to all zeros.",
       "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "sw_key_data_reg[1]"
       ],
       "refs": [
-        "502-504"
-      ]
+        "kmac.sv:503-504"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "sw_key_data_reg[1] == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "sw_key_data_reg[1]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "sw_key_data_reg[1] == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When engine_stable is high, for each 32-bit word index j from 0 to MaxKeyLen/32-1, if reg2hw.key_share1[j].qe is true, the corresponding slice sw_key_data_reg[1][32*j+:32] is updated with reg2hw.key_share1[j].q.",
-      "cond": "engine_stable and reg2hw.key_share1[j].qe",
+      "claim": "When engine_stable is high, on the next posedge clk_i, for every j in [0, MaxKeyLen/32-1] where reg2hw.key_share1[j].qe is high, the corresponding 32-bit segment sw_key_data_reg[1][32*j+:32] takes the value of reg2hw.key_share1[j].q from the previous cycle.",
+      "cond": "engine_stable && reg2hw.key_share1[j].qe",
       "signals": [
         "engine_stable",
+        "clk_i",
         "reg2hw.key_share1[j].qe",
         "reg2hw.key_share1[j].q",
         "sw_key_data_reg[1]"
       ],
       "refs": [
-        "505-510"
-      ]
+        "kmac.sv:505-509"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "engine_stable && reg2hw.key_share1[j].qe",
+        "consequent": "sw_key_data_reg[1][32*j+:32] == $past(reg2hw.key_share1[j].q, 1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "engine_stable",
+          "clk_i",
+          "reg2hw.key_share1[j].qe",
+          "reg2hw.key_share1[j].q",
+          "sw_key_data_reg[1]"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "engine_stable && reg2hw.key_share1[j].qe",
+        "consequent": "sw_key_data_reg[1][32*j+:32] == $past(reg2hw.key_share1[j].q, 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "default_fallback",
-      "claim": "When engine_stable is false (and not reset), or when a specific word's qe is false while engine_stable is true, the corresponding bits of sw_key_data_reg[1] retain their previous value.",
-      "cond": "!rst_ni (engine_stable false or qe false)",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and engine_stable is low, sw_key_data_reg[1] holds its previous value (no update).",
+      "cond": "rst_ni && !engine_stable",
       "signals": [
+        "rst_ni",
         "engine_stable",
-        "reg2hw.key_share1[j].qe",
         "sw_key_data_reg[1]"
       ],
       "refs": [
-        "502-512"
-      ]
+        "kmac.sv:505-511"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !engine_stable",
+        "consequent": "sw_key_data_reg[1] == $past(sw_key_data_reg[1])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "engine_stable",
+          "sw_key_data_reg[1]"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !engine_stable",
+        "consequent": "sw_key_data_reg[1] == $past(sw_key_data_reg[1])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "engine_stable must be asserted only when it is safe to modify the secret key share1 register, i.e., the key is not actively used in a hashing/KMAC operation or any security-critical computation.",
+      "type": "producer_contract",
+      "claim": "While engine_stable is asserted, the values of reg2hw.key_share1[*].q and .qe must remain stable so that the captured key word is deterministic and consistent.",
       "cond": "engine_stable == 1",
-      "risk": "If engine_stable is erroneously asserted during a sensitive operation, the key share may be corrupted mid-computation, potentially causing secret leakage or incorrect MAC/digest.",
+      "risk": "A glitch or change on key_share1 during capture may cause a corrupted or mismatched key word to be stored in sw_key_data_reg[1].",
       "signals": [
-        "engine_stable"
+        "engine_stable",
+        "reg2hw.key_share1[*].q",
+        "reg2hw.key_share1[*].qe"
       ],
       "refs": [
-        "505,511"
-      ]
+        "kmac.sv:505-509"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "engine_stable",
+        "consequent": "$stable(reg2hw.key_share1[*].q) && $stable(reg2hw.key_share1[*].qe)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "engine_stable",
+          "reg2hw.key_share1[*].q",
+          "reg2hw.key_share1[*].qe"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "engine_stable",
+        "consequent": "$stable(reg2hw.key_share1[*].q) && $stable(reg2hw.key_share1[*].qe)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "MaxKeyLen must be a positive integer multiple of 32 that matches the bit-width of sw_key_data_reg[1] and the dimension of key_share1 arrays to avoid out-of-bounds indexing.",
-      "cond": "parameter instantiation",
-      "risk": "If MaxKeyLen is set larger than the declared register width or not a multiple of 32, word slicing will access illegal bits or miss key bits, leading to secret corruption or synthesis/simulation mismatch.",
+      "type": "mode_config",
+      "claim": "MaxKeyLen is a positive integer multiple of 32, and sw_key_data_reg[1] is dimensioned to hold at least MaxKeyLen bits so that the for loop indexing does not overflow.",
+      "cond": "always",
+      "risk": "Misparameterization could cause out-of-bounds writes into sw_key_data_reg[1], leading to functional failure or corruption of adjacent logic.",
       "signals": [
         "MaxKeyLen",
         "sw_key_data_reg[1]"
       ],
       "refs": [
-        "506-509"
-      ]
+        "kmac.sv:506-508"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "MaxKeyLen > 0 && $size(sw_key_data_reg[1]) >= MaxKeyLen",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "MaxKeyLen",
+          "sw_key_data_reg[1]"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "MaxKeyLen > 0 && $size(sw_key_data_reg[1]) >= MaxKeyLen",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "Individual qe handshake bits may be asserted across multiple clock cycles while engine_stable remains high, leading to partial update of sw_key_data_reg[1] (some words new, some old).",
-      "cond": "engine_stable high and qe not all active in same cycle",
-      "risk": "A subsequent hash operation started after engine_stable deasserts could use an incomplete key share, breaking secret sharing integrity and potentially leaking information through incorrect MAC outputs.",
+      "claim": "Only sw_key_data_reg[1] (key share 1) is cleared on reset. It is unclear whether other key shares (e.g., sw_key_data_reg[0]) must also be zeroized to meet security requirements for secret key wipe.",
+      "cond": "During reset (rst_ni = 0)",
+      "risk": "If the key is split into multiple shares, residual key material in uncleared shares may leak the key value after reset.",
       "signals": [
-        "engine_stable",
-        "reg2hw.key_share1[j].qe",
-        "sw_key_data_reg[1]"
+        "sw_key_data_reg[1]",
+        "sw_key_data_reg[*]"
       ],
       "refs": [
-        "505-510"
-      ]
+        "kmac.sv:504"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "reset.",
+        "signals": [
+          "sw_key_data_reg[1]",
+          "sw_key_data_reg[*]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "Only sw_key_data_reg[1] (key share 1) is cleared on reset. It is unclear whether other key shares (e.g., sw_key_data_reg[0]) must also be zeroized to meet security requirements for secret key wipe",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "high",
-      "claim": "MaxKeyLen parameter is used directly in the loop bound; if its value exceeds the actual width of sw_key_data_reg[1], word-write accesses will be out of bounds.",
-      "cond": "MaxKeyLen > actual register width",
-      "risk": "Out-of-bounds write may corrupt adjacent storage or be silently truncated in synthesis, altering the effective key and compromising security.",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "If engine_stable is asserted for more than one cycle and reg2hw.key_share1[*].qe toggles between cycles, partial key word updates can occur, potentially leaving sw_key_data_reg[1] with a mix of old and new key words.",
+      "cond": "engine_stable high for > 1 cycle and qe changes",
+      "risk": "Inconsistent key material in sw_key_data_reg[1] may lead to cryptographic errors or exposure if the incomplete key is used prematurely.",
       "signals": [
-        "MaxKeyLen",
+        "engine_stable",
+        "reg2hw.key_share1[*].qe",
         "sw_key_data_reg[1]"
       ],
       "refs": [
-        "506-509"
-      ]
+        "kmac.sv:505-509"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "engine_stable && $changed(reg2hw.key_share1[*].qe)",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "engine_stable",
+          "reg2hw.key_share1[*].qe",
+          "sw_key_data_reg[1]"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "engine_stable && $changed(reg2hw.key_share1[*].qe)",
+        "consequent": "partial key word updates can occur, potentially leaving sw_key_data_reg[1] with a mix of old and new key words",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The logic that generates engine_stable is not visible; it is assumed that engine_stable is only asserted after all key_share1 entries are valid and stable. The protocol between engine_stable and key data loading needs to be verified in the parent module.",
+      "cond": "unknown",
+      "risk": "If engine_stable is asserted prematurely, key data may be captured before it is fully written, leading to a truncated or zero key.",
+      "signals": [
+        "engine_stable",
+        "reg2hw.key_share1"
+      ],
+      "refs": [
+        "kmac.sv:505"
+      ],
+      "formal": {
+        "temporal_shape": "",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "engine_stable",
+          "reg2hw.key_share1"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "The logic that generates engine_stable is not visible; it is assumed that engine_stable is only asserted after all key_share1 entries are valid and stable. The protocol between engine_stable and key data loading needs to be verified in the",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "sw_key_data_reg[1] (key share 1) is cleared on reset, but other key shares are not cleared in this chunk. If key is split into multiple shares, residual secret material in uncleared shares may survive reset and leak the key. Additionally, the engine_stable handshake and key_share1 capture have no explicit guarding against partial or glitched updates, which could corrupt the key or expose a timing side channel.",
   "evidence_refs": [
-    "502-512"
+    "kmac.sv:502-512"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 502,
-  "line_end": 512,
-  "security_implications": ""
+  "line_end": 512
 }

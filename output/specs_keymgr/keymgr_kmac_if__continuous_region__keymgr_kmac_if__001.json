@@ -25,95 +25,188 @@
       "id_en_i",
       "gen_en_i",
       "kmac_data_i",
-      "entropy_i",
-      "RndCnstRandPerm (parameter)",
-      "MaxAdvDataWidth (parameter)"
+      "entropy_i"
     ],
-    "modes": [],
+    "modes": [
+      "RndCnstRandPerm",
+      "MaxAdvDataWidth"
+    ],
     "tags": [
+      "key",
       "entropy",
       "error",
-      "parameterization",
-      "secret"
+      "handshake",
+      "parameterization"
     ]
   },
   "guarantees": [],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "Parameter MaxAdvDataWidth defaults to AdvDataWidth and must be > 0 to ensure valid port width for adv_data_i.",
-      "cond": "When the module is instantiated with a non-default MaxAdvDataWidth.",
-      "risk": "If set to 0 or a negative value, the port width [MaxAdvDataWidth-1:0] becomes invalid, causing a compilation or elaboration failure.",
+      "type": "mode_config",
+      "claim": "adv_en_i, id_en_i, gen_en_i are one-hot (only one enabled at a time).",
+      "cond": "when the module is actively selecting input data for KMAC operations",
+      "risk": "multiple input sources enabled simultaneously could corrupt the selected data and produce an incorrect KMAC digest.",
       "signals": [
-        "adv_data_i",
-        "MaxAdvDataWidth"
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:14",
-        "keymgr_kmac_if.sv:20"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The external logic driving kmac_data_i (KMAC response) must conform to kmac_pkg::app_rsp_t protocol expectations, including valid data and ready/ack handshake signals.",
-      "cond": "Whenever the module issues a request via kmac_data_o.",
-      "risk": "Protocol violation may lead to hung transactions, incorrect data_o, or spurious error assertions if the interface relies on valid/ack signals.",
-      "signals": [
-        "kmac_data_i",
-        "kmac_data_o"
+        "keymgr_kmac_if.sv:27-29"
       ],
-      "refs": [
-        "keymgr_kmac_if.sv:34-35"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_en_i + id_en_i + gen_en_i <= 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when the module is actively selecting input data for KMAC operations",
+        "consequent": "adv_en_i + id_en_i + gen_en_i <= 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "Parameter RndCnstRandPerm is declared but not used in the port list; it may be required for internal permutation logic, but its actual usage is not visible in this chunk.",
+      "cond": "unknown",
+      "risk": "if parameter is unused, it could indicate a missing connection to internal entropy permutation; if it is required, a mismatch could weaken masking.",
+      "signals": [
+        "RndCnstRandPerm"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:13"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "RndCnstRandPerm"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "Parameter RndCnstRandPerm is declared but not used in the port list; it may be required for internal permutation logic, but its actual usage is not visible in this chunk",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The logic that drives all outputs (data_o, done_o, kmac_data_o, error outputs, inputs_invalid_o, prng_en_o) is not present in this region and must be supplied by other parts of keymgr_kmac_if. The connection of inputs_invalid_i, the control by adv_en_i/id_en_i/gen_en_i, and the error conditions are unknown.",
-      "cond": "Any usage of the module.",
-      "risk": "Missing or incorrect RTL could cause functional failures, incorrect key material output, or unhandled error states.",
+      "claim": "All functional behavior (KMAC command generation, input multiplexing, error detection, handshake) is implemented in other chunks of the module; this port list alone provides no guarantees.",
+      "cond": "any operation",
+      "risk": "missing or incorrect internal logic could lead to invalid KMAC commands, data corruption, or failure to assert errors.",
       "signals": [
-        "inputs_invalid_o",
-        "done_o",
-        "data_o",
         "kmac_data_o",
-        "prng_en_o",
+        "done_o",
         "fsm_error_o",
         "kmac_error_o",
         "kmac_done_error_o",
         "cmd_error_o"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:23-45"
-      ]
+        "keymgr_kmac_if.sv:8-46"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "kmac_data_o",
+          "done_o",
+          "fsm_error_o",
+          "kmac_error_o",
+          "kmac_done_error_o",
+          "cmd_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "any operation",
+        "consequent": "All functional behavior (KMAC command generation, input multiplexing, error detection, handshake) is implemented in other chunks of the module; this port list alone provides no guarantees",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
-      "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The parameter MaxAdvDataWidth allows override of the default AdvDataWidth, but there is no local width check or documentation on allowed values. It is unclear if the module can function correctly with reduced widths.",
-      "cond": "When MaxAdvDataWidth is overridden to a value smaller than the width of internal data paths.",
-      "risk": "If internal logic (not shown) uses a wider fixed width for adv_data_i processing, a width mismatch could lead to truncated data or synthesis errors.",
+      "id": "U3",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Error outputs (fsm_error_o, kmac_error_o, kmac_done_error_o, cmd_error_o) are declared but the conditions under which they are asserted are unknown; a missing or delayed error could expose intermediate key material or let a fault propagate.",
+      "cond": "when any internal error condition occurs",
+      "risk": "Undetected errors may allow secret data to be output on data_o or sent to KMAC without proper masking.",
       "signals": [
-        "adv_data_i",
-        "MaxAdvDataWidth"
+        "fsm_error_o",
+        "kmac_error_o",
+        "kmac_done_error_o",
+        "cmd_error_o",
+        "data_o"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:14",
-        "keymgr_kmac_if.sv:20"
-      ]
+        "keymgr_kmac_if.sv:42-45",
+        "keymgr_kmac_if.sv:31"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fsm_error_o",
+          "kmac_error_o",
+          "kmac_done_error_o",
+          "cmd_error_o",
+          "data_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "when any internal error condition occurs",
+        "consequent": "Error outputs (fsm_error_o, kmac_error_o, kmac_done_error_o, cmd_error_o) are declared but the conditions under which they are asserted are unknown; a missing or delayed error could expose intermediate key material or let a fault propagate",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "data_o outputs a shared digest (key material) that must be securely masked and kept confidential; entropy_i provides the randomness for that masking; error outputs must reliably indicate faults to prevent key leakage; kmac_data_o carries cryptographic commands that could be abused if misgenerated. The chunk is part of a key manager interface that handles secrets, and incorrect operation could expose plaintext keys or digests.",
   "evidence_refs": [
     "keymgr_kmac_if.sv:8-46"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 8,
-  "line_end": 46,
-  "security_implications": ""
+  "line_end": 46
 }

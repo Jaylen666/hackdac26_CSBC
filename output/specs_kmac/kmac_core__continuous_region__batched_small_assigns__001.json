@@ -2,7 +2,7 @@
   "chunk_id": "kmac_core__continuous_region__batched_small_assigns__001",
   "header": {
     "module": "kmac_core",
-    "block_kind": "mixed",
+    "block_kind": "assign",
     "driven": [
       "encode_keylen[1]",
       "sent_blocksize"
@@ -17,112 +17,196 @@
     ],
     "tags": [
       "mask",
-      "key",
-      "counter",
-      "blocksize",
-      "security",
-      "parameterization"
+      "key"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "When parameter EnMasking is true, encode_keylen[1] is driven to 0.",
-      "cond": "EnMasking == 1 (compile-time)",
+      "type": "generate_param",
+      "claim": "When EnMasking is true, the generate block gen_encode_keylen_masked drives encode_keylen[1] to 0.",
+      "cond": "EnMasking == 1",
       "signals": [
-        "EnMasking",
         "encode_keylen"
       ],
       "refs": [
-        "file:340-342"
-      ]
+        "kmac_core.sv:340-342"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking",
+        "consequent": "encode_keylen[1] == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "encode_keylen"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking",
+        "consequent": "encode_keylen[1] == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "sent_blocksize is asserted when key_index equals block_addr_limit, otherwise deasserted.",
-      "cond": "always combinational",
+      "claim": "sent_blocksize is combinational assigned to (key_index == block_addr_limit).",
+      "cond": "always",
       "signals": [
+        "sent_blocksize",
         "key_index",
-        "block_addr_limit",
-        "sent_blocksize"
+        "block_addr_limit"
       ],
       "refs": [
-        "file:344-344"
-      ]
+        "kmac_core.sv:344"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sent_blocksize == (key_index == block_addr_limit)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sent_blocksize",
+          "key_index",
+          "block_addr_limit"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sent_blocksize == (key_index == block_addr_limit)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "When EnMasking is true, no other assignment in the module drives encode_keylen[1] to a non-zero value; only this chunk should control that bit to preserve masking.",
+      "type": "mode_config",
+      "claim": "No other logic concurrently drives encode_keylen[1] when EnMasking is true.",
       "cond": "EnMasking == 1",
-      "risk": "A conflicting driver could set encode_keylen[1] to non-zero, leaking key length information and breaking the masking scheme.",
+      "risk": "Multiple drivers on encode_keylen[1] cause unpredictable key length encoding, potentially corrupting the masked KMAC configuration.",
       "signals": [
-        "EnMasking",
         "encode_keylen"
       ],
       "refs": [
-        "file:340-342"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "key_index and block_addr_limit are stable, glitch-free signals during the sample window of sent_blocksize.",
-      "cond": "when sent_blocksize is used in downstream logic",
-      "risk": "Glitches on sent_blocksize could cause false block-sent indications, corrupting message alignment or control state.",
-      "signals": [
-        "key_index",
-        "block_addr_limit",
-        "sent_blocksize"
+        "kmac_core.sv:340-342"
       ],
-      "refs": [
-        "file:344-344"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "EnMasking",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "encode_keylen"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "EnMasking",
+        "consequent": "No other logic concurrently drives encode_keylen[1] when EnMasking is true",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "Only bit 1 of encode_keylen is zeroed when EnMasking is true; the other bits are not driven by this chunk, leaving the rest of the encoded key length unprotected.",
-      "cond": "EnMasking == 1 and other bits carry secret key length information",
-      "risk": "Partial masking of the key length may expose cryptographic key properties, reducing the effectiveness of side-channel countermeasures.",
+      "claim": "encode_keylen[1] is forced to 0 when EnMasking is true; the specification/intent behind forcing this key length bit to zero during masking is unclear and may indicate a security‑critical encoding rule.",
+      "cond": "EnMasking == 1",
+      "risk": "Incorrectly forcing encode_keylen[1] could weaken masking or cause wrong digest computation if the effective key length is misrepresented.",
       "signals": [
-        "EnMasking",
         "encode_keylen"
       ],
       "refs": [
-        "file:340-342"
-      ]
+        "kmac_core.sv:340-342"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking",
+        "consequent": "encode_keylen[1] == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "encode_keylen"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking",
+        "consequent": "encode_keylen[1] == 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_temporal_window",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "sent_blocksize compares key_index to block_addr_limit directly; if key_index wraps around or block_addr_limit is dynamically changed, the equality may be transiently asserted incorrectly.",
-      "cond": "during active processing when key_index increments or block_addr_limit is reprogrammed",
-      "risk": "A spurious block-sent flag could mislead the controller, potentially causing premature message termination or state corruption.",
+      "claim": "sent_blocksize depends on block_addr_limit; without its full definition and range relative to key_index, equality could be asserted incorrectly due to width mismatch or unbounded signal.",
+      "cond": "always",
+      "risk": "An erroneous block_addr_limit could falsely assert sent_blocksize, causing premature or missed block‑size recognition, which may affect data absorption and padding paths.",
       "signals": [
+        "sent_blocksize",
         "key_index",
-        "block_addr_limit",
-        "sent_blocksize"
+        "block_addr_limit"
       ],
       "refs": [
-        "file:344-344"
-      ]
+        "kmac_core.sv:344"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_index == block_addr_limit",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sent_blocksize",
+          "key_index",
+          "block_addr_limit"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_index == block_addr_limit",
+        "consequent": "sent_blocksize depends on block_addr_limit; without its full definition and range relative to key_index, equality could be asserted incorrectly due to width mismatch or unbounded signal",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "encode_keylen[1] forced to 0 under mask enable may affect key length encoding; if used in key absorption, it could enable incorrect key handling. sent_blocksize equality check may gate state transitions in a masked key management path; incorrect assertion could expose internal state.",
   "evidence_refs": [
-    "file:340-342",
-    "file:344-344"
+    "kmac_core.sv:339-342",
+    "kmac_core.sv:344"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 339,
-  "line_end": 444,
-  "security_implications": ""
+  "line_end": 444
 }

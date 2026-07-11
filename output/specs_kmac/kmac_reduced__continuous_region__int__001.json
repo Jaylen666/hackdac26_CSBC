@@ -5,18 +5,56 @@
     "block_kind": "mixed",
     "driven": [
       "msg_mask_en",
+      "lc_escalate_en",
       "err_o",
-      "state_valid_o",
-      "state_o",
+      "sha3_rand_valid",
+      "sha3_rand_early",
+      "sha3_rand_update",
+      "sha3_rand_consumed",
+      "sha3_rand_data",
+      "sha3_rand_aux",
       "sha3_err",
       "entropy_err",
-      "entropy_configured_o"
+      "sha3_state_error",
+      "sha3_count_error",
+      "sha3_storage_rst_error",
+      "entropy_state_error",
+      "entropy_hash_counter_error"
     ],
     "used": [
+      "clk_i",
+      "rst_ni",
+      "lc_escalate_en_i",
       "msg_mask_en_i",
       "msg_valid",
       "msg_ready",
-      "lc_escalate_en_i",
+      "msg_masked",
+      "msg_strb_i",
+      "mode_i",
+      "strength_i",
+      "start_i",
+      "process_i",
+      "run_i",
+      "done_i",
+      "ns_prefix_i",
+      "sha3_rand_valid",
+      "sha3_rand_early",
+      "sha3_rand_data",
+      "sha3_rand_aux",
+      "sha3_rand_update",
+      "sha3_rand_consumed",
+      "entropy_mode_i",
+      "entropy_ready_i",
+      "entropy_fast_process_i",
+      "entropy_in_keyblock_i",
+      "entropy_refresh_req_i",
+      "entropy_seed_update_i",
+      "entropy_seed_data_i",
+      "wait_timer_prescaler_i",
+      "wait_timer_limit_i",
+      "entropy_hash_threshold_i",
+      "entropy_hash_clr_i",
+      "err_processed_i",
       "sha3_err",
       "sha3_state_error",
       "sha3_count_error",
@@ -27,28 +65,69 @@
     ],
     "modes": [
       "EnMasking",
+      "NumLcSyncCopies",
       "RndCnstLfsrPerm",
       "RndCnstLfsrSeed",
       "RndCnstBufferLfsrSeed",
-      "NumLcSyncCopies"
+      "StateW"
     ],
     "tags": [
+      "lifecycle",
+      "error",
       "mask",
       "entropy",
-      "error",
+      "integrity",
       "fault",
       "handshake",
-      "lifecycle",
       "reset",
-      "sparse_fsm",
-      "security"
+      "clock_domain",
+      "sparse_fsm"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "err_o is the bitwise OR reduction of sha3_err, sha3_state_error, sha3_count_error, sha3_storage_rst_error, entropy_err, entropy_state_error, and entropy_hash_counter_error.",
+      "claim": "msg_mask_en is only asserted when msg_mask_en_i, msg_valid, and msg_ready are all high.",
+      "cond": "always",
+      "signals": [
+        "msg_mask_en",
+        "msg_mask_en_i",
+        "msg_valid",
+        "msg_ready"
+      ],
+      "refs": [
+        "kmac_reduced.sv:166"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "msg_mask_en == (msg_mask_en_i & msg_valid & msg_ready)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_en",
+          "msg_mask_en_i",
+          "msg_valid",
+          "msg_ready"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "msg_mask_en == (msg_mask_en_i & msg_valid & msg_ready)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "error_detection",
+      "claim": "err_o is the OR of all collected SHA3 and entropy error signals.",
       "cond": "always",
       "signals": [
         "err_o",
@@ -61,216 +140,419 @@
         "entropy_hash_counter_error"
       ],
       "refs": [
-        "file:193-194"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "assignment",
-      "claim": "msg_mask_en is asserted only when msg_mask_en_i, msg_valid, and msg_ready are all high.",
-      "cond": "always",
-      "signals": [
-        "msg_mask_en",
-        "msg_mask_en_i",
-        "msg_valid",
-        "msg_ready"
+        "kmac_reduced.sv:193-194"
       ],
-      "refs": [
-        "file:166"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "err_o == (|{sha3_err, sha3_state_error, sha3_count_error, sha3_storage_rst_error, entropy_err, entropy_state_error, entropy_hash_counter_error})",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "sha3_storage_rst_error",
+        "signals": [
+          "err_o",
+          "sha3_err",
+          "sha3_state_error",
+          "sha3_count_error",
+          "sha3_storage_rst_error",
+          "entropy_err",
+          "entropy_state_error",
+          "entropy_hash_counter_error"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "err_o == (|{sha3_err, sha3_state_error, sha3_count_error, sha3_storage_rst_error, entropy_err, entropy_state_error, entropy_hash_counter_error})",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "instance",
-      "claim": "The prim_lc_sync instance synchronizes lc_escalate_en_i into two lc_tx_t copies (lc_escalate_en[0] and [1]) with NumCopies=2.",
-      "cond": "while clk_i toggles and rst_ni is deasserted",
+      "type": "assignment",
+      "claim": "Two synchronized copies of lc_escalate_en are generated and connected to the SHA3 and entropy modules respectively.",
+      "cond": "after synchronization",
       "signals": [
+        "lc_escalate_en",
         "lc_escalate_en_i",
-        "lc_escalate_en"
+        "u_sha3.lc_escalate_en_i",
+        "u_entropy.lc_escalate_en_i"
       ],
       "refs": [
-        "file:178-185"
-      ]
+        "kmac_reduced.sv:174-185",
+        "kmac_reduced.sv:245",
+        "kmac_reduced.sv:303"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "u_sha3.lc_escalate_en_i == lc_escalate_en[0] && u_entropy.lc_escalate_en_i == lc_escalate_en[1]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en",
+          "lc_escalate_en_i",
+          "u_sha3.lc_escalate_en_i",
+          "u_entropy.lc_escalate_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "after synchronization",
+        "consequent": "u_sha3.lc_escalate_en_i == lc_escalate_en[0] && u_entropy.lc_escalate_en_i == lc_escalate_en[1]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "default_fallback",
-      "claim": "The sha3 instance's run_ack_i is permanently tied to 1'b1, guaranteeing that any run_req_o (if used) is immediately acknowledged without wait states.",
+      "claim": "The SHA3 core is always allowed to process because run_ack_i is tied high.",
       "cond": "always",
       "signals": [
-        "run_ack_i",
-        "run_req_o"
+        "u_sha3.run_ack_i"
       ],
       "refs": [
-        "file:242"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "instance",
-      "claim": "kmac_entropy's rand_valid_o, rand_early_o, rand_data_o, rand_aux_o are connected to sha3's corresponding inputs, and sha3's rand_update_o/rand_consumed_o are fed back to entropy.",
-      "cond": "always",
-      "signals": [
-        "sha3_rand_valid",
-        "sha3_rand_early",
-        "sha3_rand_data",
-        "sha3_rand_aux",
-        "sha3_rand_update",
-        "sha3_rand_consumed"
+        "kmac_reduced.sv:242"
       ],
-      "refs": [
-        "file:212-217",
-        "file:271-276"
-      ]
-    },
-    {
-      "id": "G6",
-      "type": "instance",
-      "claim": "kmac_entropy's msg_mask_en_i is driven by the locally combined msg_mask_en, enabling mask generation only during valid masked transfers.",
-      "cond": "always",
-      "signals": [
-        "msg_mask_en",
-        "msg_mask_en_i",
-        "msg_mask_o"
-      ],
-      "refs": [
-        "file:279-280"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "u_sha3.run_ack_i == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_sha3.run_ack_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "u_sha3.run_ack_i == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "msg_mask_en_i must remain stable while msg_valid and msg_ready are both high to prevent glitches on msg_mask_en.",
-      "cond": "when msg_valid & msg_ready == 1",
-      "risk": "Transient mask enabling/disabling could corrupt message masking and leak secret data or digest integrity.",
-      "signals": [
-        "msg_mask_en_i",
-        "msg_valid",
-        "msg_ready",
-        "msg_mask_en"
-      ],
-      "refs": [
-        "file:166"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "lc_escalate_en_i must be a stable, correctly timed lc_ctrl_pkg::lc_tx_t signal, sustained long enough for synchronization and free of glitches.",
-      "cond": "at all times",
-      "risk": "If lc_escalate_en_i glitches or is asynchronous beyond metastability resolution, the two synchronized copies may disagree, causing one submodule to escalate while the other continues operation, potentially leaving secret data accessible.",
+      "type": "lifecycle",
+      "claim": "The prim_lc_sync instance correctly synchronizes lc_escalate_en_i and produces stable, aligned lc_tx_t outputs.",
+      "cond": "clk and reset active",
+      "risk": "Metastability or mismatched bits in lc_escalate_en could cause incorrect lifecycle escalation or failure to escalate, breaking security isolation.",
       "signals": [
         "lc_escalate_en_i",
         "lc_escalate_en"
       ],
       "refs": [
-        "file:178-185",
-        "file:245",
-        "file:303"
-      ]
+        "kmac_reduced.sv:178-185"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i",
+          "lc_escalate_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "clk and reset active",
+        "consequent": "The prim_lc_sync instance correctly synchronizes lc_escalate_en_i and produces stable, aligned lc_tx_t outputs",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "Error outputs from sha3 and kmac_entropy (sha3_err, entropy_err, etc.) are clean (not X) and correctly reflect internal fault conditions.",
+      "cond": "always",
+      "risk": "False err_o assertion could unnecessarily halt the system; missed errors could allow corrupted data to propagate.",
+      "signals": [
+        "sha3_err",
+        "entropy_err",
+        "sha3_state_error",
+        "sha3_count_error",
+        "sha3_storage_rst_error",
+        "entropy_state_error",
+        "entropy_hash_counter_error"
+      ],
+      "refs": [
+        "kmac_reduced.sv:248-251",
+        "kmac_reduced.sv:306-308"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "sha3_storage_rst_error",
+        "signals": [
+          "sha3_err",
+          "entropy_err",
+          "sha3_state_error",
+          "sha3_count_error",
+          "sha3_storage_rst_error",
+          "entropy_state_error",
+          "entropy_hash_counter_error"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "Error outputs from sha3 and kmac_entropy (sha3_err, entropy_err, etc.) are clean (not X) and correctly reflect internal fault conditions",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "security_precondition",
+      "claim": "lc_escalate_en_i is a valid lc_tx_t encoding and will be asserted when the system must be disabled.",
+      "cond": "lifecycle event",
+      "risk": "If lc_escalate_en_i is invalid or not asserted during an escalation, security-critical modules may continue operating.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "kmac_reduced.sv:183"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "lifecycle event",
+        "consequent": "lc_escalate_en_i is a valid lc_tx_t encoding and will be asserted when the system must be disabled",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "msg_valid and msg_ready are properly driven and represent a valid data transfer cycle without glitches.",
+      "cond": "during message transfer",
+      "risk": "Masking could be incorrectly gated, potentially leaking plaintext or injecting wrong mask data.",
+      "signals": [
+        "msg_valid",
+        "msg_ready"
+      ],
+      "refs": [
+        "kmac_reduced.sv:166"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_valid",
+          "msg_ready"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during message transfer",
+        "consequent": "msg_valid and msg_ready are properly driven and represent a valid data transfer cycle without glitches",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The run_ack_i tie-off to 1'b1 permanently bypasses the REQ/ACK interface meant to avoid power spikes (as commented). Does the design intend to intentionally disable power side-channel mitigation?",
-      "cond": "always",
-      "risk": "Uncontrolled processing may cause power variations that leak secret internal state.",
+      "priority": "medium",
+      "claim": "sha3 run_req_o is left unconnected and run_ack_i is tied high. Is it intended to always allow processing, or could this hide internal backpressure that should be observed?",
+      "cond": "unknown",
+      "risk": "If the SHA3 core ever requires backpressure and it is ignored, internal state could be corrupted or power spikes unmanaged.",
       "signals": [
-        "run_req_o",
-        "run_ack_i"
+        "u_sha3.run_req_o",
+        "u_sha3.run_ack_i"
       ],
       "refs": [
-        "file:241-242"
-      ]
+        "kmac_reduced.sv:241-242"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_sha3.run_req_o",
+          "u_sha3.run_ack_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "sha3 run_req_o is left unconnected and run_ack_i is tied high. Is it intended to always allow processing, or could this hide internal backpressure that should be observed?",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "msg_mask_en_i may change during a valid message transfer when msg_valid and msg_ready are high, causing a glitch on msg_mask_en that momentarily enables or disables the mask.",
-      "cond": "when msg_mask_en_i toggles while msg_valid & msg_ready == 1",
-      "risk": "Masked data may be partially corrupted, potentially exposing secret key/digest bits.",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "err_o is computed by OR-reducing a struct (sha3_err) together with single-bit error signals. Is the reduction always well-defined and is the loss of error type information acceptable?",
+      "cond": "when an error occurs",
+      "risk": "Diagnostic software may not be able to distinguish error sources from this single-bit output.",
       "signals": [
-        "msg_mask_en_i",
-        "msg_valid",
-        "msg_ready",
-        "msg_mask_en"
+        "err_o",
+        "sha3_err"
       ],
       "refs": [
-        "file:166"
-      ]
+        "kmac_reduced.sv:193-194"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "err_o",
+          "sha3_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when an error occurs",
+        "consequent": "err_o is computed by OR-reducing a struct (sha3_err) together with single-bit error signals. Is the reduction always well-defined and is the loss of error type information acceptable?",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The entropy module's err_processed_i input is connected but its driver is outside this region. How is err_processed_i managed to clear entropy errors, and could a missing pulse leave err_o stuck high?",
-      "cond": "when an entropy error is asserted",
-      "risk": "System may lock in error state, preventing further operation.",
-      "signals": [
-        "err_processed_i",
-        "entropy_err",
-        "err_o"
-      ],
-      "refs": [
-        "file:309",
-        "file:193-194"
-      ]
-    },
-    {
-      "id": "U4",
-      "type": "U_fault_containment_gap",
+      "type": "U_temporal_window",
       "priority": "high",
-      "claim": "A single glitch or metastable event on lc_escalate_en_i could cause the two synchronized copies (lc_escalate_en[0] and [1]) to differ, leading to incomplete escalation across the sha3 and entropy security domains.",
-      "cond": "during a life cycle escalation event",
-      "risk": "One submodule may fail to enter zeroization/secure state, allowing secret data to remain accessible while the other is locked down.",
+      "claim": "lc_escalate_en_i is a multi-bit lc_tx_t signal. If its bits settle in the synchronized copies at different times, the SHA3 and entropy modules could momentarily see an inconsistent LC state.",
+      "cond": "lc_escalate_en_i changes while clocks are active",
+      "risk": "Brief inconsistent LC state could allow a security-critical operation to continue after an escalation command, or cause spurious resets.",
       "signals": [
         "lc_escalate_en_i",
         "lc_escalate_en"
       ],
       "refs": [
-        "file:178-185",
-        "file:245",
-        "file:303"
-      ]
+        "kmac_reduced.sv:178-185"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "lc_escalate_en_i changes",
+        "consequent": "lc_escalate_en retains a consistent lc_tx_t encoding",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i",
+          "lc_escalate_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "lc_escalate_en_i changes",
+        "consequent": "lc_escalate_en retains a consistent lc_tx_t encoding",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
-      "id": "U5",
-      "type": "U_spec_gap",
+      "id": "U4",
+      "type": "U_fault_containment_gap",
       "priority": "medium",
-      "claim": "The aggregated err_o does not include any lc_escalate_en signal. Should a life cycle escalation also assert err_o for system-level monitoring?",
-      "cond": "when lc_escalate_en is asserted",
-      "risk": "A fatal security escalation may go unnoticed by error monitors, delaying response.",
+      "claim": "Entropy error signals (entropy_state_error, etc.) are ORed into err_o but not cleared locally. If err_processed_i is not asserted in time, err_o may remain stuck high.",
+      "cond": "entropy error asserted and err_processed_i slow",
+      "risk": "A stuck error may prevent the system from recovering even after the fault condition is gone, leading to denial of service.",
       "signals": [
-        "lc_escalate_en",
+        "entropy_state_error",
+        "entropy_hash_counter_error",
+        "err_processed_i",
         "err_o"
       ],
       "refs": [
-        "file:193-194",
-        "file:245",
-        "file:303"
-      ]
+        "kmac_reduced.sv:193-194",
+        "kmac_reduced.sv:306-309"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "entropy_state_error || entropy_hash_counter_error",
+        "consequent": "err_o remains 1 until err_processed_i is asserted",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "entropy_state_error",
+          "entropy_hash_counter_error",
+          "err_processed_i",
+          "err_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "entropy_state_error || entropy_hash_counter_error",
+        "consequent": "err_o remains 1 until err_processed_i is asserted",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk aggregates multiple security-critical error signals (sparse FSM errors, count errors, storage errors) into a single err_o, which could mask the source of integrity violations. Lifecycle escalation enable is synchronized and distributed to the SHA3 and entropy engines; any glitch or inconsistency in lc_escalate_en could defeat security disablement. Message masking (msg_mask_en) is gated with a handshake, but relies on correct external configuration and valid data transfer. The unused run_req_o and tied run_ack_i may hide internal backpressure that could affect secret state. Combined error OR-ing without local clear may lead to stuck err_o, potentially blocking recovery from transient faults.",
   "evidence_refs": [
-    "file:166",
-    "file:178-185",
-    "file:193-194",
-    "file:212-217",
-    "file:241-242",
-    "file:245",
-    "file:271-276",
-    "file:279-280",
-    "file:303",
-    "file:309"
+    "kmac_reduced.sv:166-312"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 166,
-  "line_end": 312,
-  "security_implications": ""
+  "line_end": 312
 }

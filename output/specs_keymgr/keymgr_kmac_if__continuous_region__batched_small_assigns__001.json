@@ -7,7 +7,9 @@
       "state_q"
     ],
     "used": [
-      "state_d"
+      "state_d",
+      "data_state_e",
+      "StIdle"
     ],
     "modes": [
       "data_state_e",
@@ -15,61 +17,164 @@
     ],
     "tags": [
       "sparse_fsm",
+      "integrity",
       "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "state_transition",
-      "claim": "state_q is registered with sparse FSM encoding: state_q <= state_d on each clock edge, and on reset state_q is set to StIdle.",
-      "cond": "always (clock edge or reset)",
+      "type": "reg_update",
+      "claim": "On every clock cycle, state_q is updated with the value of state_d using sparse FSM encoding, and on reset state_q is set to StIdle.",
+      "cond": "always (next‑cycle update; reset forces StIdle)",
       "signals": [
+        "state_d",
         "state_q",
-        "state_d"
+        "StIdle"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:170-170"
-      ]
+        "keymgr_kmac_if.sv:171"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "state_q == (reset ? StIdle : state_d)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "clock",
+        "reset": "reset",
+        "signals": [
+          "state_d",
+          "state_q",
+          "StIdle"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "always (next‑cycle update; reset forces StIdle)",
+        "consequent": "state_q == (reset ? StIdle : state_d)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "state_d must always be a legal encoding of data_state_e while not in reset.",
-      "cond": "when reset is inactive and a clock edge occurs",
-      "risk": "An invalid next-state could violate the sparse FSM encoding, potentially causing an undefined error response or undetected corruption inside the key manager state machine.",
+      "claim": "state_d is always a legal member of enum data_state_e.",
+      "cond": "every cycle",
+      "risk": "If state_d is not a legal state, the sparse FSM may detect an illegal transition, potentially causing an undetected error or corrupted state if not properly escalated.",
       "signals": [
-        "state_d"
+        "state_d",
+        "data_state_e"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:170-170"
-      ]
+        "keymgr_kmac_if.sv:171"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "state_d inside {data_state_e}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_d",
+          "data_state_e"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "every cycle",
+        "consequent": "state_d inside {data_state_e}",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "StIdle is a valid member of enum data_state_e and corresponds to a legal sparse encoding value.",
+      "cond": "at reset",
+      "risk": "If StIdle is not a valid state, the reset value would be illegal, leading to erroneous state after reset and possible failure of the FSM.",
+      "signals": [
+        "StIdle",
+        "data_state_e"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:171"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "StIdle is a valid state of data_state_e",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "StIdle",
+          "data_state_e"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "at reset",
+        "consequent": "StIdle is a valid state of data_state_e",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The PRIM_FLOP_SPARSE_FSM macro may contain integrity-check logic that raises an alert or error on an invalid state_d encoding, but this is not visible from the instantiation alone.",
-      "cond": "unknown",
-      "risk": "If the macro silently allows an illegal transition or fails to report a critical FSM error, key manager state integrity could be compromised without detection.",
+      "priority": "medium",
+      "claim": "The error‑detection behavior and the generation of an alert/fatal upon an illegal state transition are defined inside the PRIM_FLOP_SPARSE_FSM macro; this chunk does not show whether such errors are connected, latched, or escalated.",
+      "cond": "when the sparse FSM detects an illegal transition",
+      "risk": "An illegal state may be latched or silently handled, allowing the key manager to operate with a corrupted state and undermining security.",
       "signals": [
-        "state_d",
+        "u_state_regs",
         "state_q"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:170-170"
-      ]
+        "keymgr_kmac_if.sv:171"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "illegal_transition_detected",
+        "consequent": "alert_or_fatal_asserted",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_state_regs",
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "illegal_transition_detected",
+        "consequent": "alert_or_fatal_asserted",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk instantiates a sparse FSM for the key manager KMAC interface state register. Sparse encoding protects the FSM against SEU‑induced illegal state transitions. If the macro detects such a transition, it must escalate to an alert or fatal error to prevent the key manager from operating with a corrupted state. The reset value StIdle provides a safe initial state. The actual error‑response connection is outside this chunk, so the overall security posture depends on the macro internals and the integration of its error output.",
   "evidence_refs": [
-    "keymgr_kmac_if.sv:170-170"
+    "keymgr_kmac_if.sv:171"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 170,
-  "line_end": 170,
-  "security_implications": ""
+  "line_end": 170
 }

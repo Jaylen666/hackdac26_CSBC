@@ -1,0 +1,2180 @@
+[
+  {
+    "finding_id": "F-0201",
+    "title": "NumRomDigestInputs parameter must be >= 1 to produce a valid port width. If NumRomDigestInputs is 0, the port rom_digest",
+    "severity": "LOW",
+    "verdict": "DEFENSIVE",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.24,
+    "contradiction": "(1) 假设明确说明 NumRomDigestInputs=0 是非法配置，会导致端口声明错误，不是预期的合法使用场景。 (2) 相关guarantee描述了当该非法参数值为0时，输出 rom_digest_vld_o 恒为1的明确行为，这为意外配置提供了确定性的回退值，避免信号悬空或不定态。 (3) 假设约束的是使用者不得给出非法参数，而硬件对非法输入提供了安全的防御性行为，二者不存在矛盾，也没有功能缺口。",
+    "involved_signals": [
+      "NumRomDigestInputs"
+    ],
+    "involved_specs": [
+      "keymgr_input_checks__continuous_region__keymgr_input_checks__001",
+      "keymgr_input_checks__always_comb__line_101__001"
+    ],
+    "evidence": [
+      {
+        "spec": "keymgr_input_checks__continuous_region__keymgr_input_checks__001",
+        "field": "assumption",
+        "excerpt": "NumRomDigestInputs parameter must be >= 1 to produce a valid port width. If NumRomDigestInputs is 0, the port rom_digest_i would have an illegal range [-1:0], causing synthesis/simulation failure."
+      },
+      {
+        "spec": "keymgr_input_checks__always_comb__line_101__001",
+        "field": "guarantee",
+        "excerpt": "When NumRomDigestInputs is 0, the for-loop body is never executed, and the initial assignment rom_digest_vld_o = 1'b1 persists, so the output is always 1."
+      }
+    ],
+    "formal_verdict": "DIRECT",
+    "formal_confidence": 1.0,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "",
+      "reset": "",
+      "bind_module": "",
+      "bind_signals": [],
+      "formalizability": "",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_007",
+        "ref_content": "Verify keymgr behavior on error response received from KMAC after sending data to it. Stimulus: Drive error from KMAC interface when VALID is high. Or drive all 0s or 1s as KMAC input digest data. Checks: Same as above entry - invalid_cmd.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KMAC",
+          "VALID",
+          "invalid_cmd"
+        ],
+        "layer": "specific",
+        "score": 0.4,
+        "cosine": 0.571,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0202",
+    "title": "无法确定是否存在硬件错误，因为 prng_en_dis_inv 的设计意图不明确。",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.235,
+    "contradiction": "无法确定是否存在硬件错误，因为 prng_en_dis_inv 的设计意图不明确。",
+    "involved_signals": [
+      "prng_en_dis_inv_d"
+    ],
+    "involved_specs": [
+      "keymgr_ctrl__always_ff__line_247__001",
+      "keymgr_ctrl__continuous_region__declarations_or_instances__001",
+      "keymgr_ctrl__continuous_region__int__001"
+    ],
+    "evidence": [
+      {
+        "spec": "keymgr_ctrl__always_ff__line_247__001",
+        "field": "assumption",
+        "excerpt": "The signal name 'prng_en_dis_inv' suggests an inverted enable/disable control for the PRNG, but the local code provides no documentation. Without external specification, the intended active level and "
+      },
+      {
+        "spec": "keymgr_ctrl__continuous_region__declarations_or_instances__001",
+        "field": "guarantee",
+        "excerpt": "prng_en_o is driven combinationally as the logical OR of random_req, wipe_req, and prng_en_dis_inv_q[0]."
+      },
+      {
+        "spec": "keymgr_ctrl__continuous_region__int__001",
+        "field": "guarantee",
+        "excerpt": "prng_en_dis_inv_d is set to 2'b11 when prng_en_dis_inv_set is high; otherwise, when prng_reseed_done_i is high, it shifts in a 0 at the MSB and retains the previous bit[1]; else it holds its previous "
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "",
+      "reset": "",
+      "bind_module": "keymgr_ctrl",
+      "bind_signals": [],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_038",
+        "ref_content": "RESEED_INTERVAL_SHADOWED: Reseed interval for key manager entropy reseed. VAL field: number of internal PRNG updates before a reseed is requested. Register is shadowed, with update_err_alert 'recov_operation_err' and storage_err_alert 'fatal_fault_err'.",
+        "ref_kind": "specific",
+        "keywords": [
+          "RESEED_INTERVAL_SHADOWED",
+          "VAL",
+          "reseed",
+          "PRNG",
+          "shadowed"
+        ],
+        "layer": "specific",
+        "score": 0.64,
+        "cosine": 0.485,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0203",
+    "title": "错误检测行为和对非法状态转换的告警/致命信号的产生是在PRIM_FLOP_SPARSE_FSM宏内部定义的；本代码段未显示此类错误是否被连接、锁存或升级。",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.214,
+    "contradiction": "假设指出非法状态转换的检测与告警行为应在宏内实现，但当前代码段未体现。guarantee 1描述了cnt_err有效时的错误处理，但cnt_err的来源未在本代码段内定义，无法确认其是否与宏的非法状态转换检测相连。缺少cnt_err与非法状态转换检测之间的连接信息，因此无法断定假设已被满足或存在矛盾。",
+    "involved_signals": [
+      "state_d"
+    ],
+    "involved_specs": [
+      "keymgr_kmac_if__continuous_region__batched_small_assigns__001",
+      "keymgr_kmac_if__always_comb__line_172__001",
+      "keymgr_data_en_state__continuous_region__int__001"
+    ],
+    "evidence": [
+      {
+        "spec": "keymgr_kmac_if__continuous_region__batched_small_assigns__001",
+        "field": "assumption",
+        "excerpt": "错误检测行为和对非法状态转换的告警/致命信号的产生是在PRIM_FLOP_SPARSE_FSM宏内部定义的；本代码段未显示此类错误是否被连接、锁存或升级。"
+      },
+      {
+        "spec": "keymgr_kmac_if__always_comb__line_172__001",
+        "field": "guarantee",
+        "excerpt": "当cnt_err为高时，state_d被强制设为StError，fsm_error_o被断言，done_o被断言（覆盖其他输出）。"
+      },
+      {
+        "spec": "keymgr_data_en_state__continuous_region__int__001",
+        "field": "guarantee",
+        "excerpt": "state_q由PRIM_FLOP_SPARSE_FSM实例u_state_regs驱动，连接state_d、state_e，并复位到StCtrlDataIdle。"
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "keymgr_kmac_if",
+      "bind_signals": [],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_022",
+        "ref_content": "CTRL.FSM.LOCAL_ESC: Main control fsm locally escalates based on any detected fault in keymgr. When a fault is detected (sync or async) the fsm transitions to invalid state to prevent further legal operations from executing.",
+        "ref_kind": "specific",
+        "keywords": [
+          "local escalation",
+          "invalid state",
+          "fault"
+        ],
+        "layer": "specific",
+        "score": 0.719,
+        "cosine": 0.599,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_024",
+        "ref_content": "CTRL.FSM.GLOBAL_ESC: When the system globally escalates, the main control fsm also transitions to invalid state to prevent further legal operations from executing.",
+        "ref_kind": "specific",
+        "keywords": [
+          "global escalation",
+          "invalid state"
+        ],
+        "layer": "specific",
+        "score": 0.705,
+        "cosine": 0.579,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0204",
+    "title": "[U-UP] The two copies of hw_key_sel_buf and the separate de signals for share 0 and 1 can diverge (e.g., due to SEU). This chunk alone does not detect or pre",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "The two copies of hw_key_sel_buf and the separate de signals for share 0 and 1 can diverge (e.g., due to SEU). This chunk alone does not detect or prevent such divergence; if one de asserts while the other remains low, a partial data leak could occur.",
+    "involved_signals": [
+      "hw_key_sel_buf[0]",
+      "hw_key_sel_buf[1]",
+      "sw_share0_output[i].de",
+      "sw_share1_output[i].de"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_007",
+        "ref_content": "KEYMGR.GENERATE.IDENTITY: Derivation of output keys to software registers. Unlike KEYMGR.GENERATE.OUTPUT, the key derivation function does not support salt or version inputs.",
+        "ref_kind": "specific",
+        "keywords": [
+          "identity",
+          "output",
+          "software registers"
+        ],
+        "layer": "specific",
+        "score": 0.579,
+        "cosine": 0.529,
+        "kw_hit": 0.696
+      },
+      {
+        "ref_id": "keymgr.hjson_006",
+        "ref_content": "KEYMGR.GENERATE.OUTPUT: Derivation of output keys with additional salt and version. Software provided salt and version values are used as inputs in the key derivation function along with the internal key manager state. The derived keys can be directed to software registers, or sideloaded to hardware security blocks.",
+        "ref_kind": "specific",
+        "keywords": [
+          "salt",
+          "version",
+          "output",
+          "software registers",
+          "sideload"
+        ],
+        "layer": "specific",
+        "score": 0.562,
+        "cosine": 0.504,
+        "kw_hit": 0.696
+      },
+      {
+        "ref_id": "keymgr.hjson_046",
+        "ref_content": "SW_SHARE1_OUTPUT: Key manager software output share1. Similar to SHARE0, hardware places operation results here for software reading. May be wiped with random value on fault.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SW_SHARE1_OUTPUT",
+          "software output",
+          "hardware update"
+        ],
+        "layer": "specific",
+        "score": 0.529,
+        "cosine": 0.607,
+        "kw_hit": 0.348
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0205",
+    "title": "[U-UP] Default key values in HW_KEY_REQ_DEFAULT and OTBN_KEY_REQ_DEFAULT are set to a known constant 32'hDEADBEEF. If these default values are ever used as a",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "Default key values in HW_KEY_REQ_DEFAULT and OTBN_KEY_REQ_DEFAULT are set to a known constant 32'hDEADBEEF. If these default values are ever used as actual key material (e.g., when valid is set but the key field is not overridden), an attacker could exploit the predictable key.",
+    "involved_signals": [
+      "HW_KEY_REQ_DEFAULT.key",
+      "OTBN_KEY_REQ_DEFAULT.key"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_003",
+        "ref_content": "KEYMGR.SIDELOAD.OTBN: Generation of keys for KMAC. The key is only visible to hardware and OTBN code.",
+        "ref_kind": "specific",
+        "keywords": [
+          "OTBN",
+          "sideload",
+          "key"
+        ],
+        "layer": "specific",
+        "score": 0.659,
+        "cosine": 0.513,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_008",
+        "ref_content": "When key manager enters Invalid state (due to life cycle deactivation or fault), the internal key, all sideload key slots, and software keys are wiped immediately with entropy.",
+        "ref_kind": "specific",
+        "keywords": [
+          "Invalid",
+          "life cycle deactivation",
+          "fault",
+          "entropy wipe"
+        ],
+        "layer": "specific",
+        "score": 0.653,
+        "cosine": 0.505,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_004",
+        "ref_content": "KEYMGR.DERIVE.ATTESTATION: DICE compliant key derivation. Used to generate attestation keys. Derived keys can be directed to registers exposed to software, or sideloaded to OTBN (KEYMGR.SIDELOAD.OTBN). 256Bit measurements can be provided to the key derivation function using a dedicated set of registers.",
+        "ref_kind": "specific",
+        "keywords": [
+          "attestation",
+          "derive",
+          "software registers",
+          "sideload",
+          "OTBN",
+          "256Bit measurements"
+        ],
+        "layer": "specific",
+        "score": 0.535,
+        "cosine": 0.539,
+        "kw_hit": 0.526
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0206",
+    "title": "[U-UP] Filling unused max_key_versions entries with zero may inadvertently grant a valid version number (0) if an out-of-bounds stage index (i >= KeyMgrStage",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "Filling unused max_key_versions entries with zero may inadvertently grant a valid version number (0) if an out-of-bounds stage index (i >= KeyMgrStages) is ever used elsewhere to read max_key_versions, potentially enabling a version rollback or bypass of version enforcement.",
+    "involved_signals": [
+      "max_key_versions",
+      "KeyMgrStages"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_001",
+        "ref_content": "KEYMGR.SIDELOAD.KMAC: Generation of keys for KMAC. The key is only visible to hardware. This is tracked in KMAC as KMAC.KEY.SIDELOAD.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KMAC",
+          "sideload",
+          "key",
+          "KMAC.KEY.SIDELOAD"
+        ],
+        "layer": "specific",
+        "score": 0.667,
+        "cosine": 0.524,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_008",
+        "ref_content": "KEYMGR.KEY_VERSIONING: The maximum version value supported by KEYMGR.GENERATE.OUTPUT is configurable via a set of write-lockable registers. KEYMGR.GENERATE.OUTPUT will fail to derive a key with a version greater than the version set in the write lockable register for any given key manager internal state.",
+        "ref_kind": "specific",
+        "keywords": [
+          "version",
+          "write-lockable registers",
+          "max version",
+          "KEYMGR.GENERATE.OUTPUT"
+        ],
+        "layer": "specific",
+        "score": 0.666,
+        "cosine": 0.707,
+        "kw_hit": 0.571
+      },
+      {
+        "ref_id": "keymgr.hjson_006",
+        "ref_content": "KEYMGR.GENERATE.OUTPUT: Derivation of output keys with additional salt and version. Software provided salt and version values are used as inputs in the key derivation function along with the internal key manager state. The derived keys can be directed to software registers, or sideloaded to hardware security blocks.",
+        "ref_kind": "specific",
+        "keywords": [
+          "salt",
+          "version",
+          "output",
+          "software registers",
+          "sideload"
+        ],
+        "layer": "specific",
+        "score": 0.599,
+        "cosine": 0.611,
+        "kw_hit": 0.571
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0207",
+    "title": "[U-UP] The KmacMaskCheck_A assertion uses an initial/static check; if kmac_en_masking_i can change after elaboration, a later mismatch between KmacEnMasking ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "The KmacMaskCheck_A assertion uses an initial/static check; if kmac_en_masking_i can change after elaboration, a later mismatch between KmacEnMasking and kmac_en_masking_i may go undetected.",
+    "involved_signals": [
+      "KmacEnMasking",
+      "kmac_en_masking_i"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_007",
+        "ref_content": "Verify keymgr behavior on error response received from KMAC after sending data to it. Stimulus: Drive error from KMAC interface when VALID is high. Or drive all 0s or 1s as KMAC input digest data. Checks: Same as above entry - invalid_cmd.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KMAC",
+          "VALID",
+          "invalid_cmd"
+        ],
+        "layer": "specific",
+        "score": 0.674,
+        "cosine": 0.534,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_006",
+        "ref_content": "Life cycle can disable keymgr and let keymgr wipe secret immediately. Stimulus: Test life cycle disables keymgr in any state. Checks: If keymgr is not initialized, check it can't be initialized until life cycle enables keymgr. If keymgr is in a valid state after StReset, key output to KMAC is wiped immediately and SW output will be invalid after OP is done. If keymgr in disabled state, check the behavior is consistent with normal behavior.",
+        "ref_kind": "specific",
+        "keywords": [
+          "life cycle",
+          "keymgr",
+          "KMAC",
+          "SW output",
+          "StReset"
+        ],
+        "layer": "specific",
+        "score": 0.657,
+        "cosine": 0.509,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_029",
+        "ref_content": "KMAC_IF_DONE.CTRL.CONSISTENCY: Spurious kmac done check.",
+        "ref_kind": "specific",
+        "keywords": [
+          "kmac done",
+          "spurious"
+        ],
+        "layer": "specific",
+        "score": 0.41,
+        "cosine": 0.586,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0208",
+    "title": "[U-UP] The signal unused_kmac_en_masking ties kmac_en_masking_i to an otherwise unused wire; its design intention beyond static parameter matching is unclear",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "The signal unused_kmac_en_masking ties kmac_en_masking_i to an otherwise unused wire; its design intention beyond static parameter matching is unclear.",
+    "involved_signals": [
+      "unused_kmac_en_masking",
+      "kmac_en_masking_i"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_007",
+        "ref_content": "Verify keymgr behavior on error response received from KMAC after sending data to it. Stimulus: Drive error from KMAC interface when VALID is high. Or drive all 0s or 1s as KMAC input digest data. Checks: Same as above entry - invalid_cmd.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KMAC",
+          "VALID",
+          "invalid_cmd"
+        ],
+        "layer": "specific",
+        "score": 0.663,
+        "cosine": 0.519,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_034",
+        "ref_content": "Generate-output-hw: when the hardware output key option is used, the output of the KMAC invocation is stored in hardware registers (not software-visible) that directly output to symmetric primitives such as AES, KMAC, and OTBN.",
+        "ref_kind": "specific",
+        "keywords": [
+          "generate-output-hw",
+          "hardware registers",
+          "AES",
+          "KMAC",
+          "OTBN"
+        ],
+        "layer": "specific",
+        "score": 0.651,
+        "cosine": 0.502,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_026",
+        "ref_content": "KMAC_IF.FSM.SPARSE: kmac interface fsm is sparsely encoded.",
+        "ref_kind": "specific",
+        "keywords": [
+          "kmac interface fsm",
+          "sparse"
+        ],
+        "layer": "specific",
+        "score": 0.414,
+        "cosine": 0.591,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0209",
+    "title": "[U-UP] Hard-coded RndCnst*SeedDefault parameters are static compile-time constants. It is unclear whether these seeds are intended only as placeholders repla",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.196,
+    "contradiction": "Hard-coded RndCnst*SeedDefault parameters are static compile-time constants. It is unclear whether these seeds are intended only as placeholders replaced during manufacturing/test or whether they represent a real security root. If they cannot be altered post-synthesis and are exposed, the system's key derivation may be deterministic and weak.",
+    "involved_signals": [
+      "RndCnstRevisionSeedDefault",
+      "RndCnstCreatorIdentitySeedDefault",
+      "RndCnstOwnerIntIdentitySeedDefault",
+      "RndCnstOwnerIdentitySeedDefault",
+      "RndCnstSoftOutputSeedDefault",
+      "RndCnstHardOutputSeedDefault",
+      "RndCnstNoneSeedDefault",
+      "RndCnstAesSeedDefault",
+      "RndCnstKmacSeedDefault",
+      "RndCnstOtbnSeedDefault",
+      "RndCnstCdiDefault",
+      "RndCnstLfsrSeedDefault",
+      "RndCnstLfsrPermDefault",
+      "RndCnstRandPermDefault"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.622,
+        "cosine": 0.46,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_022",
+        "ref_content": "CTRL.FSM.LOCAL_ESC: Main control fsm locally escalates based on any detected fault in keymgr. When a fault is detected (sync or async) the fsm transitions to invalid state to prevent further legal operations from executing.",
+        "ref_kind": "specific",
+        "keywords": [
+          "local escalation",
+          "invalid state",
+          "fault"
+        ],
+        "layer": "specific",
+        "score": 0.607,
+        "cosine": 0.439,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0210",
+    "title": "[U-UP] The enable signals for u_ctrl, u_cfgen, and u_sw_binding_regwen are directly driven by lc_tx_test_true_strict. If the function's output glitches or by",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.193,
+    "contradiction": "The enable signals for u_ctrl, u_cfgen, and u_sw_binding_regwen are directly driven by lc_tx_test_true_strict. If the function's output glitches or bypasses due to a fault, all keymgr operations could be unlocked in a low lifecycle state.",
+    "involved_signals": [
+      "lc_tx_test_true_strict",
+      "lc_keymgr_en"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_006",
+        "ref_content": "Life cycle can disable keymgr and let keymgr wipe secret immediately. Stimulus: Test life cycle disables keymgr in any state. Checks: If keymgr is not initialized, check it can't be initialized until life cycle enables keymgr. If keymgr is in a valid state after StReset, key output to KMAC is wiped immediately and SW output will be invalid after OP is done. If keymgr in disabled state, check the behavior is consistent with normal behavior.",
+        "ref_kind": "specific",
+        "keywords": [
+          "life cycle",
+          "keymgr",
+          "KMAC",
+          "SW output",
+          "StReset"
+        ],
+        "layer": "specific",
+        "score": 0.534,
+        "cosine": 0.612,
+        "kw_hit": 0.353
+      },
+      {
+        "ref_id": "keymgr.hjson_013",
+        "ref_content": "SW_BINDING.CONFIG.REGWEN: Software binding is lockable by software in each stage. When keymgr successfully advances, the lock is released to allow the next stage the freedom to program.",
+        "ref_kind": "specific",
+        "keywords": [
+          "software binding",
+          "lockable",
+          "advance"
+        ],
+        "layer": "specific",
+        "score": 0.465,
+        "cosine": 0.664,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "keymgr_sec_cm_testplan.hjson_001",
+        "ref_content": "sec_cm_sw_binding_config_regwen: Verify the countermeasure(s) SW_BINDING.CONFIG.REGWEN. Test that `sw_binding_regwen` gates the *_sw_binding and `sw_binding_regwen` will be cleared after a successful advance operation. X-ref'ed with `random`.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sw_binding_regwen",
+          "*_sw_binding"
+        ],
+        "layer": "specific",
+        "score": 0.444,
+        "cosine": 0.634,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "keymgr.hjson_041",
+        "ref_content": "ATTEST_SW_BINDING: Software binding input to the attestation portion of the key manager. Lockable (via SW_BINDING_REGWEN) and shared between stages. Locked by software and unlocked by hardware upon a successful advance operation.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ATTEST_SW_BINDING",
+          "SW_BINDING_REGWEN",
+          "software binding",
+          "lockable",
+          "advance"
+        ],
+        "layer": "specific",
+        "score": 0.443,
+        "cosine": 0.633,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0211",
+    "title": "[U-UP] The hw2reg debug status bits for invalid_* are set but there is no clear mechanism visible; they may accumulate and never be reset, potentially hiding",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.189,
+    "contradiction": "The hw2reg debug status bits for invalid_* are set but there is no clear mechanism visible; they may accumulate and never be reset, potentially hiding transient invalid events from software.",
+    "involved_signals": [
+      "hw2reg.debug.invalid_creator_seed",
+      "hw2reg.debug.invalid_owner_seed",
+      "hw2reg.debug.invalid_dev_id",
+      "hw2reg.debug.invalid_health_state",
+      "hw2reg.debug.invalid_key_version",
+      "hw2reg.debug.invalid_key",
+      "hw2reg.debug.invalid_digest"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_051",
+        "ref_content": "DEBUG: Debug information register. Fields indicate input validation failures: INVALID_CREATOR_SEED, INVALID_OWNER_SEED, INVALID_DEV_ID, INVALID_HEALTH_STATE, INVALID_KEY_VERSION, INVALID_KEY, INVALID_DIGEST. All are set when respective input fails checks during operation.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DEBUG",
+          "INVALID_CREATOR_SEED",
+          "INVALID_OWNER_SEED",
+          "INVALID_DEV_ID",
+          "INVALID_HEALTH_STATE",
+          "INVALID_KEY_VERSION",
+          "INVALID_KEY",
+          "INVALID_DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.78,
+        "cosine": 0.686,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_007",
+        "ref_content": "In Disabled state, any advance or generate operation updates the outputs and keys with randomly computed values and always returns an invalid operation error. If life cycle deactivation or a fault is encountered, the key manager transitions to Invalid state.",
+        "ref_kind": "specific",
+        "keywords": [
+          "Disabled",
+          "advance",
+          "generate",
+          "invalid operation error",
+          "Invalid transition"
+        ],
+        "layer": "specific",
+        "score": 0.428,
+        "cosine": 0.612,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0212",
+    "title": "[U-UP] KeyWidth may not be a multiple of 64, causing ECC word misalignment across Shares and CDIs.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.185,
+    "contradiction": "KeyWidth may not be a multiple of 64, causing ECC word misalignment across Shares and CDIs.",
+    "involved_signals": [
+      "KeyWidth",
+      "EccWords",
+      "TotalEccWords"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_033",
+        "ref_content": "CTRL.KEY.INTEGRITY: Internal secret key is protected with ECC.",
+        "ref_kind": "specific",
+        "keywords": [
+          "internal secret key",
+          "ECC"
+        ],
+        "layer": "specific",
+        "score": 0.583,
+        "cosine": 0.523,
+        "kw_hit": 0.724
+      },
+      {
+        "ref_id": "keymgr.hjson_001",
+        "ref_content": "KEYMGR.SIDELOAD.KMAC: Generation of keys for KMAC. The key is only visible to hardware. This is tracked in KMAC as KMAC.KEY.SIDELOAD.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KMAC",
+          "sideload",
+          "key",
+          "KMAC.KEY.SIDELOAD"
+        ],
+        "layer": "specific",
+        "score": 0.425,
+        "cosine": 0.489,
+        "kw_hit": 0.276
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0213",
+    "title": "[U-UP] If AdvDataWidth is less than the bit-width of the concatenation {sw_binding, otp_device_id_i, lc_keymgr_div_i, rom_digest_i.data, revision_seed}, the ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.185,
+    "contradiction": "If AdvDataWidth is less than the bit-width of the concatenation {sw_binding, otp_device_id_i, lc_keymgr_div_i, rom_digest_i.data, revision_seed}, the upper bits will be silently truncated. This could lose critical secret or integrity data, compromising subsequent key derivation.",
+    "involved_signals": [
+      "sw_binding",
+      "otp_device_id_i",
+      "lc_keymgr_div_i",
+      "rom_digest_i.data",
+      "revision_seed",
+      "AdvDataWidth"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_002",
+        "ref_content": "Extend from smoke to randomize all SW input data. Fully randomize SW inputs: rom_ext_desc_*, software_binding_*, salt_*, max_*_key_ver, *_key_ver_regwen. Randomize key_version any value less than max_*_key_ver, to avoid triggerring invalid_kmac_input error. Fully randomize HW inputs from flash, otp and life cycle. Randomize *sw_binding_regwen. Ensure this gates the *_sw_binding and it will be cleared after a successful advance operation. Most of other sequences are derived from this to have similar init and sequence. Stimulus and checks are the same as smoke.",
+        "ref_kind": "specific",
+        "keywords": [
+          "rom_ext_desc_*",
+          "software_binding_*",
+          "salt_*",
+          "max_*_key_ver",
+          "*_key_ver_regwen",
+          "sw_binding_regwen",
+          "*_sw_binding"
+        ],
+        "layer": "specific",
+        "score": 0.429,
+        "cosine": 0.552,
+        "kw_hit": 0.141
+      },
+      {
+        "ref_id": "keymgr.hjson_039",
+        "ref_content": "SW_BINDING_REGWEN: Register write enable for SOFTWARE_BINDING. This is locked by software and unlocked by hardware upon a successful advance call. Software binding resets to 1, and its value cannot be altered by software until advancement to Init state.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SW_BINDING_REGWEN",
+          "locked",
+          "unlocked",
+          "advance",
+          "Init"
+        ],
+        "layer": "specific",
+        "score": 0.427,
+        "cosine": 0.549,
+        "kw_hit": 0.141
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0214",
+    "title": "[U-UP] The de gating uses mubi4_test_false_strict(hw_key_sel_buf[*]) to allow data output only when no hardware key is selected. Is it always correct to bloc",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.18,
+    "contradiction": "The de gating uses mubi4_test_false_strict(hw_key_sel_buf[*]) to allow data output only when no hardware key is selected. Is it always correct to block software reads when a key is selected, or are there states where software may legitimately read output even while a key is active?",
+    "involved_signals": [
+      "hw_key_sel_buf",
+      "de",
+      "data_valid",
+      "wipe_key"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_sec_cm_testplan.hjson_004",
+        "ref_content": "sec_cm_output_keys_ctrl_redun: Verify the countermeasure(s) OUTPUT_KEYS.CTRL.REDUN. 1. Randomly advance to a functional state and start a sideload operation. 2. Flip either data_sw_en or data_valid. 3. Read sw_share* for check: - if hw_key_sel is flipped but data_sw_en is not, it doesn't match either the previously flopped value or the sideload value. - if hw_key_sel is not flipped but data_en is, you should see the previous value.",
+        "ref_kind": "specific",
+        "keywords": [
+          "data_sw_en",
+          "data_valid",
+          "sw_share*",
+          "hw_key_sel",
+          "data_en"
+        ],
+        "layer": "specific",
+        "score": 0.588,
+        "cosine": 0.538,
+        "kw_hit": 0.706
+      },
+      {
+        "ref_id": "keymgr.hjson_002",
+        "ref_content": "KEYMGR.SIDELOAD.AES: Generation of keys for AES. The key is only visible to hardware.",
+        "ref_kind": "specific",
+        "keywords": [
+          "AES",
+          "sideload",
+          "key"
+        ],
+        "layer": "specific",
+        "score": 0.519,
+        "cosine": 0.464,
+        "kw_hit": 0.647
+      },
+      {
+        "ref_id": "keymgr.hjson_040",
+        "ref_content": "SEALING_SW_BINDING: Software binding input to the sealing portion of the key manager. This register is lockable (via SW_BINDING_REGWEN) and shared between key manager stages. The binding value is not secret but integrity is important. The software binding is locked by software and unlocked by hardware upon a successful advance operation.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SEALING_SW_BINDING",
+          "SW_BINDING_REGWEN",
+          "software binding",
+          "lockable",
+          "advance"
+        ],
+        "layer": "specific",
+        "score": 0.42,
+        "cosine": 0.6,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0215",
+    "title": "[U-UP] The alert_state_o outputs of both prim_alert_sender instances are left unconnected, making the internal alert state unobservable.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.178,
+    "contradiction": "The alert_state_o outputs of both prim_alert_sender instances are left unconnected, making the internal alert state unobservable.",
+    "involved_signals": [
+      "alert_state_o",
+      "u_fault_alert",
+      "u_op_err_alert"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_011",
+        "ref_content": "Verify the outcome of injecting faults to security countermeasures. Stimulus: As mentioned in prim_count_check, prim_one_hot_check and prim_fsm_check. Checks: Besides checking alert and fault_status, issue an operation after injecting faults, then ensure that op_status is failed and design enters StInvalid.",
+        "ref_kind": "specific",
+        "keywords": [
+          "prim_count_check",
+          "prim_one_hot_check",
+          "prim_fsm_check",
+          "alert",
+          "fault_status",
+          "op_status",
+          "StInvalid"
+        ],
+        "layer": "specific",
+        "score": 0.683,
+        "cosine": 0.548,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.57,
+        "cosine": 0.51,
+        "kw_hit": 0.711
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0216",
+    "title": "[U-UP] AlertAsyncOn parameter may be instantiated with fewer than two elements, resulting in illegal index access at indices 0 or 1.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.178,
+    "contradiction": "AlertAsyncOn parameter may be instantiated with fewer than two elements, resulting in illegal index access at indices 0 or 1.",
+    "involved_signals": [
+      "AlertAsyncOn"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.692,
+        "cosine": 0.56,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_011",
+        "ref_content": "Verify the outcome of injecting faults to security countermeasures. Stimulus: As mentioned in prim_count_check, prim_one_hot_check and prim_fsm_check. Checks: Besides checking alert and fault_status, issue an operation after injecting faults, then ensure that op_status is failed and design enters StInvalid.",
+        "ref_kind": "specific",
+        "keywords": [
+          "prim_count_check",
+          "prim_one_hot_check",
+          "prim_fsm_check",
+          "alert",
+          "fault_status",
+          "op_status",
+          "StInvalid"
+        ],
+        "layer": "specific",
+        "score": 0.636,
+        "cosine": 0.48,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0217",
+    "title": "[U-UP] Combinational path from random_req/wipe_req to prng_en_o may glitch; downstream PRNG logic should be insensitive to such glitches.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.159,
+    "contradiction": "Combinational path from random_req/wipe_req to prng_en_o may glitch; downstream PRNG logic should be insensitive to such glitches.",
+    "involved_signals": [
+      "random_req",
+      "wipe_req",
+      "prng_en_o"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_038",
+        "ref_content": "RESEED_INTERVAL_SHADOWED: Reseed interval for key manager entropy reseed. VAL field: number of internal PRNG updates before a reseed is requested. Register is shadowed, with update_err_alert 'recov_operation_err' and storage_err_alert 'fatal_fault_err'.",
+        "ref_kind": "specific",
+        "keywords": [
+          "RESEED_INTERVAL_SHADOWED",
+          "VAL",
+          "reseed",
+          "PRNG",
+          "shadowed"
+        ],
+        "layer": "specific",
+        "score": 0.475,
+        "cosine": 0.559,
+        "kw_hit": 0.28
+      },
+      {
+        "ref_id": "theory_of_operation.md_009",
+        "ref_content": "If key manager is deactivated while an operation is ongoing, it begins wiping all keys with entropy immediately, waits for the current operation to complete gracefully, and then transitions to Invalid state. During the wait, keys are continuously wiped.",
+        "ref_kind": "specific",
+        "keywords": [
+          "deactivation",
+          "ongoing operation",
+          "wipe",
+          "Invalid transition"
+        ],
+        "layer": "specific",
+        "score": 0.4,
+        "cosine": 0.434,
+        "kw_hit": 0.32
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0218",
+    "title": "[U-UP] The ecc_errs array is driven here but not consumed locally; the downstream logic must act on error flags (e.g. wipe key, trigger alert) to prevent cor",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.143,
+    "contradiction": "The ecc_errs array is driven here but not consumed locally; the downstream logic must act on error flags (e.g. wipe key, trigger alert) to prevent corrupted key usage.",
+    "involved_signals": [
+      "ecc_errs"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.721,
+        "cosine": 0.601,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_009",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Drive all 0s or 1s on any of these inputs - flash seeds, otp_key, diversification ID, Rom digest etc. Make sure all cases are covered in csr_debug_cg. Checks: Check interrupts err is triggered. Check alert recov_operation_err is triggered and err_code is INVALID_KMAC_DATA. Check SW output isn't updated and working state remains the same.",
+        "ref_kind": "specific",
+        "keywords": [
+          "flash seeds",
+          "otp_key",
+          "diversification ID",
+          "Rom digest",
+          "err",
+          "recov_operation_err",
+          "INVALID_KMAC_DATA",
+          "SW output"
+        ],
+        "layer": "specific",
+        "score": 0.718,
+        "cosine": 0.597,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_033",
+        "ref_content": "CTRL.KEY.INTEGRITY: Internal secret key is protected with ECC.",
+        "ref_kind": "specific",
+        "keywords": [
+          "internal secret key",
+          "ECC"
+        ],
+        "layer": "specific",
+        "score": 0.7,
+        "cosine": 0.572,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0219",
+    "title": "[U-UP] The error flag ecc_errs is formed by OR-reduction of the 2-bit errs, treating correctable and uncorrectable ECC errors identically; design intent may ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.139,
+    "contradiction": "The error flag ecc_errs is formed by OR-reduction of the 2-bit errs, treating correctable and uncorrectable ECC errors identically; design intent may require separate handling.",
+    "involved_signals": [
+      "errs",
+      "ecc_errs"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.702,
+        "cosine": 0.574,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_009",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Drive all 0s or 1s on any of these inputs - flash seeds, otp_key, diversification ID, Rom digest etc. Make sure all cases are covered in csr_debug_cg. Checks: Check interrupts err is triggered. Check alert recov_operation_err is triggered and err_code is INVALID_KMAC_DATA. Check SW output isn't updated and working state remains the same.",
+        "ref_kind": "specific",
+        "keywords": [
+          "flash seeds",
+          "otp_key",
+          "diversification ID",
+          "Rom digest",
+          "err",
+          "recov_operation_err",
+          "INVALID_KMAC_DATA",
+          "SW output"
+        ],
+        "layer": "specific",
+        "score": 0.689,
+        "cosine": 0.556,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0220",
+    "title": "[U-UP] The logic that updates cnt must guarantee cnt never exceeds LastAdvRound, LastIdRound, or LastGenRound; otherwise the subtraction underflow could sele",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The logic that updates cnt must guarantee cnt never exceeds LastAdvRound, LastIdRound, or LastGenRound; otherwise the subtraction underflow could select invalid round indices.",
+    "involved_signals": [
+      "cnt",
+      "LastAdvRound",
+      "LastIdRound",
+      "LastGenRound",
+      "adv_sel",
+      "id_sel",
+      "gen_sel"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_sec_cm_testplan.hjson_005",
+        "ref_content": "sec_cm_ctrl_fsm_consistency: Verify the countermeasure(s) CTRL.FSM.CONSISTENCY. - Set `ral.control_shadowed` to OpDisable, so that no Advance or Generate operation is selected. - Force internal `tb.dut.u_ctrl.adv_en_o` or `tb.dut.u_ctrl.gen_en_o` to 1. - Check the fatal alert is triggered and `fault_status.ctrl_fsm_chk` is set.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ral.control_shadowed",
+          "adv_en_o",
+          "gen_en_o",
+          "fault_status.ctrl_fsm_chk"
+        ],
+        "layer": "specific",
+        "score": 0.441,
+        "cosine": 0.574,
+        "kw_hit": 0.13
+      },
+      {
+        "ref_id": "theory_of_operation.md_032",
+        "ref_content": "Sideload clearing: the SIDELOAD_CLEAR register can clear one slot at a time or all at once. When a clearing bit is enabled for a slot, that slot's value is continuously re-randomized every clock cycle. Software must disable the bit to make the last random value stable; otherwise the slot is continuously randomized, preventing sideloading an actual key.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SIDELOAD_CLEAR",
+          "slot",
+          "re-randomize",
+          "clock cycle",
+          "sideload key"
+        ],
+        "layer": "specific",
+        "score": 0.411,
+        "cosine": 0.587,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0221",
+    "title": "[U-UP] If the widths of `adv_sel`, `id_sel`, `gen_sel` exceed the corresponding array dimensions due to parameterization, an out-of-bounds read can occur, po",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "If the widths of `adv_sel`, `id_sel`, `gen_sel` exceed the corresponding array dimensions due to parameterization, an out-of-bounds read can occur, potentially leaking adjacent key material.",
+    "involved_signals": [
+      "adv_sel",
+      "id_sel",
+      "gen_sel",
+      "adv_data",
+      "id_data",
+      "gen_data"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0222",
+    "title": "[U-UP] invalid_data is only explicitly assigned for four operation indices (OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut); if the operation width allows other ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "invalid_data is only explicitly assigned for four operation indices (OpAdvance, OpGenId, OpGenSwOut, OpGenHwOut); if the operation width allows other values, invalid_data for those indices is undriven or x.",
+    "involved_signals": [
+      "invalid_data",
+      "OpAdvance",
+      "OpGenId",
+      "OpGenSwOut",
+      "OpGenHwOut"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_027",
+        "ref_content": "Legal operations per state: Reset – only Advance; Initialized – Disable / Advance; CreatorRootKey, OwnerIntKey, OwnerRootKey – Disable / Advance / Generate; Invalid/Disabled – none. Any illegal operation leads to invalid operation error (ERR_CODE.INVALID_OP).",
+        "ref_kind": "specific",
+        "keywords": [
+          "legal operations",
+          "ERR_CODE.INVALID_OP",
+          "Reset",
+          "Initialized",
+          "CreatorRootKey",
+          "OwnerIntKey",
+          "OwnerRootKey",
+          "Invalid",
+          "Disabled"
+        ],
+        "layer": "specific",
+        "score": 0.539,
+        "cosine": 0.662,
+        "kw_hit": 0.25
+      },
+      {
+        "ref_id": "theory_of_operation.md_023",
+        "ref_content": "Operation after Invalid: once the key manager is already in Invalid state, starting an operation does not wipe internal storage (as it is already wiped) but reports an invalid operation in ERR_CODE.INVALID_OP.",
+        "ref_kind": "specific",
+        "keywords": [
+          "Invalid",
+          "ERR_CODE.INVALID_OP"
+        ],
+        "layer": "specific",
+        "score": 0.505,
+        "cosine": 0.614,
+        "kw_hit": 0.25
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0223",
+    "title": "[U-UP] Status bits are written with constant 1 and enabled by level signals; it is unclear if the design intends them to be clearable while fault/error condi",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "Status bits are written with constant 1 and enabled by level signals; it is unclear if the design intends them to be clearable while fault/error conditions persist, or if a separate edge-based latch exists elsewhere.",
+    "involved_signals": [
+      "hw2reg.fault_status.cmd.d",
+      "hw2reg.fault_status.cmd.de",
+      "fault_code",
+      "err_code"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.728,
+        "cosine": 0.611,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_013",
+        "ref_content": "Recoverable errors are captured in ERR_CODE register and trigger a recoverable alert; fatal errors are captured in FAULT_STATUS register and trigger a continuous fatal alert.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE",
+          "recoverable alert",
+          "FAULT_STATUS",
+          "fatal alert"
+        ],
+        "layer": "specific",
+        "score": 0.686,
+        "cosine": 0.656,
+        "kw_hit": 0.756
+      },
+      {
+        "ref_id": "keymgr.hjson_048",
+        "ref_content": "OP_STATUS: Key manager status. Hardware sets status based on software initiated operations. STATUS field: Idle, WIP (work in progress), DONE_SUCCESS, DONE_ERROR. Software must explicitly clear by writing back the read value.",
+        "ref_kind": "specific",
+        "keywords": [
+          "OP_STATUS",
+          "STATUS",
+          "Idle",
+          "WIP",
+          "DONE_SUCCESS",
+          "DONE_ERROR",
+          "clear"
+        ],
+        "layer": "specific",
+        "score": 0.641,
+        "cosine": 0.675,
+        "kw_hit": 0.561
+      },
+      {
+        "ref_id": "theory_of_operation.md_017",
+        "ref_content": "Fatal error: one-hot command check. The command received by the KMAC interface must be one-hot and stable during a KMAC transaction. Failure sets FAULT_STATUS.CMD, generates a continuous fatal alert, and causes transition to Invalid state with internal storage wiped, and also reports ERR_CODE.INVALID_OP.",
+        "ref_kind": "specific",
+        "keywords": [
+          "FAULT_STATUS.CMD",
+          "one-hot",
+          "fatal alert",
+          "Invalid",
+          "ERR_CODE.INVALID_OP"
+        ],
+        "layer": "specific",
+        "score": 0.636,
+        "cosine": 0.584,
+        "kw_hit": 0.756
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0224",
+    "title": "[U-UP] Error and fault code bits may be pulses; if a pulse occurs while the corresponding status register is not being sampled (e.g., due to clock gating or ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "Error and fault code bits may be pulses; if a pulse occurs while the corresponding status register is not being sampled (e.g., due to clock gating or interface timing), it may be missed.",
+    "involved_signals": [
+      "err_code",
+      "fault_code",
+      "hw2reg.err_code.*.de",
+      "hw2reg.fault_status.*.de"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr_testplan.hjson_010",
+        "ref_content": "Verify keymgr behavior with invalid data patterns. Stimulus: Create sync (transactional) fault occurs followed by async (non-transactional) fault, and async fault occurs followed by sync fault. Checks: Check interrupts err is triggered. Check alert fatal_fault_err is triggered. Check fault_status is updated correctly.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sync",
+          "async",
+          "fault",
+          "err",
+          "fatal_fault_err",
+          "fault_status"
+        ],
+        "layer": "specific",
+        "score": 0.731,
+        "cosine": 0.615,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_013",
+        "ref_content": "Recoverable errors are captured in ERR_CODE register and trigger a recoverable alert; fatal errors are captured in FAULT_STATUS register and trigger a continuous fatal alert.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE",
+          "recoverable alert",
+          "FAULT_STATUS",
+          "fatal alert"
+        ],
+        "layer": "specific",
+        "score": 0.705,
+        "cosine": 0.655,
+        "kw_hit": 0.821
+      },
+      {
+        "ref_id": "theory_of_operation.md_014",
+        "ref_content": "Synchronous recoverable error: ERR_CODE.INVALID_OP is set when software issues an invalid operation given the current key manager state. A recoverable alert is sent and the operation completes with an error.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE.INVALID_OP",
+          "invalid operation",
+          "recoverable alert"
+        ],
+        "layer": "specific",
+        "score": 0.585,
+        "cosine": 0.644,
+        "kw_hit": 0.446
+      },
+      {
+        "ref_id": "theory_of_operation.md_015",
+        "ref_content": "Synchronous recoverable error: ERR_CODE.INVALID_KMAC_INPUT is set when software supplies invalid input (e.g., a key greater than the max version) for a key manager operation. A recoverable alert is sent.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE.INVALID_KMAC_INPUT",
+          "invalid input",
+          "recoverable alert"
+        ],
+        "layer": "specific",
+        "score": 0.549,
+        "cosine": 0.593,
+        "kw_hit": 0.446
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0225",
+    "title": "[U-UP] ctrl_lfsr_en, data_lfsr_en, and sideload_lfsr_en are not driven in this chunk; their generation logic must be reviewed to ensure they are not simultan",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "ctrl_lfsr_en, data_lfsr_en, and sideload_lfsr_en are not driven in this chunk; their generation logic must be reviewed to ensure they are not simultaneously high causing glitching transitions or unintentional LFSR toggling.",
+    "involved_signals": [
+      "ctrl_lfsr_en",
+      "data_lfsr_en",
+      "sideload_lfsr_en"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_019",
+        "ref_content": "OUTPUT_KEYS.CTRL.REDUN: Software and sideload keys are redundantly controlled. Each generate operation creates a valid and a data enable (software and sideload specific). In order for a key to be populated into the software register, both the software valid and the software data enable must be asserted. The same is true for sideload. This makes it more difficult for an attack to fault a sideload key into the software key slot. An attacker would need to fault both the software valid and the software data enable. During a sideload operation, if an attacker manages to fault the valid but not the data enable, the software key is populated with random data. If an attacker manages to fault the data enable but not the valid, then the software key retains its previous value.",
+        "ref_kind": "specific",
+        "keywords": [
+          "valid",
+          "data enable",
+          "software",
+          "sideload",
+          "output keys"
+        ],
+        "layer": "specific",
+        "score": 0.558,
+        "cosine": 0.625,
+        "kw_hit": 0.4
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_004",
+        "ref_content": "Keymgr contains HW sideload interfaces to output keys for KMAC, AES, OTBN. Stimulus: Generate a keymgr output to HW sideload interface, exercising all the sideload interfaces. Randomly program any value to Sideload_clear after any operation. Checks: Verify the sideload data and status for correctness.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sideload",
+          "KMAC",
+          "AES",
+          "OTBN",
+          "Sideload_clear"
+        ],
+        "layer": "specific",
+        "score": 0.512,
+        "cosine": 0.559,
+        "kw_hit": 0.4
+      },
+      {
+        "ref_id": "keymgr.hjson_032",
+        "ref_content": "SIDELOAD_CTRL.FSM.SPARSE: Sideload control fsm is sparsely encoded.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sideload control fsm",
+          "sparse"
+        ],
+        "layer": "specific",
+        "score": 0.42,
+        "cosine": 0.6,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0226",
+    "title": "[U-UP] sw_binding_clr is combinational and could glitch during a write transaction if q changes while qe remains high.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "sw_binding_clr is combinational and could glitch during a write transaction if q changes while qe remains high.",
+    "involved_signals": [
+      "sw_binding_clr",
+      "reg2hw.sw_binding_regwen.qe",
+      "reg2hw.sw_binding_regwen.q"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_039",
+        "ref_content": "SW_BINDING_REGWEN: Register write enable for SOFTWARE_BINDING. This is locked by software and unlocked by hardware upon a successful advance call. Software binding resets to 1, and its value cannot be altered by software until advancement to Init state.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SW_BINDING_REGWEN",
+          "locked",
+          "unlocked",
+          "advance",
+          "Init"
+        ],
+        "layer": "specific",
+        "score": 0.626,
+        "cosine": 0.623,
+        "kw_hit": 0.632
+      },
+      {
+        "ref_id": "theory_of_operation.md_029",
+        "ref_content": "DICE generate operation: software selects the CDI source via CONTROL.CDI_SEL. Only one KMAC transaction is performed using the selected CDI internal key and its corresponding SW_BINDING.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DICE",
+          "generate",
+          "CONTROL.CDI_SEL",
+          "SW_BINDING"
+        ],
+        "layer": "specific",
+        "score": 0.615,
+        "cosine": 0.45,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "keymgr.hjson_040",
+        "ref_content": "SEALING_SW_BINDING: Software binding input to the sealing portion of the key manager. This register is lockable (via SW_BINDING_REGWEN) and shared between key manager stages. The binding value is not secret but integrity is important. The software binding is locked by software and unlocked by hardware upon a successful advance operation.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SEALING_SW_BINDING",
+          "SW_BINDING_REGWEN",
+          "software binding",
+          "lockable",
+          "advance"
+        ],
+        "layer": "specific",
+        "score": 0.609,
+        "cosine": 0.6,
+        "kw_hit": 0.632
+      },
+      {
+        "ref_id": "keymgr_sec_cm_testplan.hjson_001",
+        "ref_content": "sec_cm_sw_binding_config_regwen: Verify the countermeasure(s) SW_BINDING.CONFIG.REGWEN. Test that `sw_binding_regwen` gates the *_sw_binding and `sw_binding_regwen` will be cleared after a successful advance operation. X-ref'ed with `random`.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sw_binding_regwen",
+          "*_sw_binding"
+        ],
+        "layer": "specific",
+        "score": 0.599,
+        "cosine": 0.584,
+        "kw_hit": 0.632
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0227",
+    "title": "[U-UP] If GenLfsrCopies can be 0, the replication {0{lfsr[31:0]}} would produce a zero-width vector, causing gen_in to have a narrower width than expected. T",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "If GenLfsrCopies can be 0, the replication {0{lfsr[31:0]}} would produce a zero-width vector, causing gen_in to have a narrower width than expected. The concatenation with reg2hw.key_version, reg2hw.salt, etc. could shift bits, leading to corrupted key material composition.",
+    "involved_signals": [
+      "GenLfsrCopies",
+      "gen_in"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0228",
+    "title": "[U-UP] The decode of dis_op treats any op_i outside the four listed operations as a disable. If the full design defines additional legal operations, they wou",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The decode of dis_op treats any op_i outside the four listed operations as a disable. If the full design defines additional legal operations, they would erroneously trigger a disable, potentially causing an unintended key wipe or state transition.",
+    "involved_signals": [
+      "op_i",
+      "dis_op"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_027",
+        "ref_content": "Legal operations per state: Reset – only Advance; Initialized – Disable / Advance; CreatorRootKey, OwnerIntKey, OwnerRootKey – Disable / Advance / Generate; Invalid/Disabled – none. Any illegal operation leads to invalid operation error (ERR_CODE.INVALID_OP).",
+        "ref_kind": "specific",
+        "keywords": [
+          "legal operations",
+          "ERR_CODE.INVALID_OP",
+          "Reset",
+          "Initialized",
+          "CreatorRootKey",
+          "OwnerIntKey",
+          "OwnerRootKey",
+          "Invalid",
+          "Disabled"
+        ],
+        "layer": "specific",
+        "score": 0.482,
+        "cosine": 0.689,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_014",
+        "ref_content": "Synchronous recoverable error: ERR_CODE.INVALID_OP is set when software issues an invalid operation given the current key manager state. A recoverable alert is sent and the operation completes with an error.",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE.INVALID_OP",
+          "invalid operation",
+          "recoverable alert"
+        ],
+        "layer": "specific",
+        "score": 0.455,
+        "cosine": 0.65,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0229",
+    "title": "[U-UP] When RandWidth > 32, the function leaves bits 32..RandWidth-1 of perm_data unassigned (X); if this data is used as a key, mask, or digest, the X bits ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "When RandWidth > 32, the function leaves bits 32..RandWidth-1 of perm_data unassigned (X); if this data is used as a key, mask, or digest, the X bits could propagate or cause synthesis-dependent behavior, potentially leaking secret information.",
+    "involved_signals": [
+      "perm_data",
+      "RandWidth"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0230",
+    "title": "[U-UP] out_q resets to 1'b1, which may enable key manager configuration before software explicitly sets vld_set and without a vld_dis assertion. This contrad",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "out_q resets to 1'b1, which may enable key manager configuration before software explicitly sets vld_set and without a vld_dis assertion. This contradicts typical security practice where sensitive enables are disabled by default.",
+    "involved_signals": [
+      "out_q",
+      "rst_ni"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_019",
+        "ref_content": "OUTPUT_KEYS.CTRL.REDUN: Software and sideload keys are redundantly controlled. Each generate operation creates a valid and a data enable (software and sideload specific). In order for a key to be populated into the software register, both the software valid and the software data enable must be asserted. The same is true for sideload. This makes it more difficult for an attack to fault a sideload key into the software key slot. An attacker would need to fault both the software valid and the software data enable. During a sideload operation, if an attacker manages to fault the valid but not the data enable, the software key is populated with random data. If an attacker manages to fault the data enable but not the valid, then the software key retains its previous value.",
+        "ref_kind": "specific",
+        "keywords": [
+          "valid",
+          "data enable",
+          "software",
+          "sideload",
+          "output keys"
+        ],
+        "layer": "specific",
+        "score": 0.538,
+        "cosine": 0.625,
+        "kw_hit": 0.333
+      },
+      {
+        "ref_id": "keymgr.hjson_046",
+        "ref_content": "SW_SHARE1_OUTPUT: Key manager software output share1. Similar to SHARE0, hardware places operation results here for software reading. May be wiped with random value on fault.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SW_SHARE1_OUTPUT",
+          "software output",
+          "hardware update"
+        ],
+        "layer": "specific",
+        "score": 0.493,
+        "cosine": 0.561,
+        "kw_hit": 0.333
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0231",
+    "title": "[U-UP] cnt_after_commit_o is unconnected; currently commit_i is tied to 1 (making it match cnt_o), but any future change to commit_i would leave that output ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "cnt_after_commit_o is unconnected; currently commit_i is tied to 1 (making it match cnt_o), but any future change to commit_i would leave that output undriven in the rest of the design.",
+    "involved_signals": [
+      "cnt_after_commit_o",
+      "commit_i"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0232",
+    "title": "[U-UP] The function requires RandWidth >= 32; if a top-level configuration sets RandWidth < 32, the design will not compile.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The function requires RandWidth >= 32; if a top-level configuration sets RandWidth < 32, the design will not compile.",
+    "involved_signals": [
+      "RandWidth"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0233",
+    "title": "[U-UP] The indices AesIdx, KmacIdx, OtbnIdx and the width parameter LastIdx are used without local bounds checking. If any index exceeds the width of valids,",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.123,
+    "contradiction": "The indices AesIdx, KmacIdx, OtbnIdx and the width parameter LastIdx are used without local bounds checking. If any index exceeds the width of valids, the part-select would be out-of-range, causing an elaboration error; however, incorrect parameter values could lead to unintended connections or silent width mismatches.",
+    "involved_signals": [
+      "valids",
+      "LastIdx",
+      "AesIdx",
+      "KmacIdx",
+      "OtbnIdx"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_037",
+        "ref_content": "SIDELOAD_CLEAR: sideload key slots clear. VAL field: 0=None (no clear), 1=AES clear, 2=KMAC clear, 3=OTBN clear, other values cause ALL sideload key slots to be continuously cleared. To stop continuous clearing, SW must toggle the clear bit again.",
+        "ref_kind": "specific",
+        "keywords": [
+          "SIDELOAD_CLEAR",
+          "VAL",
+          "clear",
+          "AES",
+          "KMAC",
+          "OTBN"
+        ],
+        "layer": "specific",
+        "score": 0.588,
+        "cosine": 0.503,
+        "kw_hit": 0.788
+      },
+      {
+        "ref_id": "keymgr_testplan.hjson_004",
+        "ref_content": "Keymgr contains HW sideload interfaces to output keys for KMAC, AES, OTBN. Stimulus: Generate a keymgr output to HW sideload interface, exercising all the sideload interfaces. Randomly program any value to Sideload_clear after any operation. Checks: Verify the sideload data and status for correctness.",
+        "ref_kind": "specific",
+        "keywords": [
+          "sideload",
+          "KMAC",
+          "AES",
+          "OTBN",
+          "Sideload_clear"
+        ],
+        "layer": "specific",
+        "score": 0.535,
+        "cosine": 0.504,
+        "kw_hit": 0.606
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0234",
+    "title": "[U-UP] Parameters HealthStateWidth and DevIdWidth are defined locally as 128 and 256, but comments indicate they should be sourced from another module's pack",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.114,
+    "contradiction": "Parameters HealthStateWidth and DevIdWidth are defined locally as 128 and 256, but comments indicate they should be sourced from another module's package. A mismatch between the actual hardware configuration and these local defaults could lead to incorrect width calculations (AdvDataWidth, etc.) and silent truncation or overflow.",
+    "involved_signals": [
+      "HealthStateWidth",
+      "DevIdWidth",
+      "AdvDataWidth"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_047",
+        "ref_content": "WORKING_STATE: Read-only key manager working state. STATE field indicates current state: Reset, Init, Creator Root Key, Owner Intermediate Key, Owner Key, Disabled, Invalid.",
+        "ref_kind": "specific",
+        "keywords": [
+          "WORKING_STATE",
+          "STATE",
+          "Reset",
+          "Init",
+          "Creator Root Key",
+          "Owner Intermediate Key",
+          "Owner Key",
+          "Disabled",
+          "Invalid"
+        ],
+        "layer": "specific",
+        "score": 0.417,
+        "cosine": 0.416,
+        "kw_hit": 0.421
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0235",
+    "title": "[U-UP] If MaxAdvDataWidth exceeds KDFMaxWidth, then AdvRounds > MaxRounds, causing CntWidth ($clog2(MaxRounds)) to be insufficient. The assignment LastAdvRou",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.113,
+    "contradiction": "If MaxAdvDataWidth exceeds KDFMaxWidth, then AdvRounds > MaxRounds, causing CntWidth ($clog2(MaxRounds)) to be insufficient. The assignment LastAdvRound = LastAdvRoundInt[CntWidth-1:0] truncates the value, leading to an incorrect last‑round set point.",
+    "involved_signals": [
+      "MaxAdvDataWidth",
+      "KDFMaxWidth",
+      "MaxRounds",
+      "AdvRounds",
+      "LastAdvRound",
+      "CntWidth"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0236",
+    "title": "[U-UP] The decoder's corrected data output (data_o) and syndrome (syndrome_o) are left unconnected; it is unclear whether this is intentional or whether corr",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.113,
+    "contradiction": "The decoder's corrected data output (data_o) and syndrome (syndrome_o) are left unconnected; it is unclear whether this is intentional or whether corrected key state should be propagated.",
+    "involved_signals": [
+      "data_o",
+      "syndrome_o"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "keymgr.hjson_019",
+        "ref_content": "OUTPUT_KEYS.CTRL.REDUN: Software and sideload keys are redundantly controlled. Each generate operation creates a valid and a data enable (software and sideload specific). In order for a key to be populated into the software register, both the software valid and the software data enable must be asserted. The same is true for sideload. This makes it more difficult for an attack to fault a sideload key into the software key slot. An attacker would need to fault both the software valid and the software data enable. During a sideload operation, if an attacker manages to fault the valid but not the data enable, the software key is populated with random data. If an attacker manages to fault the data enable but not the valid, then the software key retains its previous value.",
+        "ref_kind": "specific",
+        "keywords": [
+          "valid",
+          "data enable",
+          "software",
+          "sideload",
+          "output keys"
+        ],
+        "layer": "specific",
+        "score": 0.484,
+        "cosine": 0.548,
+        "kw_hit": 0.333
+      },
+      {
+        "ref_id": "keymgr.hjson_021",
+        "ref_content": "DATA.FSM.SPARSE: Control data fsm (for redundant data control) is sparsely encoded.",
+        "ref_kind": "specific",
+        "keywords": [
+          "control data fsm",
+          "sparse"
+        ],
+        "layer": "specific",
+        "score": 0.479,
+        "cosine": 0.541,
+        "kw_hit": 0.333
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0237",
+    "title": "[U-UP] The encoding distances among state constants may not satisfy the SEC_CM sparse FSM requirement; minimum Hamming distance is not specified.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.102,
+    "contradiction": "The encoding distances among state constants may not satisfy the SEC_CM sparse FSM requirement; minimum Hamming distance is not specified.",
+    "involved_signals": [
+      "StCtrlDataIdle",
+      "StCtrlDataHwEn",
+      "StCtrlDataSwEn",
+      "StCtrlDataDis",
+      "StCtrlDataWait",
+      "StCtrlDataInvalid"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_022",
+        "ref_content": "Fault during idle: if a fault is observed on the regfile (shadow storage error) or the FSM (control FSM integrity error) while idle, the faults are reflected in FAULT_STATUS, the key manager transitions to Invalid state, wipes internal storage, but does not report an invalid operation.",
+        "ref_kind": "specific",
+        "keywords": [
+          "idle",
+          "shadow storage error",
+          "control FSM integrity",
+          "FAULT_STATUS",
+          "Invalid"
+        ],
+        "layer": "specific",
+        "score": 0.444,
+        "cosine": 0.48,
+        "kw_hit": 0.36
+      },
+      {
+        "ref_id": "keymgr.hjson_020",
+        "ref_content": "CTRL.FSM.SPARSE: Main control fsm is sparsely encoded.",
+        "ref_kind": "specific",
+        "keywords": [
+          "main control fsm",
+          "sparse"
+        ],
+        "layer": "specific",
+        "score": 0.436,
+        "cosine": 0.623,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "keymgr.hjson_026",
+        "ref_content": "KMAC_IF.FSM.SPARSE: kmac interface fsm is sparsely encoded.",
+        "ref_kind": "specific",
+        "keywords": [
+          "kmac interface fsm",
+          "sparse"
+        ],
+        "layer": "specific",
+        "score": 0.431,
+        "cosine": 0.616,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "keymgr.hjson_021",
+        "ref_content": "DATA.FSM.SPARSE: Control data fsm (for redundant data control) is sparsely encoded.",
+        "ref_kind": "specific",
+        "keywords": [
+          "control data fsm",
+          "sparse"
+        ],
+        "layer": "specific",
+        "score": 0.426,
+        "cosine": 0.609,
+        "kw_hit": 0.0
+      }
+    ]
+  }
+]

@@ -7,81 +7,205 @@
       "tx_out_q"
     ],
     "used": [
-      "rst_ni",
+      "tx_out",
       "ovrd_tx_en",
       "ovrd_tx_val",
       "sys_loopback",
-      "tx_out",
-      "clk_i"
+      "rst_ni"
     ],
     "modes": [],
     "tags": [
-      "reset",
-      "loopback",
-      "access_control"
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "tx_out_q is updated on posedge clk_i or negedge rst_ni: if !rst_ni, assigned 1'b1; else if ovrd_tx_en, assigned ovrd_tx_val; else if sys_loopback, assigned 1'b1; else assigned tx_out.",
-      "cond": "always",
+      "claim": "On reset (rst_ni low), tx_out_q is forced to 1'b1 (UART idle)",
+      "cond": "rst_ni == 0",
       "signals": [
-        "tx_out_q",
         "rst_ni",
-        "ovrd_tx_en",
-        "ovrd_tx_val",
-        "sys_loopback",
-        "tx_out"
+        "tx_out_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:216-226"
-      ]
-    }
-  ],
-  "assumptions": [
+        "uart_core.sv:217-218"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "tx_out_q == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "tx_out_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "tx_out_q == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
     {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "Inputs tx_out, ovrd_tx_en, ovrd_tx_val, and sys_loopback must be synchronous to clk_i and meet setup/hold at its rising edge.",
-      "cond": "while clk_i is running and rst_ni is high",
-      "risk": "Metastability or incorrect latch could cause tx_out_q to hold wrong value, leading to UART output errors, loopback failure, or override glitch.",
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When not reset and ovrd_tx_en is high, tx_out_q takes the value of ovrd_tx_val",
+      "cond": "rst_ni && ovrd_tx_en",
       "signals": [
-        "tx_out",
         "ovrd_tx_en",
         "ovrd_tx_val",
-        "sys_loopback",
-        "clk_i"
+        "tx_out_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:216"
-      ]
-    }
-  ],
-  "uncertain_points": [
+        "uart_core.sv:219-220"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ovrd_tx_en",
+        "consequent": "tx_out_q == ovrd_tx_val",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "ovrd_tx_en",
+          "ovrd_tx_val",
+          "tx_out_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ovrd_tx_en",
+        "consequent": "tx_out_q == ovrd_tx_val",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
     {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "ovrd_tx_en overrides sys_loopback; if ovrd_tx_en is asserted while sys_loopback is active, tx_out_q outputs ovrd_tx_val instead of forced high, potentially breaking loopback test or normal UART operation.",
-      "cond": "ovrd_tx_en && sys_loopback",
-      "risk": "Loopback test may fail or produce unexpected data if override is unintentionally enabled; UART output may corrupt under loopback mode.",
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When not reset, not override, and sys_loopback is high, tx_out_q is forced to 1'b1",
+      "cond": "rst_ni && !ovrd_tx_en && sys_loopback",
       "signals": [
-        "ovrd_tx_en",
         "sys_loopback",
         "tx_out_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:219-221"
-      ]
+        "uart_core.sv:221-222"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !ovrd_tx_en && sys_loopback",
+        "consequent": "tx_out_q == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "sys_loopback",
+          "tx_out_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !ovrd_tx_en && sys_loopback",
+        "consequent": "tx_out_q == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "In all other cases (no reset, no override, no loopback), tx_out_q simply follows tx_out",
+      "cond": "rst_ni && !ovrd_tx_en && !sys_loopback",
+      "signals": [
+        "tx_out",
+        "tx_out_q"
+      ],
+      "refs": [
+        "uart_core.sv:224"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !ovrd_tx_en && !sys_loopback",
+        "consequent": "tx_out_q == tx_out",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "tx_out",
+          "tx_out_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !ovrd_tx_en && !sys_loopback",
+        "consequent": "tx_out_q == tx_out",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "Intent of forcing tx_out_q to 1'b1 during sys_loopback is not documented; it may mask legitimate TX activity if the loopback mode is internal only.",
+      "cond": "sys_loopback is active",
+      "risk": "If the external TX pin is still required to output data while sys_loopback is active, this forced idle could cause protocol errors.",
+      "signals": [
+        "sys_loopback",
+        "tx_out_q"
+      ],
+      "refs": [
+        "uart_core.sv:221-222"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "sys_loopback",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sys_loopback",
+          "tx_out_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "sys_loopback",
+        "consequent": "Intent of forcing tx_out_q to 1'b1 during sys_loopback is not documented; it may mask legitimate TX activity if the loopback mode is internal only",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:216-226"
+    "uart_core.sv:216-226"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 216,
-  "line_end": 226,
-  "security_implications": ""
+  "line_end": 226
 }

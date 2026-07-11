@@ -11,40 +11,80 @@
     ],
     "modes": [],
     "tags": [
-      "handshake",
-      "error",
-      "key"
+      "key",
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "key_vld_o is driven as the bitwise AND-reduction of key_chk; 1 when all bits of key_chk are 1, else 0.",
+      "claim": "key_vld_o is driven as the bitwise AND of all key_chk bits.",
       "cond": "always",
       "signals": [
         "key_vld_o",
         "key_chk"
       ],
       "refs": [
-        "file:100-100"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:100"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "1'b1",
+        "consequent": "key_vld_o == &key_chk",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_vld_o",
+          "key_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "1'b1",
+        "consequent": "key_vld_o == &key_chk",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "key_chk is a stable, non-X vector where each bit represents a finished check status (1 = pass, 0 = fail); all bits must be valid before key_vld_o is sampled.",
-      "cond": "whenever key_vld_o is used as a validity qualifier",
-      "risk": "if any bit of key_chk is X, Z, or stale, key_vld_o may be asserted spuriously or deasserted incorrectly, leading to wrongful key acceptance or rejection.",
+      "claim": "Each bit of key_chk must correctly indicate the pass/fail status of an associated key check, with a fail condition driving the bit to 0.",
+      "cond": "always",
+      "risk": "If a check fails but its key_chk bit remains 1 (e.g., due to a design bug or disabled check), key_vld_o will be asserted, marking an invalid key as valid and leading to use of corrupted key material.",
       "signals": [
-        "key_chk",
-        "key_vld_o"
+        "key_chk"
       ],
       "refs": [
-        "file:100-100"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:100"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "failing check => key_chk[i] == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "failing check => key_chk[i] == 0",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -52,23 +92,76 @@
       "id": "U1",
       "type": "U_width_param_hazard",
       "priority": "high",
-      "claim": "The width of key_chk is not shown in the chunk. If the design allows key_chk to be zero‑width (e.g., through a parameter controlling the number of check bits), the AND‑reduction would return 1’b1, making key_vld_o permanently valid without any real check.",
-      "cond": "if key_chk width parameter is set to 0",
-      "risk": "All key‑integrity checks would be silently bypassed, allowing the key manager to accept unverified key material.",
+      "claim": "The width of key_chk is not fixed; if parameterization allows unused or disabled bits to be tied high, key_vld_o could be constantly 1, bypassing all checks.",
+      "cond": "when key_chk width includes bits that are not actively driven by checks",
+      "risk": "Complete bypass of key validity checks, allowing invalid keys to be used.",
       "signals": [
-        "key_chk",
-        "key_vld_o"
+        "key_chk"
       ],
       "refs": [
-        "file:100-100"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:100"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when key_chk width includes bits that are not actively driven by checks",
+        "consequent": "The width of key_chk is not fixed; if parameterization allows unused or disabled bits to be tied high, key_vld_o could be constantly 1, bypassing all checks",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The semantic mapping of key_chk bits to specific key integrity checks is undocumented in this chunk, making it unclear which checks are required for a valid key.",
+      "cond": "always",
+      "risk": "Missed or mis-ordered checks could lead to false validity assertion.",
+      "signals": [
+        "key_chk"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:100"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The semantic mapping of key_chk bits to specific key integrity checks is undocumented in this chunk, making it unclear which checks are required for a valid key",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The key_vld_o signal gates the use of a cryptographic key. If the AND of key_chk bits is unreliable (due to missing checks, stuck-at faults, tie-off of unused bits, or parameterization bugs), an invalid or corrupted key could be marked valid and subsequently used for cryptographic operations, potentially leading to data exposure, unauthorized access, or integrity failures.",
   "evidence_refs": [
-    "file:100-100"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv:100"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv",
   "line_start": 99,
-  "line_end": 108,
-  "security_implications": ""
+  "line_end": 108
 }

@@ -1,20 +1,365 @@
 {
   "chunk_id": "rv_dm__continuous_region__declarations_or_instances__002",
-  "summary": "声明 SBA 和 DMP 接口的信号，实例化 TL-UL 生命周期门控与主机适配器，并生成 ndmreset_ack 组合逻辑。",
-  "behavior": "行 347-351 的组合赋值产生 ndmreset_ack，当 ndmreset_pending_q 与 lc_rst_pending_q 同时为高，且 ndmreset_req 为低、lc_rst_asserted 为低、reset_req_en 为高时，该信号有效。行 357-366 声明了 SBA 主机端控制信号（host_req、host_add、host_we、host_wdata、host_be、host_gnt、host_r_valid 等）。行 370-386 实例化 tlul_lc_gate，将内部 TL-UL 线 sba_tl_h_o_int/sba_tl_h_i_int 经生命周期使能 lc_hw_debug_en_gated[LcEnSba] 门控后连接到外部 sba_tl_h_o/sba_tl_h_i；flush_ack_o 与 resp_pending_o 悬空，错误输出引出至 sba_gate_intg_error。行 388-418 实例化 tlul_adapter_host（最大 1 个待处理请求，开启数据完整性生成与响应完整性检查），将 host_* 信号转换为 TL-UL 接口，产生的完整性错误通过 host_r_other_err 引出，并未连接到系统警报（注释说明：SBA 在生产生命周期不活跃，调试阶段接受带完整性错误的事务便于诊断，错误可通过 CSR 区分）。行 424-438 声明 DMP 设备端信号，并由 assign device_addr_aligned = BusWidth'(device_addr) 将 device_addr 零扩展到 BusWidth 宽度，作为对齐地址供后续使用。",
-  "guarantees": [],
-  "security_implications": "SBA 接口受生命周期门控信号 lc_hw_debug_en_gated[LcEnSba] 控制，仅在授权调试状态下连通。完整性错误通过 host_r_other_err 上报而非触发警报，这允许在调试生命周期内接受含完整性错误的事务以便诊断，而不会引发系统级安全反应。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:347-351",
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:357-366",
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:370-386",
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:388-418",
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:424-438"
+  "header": {
+    "module": "rv_dm",
+    "block_kind": "mixed",
+    "driven": [
+      "ndmreset_ack",
+      "device_addr_aligned",
+      "sba_tl_h_o",
+      "host_gnt",
+      "host_r_valid",
+      "host_r_rdata",
+      "host_r_err",
+      "host_r_other_err",
+      "sba_gate_intg_error"
+    ],
+    "used": [
+      "ndmreset_pending_q",
+      "lc_rst_pending_q",
+      "ndmreset_req",
+      "lc_rst_asserted",
+      "reset_req_en",
+      "host_req",
+      "host_add",
+      "host_we",
+      "host_wdata",
+      "host_be",
+      "sba_tl_h_i",
+      "lc_hw_debug_en_gated",
+      "device_addr",
+      "BusWidth",
+      "NrHarts",
+      "MemAw"
+    ],
+    "modes": [
+      "LcEnSba"
+    ],
+    "tags": [
+      "lifecycle",
+      "access_control",
+      "fault",
+      "reset",
+      "csr"
+    ]
+  },
+  "guarantees": [
+    {
+      "id": "G1",
+      "type": "assignment",
+      "claim": "ndmreset_ack is asserted combinatorially when ndmreset_pending_q, lc_rst_pending_q, and reset_req_en are all high, and ndmreset_req and lc_rst_asserted are low; otherwise ndmreset_ack is low.",
+      "cond": "always",
+      "signals": [
+        "ndmreset_ack",
+        "ndmreset_pending_q",
+        "lc_rst_pending_q",
+        "reset_req_en",
+        "ndmreset_req",
+        "lc_rst_asserted"
+      ],
+      "refs": [
+        "rv_dm.sv:347-351"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "ndmreset_pending_q && lc_rst_pending_q && reset_req_en && !ndmreset_req && !lc_rst_asserted",
+        "consequent": "ndmreset_ack == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_ack",
+        "signals": [
+          "ndmreset_ack",
+          "ndmreset_pending_q",
+          "lc_rst_pending_q",
+          "reset_req_en",
+          "ndmreset_req",
+          "lc_rst_asserted"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "ndmreset_pending_q && lc_rst_pending_q && reset_req_en && !ndmreset_req && !lc_rst_asserted",
+        "consequent": "ndmreset_ack == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "device_addr_aligned is continuously assigned the value of device_addr cast to BusWidth bits; this may truncate high-order bits if MemAw > BusWidth.",
+      "cond": "always",
+      "signals": [
+        "device_addr_aligned",
+        "device_addr",
+        "BusWidth"
+      ],
+      "refs": [
+        "rv_dm.sv:435"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "device_addr_aligned",
+          "device_addr",
+          "BusWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "device_addr_aligned is continuously assigned the value of device_addr cast to BusWidth bits; this may truncate high-order bits if MemAw > BusWidth",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "lifecycle",
+      "claim": "lc_hw_debug_en_gated[LcEnSba] must correctly reflect the debug enable permission of the current life cycle state and must be stable during active SBA transactions.",
+      "cond": "when SBA operations are expected or in progress",
+      "risk": "If the signal is incorrectly asserted in a non-debug state or toggles mid-transaction, the SBA port could be illicitly accessed or produce unexpected errors, breaking life-cycle security boundaries.",
+      "signals": [
+        "lc_hw_debug_en_gated[LcEnSba]",
+        "sba_tl_h_o",
+        "sba_tl_h_i",
+        "sba_tl_h_o_int"
+      ],
+      "refs": [
+        "rv_dm.sv:372-381"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_gated[LcEnSba]",
+          "sba_tl_h_o",
+          "sba_tl_h_i",
+          "sba_tl_h_o_int"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when SBA operations are expected or in progress",
+        "consequent": "lc_hw_debug_en_gated[LcEnSba] must correctly reflect the debug enable permission of the current life cycle state and must be stable during active SBA transactions",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
   "uncertain_points": [
-    "MemAw 与 BusWidth 的大小关系未知，若 MemAw > BusWidth，BusWidth'(device_addr) 会截断高位地址位，可能导致地址不对齐，但通常 MemAw 不应大于 BusWidth。",
-    "ndmreset_ack 是纯组合信号，但所有输入均来自其他模块，未在本片段中定义时序或同步关系。"
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If MemAw (used for device_addr) is wider than BusWidth, the cast 'BusWidth'(device_addr)' silently truncates higher address bits, potentially causing address aliasing within the debug memory port.",
+      "cond": "MemAw > BusWidth and device_addr exceeds the BusWidth range",
+      "risk": "Debug transactions could access unintended memory locations, leading to data corruption or information leakage without any hardware error indication.",
+      "signals": [
+        "device_addr",
+        "device_addr_aligned",
+        "BusWidth",
+        "MemAw"
+      ],
+      "refs": [
+        "rv_dm.sv:435"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "port.",
+        "signals": [
+          "device_addr",
+          "device_addr_aligned",
+          "BusWidth",
+          "MemAw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "MemAw > BusWidth and device_addr exceeds the BusWidth range",
+        "consequent": "the cast 'BusWidth'(device_addr)' silently truncates higher address bits, potentially causing address aliasing within the debug memory port",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The integrity error output host_r_other_err from the SBA adapter is explicitly not connected to an alert, per design comments. This relies on the life cycle to prevent SBA activity in production states; however, a transient or permanent fault (e.g., in the LC gate) could cause an integrity error to fire unnoticed, since it only updates a CSR and does not trigger a system-wide response.",
+      "cond": "Integrity error occurs while SBA is (erroneously) active or in a test state",
+      "risk": "Undetected bus tampering or data corruption may propagate into the system without raising an alert, potentially masking attacks or hardware faults.",
+      "signals": [
+        "host_r_other_err",
+        "lc_hw_debug_en_gated[LcEnSba]",
+        "sba_tl_h_o_int"
+      ],
+      "refs": [
+        "rv_dm.sv:408-415"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "host_r_other_err",
+          "lc_hw_debug_en_gated[LcEnSba]",
+          "sba_tl_h_o_int"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Integrity error occurs while SBA is (erroneously) active or in a test state",
+        "consequent": "The integrity error output host_r_other_err from the SBA adapter is explicitly not connected to an alert, per design comments. This relies on the life cycle to prevent SBA activity in production states; however, a transient or permanent fau",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The flush request of the TL-UL LC gate is tied low and its acknowledge is left open, indicating that the flush mechanism is intentionally disabled. It is unclear if this could hide a transaction-in-flight that should be aborted during life cycle transitions.",
+      "cond": "Life cycle state change while an SBA transaction is ongoing",
+      "risk": "Stale or partial transactions might survive a life cycle switch, potentially violating isolation requirements.",
+      "signals": [
+        "flush_req_i",
+        "flush_ack_o"
+      ],
+      "refs": [
+        "rv_dm.sv:383-384"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "flush_req_i",
+          "flush_ack_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Life cycle state change while an SBA transaction is ongoing",
+        "consequent": "The flush request of the TL-UL LC gate is tied low and its acknowledge is left open, indicating that the flush mechanism is intentionally disabled. It is unclear if this could hide a transaction-in-flight that should be aborted during life",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The TL-UL LC gate is controlled by lc_hw_debug_en_gated[LcEnSba]; it is not known whether this signal is synchronous to clk_i or can change asynchronously. A glitch or sudden de-assertion during an active SBA transfer could corrupt the bus transaction or produce unpredictable gating behavior.",
+      "cond": "lc_hw_debug_en_gated transitions while sba_tl_h_o_int handshake is in progress",
+      "risk": "Data corruption, protocol violation, or silent access failure inside the SBA path.",
+      "signals": [
+        "lc_hw_debug_en_gated[LcEnSba]",
+        "sba_tl_h_o_int",
+        "sba_tl_h_o"
+      ],
+      "refs": [
+        "rv_dm.sv:381",
+        "rv_dm.sv:416-417"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_gated[LcEnSba]",
+          "sba_tl_h_o_int",
+          "sba_tl_h_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "lc_hw_debug_en_gated transitions while sba_tl_h_o_int handshake is in progress",
+        "consequent": "The TL-UL LC gate is controlled by lc_hw_debug_en_gated[LcEnSba]; it is not known whether this signal is synchronous to clk_i or can change asynchronously. A glitch or sudden de-assertion during an active SBA transfer could corrupt the bus",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U5",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "sba_gate_intg_error from the LC gate is generated but its usage outside this chunk (alert, CSR, or logic) is not visible. It is essential that this error is properly propagated; an unhandled integrity error could silently violate DM security assumptions.",
+      "cond": "sba_gate_intg_error is asserted",
+      "risk": "Missed detection of a compromised or faulting SBA lc_gate, undermining the security isolation between life cycle states.",
+      "signals": [
+        "sba_gate_intg_error"
+      ],
+      "refs": [
+        "rv_dm.sv:382"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sba_gate_intg_error"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "sba_gate_intg_error is asserted",
+        "consequent": "sba_gate_intg_error from the LC gate is generated but its usage outside this chunk (alert, CSR, or logic) is not visible. It is essential that this error is properly propagated; an unhandled integrity error could silently violate DM securit",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "This chunk contains the SBA bus lifecycle gate (u_tlul_lc_gate_sba) controlled by lc_hw_debug_en_gated[LcEnSba], which can block TL-UL transactions based on life cycle state. If this gate is misconfigured or bypassed (e.g., due to a timing glitch or incorrect state), an attacker could perform memory accesses in non-debug life cycle states, compromising system security. The integrity error host_r_other_err from the SBA adapter is explicitly not connected to an alert, relying on the life cycle to prevent its activation; a fault that triggers this error while the gate is open (or due to a gate failure) would be recorded only in a CSR, potentially letting data corruption or tampering go undetected.",
+  "evidence_refs": [
+    "rv_dm.sv:347-351",
+    "rv_dm.sv:368-418",
+    "rv_dm.sv:435"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
   "line_start": 347,

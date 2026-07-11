@@ -2,57 +2,136 @@
   "chunk_id": "hmac__generate_for__gen_assert_wmask_bytealign__001",
   "header": {
     "module": "hmac",
-    "block_kind": "generate_for",
+    "block_kind": "generate",
     "driven": [],
     "used": [
-      "msg_fifo_wmask",
+      "msg_fifo_wmask[8*i+:8]",
       "clk_i",
       "rst_ni"
     ],
-    "modes": [
-      "i"
-    ],
-    "tags": []
+    "modes": [],
+    "tags": [
+      "assert",
+      "integrity"
+    ]
   },
   "guarantees": [],
   "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "Property wmask_bytealign_p is not defined in this chunk; its assertion on byte slices of msg_fifo_wmask cannot be evaluated without its definition.",
-      "cond": "assertion evaluation",
-      "risk": "If the property is incorrect or not aligned with design intent, undetected misaligned write masks could cause HMAC data corruption.",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The generate loop is hardcoded for 4 bytes (32-bit wmask), but msg_fifo_wmask may be wider if the design supports data widths >32 bits; upper bytes are not checked, allowing undetected partial writes.",
+      "cond": "msg_fifo_wmask width > 32 bits (parameter or static configuration)",
+      "risk": "Byte-alignment violations in upper bytes cause partial writes, corrupting HMAC state and potentially leaking previous message data.",
       "signals": [
         "msg_fifo_wmask",
-        "clk_i",
-        "rst_ni"
+        "genvar i"
       ],
       "refs": [
-        "file:917-919"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:917-919"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "supports",
+        "signals": [
+          "msg_fifo_wmask",
+          "genvar i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "msg_fifo_wmask width > 32 bits (parameter or static configuration)",
+        "consequent": "The generate loop is hardcoded for 4 bytes (32-bit wmask), but msg_fifo_wmask may be wider if the design supports data widths >32 bits; upper bytes are not checked, allowing undetected partial writes",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_unhandled_legal_case",
-      "priority": "low",
-      "claim": "The generate loop checks only 4 bytes (i=0..3) using msg_fifo_wmask[8*i+:8]; if msg_fifo_wmask has more than 32 bits, the check is incomplete.",
-      "cond": "when msg_fifo_wmask width > 32",
-      "risk": "Higher-order bytes of msg_fifo_wmask would not be verified for alignment, potentially hiding a bug in those bytes.",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The assertion only flags a violation in simulation/formal; no hardware mechanism (e.g., error gating, alert) is present to prevent a misaligned write mask from reaching the FIFO or message buffer.",
+      "cond": "An actual wmask misalignment occurs (bug, glitch, or configuration error)",
+      "risk": "Silent partial write proceeds, causing data corruption or exposure of previous message residue in HMAC internal storage.",
       "signals": [
+        "msg_fifo_wmask",
+        "gen_assert_wmask_bytealign"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:917-919"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_fifo_wmask",
+          "gen_assert_wmask_bytealign"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "An actual wmask misalignment occurs (bug, glitch, or configuration error)",
+        "consequent": "The assertion only flags a violation in simulation/formal; no hardware mechanism (e.g., error gating, alert) is present to prevent a misaligned write mask from reaching the FIFO or message buffer",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact definition of property wmask_bytealign_p (e.g., per-byte all‑0 or all‑1) is in a separate file and not visible here, so the strength and correctness of the check cannot be evaluated.",
+      "cond": "Unknown property code",
+      "risk": "If the property is too weak (e.g., only checks for non‑X) or mis‑specified, the security intent of full‑byte masking could be undermined.",
+      "signals": [
+        "wmask_bytealign_p",
         "msg_fifo_wmask"
       ],
       "refs": [
-        "file:917-919"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:918"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wmask_bytealign_p",
+          "msg_fifo_wmask"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Unknown property code",
+        "consequent": "The exact definition of property wmask_bytealign_p (e.g., per-byte all‑0 or all‑1) is in a separate file and not visible here, so the strength and correctness of the check cannot be evaluated",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The assertion on msg_fifo_wmask byte alignment ensures that each byte of write data is either fully written or fully masked, preventing partial writes that could leave stale data in HMAC's internal message buffer. If the assertion is not synthesizable or is disabled in hardware, and the actual wmask can be misaligned, an attacker could exploit partial writes to recover previous message data or force hash computation over contaminated state, breaking confidentiality (secret leakage) and integrity (MAC forgery).",
   "evidence_refs": [
-    "file:917-919"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:917-919"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 917,
-  "line_end": 919,
-  "security_implications": ""
+  "line_end": 919
 }

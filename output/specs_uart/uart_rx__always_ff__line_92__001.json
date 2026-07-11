@@ -8,71 +8,100 @@
     ],
     "used": [
       "tick_baud_q",
-      "bit_cnt_q",
-      "rst_ni"
+      "bit_cnt_q"
     ],
     "modes": [],
     "tags": [
-      "handshake",
-      "counter",
-      "reset"
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On positive edge of clk_i, rx_valid_q is updated to (tick_baud_q && (bit_cnt_q == 4'h1)); on negative edge of rst_ni, rx_valid_q is asynchronously cleared to 0.",
-      "cond": "always",
+      "claim": "On reset (rst_ni low), rx_valid_q is cleared to 0 on the next clock edge; when reset is inactive, rx_valid_q is driven to (tick_baud_q && bit_cnt_q == 4'h1) on each clock edge.",
+      "cond": "posedge clk_i (considering rst_ni state)",
       "signals": [
         "rx_valid_q",
-        "tick_baud_q",
-        "bit_cnt_q",
         "rst_ni",
-        "clk_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:92-96"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "tick_baud_q and bit_cnt_q must be synchronous to clk_i and correctly indicate a valid sampling point when both conditions are true.",
-      "cond": "when rx_valid_q is expected to be meaningful",
-      "risk": "rx_valid_q may assert incorrectly, marking invalid data as valid, causing data corruption.",
-      "signals": [
         "tick_baud_q",
         "bit_cnt_q"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:92-96"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "if (!rst_ni) ##1 rx_valid_q == 1'b0 else ##1 rx_valid_q == (tick_baud_q && (bit_cnt_q == 4'h1))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_rx",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rx_valid_q",
+          "rst_ni",
+          "tick_baud_q",
+          "bit_cnt_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "posedge clk_i (considering rst_ni state)",
+        "consequent": "if (!rst_ni) ##1 rx_valid_q == 1'b0 else ##1 rx_valid_q == (tick_baud_q && (bit_cnt_q == 4'h1))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "The meaning of bit_cnt_q == 4'h1 (bit position 1) is not documented in this chunk; it could indicate the start bit sample, first data bit, or other timing significance.",
-      "cond": "always",
-      "risk": "If the intended sample point is misinterpreted, rx_valid_q may be asserted at an incorrect time, leading to framing errors or misaligned data capture.",
+      "claim": "It is unclear whether the condition (bit_cnt_q == 4'h1) is the exact moment of a completed byte reception. Using a hardcoded '1' may be fragile if the bit-order or count encoding changes.",
+      "cond": "When baud tick occurs and bit_cnt_q reaches 1",
+      "risk": "rx_valid_q could be asserted at an incorrect time, causing a false data-valid strobe to downstream logic.",
       "signals": [
-        "bit_cnt_q"
+        "bit_cnt_q",
+        "tick_baud_q",
+        "rx_valid_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:92-96"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:94"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_rx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "bit_cnt_q",
+          "tick_baud_q",
+          "rx_valid_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "When baud tick occurs and bit_cnt_q reaches 1",
+        "consequent": "It is unclear whether the condition (bit_cnt_q == 4'h1) is the exact moment of a completed byte reception. Using a hardcoded '1' may be fragile if the bit-order or count encoding changes",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "If rx_valid_q is incorrectly asserted due to a glitch or mismatched bit-count condition, a downstream FIFO may capture invalid data, violating communication integrity. This does not expose secrets but can cause data corruption.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv:92-96"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_rx.sv",
   "line_start": 92,
-  "line_end": 96,
-  "security_implications": ""
+  "line_end": 96
 }

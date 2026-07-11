@@ -5,8 +5,6 @@
     "block_kind": "mixed",
     "driven": [
       "intr_op_done_o",
-      "hw2reg.intr_state.de",
-      "hw2reg.intr_state.d",
       "hw2reg.err_code.invalid_op.d",
       "hw2reg.err_code.invalid_kmac_input.d",
       "hw2reg.err_code.invalid_shadow_update.d",
@@ -41,10 +39,10 @@
       "hw2reg.fault_status.side_ctrl_fsm.d",
       "hw2reg.fault_status.side_ctrl_sel.d",
       "hw2reg.fault_status.key_ecc.d",
-      "fault_errs",
       "fault_err_req_d",
-      "op_errs",
-      "op_err_req_d"
+      "op_err_req_d",
+      "fault_errs",
+      "op_errs"
     ],
     "used": [
       "op_done",
@@ -56,202 +54,571 @@
       "fault_code",
       "reg2hw.fault_status",
       "fault_err_ack",
-      "fault_err_req_q",
       "op_err_ack",
+      "fault_err_req_q",
       "op_err_req_q"
     ],
-    "modes": [],
+    "modes": [
+      "fault_code bits (FaultKmacCmd, FaultKmacFsm, FaultKmacOp, FaultKmacDone, FaultKmacOut, FaultRegIntg, FaultShadow, FaultCtrlFsm, FaultCtrlFsmChk, FaultCtrlCnt, FaultReseedCnt, FaultSideFsm, FaultSideSel, FaultKeyEcc)",
+      "err_code bits (ErrInvalidOp, ErrInvalidIn, ErrShadowUpdate)"
+    ],
     "tags": [
       "error",
       "fault",
-      "alert",
       "interrupt",
-      "csr",
-      "handshake"
+      "integrity",
+      "alert"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "When any error_code bit is set (err_code[ErrInvalidOp], err_code[ErrInvalidIn], or err_code[ErrShadowUpdate] high), the corresponding hw2reg.err_code.*.de is asserted and hw2reg.err_code.*.d is driven to 1'b1.",
-      "cond": "err_code[bit] == 1",
-      "signals": [
-        "err_code",
-        "hw2reg.err_code.invalid_op.de",
-        "hw2reg.err_code.invalid_op.d",
-        "hw2reg.err_code.invalid_kmac_input.de",
-        "hw2reg.err_code.invalid_kmac_input.d",
-        "hw2reg.err_code.invalid_shadow_update.de",
-        "hw2reg.err_code.invalid_shadow_update.d"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:672-677"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "assignment",
-      "claim": "When any fault_code bit is set (FaultKmacCmd, FaultKmacFsm, ...), the corresponding hw2reg.fault_status.*.de is asserted and hw2reg.fault_status.*.d is driven to 1'b1.",
-      "cond": "fault_code[bit] == 1",
-      "signals": [
-        "fault_code",
-        "hw2reg.fault_status.cmd.de",
-        "hw2reg.fault_status.cmd.d",
-        "... all other fault_status bits"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:679-706"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "assignment",
-      "claim": "Signal fault_errs is the OR of all bits in reg2hw.fault_status; op_errs is the OR of all bits in err_code.",
-      "cond": "always",
-      "signals": [
-        "reg2hw.fault_status",
-        "fault_errs",
-        "err_code",
-        "op_errs"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:716,721"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "fault_err_req_d is set to 1 when fault_errs is high, cleared to 0 when fault_err_ack is high, and held at fault_err_req_q otherwise; op_err_req_d is set in the same pattern using op_errs and op_err_ack.",
-      "cond": "always",
-      "signals": [
-        "fault_errs",
-        "fault_err_ack",
-        "fault_err_req_q",
-        "fault_err_req_d",
-        "op_errs",
-        "op_err_ack",
-        "op_err_req_q",
-        "op_err_req_d"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:718-723"
-      ]
-    },
-    {
-      "id": "G5",
       "type": "instance",
-      "claim": "The prim_intr_hw instance u_intr_op_done generates interrupt output intr_op_done_o based on op_done event and CSR control signals reg2hw.intr_enable.q, reg2hw.intr_test.q, reg2hw.intr_test.qe, reg2hw.intr_state.q, and drives hw2reg.intr_state.de/d.",
-      "cond": "as defined by prim_intr_hw",
+      "claim": "The prim_intr_hw instance u_intr_op_done drives interrupt output intr_op_done_o, responding to event op_done and register configuration (enable, test, state).",
+      "cond": "always",
       "signals": [
-        "intr_op_done_o",
         "op_done",
         "reg2hw.intr_enable.q",
         "reg2hw.intr_test.q",
         "reg2hw.intr_test.qe",
         "reg2hw.intr_state.q",
-        "hw2reg.intr_state.de",
-        "hw2reg.intr_state.d"
+        "intr_op_done_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:659-670"
-      ]
+        "keymgr.sv:659-670"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_done == 1 && reg2hw.intr_enable.q == 1",
+        "consequent": "intr_op_done_o == 1",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done",
+          "reg2hw.intr_enable.q",
+          "reg2hw.intr_test.q",
+          "reg2hw.intr_test.qe",
+          "reg2hw.intr_state.q",
+          "intr_op_done_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_done == 1 && reg2hw.intr_enable.q == 1",
+        "consequent": "intr_op_done_o == 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "Error code status data inputs (invalid_op, invalid_kmac_input, invalid_shadow_update) are constant 1.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.err_code.invalid_op.d",
+        "hw2reg.err_code.invalid_kmac_input.d",
+        "hw2reg.err_code.invalid_shadow_update.d"
+      ],
+      "refs": [
+        "keymgr.sv:672-675"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.err_code.invalid_op.d == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.err_code.invalid_op.d",
+          "hw2reg.err_code.invalid_kmac_input.d",
+          "hw2reg.err_code.invalid_shadow_update.d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw2reg.err_code.invalid_op.d == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "Error code status data enables are directly sourced from err_code bits.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.err_code.invalid_op.de",
+        "hw2reg.err_code.invalid_kmac_input.de",
+        "hw2reg.err_code.invalid_shadow_update.de",
+        "err_code"
+      ],
+      "refs": [
+        "keymgr.sv:675-677"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.err_code.invalid_op.de == err_code[ErrInvalidOp]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.err_code.invalid_op.de",
+          "hw2reg.err_code.invalid_kmac_input.de",
+          "hw2reg.err_code.invalid_shadow_update.de",
+          "err_code"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw2reg.err_code.invalid_op.de == err_code[ErrInvalidOp]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "All fault status data inputs are constant 1.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.fault_status.cmd.d",
+        "hw2reg.fault_status.kmac_fsm.d",
+        "hw2reg.fault_status.kmac_done.d",
+        "hw2reg.fault_status.kmac_op.d",
+        "hw2reg.fault_status.kmac_out.d",
+        "hw2reg.fault_status.regfile_intg.d",
+        "hw2reg.fault_status.shadow.d",
+        "hw2reg.fault_status.ctrl_fsm_intg.d",
+        "hw2reg.fault_status.ctrl_fsm_chk.d",
+        "hw2reg.fault_status.ctrl_fsm_cnt.d",
+        "hw2reg.fault_status.reseed_cnt.d",
+        "hw2reg.fault_status.side_ctrl_fsm.d",
+        "hw2reg.fault_status.side_ctrl_sel.d",
+        "hw2reg.fault_status.key_ecc.d"
+      ],
+      "refs": [
+        "keymgr.sv:693-706"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.fault_status.cmd.d == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.fault_status.cmd.d",
+          "hw2reg.fault_status.kmac_fsm.d",
+          "hw2reg.fault_status.kmac_done.d",
+          "hw2reg.fault_status.kmac_op.d",
+          "hw2reg.fault_status.kmac_out.d",
+          "hw2reg.fault_status.regfile_intg.d",
+          "hw2reg.fault_status.shadow.d",
+          "hw2reg.fault_status.ctrl_fsm_intg.d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw2reg.fault_status.cmd.d == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "Fault status data enables are directly sourced from fault_code bits.",
+      "cond": "always",
+      "signals": [
+        "hw2reg.fault_status.cmd.de",
+        "hw2reg.fault_status.kmac_fsm.de",
+        "hw2reg.fault_status.kmac_op.de",
+        "hw2reg.fault_status.kmac_done.de",
+        "hw2reg.fault_status.kmac_out.de",
+        "hw2reg.fault_status.regfile_intg.de",
+        "hw2reg.fault_status.shadow.de",
+        "hw2reg.fault_status.ctrl_fsm_intg.de",
+        "hw2reg.fault_status.ctrl_fsm_chk.de",
+        "hw2reg.fault_status.ctrl_fsm_cnt.de",
+        "hw2reg.fault_status.reseed_cnt.de",
+        "hw2reg.fault_status.side_ctrl_fsm.de",
+        "hw2reg.fault_status.side_ctrl_sel.de",
+        "hw2reg.fault_status.key_ecc.de",
+        "fault_code"
+      ],
+      "refs": [
+        "keymgr.sv:679-692"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.fault_status.cmd.de == fault_code[FaultKmacCmd]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.fault_status.cmd.de",
+          "hw2reg.fault_status.kmac_fsm.de",
+          "hw2reg.fault_status.kmac_op.de",
+          "hw2reg.fault_status.kmac_done.de",
+          "hw2reg.fault_status.kmac_out.de",
+          "hw2reg.fault_status.regfile_intg.de",
+          "hw2reg.fault_status.shadow.de",
+          "hw2reg.fault_status.ctrl_fsm_intg.de"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw2reg.fault_status.cmd.de == fault_code[FaultKmacCmd]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "Fault error request next-state logic: set when any fault_status bit is high, clear when ack, else hold.",
+      "cond": "always",
+      "signals": [
+        "fault_err_req_d",
+        "fault_errs",
+        "fault_err_ack",
+        "fault_err_req_q",
+        "reg2hw.fault_status"
+      ],
+      "refs": [
+        "keymgr.sv:716-719"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "fault_err_req_d == (fault_errs ? 1'b1 : (fault_err_ack ? 1'b0 : fault_err_req_q))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fault_err_req_d",
+          "fault_errs",
+          "fault_err_ack",
+          "fault_err_req_q",
+          "reg2hw.fault_status"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "fault_err_req_d == (fault_errs ? 1'b1 : (fault_err_ack ? 1'b0 : fault_err_req_q))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "assignment",
+      "claim": "Operation error request next-state logic: set when any err_code bit is high, clear when ack, else hold.",
+      "cond": "always",
+      "signals": [
+        "op_err_req_d",
+        "op_errs",
+        "op_err_ack",
+        "op_err_req_q",
+        "err_code"
+      ],
+      "refs": [
+        "keymgr.sv:721-723"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_err_req_d == (op_errs ? 1'b1 : (op_err_ack ? 1'b0 : op_err_req_q))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_err_req_d",
+          "op_errs",
+          "op_err_ack",
+          "op_err_req_q",
+          "err_code"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_err_req_d == (op_errs ? 1'b1 : (op_err_ack ? 1'b0 : op_err_req_q))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
+      "type": "producer_contract",
+      "claim": "Signals op_done and register interface inputs (reg2hw.intr_enable.q, reg2hw.intr_test.q, reg2hw.intr_test.qe, reg2hw.intr_state.q) are stable and valid when sampled by the prim_intr_hw instance.",
+      "cond": "every clock cycle",
+      "risk": "Interrupt intr_op_done_o may glitch, mis-fire, or miss events, disrupting security operation signaling.",
+      "signals": [
+        "op_done",
+        "reg2hw.intr_enable.q",
+        "reg2hw.intr_test.q",
+        "reg2hw.intr_test.qe",
+        "reg2hw.intr_state.q"
+      ],
+      "refs": [
+        "keymgr.sv:659-670"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$stable(op_done) && $stable(reg2hw.intr_enable.q)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done",
+          "reg2hw.intr_enable.q",
+          "reg2hw.intr_test.q",
+          "reg2hw.intr_test.qe",
+          "reg2hw.intr_state.q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "every clock cycle",
+        "consequent": "$stable(op_done) && $stable(reg2hw.intr_enable.q)",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
       "type": "value_domain",
-      "claim": "Inputs err_code and fault_code are stable, glitch-free, and only assert when a true error/fault condition exists.",
-      "cond": "during operation",
-      "risk": "Transient or spurious pulses could cause spurious status writes (d=1) and unexpected alert requests.",
+      "claim": "err_code and fault_code bits are glitch-free and accurately reflect error/fault conditions.",
+      "cond": "when status registers are enabled for write",
+      "risk": "Glitches could cause spurious writes, setting status bits incorrectly and potentially escalating security alerts erroneously.",
       "signals": [
         "err_code",
         "fault_code"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:672-706,716,721"
-      ]
+        "keymgr.sv:672-706"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$stable(err_code) && $stable(fault_code)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "err_code",
+          "fault_code"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when status registers are enabled for write",
+        "consequent": "$stable(err_code) && $stable(fault_code)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "A2",
+      "id": "A3",
       "type": "handshake",
-      "claim": "fault_err_ack and op_err_ack are driven by external logic (likely alert handler) and will eventually assert after a request is active, enabling the request signals to reset.",
-      "cond": "when fault_err_req_d / op_err_req_d are high",
-      "risk": "If ack never arrives, the request remains stuck high and downstream alert handling may stall or miss subsequent events.",
+      "claim": "External logic must eventually assert fault_err_ack and op_err_ack to clear the corresponding request signals.",
+      "cond": "after fault_errs or op_errs become high",
+      "risk": "If never acknowledged, fault_err_req_d / op_err_req_d remain high, potentially stalling recovery or masking further errors.",
       "signals": [
         "fault_err_ack",
         "op_err_ack"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:718-723"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "producer_contract",
-      "claim": "op_done provides a valid pulse or level to indicate completion of an operation, conforming to prim_intr_hw requirements.",
-      "cond": "when an operation completes",
-      "risk": "A missing or incorrect op_done signal could lead to missed interrupts, affecting software notification.",
-      "signals": [
-        "op_done"
+        "keymgr.sv:718-719,723"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:662"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "fault_errs == 1",
+        "consequent": "s_eventually fault_err_ack == 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fault_err_ack",
+          "op_err_ack"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "fault_errs == 1",
+        "consequent": "s_eventually fault_err_ack == 1",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A4",
-      "type": "value_domain",
-      "claim": "fault_err_req_q and op_err_req_q hold the registered state of the request signals and are updated elsewhere with the values of fault_err_req_d and op_err_req_d.",
-      "cond": "always",
-      "risk": "If these do not correctly store the previous state, the hold and clear logic for request generation breaks.",
+      "type": "security_precondition",
+      "claim": "The hw2reg interface must support clearing of fault/error status bits when their corresponding de is low, otherwise persistent fault conditions prevent clearing.",
+      "cond": "fault_code or err_code bits remain high indefinitely",
+      "risk": "Inability to clear fault status could permanently block security recovery flows or forced clearing of secret states.",
       "signals": [
-        "fault_err_req_q",
-        "op_err_req_q"
+        "hw2reg.fault_status.*.de",
+        "hw2reg.err_code.*.de",
+        "fault_code",
+        "err_code"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:719,723"
-      ]
+        "keymgr.sv:672-706"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "fault_code[FaultKmacCmd] == 1",
+        "consequent": "s_eventually hw2reg.fault_status.cmd.q == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "support",
+        "signals": [
+          "hw2reg.fault_status.*.de",
+          "hw2reg.err_code.*.de",
+          "fault_code",
+          "err_code"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "fault_code[FaultKmacCmd] == 1",
+        "consequent": "s_eventually hw2reg.fault_status.cmd.q == 0",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "fault_err_req_q and op_err_req_q are used but not driven in this chunk; their registered behavior must be confirmed in another module to ensure the request hold/reset logic is correctly closed.",
-      "cond": "register update path outside this chunk",
-      "risk": "If the register is missing or incorrectly implemented, the request signals may not latch or clear as intended, possibly causing loss or hang of error/fault alerting.",
+      "claim": "Status bits are written with constant 1 and enabled by level signals; it is unclear if the design intends them to be clearable while fault/error conditions persist, or if a separate edge-based latch exists elsewhere.",
+      "cond": "fault_code or err_code bits staying high",
+      "risk": "If clear is impossible, a stuck fault may permanently set the status, escalating security alerts and blocking normal operation.",
       "signals": [
-        "fault_err_req_q",
-        "op_err_req_q"
+        "hw2reg.fault_status.cmd.d",
+        "hw2reg.fault_status.cmd.de",
+        "fault_code",
+        "err_code"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:712-723"
-      ]
+        "keymgr.sv:672-706"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.fault_status.cmd.d",
+          "hw2reg.fault_status.cmd.de",
+          "fault_code",
+          "err_code"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "fault_code or err_code bits staying high",
+        "consequent": "Status bits are written with constant 1 and enabled by level signals; it is unclear if the design intends them to be clearable while fault/error conditions persist, or if a separate edge-based latch exists elsewhere",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "The destination of fault_err_req_d and op_err_req_d is not shown; they are likely connected to different alert sender instances, but the comment hints at two types of alerts (hardware vs. software-generated). The handling and priority of these two request types need verification.",
-      "cond": "connection outside this chunk",
-      "risk": "Incorrect assignment could cause misrouted alerts, bypassing security escalation or masking a critical hardware fault as a software error.",
+      "claim": "Error and fault code bits may be pulses; if a pulse occurs while the corresponding status register is not being sampled (e.g., due to clock gating or interface timing), it may be missed.",
+      "cond": "err_code/Fault_code bit pulses shorter than one clock cycle",
+      "risk": "Transient hardware errors could go undetected, allowing corrupted data or states to be used without alert.",
       "signals": [
-        "fault_err_req_d",
-        "op_err_req_d"
+        "err_code",
+        "fault_code",
+        "hw2reg.err_code.*.de",
+        "hw2reg.fault_status.*.de"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:708-710,718-723"
-      ]
+        "keymgr.sv:675-677,679-692"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "$rose(err_code[ErrInvalidOp])",
+        "consequent": "hw2reg.err_code.invalid_op.de == 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "err_code",
+          "fault_code",
+          "hw2reg.err_code.*.de",
+          "hw2reg.fault_status.*.de"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "$rose(err_code[ErrInvalidOp])",
+        "consequent": "hw2reg.err_code.invalid_op.de == 1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Chunk configures error and fault status registers capturing integrity violations (regfile_intg, shadow, ctrl_fsm_intg, key_ecc, etc.). Incorrect setting or clearing of these bits could mask critical hardware failures, potentially allowing corrupted keys to be used or secrets to leak. The fault_err_req mechanism may trigger security escalation; a stuck-high request could cause denial of service or block secure recovery. The op_done interrupt signals completion of security-sensitive operations; a missed interrupt may stall or corrupt secure workflows.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:659-723"
+    "keymgr.sv:659-723"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 659,
-  "line_end": 723,
-  "security_implications": ""
+  "line_end": 723
 }

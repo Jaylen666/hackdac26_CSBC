@@ -2,89 +2,99 @@
   "chunk_id": "hmac__generate_for__gen_key__001",
   "header": {
     "module": "hmac",
-    "block_kind": "generate_for",
+    "block_kind": "generate",
     "driven": [
-      "hw2reg.key[31-i].d"
+      "hw2reg.key[*].d"
     ],
     "used": [],
-    "modes": [],
+    "modes": [
+      "32 (loop count)"
+    ],
     "tags": [
       "key",
-      "security",
-      "parameterization"
+      "secret",
+      "wipe"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "hw2reg.key[*].d is permanently assigned 0, ensuring the hardware-to-register data path for the key cannot deliver non-zero values.",
+      "claim": "All 32 bits of the hardware-to-register interface signal hw2reg.key[31-i].d are hardwired to logic 0, for i from 0 to 31.",
       "cond": "always",
       "signals": [
-        "hw2reg",
-        "key",
-        "d"
+        "hw2reg.key[*].d"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:234-236"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "hw2reg.key is exactly a 32-bit packed field; the generate loop index 0..31 covers the entire field.",
-      "cond": "always",
-      "risk": "If the key field is wider than 32 bits, bits beyond index 31 are not assigned zero by this block, allowing hardware to potentially set those bits and compromise key integrity.",
-      "signals": [
-        "hw2reg",
-        "key"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:234-236"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.key[31-i].d == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.key[*].d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw2reg.key[31-i].d == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The assignment uses index reversal (31-i). This may incorrectly map key bits if the hardware-to-register bit order does not match the software-facing key layout, potentially swapping key bits.",
-      "cond": "always",
-      "risk": "Key bits could be misaligned between hardware and software, leading to a broken or weak HMAC operation that uses a scrambled key.",
+      "claim": "Why is the hardware-to-register key data (hw2reg.key.d) forced to zero? This may be a deliberate mechanism to prevent software reads of the secret key, but it could also inhibit legitimate key loading or auditing paths.",
+      "cond": "unknown",
+      "risk": "If the zeroing is unintended or incomplete, key material may be exposed to software or key initialization may fail silently.",
       "signals": [
-        "hw2reg",
-        "key",
-        "d",
-        "genvar i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:234-236"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "high",
-      "claim": "The loop bound is hardcoded to 32. If the actual key register width is not 32, this block may fail to zero all key bits (if wider) or cause a compilation error (if narrower), leaving a security gap.",
-      "cond": "when key width != 32",
-      "risk": "Hardware could write non-zero values to unzeroed key bits, compromising key confidentiality or integrity.",
-      "signals": [
-        "hw2reg",
+        "hw2reg.key[*].d",
         "key"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:234-236"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.key[*].d == 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw2reg.key[*].d",
+          "key"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "hw2reg.key[*].d == 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk drives all bits of the hardware-to-register key path (hw2reg.key[*].d) to constant 0. This directly affects the key secret storage readback interface. It may implement a key wipe or read protection, but the intent is unclear from this snippet. If the zeroing is not correctly integrated with key provisioning, it could lead to key exposure or functional deadlock.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:234-236"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 234,
-  "line_end": 236,
-  "security_implications": ""
+  "line_end": 236
 }

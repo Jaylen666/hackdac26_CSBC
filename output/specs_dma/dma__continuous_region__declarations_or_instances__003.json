@@ -9,28 +9,31 @@
     "used": [
       "ctrl_state_logic"
     ],
-    "modes": [],
+    "modes": [
+      "dma_ctrl_state_e",
+      "control_state_t"
+    ],
     "tags": [
-      "csr",
-      "capture"
+      "access_control",
+      "csr"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "ctrl_state_q is continuously assigned as the dma_ctrl_state_e-type cast of ctrl_state_logic.",
+      "claim": "ctrl_state_q is continuously assigned to the type-cast of ctrl_state_logic to dma_ctrl_state_e",
       "cond": "always",
       "signals": [
-        "ctrl_state_logic",
-        "ctrl_state_q"
+        "ctrl_state_q",
+        "ctrl_state_logic"
       ],
       "refs": [
-        "dma.sv:267-268"
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:267-268"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": null,
+        "antecedent": "",
         "consequent": "ctrl_state_q == dma_ctrl_state_e'(ctrl_state_logic)",
         "formalizability": "direct"
       },
@@ -40,8 +43,8 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "ctrl_state_logic",
-          "ctrl_state_q"
+          "ctrl_state_q",
+          "ctrl_state_logic"
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
@@ -52,26 +55,24 @@
       }
     }
   ],
-  "assumptions": [],
-  "uncertain_points": [
+  "assumptions": [
     {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The comment describes ctrl_state_q as a captured value that should be stable during active DMA operation, but the continuous assignment makes it follow any change on ctrl_state_logic, breaking the intended lock.",
-      "cond": "DMA operation is active",
-      "risk": "If ctrl_state_logic changes after DMA start, the state machine may use an incorrect control state, leading to unpredictable transfers or security violations.",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "ctrl_state_logic always holds a legal encoding of the dma_ctrl_state_e enum",
+      "cond": "always",
+      "risk": "If violated, ctrl_state_q will hold an illegal value, potentially causing undefined FSM behavior.",
       "signals": [
         "ctrl_state_logic",
         "ctrl_state_q"
       ],
       "refs": [
-        "dma.sv:268,270-277"
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:267-268"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": null,
-        "consequent": null,
+        "antecedent": "",
+        "consequent": "",
         "formalizability": "none"
       },
       "formal_sketch": {
@@ -83,19 +84,95 @@
           "ctrl_state_q"
         ],
         "temporal_shape": "comb",
-        "antecedent": "DMA operation is active",
-        "consequent": "The comment describes ctrl_state_q as a captured value that should be stable during active DMA operation, but the continuous assignment makes it follow any change on ctrl_state_logic, breaking the intended lock",
+        "antecedent": "always",
+        "consequent": "ctrl_state_logic always holds a legal encoding of the dma_ctrl_state_e enum",
         "formalizability": "none",
-        "confidence": 0.8,
+        "confidence": 0.85,
         "source": "llm"
       }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The signals capture_state, control_d, and control_q are declared but their generation and usage are implemented in other chunks. Verification must confirm that the register-capture mechanism correctly locks relevant registers during active DMA operation as described in the comment.",
+      "cond": "unknown (cross-chunk)",
+      "risk": "If the capture mechanism fails, software could modify critical DMA control registers mid-operation, leading to access control bypass or data corruption.",
+      "signals": [
+        "capture_state",
+        "control_d",
+        "control_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:276-277"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "capture_state",
+          "control_d",
+          "control_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown (cross-chunk)",
+        "consequent": "The signals capture_state, control_d, and control_q are declared but their generation and usage are implemented in other chunks. Verification must confirm that the register-capture mechanism correctly locks relevant registers during active",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_unhandled_legal_case",
+      "priority": "high",
+      "claim": "ctrl_state_logic may take a value not in the dma_ctrl_state_e enum. No error checking or safe default is enforced in this chunk. An illegal value propagates directly to ctrl_state_q.",
+      "cond": "ctrl_state_logic has an illegal encoding",
+      "risk": "The downstream FSM may enter an invalid state, bypass security checks, or deadlock.",
+      "signals": [
+        "ctrl_state_logic",
+        "ctrl_state_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:267-268"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "ctrl_state_q is used",
+        "consequent": "ctrl_state_q inside {dma_ctrl_state_e}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "ctrl_state_logic",
+          "ctrl_state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "ctrl_state_q is used",
+        "consequent": "ctrl_state_q inside {dma_ctrl_state_e}",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The dma module uses hardware-controlled REGWEN to lock most registers during active DMA operation. For registers that cannot be locked this way (e.g., CONTROL register), a capture mechanism records their values at operation start and only the captured value (via control_q) is used subsequently. If capture_state fails or if control_q does not hold the correct captured value, software may be able to modify critical control registers mid-operation, potentially causing privilege escalation, access control bypass, or DMA transfer corruption. Additionally, an illegal encoding on ctrl_state_logic could cause the FSM to misbehave, possibly bypassing the capture mechanism or accessing illegal addresses.",
   "evidence_refs": [
-    "dma.sv:267-277"
+    "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:267-277"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 267,
-  "line_end": 277,
-  "security_implications": ""
+  "line_end": 277
 }

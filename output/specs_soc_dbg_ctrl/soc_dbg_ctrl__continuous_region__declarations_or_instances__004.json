@@ -11,51 +11,91 @@
     "used": [
       "halt_state_d",
       "Idle",
-      "boot_status_i.clk_status",
-      "boot_status_i.light_reset_req",
-      "boot_status_i.strap_sampled"
+      "boot_status_i"
     ],
     "modes": [
       "Idle"
     ],
     "tags": [
+      "debug",
       "sparse_fsm",
-      "error"
+      "error",
+      "unused_signals",
+      "fault"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "reg_update",
-      "claim": "halt_state_q is registered from halt_state_d and reset to the Idle state.",
-      "cond": "always",
+      "type": "default_fallback",
+      "claim": "The macro instances a sparse FSM state register that produces halt_state_q and an error flag halt_state_e; the error flag is asserted when halt_state_d contains an illegal encoding.",
+      "cond": "halt_state_d encodes an invalid state",
       "signals": [
-        "halt_state_q",
         "halt_state_d",
-        "Idle"
+        "halt_state_q",
+        "halt_state_e"
       ],
       "refs": [
         "soc_dbg_ctrl.sv:379"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "halt_state_q == $past(halt_state_d)",
-        "formalizability": "direct"
+        "consequent": "halt_state_e == 1'b1",
+        "formalizability": "partial"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "soc_dbg_ctrl",
         "clock": "",
-        "reset": "reset",
+        "reset": "",
         "signals": [
-          "halt_state_q",
           "halt_state_d",
-          "Idle"
+          "halt_state_q",
+          "halt_state_e"
         ],
-        "temporal_shape": "next_cycle",
+        "temporal_shape": "comb",
+        "antecedent": "halt_state_d encodes an invalid state",
+        "consequent": "halt_state_e == 1'b1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "assignment",
+      "claim": "unused_signals is continuously driven by the XOR of three boot status inputs, providing a toggle sink to avoid lint warnings.",
+      "cond": "always",
+      "signals": [
+        "unused_signals",
+        "boot_status_i.clk_status",
+        "boot_status_i.light_reset_req",
+        "boot_status_i.strap_sampled"
+      ],
+      "refs": [
+        "soc_dbg_ctrl.sv:382-384"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "unused_signals == (boot_status_i.clk_status ^ boot_status_i.light_reset_req ^ boot_status_i.strap_sampled)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "boot_status_i.clk_status",
+        "reset": "boot_status_i.light_reset_req",
+        "signals": [
+          "unused_signals",
+          "boot_status_i.clk_status",
+          "boot_status_i.light_reset_req",
+          "boot_status_i.strap_sampled"
+        ],
+        "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "halt_state_q == $past(halt_state_d)",
+        "consequent": "unused_signals == (boot_status_i.clk_status ^ boot_status_i.light_reset_req ^ boot_status_i.strap_sampled)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -65,45 +105,12 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "halt_state_d must always be driven with a valid sparse FSM encoding.",
-      "cond": "whenever the macro is active",
-      "risk": "halt_state_e may be incorrectly asserted, potentially causing spurious error handling or FSM misbehavior.",
+      "type": "producer_contract",
+      "claim": "The external logic driving halt_state_d must never generate an encoding that is illegal for the sparse FSM primitive, except during error injection test.",
+      "cond": "Normal operation (not a deliberate fault test)",
+      "risk": "A spurious error assertion on halt_state_e could cause unintended debug state machine reset or escalation, potentially locking debug access or masking real faults.",
       "signals": [
-        "halt_state_d"
-      ],
-      "refs": [
-        "soc_dbg_ctrl.sv:379"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "halt_state_d has invalid encoding",
-        "consequent": "halt_state_e == 1",
-        "formalizability": "partial"
-      },
-      "formal_sketch": {
-        "scope": "soc_dbg_ctrl",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "halt_state_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "halt_state_d has invalid encoding",
-        "consequent": "halt_state_e == 1",
-        "formalizability": "partial",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "A2",
-      "type": "mode_config",
-      "claim": "The Idle parameter must correspond to a valid reset state encoding for the sparse FSM.",
-      "cond": "on reset",
-      "risk": "Reset value may be invalid, causing halt_state_e to be asserted immediately after reset.",
-      "signals": [
-        "Idle",
+        "halt_state_d",
         "halt_state_e"
       ],
       "refs": [
@@ -111,23 +118,23 @@
       ],
       "formal": {
         "temporal_shape": "always",
-        "antecedent": "reset active",
-        "consequent": "Idle is a valid encoding",
-        "formalizability": "partial"
+        "antecedent": "",
+        "consequent": "halt_state_d inside {Idle}",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "soc_dbg_ctrl",
         "clock": "",
-        "reset": "reset",
+        "reset": "",
         "signals": [
-          "Idle",
+          "halt_state_d",
           "halt_state_e"
         ],
         "temporal_shape": "always",
-        "antecedent": "reset active",
-        "consequent": "Idle is a valid encoding",
-        "formalizability": "partial",
-        "confidence": 1.0,
+        "antecedent": "Normal operation (not a deliberate fault test)",
+        "consequent": "halt_state_d inside {Idle}",
+        "formalizability": "none",
+        "confidence": 0.85,
         "source": "llm"
       }
     }
@@ -135,19 +142,18 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
-      "priority": "low",
-      "claim": "Signals boot_status_i.clk_status, boot_status_i.light_reset_req, boot_status_i.strap_sampled are only used in a dummy XOR reduction to an unread wire unused_signals, making the inputs effectively unused.",
-      "cond": "always",
-      "risk": "If these boot_status inputs are needed for debug control functionality, the design may be missing critical connections.",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The boot_status_i input fields (clk_status, light_reset_req, strap_sampled) are completely unused by the debug controller; any clock fault, external light reset request, or strap sampling event is merged into a dummy XOR and ignored, potentially bypassing critical fail‑safe reactions.",
+      "cond": "unknown",
+      "risk": "If a clock failure or external reset request occurs, the debug controller continues operating without entering a safe or locked state, possibly violating debug access control or exposing secure resources.",
       "signals": [
         "boot_status_i.clk_status",
         "boot_status_i.light_reset_req",
-        "boot_status_i.strap_sampled",
-        "unused_signals"
+        "boot_status_i.strap_sampled"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:381-384"
+        "soc_dbg_ctrl.sv:382-384"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -162,12 +168,11 @@
         "signals": [
           "boot_status_i.clk_status",
           "boot_status_i.light_reset_req",
-          "boot_status_i.strap_sampled",
-          "unused_signals"
+          "boot_status_i.strap_sampled"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
-        "consequent": "Signals boot_status_i.clk_status, boot_status_i.light_reset_req, boot_status_i.strap_sampled are only used in a dummy XOR reduction to an unread wire unused_signals, making the inputs effectively unused",
+        "antecedent": "unknown",
+        "consequent": "The boot_status_i input fields (clk_status, light_reset_req, strap_sampled) are completely unused by the debug controller; any clock fault, external light reset request, or strap sampling event is merged into a dummy XOR and ignored, potent",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
@@ -175,15 +180,14 @@
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "The exact error detection logic of the PRIM_FLOP_SPARSE_FSM macro (including possible stuck-state detection) is not visible; the behavior of halt_state_e depends on the macro definition.",
-      "cond": "whenever the macro instance is synthesized",
-      "risk": "Invalid or stuck state condition handling may be misunderstood, potentially hiding FSM failures or causing false error assertions.",
+      "claim": "The exact behaviour of PRIM_FLOP_SPARSE_FSM (error detection mechanism, Idle encoding, recovery) cannot be deduced solely from this instantiation; the primitive must be reviewed to confirm that it covers all illegal state transitions and does not open a window where an attacker could exploit partial state updates.",
+      "cond": "whenever halt_state_d changes",
+      "risk": "A partially specified sparse encoding could allow brief illegal states that are not latched as errors, permitting unauthorized debug state transitions.",
       "signals": [
-        "halt_state_e",
         "halt_state_d",
-        "halt_state_q",
+        "halt_state_e",
         "Idle"
       ],
       "refs": [
@@ -191,34 +195,33 @@
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
+        "antecedent": "halt_state_d != Idle",
+        "consequent": "halt_state_e == 1'b1",
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "soc_dbg_ctrl",
         "clock": "",
         "reset": "",
         "signals": [
-          "halt_state_e",
           "halt_state_d",
-          "halt_state_q",
+          "halt_state_e",
           "Idle"
         ],
         "temporal_shape": "comb",
-        "antecedent": "whenever the macro instance is synthesized",
-        "consequent": "The exact error detection logic of the PRIM_FLOP_SPARSE_FSM macro (including possible stuck-state detection) is not visible; the behavior of halt_state_e depends on the macro definition",
-        "formalizability": "none",
-        "confidence": 0.8,
+        "antecedent": "halt_state_d != Idle",
+        "consequent": "halt_state_e == 1'b1",
+        "formalizability": "partial",
+        "confidence": 0.95,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The sparse FSM on halt_state protects the debug state machine against fault injection. If the error flag halt_state_e or the Idle encoding is misconfigured, an attacker could bypass the error detection and force the debug controller into a privileged state. The ignored boot_status inputs (clk_status, light_reset_req) are potential side-channels for clock glitch or reset attacks; their current discard means such attacks are not detected or mitigated in hardware.",
   "evidence_refs": [
     "soc_dbg_ctrl.sv:379-384"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv",
   "line_start": 379,
-  "line_end": 384,
-  "security_implications": ""
+  "line_end": 384
 }

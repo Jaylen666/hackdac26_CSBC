@@ -8,139 +8,199 @@
     ],
     "used": [
       "tl_i.a_address",
-      "AW",
       "intg_err"
     ],
     "modes": [],
     "tags": [
-      "parameterization",
-      "address_decoding",
-      "error_override"
+      "address_decode",
+      "integrity",
+      "error",
+      "csr"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "mux_case",
-      "claim": "When intg_err is deasserted, reg_steer is 0 if tl_i.a_address[AW-1:0] falls inside [4096:8191]; otherwise reg_steer is 1.",
-      "cond": "intg_err == 0",
+      "type": "assignment",
+      "claim": "When intg_err is 0 and tl_i.a_address is inside [4096:8191], reg_steer is driven to 0.",
+      "cond": "intg_err == 0 && tl_i.a_address inside {[4096:8191]}",
       "signals": [
-        "reg_steer",
+        "intg_err",
         "tl_i.a_address",
-        "AW"
+        "reg_steer"
       ],
       "refs": [
-        "hmac_reg_top.sv:130-133"
-      ]
+        "hmac_reg_top.sv:129-139"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "intg_err == 1'b0 && tl_i.a_address inside {[4096:8191]}",
+        "consequent": "reg_steer == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intg_err",
+          "tl_i.a_address",
+          "reg_steer"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "intg_err == 1'b0 && tl_i.a_address inside {[4096:8191]}",
+        "consequent": "reg_steer == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "error_detection",
-      "claim": "When intg_err is asserted, reg_steer is forced to 1 regardless of tl_i.a_address.",
-      "cond": "intg_err == 1",
+      "type": "default_fallback",
+      "claim": "In all other cases (intg_err == 1 or tl_i.a_address outside [4096:8191]), reg_steer is driven to 1.",
+      "cond": "intg_err == 1 || !(tl_i.a_address inside {[4096:8191]})",
       "signals": [
-        "reg_steer",
-        "intg_err"
+        "intg_err",
+        "tl_i.a_address",
+        "reg_steer"
       ],
       "refs": [
-        "hmac_reg_top.sv:136-138"
-      ]
+        "hmac_reg_top.sv:129-139"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "intg_err == 1'b1 || !(tl_i.a_address inside {[4096:8191]})",
+        "consequent": "reg_steer == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intg_err",
+          "tl_i.a_address",
+          "reg_steer"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "intg_err == 1'b1 || !(tl_i.a_address inside {[4096:8191]})",
+        "consequent": "reg_steer == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "mode_config",
-      "claim": "The address range [4096:8191] corresponds to a non-register region (e.g., HMAC window) in the system memory map.",
-      "cond": "always",
-      "risk": "If the range is incorrect, reg_steer will misroute accesses, directing window reads to register space or vice versa, causing data corruption or security violations.",
-      "signals": [
-        "tl_i.a_address",
-        "AW"
-      ],
-      "refs": [
-        "hmac_reg_top.sv:130-133"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "AW parameter is set to the full TL-UL address width so that the inside comparison evaluates all address bits correctly.",
-      "cond": "always",
-      "risk": "If AW is too small, address truncation will cause misclassification and incorrect steering.",
-      "signals": [
-        "AW"
-      ],
-      "refs": [
-        "hmac_reg_top.sv:131"
-      ]
-    },
-    {
-      "id": "A3",
       "type": "security_precondition",
-      "claim": "intg_err reflects a genuine integrity error and is not spuriously asserted.",
-      "cond": "when intg_err is asserted",
-      "risk": "Spurious assertion forces reg_steer=1, blocking window accesses, potentially causing denial-of-service or masking real errors.",
+      "claim": "intg_err must be driven correctly and timely by external integrity check logic to indicate an actual integrity error on the incoming TL-UL request.",
+      "cond": "whenever an integrity error occurs on the bus access targeting this module",
+      "risk": "If intg_err is not asserted during an integrity error, the override is skipped and reg_steer may remain 0 for an address inside [4096:8191], allowing the error to propagate to a potentially sensitive memory window or data path.",
       "signals": [
         "intg_err"
       ],
       "refs": [
         "hmac_reg_top.sv:136-138"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "integrity_error_detected -> intg_err == 1'b1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intg_err"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "whenever an integrity error occurs on the bus access targeting this module",
+        "consequent": "integrity_error_detected -> intg_err == 1'b1",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "Hardcoded address range [4096:8191] may not match the actual HMAC window base/size defined elsewhere.",
-      "cond": "always",
-      "risk": "Mismatch leads to incorrect steering, possibly accessing wrong registers or FIFO, causing functional failure or leaking secret data.",
-      "signals": [
-        "tl_i.a_address",
-        "AW"
-      ],
-      "refs": [
-        "hmac_reg_top.sv:130-133"
-      ]
-    },
-    {
-      "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The use of reg_steer in downstream logic (e.g., read mux or FIFO access) is not defined in this chunk.",
-      "cond": "always",
-      "risk": "If downstream interpretation is inconsistent, data could be routed to the wrong destination, causing read corruption or exposure.",
+      "priority": "high",
+      "claim": "The destination and security role of reg_steer (0 vs 1) is unknown; it likely selects between a memory/FIFO window (address range 4096-8191) and a register interface, but without downstream context the exact security impact of the integrity-error override cannot be confirmed.",
+      "cond": "any access when reg_steer controls critical data or configuration paths",
+      "risk": "If reg_steer=0 enables access to a key, digest, message buffer, or other secret data, and the integrity override fails, corrupted data could be written or sensitive data leaked.",
       "signals": [
         "reg_steer"
       ],
       "refs": [
-        "hmac_reg_top.sv:130,137"
-      ]
+        "hmac_reg_top.sv:130-138"
+      ],
+      "formal": {},
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg_steer"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "any access when reg_steer controls critical data or configuration paths",
+        "consequent": "The destination and security role of reg_steer (0 vs 1) is unknown; it likely selects between a memory/FIFO window (address range 4096-8191) and a register interface, but without downstream context the exact security impact of the integrity",
+        "formalizability": "none",
+        "confidence": 0.7,
+        "source": "heuristic"
+      }
     },
     {
-      "id": "U3",
+      "id": "U2",
       "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "intg_err is combinational; a transition mid-transaction could change reg_steer after the address phase, causing a mismatch in steering.",
-      "cond": "intg_err toggles during an active TL-UL transaction",
-      "risk": "The TL-UL interface may sample reg_steer at different times, leading to a partially steered transaction, data corruption, or protocol violation.",
+      "claim": "intg_err is sampled combinationally to produce reg_steer; a glitch on intg_err could cause a momentary wrong reg_steer value during the same cycle, potentially triggering unintended downstream behavior before the value settles.",
+      "cond": "while tl_i.a_address is stable inside [4096:8191] and a glitch occurs on intg_err",
+      "risk": "A glitch could momentarily select the wrong steering path (0 vs 1) and cause a speculative access or a timing violation in downstream logic that expects a stable reg_steer.",
       "signals": [
         "intg_err",
-        "reg_steer",
-        "tl_i.a_address"
+        "reg_steer"
       ],
       "refs": [
         "hmac_reg_top.sv:136-138"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tl_i.a_address inside {[4096:8191]}",
+        "consequent": "stable reg_steer during the entire access phase",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intg_err",
+          "reg_steer"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tl_i.a_address inside {[4096:8191]}",
+        "consequent": "stable reg_steer during the entire access phase",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk uses intg_err to override the address-based steering of reg_steer. When no integrity error is present, accesses to addresses 4096-8191 drive reg_steer=0; otherwise reg_steer=1. If reg_steer=0 enables access to a memory-mapped window (e.g., message FIFO, key buffer, digest storage) and the integrity override fails (intg_err not asserted during a real error), corrupted or maliciously crafted access could reach that window, leading to data leakage, digest corruption, or key manipulation. The override logic is therefore a critical integrity gate; its correctness and the timely assertion of intg_err are essential for security.",
   "evidence_refs": [
     "hmac_reg_top.sv:129-139"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
   "line_start": 129,
-  "line_end": 139,
-  "security_implications": ""
+  "line_end": 139
 }

@@ -13,46 +13,95 @@
       "op_update_i",
       "sync_err_d"
     ],
-    "modes": [],
+    "modes": [
+      "reset",
+      "done",
+      "update",
+      "hold"
+    ],
     "tags": [
       "error",
-      "fault",
-      "handshake",
-      "reset"
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "sync_err_q is cleared to 0 when rst_ni is low.",
-      "cond": "!rst_ni",
+      "claim": "When reset (rst_ni low) is asserted, sync_err_q is cleared to all zeros on the next clock edge.",
+      "cond": "always",
       "signals": [
         "rst_ni",
         "sync_err_q"
       ],
       "refs": [
         "keymgr_err.sv:78-79"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "sync_err_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "sync_err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "sync_err_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "sync_err_q is cleared to 0 when op_done_i is high (and rst_ni high).",
-      "cond": "op_done_i && rst_ni",
+      "claim": "When op_done_i is active and reset is inactive, sync_err_q is cleared to zero on the next cycle, overriding any concurrent op_update_i.",
+      "cond": "rst_ni && op_done_i",
       "signals": [
         "op_done_i",
+        "rst_ni",
         "sync_err_q"
       ],
       "refs": [
         "keymgr_err.sv:80-81"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && op_done_i",
+        "consequent": "sync_err_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "op_done_i",
+          "rst_ni",
+          "sync_err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && op_done_i",
+        "consequent": "sync_err_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When op_done_i is low and op_update_i is high, sync_err_q is updated with the current value of sync_err_d.",
-      "cond": "!op_done_i && op_update_i && rst_ni",
+      "claim": "When op_update_i is active and neither reset nor op_done_i are active, sync_err_q is updated to the value of sync_err_d on the next cycle.",
+      "cond": "rst_ni && !op_done_i && op_update_i",
       "signals": [
         "op_update_i",
         "sync_err_d",
@@ -60,46 +109,110 @@
       ],
       "refs": [
         "keymgr_err.sv:82-83"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !op_done_i && op_update_i",
+        "consequent": "sync_err_q == sync_err_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "op_update_i",
+          "sync_err_d",
+          "sync_err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !op_done_i && op_update_i",
+        "consequent": "sync_err_q == sync_err_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "default_fallback",
-      "claim": "When rst_ni is high and neither op_done_i nor op_update_i is asserted, sync_err_q retains its previous value.",
+      "claim": "When no clearing or updating condition is met, sync_err_q retains its previous value.",
       "cond": "rst_ni && !op_done_i && !op_update_i",
       "signals": [
         "sync_err_q"
       ],
       "refs": [
-        "keymgr_err.sv:77-85"
-      ]
+        "keymgr_err.sv:84 (implicit)"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !op_done_i && !op_update_i",
+        "consequent": "sync_err_q == $past(sync_err_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sync_err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !op_done_i && !op_update_i",
+        "consequent": "sync_err_q == $past(sync_err_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "sync_err_d must be stable and valid at the rising clock edge when op_update_i is asserted.",
-      "cond": "op_update_i is high",
-      "risk": "If sync_err_d changes coincident with the update pulse, sync_err_q may capture a metastable or incorrect value.",
+      "claim": "sync_err_d must be stable during the clock cycle where op_update_i is active, because it is sampled on the next edge.",
+      "cond": "op_update_i && !op_done_i && rst_ni",
+      "risk": "A glitch on sync_err_d could cause a corrupted error value to be latched into sync_err_q.",
       "signals": [
         "sync_err_d",
-        "op_update_i",
-        "clk_i"
+        "op_update_i"
       ],
       "refs": [
         "keymgr_err.sv:82-83"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_update_i && !op_done_i && rst_ni",
+        "consequent": "$stable(sync_err_d)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "sync_err_d",
+          "op_update_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_update_i && !op_done_i && rst_ni",
+        "consequent": "$stable(sync_err_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The priority of op_done_i over op_update_i may cause loss of a new error assertion when an operation completes simultaneously.",
-      "cond": "op_done_i and op_update_i both high in the same cycle",
-      "risk": "A valid synchronous error (sync_err_d) could be cleared before the error is processed or logged, leading to undetected faults.",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "Simultaneous assertion of op_done_i and op_update_i clears sync_err_q and ignores sync_err_d. This may drop an error that arrives in the same cycle as the operation completion.",
+      "cond": "op_done_i && op_update_i",
+      "risk": "A pending error in sync_err_d is not captured, possibly causing a fault (e.g., integrity violation) to be missed, undermining error reporting in the key manager.",
       "signals": [
         "op_done_i",
         "op_update_i",
@@ -108,43 +221,37 @@
       ],
       "refs": [
         "keymgr_err.sv:80-83"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "If op_done_i remains asserted for multiple cycles, any op_update_i during that window is ignored, suppressing error capture.",
-      "cond": "op_done_i = 1 for two or more consecutive cycles",
-      "risk": "Errors occurring while an operation is marked done may be silently discarded, weakening fault detection during operation tails.",
-      "signals": [
-        "op_done_i"
       ],
-      "refs": [
-        "keymgr_err.sv:80-81"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The mutual exclusion or pulse width of op_done_i and op_update_i is not locally enforced; the behavior relies on external control logic.",
-      "cond": "External generation of op_done_i and op_update_i",
-      "risk": "If the external protocol allows overlapping or long-lasting assertions, error clearing/update semantics become ambiguous.",
-      "signals": [
-        "op_done_i",
-        "op_update_i"
-      ],
-      "refs": [
-        "keymgr_err.sv:80-83"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_done_i && op_update_i",
+        "consequent": "sync_err_q == '0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done_i",
+          "op_update_i",
+          "sync_err_d",
+          "sync_err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "op_done_i && op_update_i",
+        "consequent": "sync_err_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "sync_err_q captures operational errors for the key manager. If an error generated concurrently with op_done_i (clearing pulse) is dropped, a security-relevant condition (e.g., integrity check failure, masking error) could go unreported, potentially allowing an attacker to bypass error escalation or leak secret material.",
   "evidence_refs": [
     "keymgr_err.sv:77-85"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 77,
-  "line_end": 85,
-  "security_implications": ""
+  "line_end": 85
 }

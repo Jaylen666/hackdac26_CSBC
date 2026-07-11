@@ -24,143 +24,315 @@
       "DoneAwaitHashComplete"
     ],
     "tags": [
+      "digest",
       "handshake",
-      "counter",
-      "sparse_fsm"
+      "counter"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "default_fallback",
-      "claim": "done_state_d defaults to done_state_q, preserving current state unless modified; hash_done_event is cleared to 8'd0 every cycle before conditional updates.",
-      "cond": "always",
+      "claim": "When done_state_q is not any of the four handled states, done_state_d holds its current value (done_state_q).",
+      "cond": "default case branch",
       "signals": [
         "done_state_d",
-        "done_state_q",
-        "hash_done_event"
+        "done_state_q"
       ],
       "refs": [
-        "hmac.sv:150-151"
-      ]
+        "hmac.sv:150",
+        "hmac.sv:193-194"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(done_state_q != DoneAwaitCmd) && (done_state_q != DoneAwaitHashDone) && (done_state_q != DoneAwaitMessageComplete) && (done_state_q != DoneAwaitHashComplete)",
+        "consequent": "done_state_d == done_state_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "done_state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(done_state_q != DoneAwaitCmd) && (done_state_q != DoneAwaitHashDone) && (done_state_q != DoneAwaitMessageComplete) && (done_state_q != DoneAwaitHashComplete)",
+        "consequent": "done_state_d == done_state_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "state_transition",
-      "claim": "In DoneAwaitCmd state, cool_down_ct_d is unconditionally cleared to 8'd0. If sha_hash_process is asserted, done_state_d moves to DoneAwaitHashDone; else if reg_hash_stop is asserted, done_state_d moves to DoneAwaitMessageComplete.",
-      "cond": "done_state_q == DoneAwaitCmd",
+      "type": "mux_case",
+      "claim": "hash_done_event is 0 by default; it is asserted to 1 only in state DoneAwaitHashDone when reg_hash_done is true, or in state DoneAwaitHashComplete when !hash_running and cool_down_ct_q >= 127.",
+      "cond": "always",
       "signals": [
+        "hash_done_event",
         "done_state_q",
-        "sha_hash_process",
-        "reg_hash_stop",
-        "done_state_d",
-        "cool_down_ct_d"
+        "reg_hash_done",
+        "hash_running",
+        "cool_down_ct_q"
       ],
       "refs": [
-        "hmac.sv:155-162"
-      ]
+        "hmac.sv:151",
+        "hmac.sv:166-169",
+        "hmac.sv:180-191"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(done_state_q == DoneAwaitHashDone && reg_hash_done) || (done_state_q == DoneAwaitHashComplete && !hash_running && cool_down_ct_q >= 8'd127)",
+        "consequent": "hash_done_event == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hash_done_event",
+          "done_state_q",
+          "reg_hash_done",
+          "hash_running",
+          "cool_down_ct_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(done_state_q == DoneAwaitHashDone && reg_hash_done) || (done_state_q == DoneAwaitHashComplete && !hash_running && cool_down_ct_q >= 8'd127)",
+        "consequent": "hash_done_event == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "state_transition",
-      "claim": "In DoneAwaitHashDone, if reg_hash_done is asserted, hash_done_event is set to 1'b1 and done_state_d returns to DoneAwaitCmd; otherwise, done_state_d stays unchanged.",
-      "cond": "done_state_q == DoneAwaitHashDone",
+      "claim": "In DoneAwaitCmd, if sha_hash_process is true, done_state_d transitions to DoneAwaitHashDone.",
+      "cond": "done_state_q == DoneAwaitCmd && sha_hash_process",
       "signals": [
+        "done_state_d",
         "done_state_q",
-        "reg_hash_done",
-        "hash_done_event",
-        "done_state_d"
+        "sha_hash_process"
       ],
       "refs": [
-        "hmac.sv:165-170"
-      ]
+        "hmac.sv:156-158"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitCmd && sha_hash_process",
+        "consequent": "done_state_d == DoneAwaitHashDone",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "done_state_q",
+          "sha_hash_process"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitCmd && sha_hash_process",
+        "consequent": "done_state_d == DoneAwaitHashDone",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "state_transition",
-      "claim": "In DoneAwaitMessageComplete, if digest_on_blk is asserted, done_state_d advances to DoneAwaitHashComplete; otherwise, no state change.",
-      "cond": "done_state_q == DoneAwaitMessageComplete",
+      "claim": "In DoneAwaitCmd, else if reg_hash_stop is true, done_state_d transitions to DoneAwaitMessageComplete.",
+      "cond": "done_state_q == DoneAwaitCmd && !sha_hash_process && reg_hash_stop",
       "signals": [
+        "done_state_d",
         "done_state_q",
-        "digest_on_blk",
-        "done_state_d"
+        "reg_hash_stop"
       ],
       "refs": [
-        "hmac.sv:172-178"
-      ]
+        "hmac.sv:159-162"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitCmd && !sha_hash_process && reg_hash_stop",
+        "consequent": "done_state_d == DoneAwaitMessageComplete",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "done_state_q",
+          "reg_hash_stop"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitCmd && !sha_hash_process && reg_hash_stop",
+        "consequent": "done_state_d == DoneAwaitMessageComplete",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
       "type": "state_transition",
-      "claim": "In DoneAwaitHashComplete, if hash_running is deasserted: if cool_down_ct_q < 127, cool_down_ct_d is incremented, hash_done_event is cleared to 0, done_state_d stays; else (cool_down_ct_q >= 127), hash_done_event is set to 1 and done_state_d moves to DoneAwaitCmd. If hash_running is asserted, no assignments to done_state_d or cool_down_ct_d.",
-      "cond": "done_state_q == DoneAwaitHashComplete",
-      "signals": [
-        "done_state_q",
-        "hash_running",
-        "cool_down_ct_q",
-        "cool_down_ct_d",
-        "hash_done_event",
-        "done_state_d"
-      ],
-      "refs": [
-        "hmac.sv:180-191"
-      ]
-    },
-    {
-      "id": "G6",
-      "type": "default_fallback",
-      "claim": "For any state not matching the four enumerated cases, done_state_d retains its default of done_state_q (no transition), hash_done_event remains 0, and cool_down_ct_d is not assigned, potentially holding its previous combinational value.",
-      "cond": "done_state_q not in {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete}",
+      "claim": "In DoneAwaitHashDone, if reg_hash_done is true, done_state_d transitions back to DoneAwaitCmd and hash_done_event is asserted.",
+      "cond": "done_state_q == DoneAwaitHashDone && reg_hash_done",
       "signals": [
         "done_state_d",
         "hash_done_event",
-        "cool_down_ct_d"
+        "done_state_q",
+        "reg_hash_done"
       ],
       "refs": [
-        "hmac.sv:193"
-      ]
+        "hmac.sv:166-168"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitHashDone && reg_hash_done",
+        "consequent": "done_state_d == DoneAwaitCmd && hash_done_event == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "hash_done_event",
+          "done_state_q",
+          "reg_hash_done"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitHashDone && reg_hash_done",
+        "consequent": "done_state_d == DoneAwaitCmd && hash_done_event == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "In DoneAwaitMessageComplete, if digest_on_blk is true, done_state_d transitions to DoneAwaitHashComplete.",
+      "cond": "done_state_q == DoneAwaitMessageComplete && digest_on_blk",
+      "signals": [
+        "done_state_d",
+        "done_state_q",
+        "digest_on_blk"
+      ],
+      "refs": [
+        "hmac.sv:173-177"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitMessageComplete && digest_on_blk",
+        "consequent": "done_state_d == DoneAwaitHashComplete",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "done_state_q",
+          "digest_on_blk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitMessageComplete && digest_on_blk",
+        "consequent": "done_state_d == DoneAwaitHashComplete",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "state_transition",
+      "claim": "In DoneAwaitHashComplete, when !hash_running, if cool_down_ct_q < 127, done_state_d stays in DoneAwaitHashComplete and cool_down_ct_d is incremented; else (>=127) done_state_d transitions to DoneAwaitCmd and hash_done_event is asserted.",
+      "cond": "done_state_q == DoneAwaitHashComplete && !hash_running",
+      "signals": [
+        "done_state_d",
+        "cool_down_ct_d",
+        "hash_done_event",
+        "cool_down_ct_q"
+      ],
+      "refs": [
+        "hmac.sv:181-190"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitHashComplete && !hash_running && cool_down_ct_q < 8'd127",
+        "consequent": "done_state_d == DoneAwaitHashComplete && cool_down_ct_d == cool_down_ct_q + 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_d",
+          "cool_down_ct_d",
+          "hash_done_event",
+          "cool_down_ct_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "done_state_q == DoneAwaitHashComplete && !hash_running && cool_down_ct_q < 8'd127",
+        "consequent": "done_state_d == DoneAwaitHashComplete && cool_down_ct_d == cool_down_ct_q + 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "This block assumes that done_state_q always encodes one of the four enumerated states; there is no recovery for illegal encodings.",
+      "type": "mode_config",
+      "claim": "done_state_q is always a legal state among DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete.",
       "cond": "always",
-      "risk": "If done_state_q becomes an illegal value (e.g., due to SEU), the FSM hangs, cool_down_ct_d is not driven (may latch), and hash_done_event is never asserted, blocking HMAC done notification.",
+      "risk": "If an illegal state occurs, done_state_d will remain stuck (hold current illegal state) because the default branch has no transition, potentially blocking all further hash_done_event generation and stalling the HMAC pipeline.",
       "signals": [
         "done_state_q"
       ],
       "refs": [
-        "hmac.sv:153-194"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The block assumes that cool_down_ct_d is registered externally and fed back as cool_down_ct_q each cycle, forming a functional counter.",
-      "cond": "when DoneAwaitHashComplete is active",
-      "risk": "If the external register does not update correctly, the cool-down counter will not count and the DoneAwaitHashComplete state may never exit, stalling HMAC done event.",
-      "signals": [
-        "cool_down_ct_d",
-        "cool_down_ct_q"
+        "hmac.sv:153",
+        "hmac.sv:193"
       ],
-      "refs": [
-        "hmac.sv:182-188"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "handshake",
-      "claim": "The block sets hash_done_event as a single-cycle pulse; it assumes the consumer samples it within that cycle, because in the next cycle hash_done_event is cleared to 0 unless reasserted.",
-      "cond": "when hash_done_event is asserted",
-      "risk": "If the consumer expects a level or latched signal, it may miss the done notification.",
-      "signals": [
-        "hash_done_event"
-      ],
-      "refs": [
-        "hmac.sv:151,167,184,187"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "done_state_q inside {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "done_state_q inside {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -168,38 +340,121 @@
       "id": "U1",
       "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "The default branch is empty (no assignment), so if done_state_q is corrupted to an illegal state, the FSM stalls, cool_down_ct_d is not driven (possible latch), and there is no recovery mechanism.",
-      "cond": "done_state_q illegal",
-      "risk": "Loss of HMAC done event or counter corruption could block secure hash completion or leak state, impacting security if done notification is required for integrity or further processing.",
+      "claim": "cool_down_ct_d is not assigned in all branches: missing assignments in state DoneAwaitHashComplete when cool_down_ct_q >= 127 (the else branch), and completely absent in states DoneAwaitHashDone and DoneAwaitMessageComplete. This infers a latch that can hold stale values.",
+      "cond": "In states where cool_down_ct_d is not explicitly driven",
+      "risk": "The latched value may persist across state transitions, causing an incorrect cooldown count when re-entering DoneAwaitHashComplete. This could lead to hash_done_event being asserted too early or too late, violating integrity of the hash completion handshake.",
       "signals": [
-        "done_state_d",
         "cool_down_ct_d",
-        "done_state_q"
+        "done_state_q",
+        "cool_down_ct_q",
+        "hash_running"
       ],
       "refs": [
-        "hmac.sv:193"
-      ]
+        "hmac.sv:155",
+        "hmac.sv:181-191"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cool_down_ct_d",
+          "done_state_q",
+          "cool_down_ct_q",
+          "hash_running"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "In states where cool_down_ct_d is not explicitly driven",
+        "consequent": "cool_down_ct_d is not assigned in all branches: missing assignments in state DoneAwaitHashComplete when cool_down_ct_q >= 127 (the else branch), and completely absent in states DoneAwaitHashDone and DoneAwaitMessageComplete. This infers a l",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The cool-down counter uses a hardcoded threshold of 127, but the rationale (e.g., pipeline depth, output latency of SHA) is not documented in this block.",
-      "cond": "when DoneAwaitHashComplete state active",
-      "risk": "Incorrect threshold could lead to premature hash_done_event or unnecessary stalling, but functional risk appears low given the fixed constant.",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "Once in state DoneAwaitMessageComplete, the FSM waits indefinitely for digest_on_blk to go high. There is no timeout or fallback transition if digest_on_blk is never asserted.",
+      "cond": "done_state_q == DoneAwaitMessageComplete && digest_on_blk == 0 (forever)",
+      "risk": "Deadlock: the FSM can never exit this state, preventing completion signaling and potentially blocking the HMAC from finishing all operations, including security-critical clear/write sequences.",
       "signals": [
-        "cool_down_ct_q"
+        "done_state_q",
+        "digest_on_blk"
       ],
       "refs": [
-        "hmac.sv:182"
-      ]
+        "hmac.sv:172-178"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "done_state_q == DoneAwaitMessageComplete",
+        "consequent": "eventually digest_on_blk",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_q",
+          "digest_on_blk"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "done_state_q == DoneAwaitMessageComplete",
+        "consequent": "eventually digest_on_blk",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "Illegal done_state_q values are handled by a silent default (no state change, no error signal). There is no recovery indication.",
+      "cond": "done_state_q not in {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete}",
+      "risk": "An illegal state (e.g., from SEU or logic bug) could persist undetected, locking the FSM and masking security violations.",
+      "signals": [
+        "done_state_q",
+        "done_state_d"
+      ],
+      "refs": [
+        "hmac.sv:193-194"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!(done_state_q inside {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete})",
+        "consequent": "done_state_d == done_state_q",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_state_q",
+          "done_state_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!(done_state_q inside {DoneAwaitCmd, DoneAwaitHashDone, DoneAwaitMessageComplete, DoneAwaitHashComplete})",
+        "consequent": "done_state_d == done_state_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This FSM controls the assertion of hash_done_event, which signals completion of the digest. U1 (latch on cool_down_ct_d) can corrupt the cooldown timing, potentially releasing a done indication before the hash output is stable, exposing an incomplete/falsified digest. U2 (stuck in DoneAwaitMessageComplete) can stall the entire HMAC done sequence, possibly preventing final wipe or output signaling. U3 (silent illegal state) may hide undefined behavior that could be exploited for side-channel or integrity attacks. All directly impact the integrity and availability of the hash result.",
   "evidence_refs": [
     "hmac.sv:149-195"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 149,
-  "line_end": 195,
-  "security_implications": ""
+  "line_end": 195
 }

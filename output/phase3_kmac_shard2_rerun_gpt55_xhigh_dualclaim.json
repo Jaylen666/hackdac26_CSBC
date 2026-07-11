@@ -1,0 +1,915 @@
+[
+  {
+    "finding_id": "F-0054",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.94,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_017",
+      "kmac_testplan.hjson_023"
+    ],
+    "summary": "msgfifo_full_seen_d is intentionally internal state for the FIFO empty interrupt gate; the finding describes a bad formal assumption, not an RTL bug.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:637-640 drives msgfifo_full_seen_d from msgfifo_full, msgfifo_empty_negedge, msgfifo2kmac_process, and msgfifo_full_seen_q; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-659 registers it.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims msgfifo_full_seen_d should be a stable external input. In RTL it is a combinational next-state signal declared with msgfifo_full_seen_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:629-630, driven at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:637-640, and registered at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-659.\nRef analysis: theory_of_operation.md_017 is same_behavior for the FIFO-empty interrupt gate: /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:146-155 explains fifo_full/fifo_empty status and the Process/app/Absorb gating. kmac_testplan.hjson_023 is overlapping coverage only. kmac_testplan.hjson_022 is adjacent TLUL-mask coverage. kmac_testplan.hjson_009 is unrelated command-error coverage.\nVerdict integration: The source implements the ref-described FIFO-full memory bit and does not expose msgfifo_full_seen_d as an input; no underrun/overrun/deadlock defect follows from this assumption mismatch.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0055",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_034"
+    ],
+    "summary": "The left_encode constants for key length match the intended little-endian byte stream used by the slicer.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:311-336 assigns encode_keylen constants; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:349-377 selects the valid 16 or 24 low bits for each key size; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:913-952 lists the supported key lengths.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding questions encode_keylen[0]. RTL comments at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:311-319 state that NIST left_encode bytes are byte-swapped for Keccak little-endian input. The constants at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:330-334 produce byte streams 01 80, 01 C0, 02 01 00, 02 01 80, and 02 02 00 via low-bit slicing at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:354-372.\nRef analysis: kmac.hjson_034 is same_behavior: KEY_LEN selects 128/192/256/384/512-bit lengths and is used to encode the KMAC key (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:913-952). theory_of_operation.md_021 is adjacent unmasked-key behavior, not key-length encoding. kmac.hjson_015 is general SHA3 compliance, not actionable for this signal.\nVerdict integration: The encoded constants and variable-width concatenation agree with the documented key lengths; no key-length encoding defect was found.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0056",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.88,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026"
+    ],
+    "summary": "The command delay buffer is intentionally one-deep beyond the active delayed command; overwriting it requires unsupported extra writes beyond the documented two-command use case.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:356-380 documents SecCmdDelay and computes counting_d/cmd_update; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:392-416 registers one active command and one buffered command.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says a second command overwrites an old buffered command. In the SecCmdDelay path, the first write when counting_q==0 loads cmd_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:407-409, and one later write while counting loads cmd_buf_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:409-410. A further write can overwrite cmd_buf_q, but the block is explicitly one additional buffered command (/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:392-394).\nRef analysis: kmac.hjson_026 is overlapping/same CMD sequence behavior: /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:594-675 describes start -> process -> run -> done. theory_of_operation.md_009 is overlapping Process behavior at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:101-103. The smoke/error testplan refs are general coverage, not a requirement for unlimited buffering.\nVerdict integration: The RTL matches the SecCmdDelay design comment: software can pass two commands in series, not an arbitrary queue of commands.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0057",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.96,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_033",
+      "kmac.hjson_034"
+    ],
+    "summary": "MaxKeyLen is fixed at 512 bits and is exactly 16 32-bit words; the hypothetical non-32-bit parameter case is excluded by source assertions/comments.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:43-57 defines MaxKeyLen=512 and MaxEncodedKeyW; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-499 writes all MaxKeyLen/32 words of share0; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:379-380 asserts MaxKeyLen is 512.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding depends on MaxKeyLen not being a 32-bit multiple or being less than 32. The package fixes MaxKeyLen to 512 at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:43-47, share0 loops over all 16 words at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-499, and kmac_core asserts that the design assumes 512 at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:379-380.\nRef analysis: kmac.hjson_033 is adjacent KEY_SHARE1 behavior and states up to 512 bits with idle-only writes (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:884-912). kmac.hjson_034 is overlapping KEY_LEN support (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:913-952). Neither ref creates a different MaxKeyLen configuration.\nVerdict integration: The claimed partial-update condition is unreachable in this RTL configuration.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0058",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026",
+      "kmac_testplan.hjson_010"
+    ],
+    "summary": "err_processed is intentionally a write pulse derived from q and qe, and the RTL asserts it is one-cycle pulsed.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:572-576 assigns err_processed = q & qe and asserts a rose is followed by deassertion; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:451-541 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:701-711 consume it as SW error-processed indication.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims there is no guarantee against a stuck-high qe. The RTL contains an explicit assertion at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:576 that a rising err_processed pulse deasserts in the next cycle. The signal is generated only from the CMD field q/qe at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:572-573.\nRef analysis: kmac.hjson_026 is same_behavior for CMD.err_processed (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:667-672). kmac_testplan.hjson_010 is overlapping use of err_processed in error recovery. The smoke-test ref is general and not used.\nVerdict integration: The source-level property directly refutes the stuck-high pulse premise; no persistent error masking path was found.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0059",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.86,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_005"
+    ],
+    "summary": "The main message FIFO clear input is not tied to zero, and the fatal-fault requirement is reset-based rather than an immediate FIFO clr_i scrub.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1163 connects kmac_msgfifo.clear_i to sha3_done; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:155 uses clear_i for the FIFO clear; fatal alerts are latched/statused at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1446-1464 and the hjson says fatal faults require reset at /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:68-78.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims clr_i is hard-wired to 0 for the security-critical FIFO. In the main KMAC instance, u_msgfifo.clear_i is wired to sha3_done at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1163, not 0. A reduced SCA wrapper has packer clr_i tied low at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:113 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:130, but that is not the main TL-UL KMAC FIFO.\nRef analysis: kmac.hjson_005 is contradictory to the asserted immediate-clear requirement: fatal_fault_err means the unit cannot recover and needs reset (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:68-78). kmac.hjson_026 is adjacent CMD error handling, not a FIFO fatal-clear rule.\nVerdict integration: The stated wiring is incorrect for the main RTL, and the cited fatal-fault intent is reset/lockout rather than a dedicated clr_i scrub.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0060",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_005"
+    ],
+    "summary": "alerts[1] is a same-clock fatal-fault aggregation intentionally latched until reset for local escalation; no CDC synchronization requirement applies at this point.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1446-1450 forms alert_fatal from internal fault sources; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1485-1493 latches alerts_q[1] until reset; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1511-1515 converts it into local LC escalation.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats alerts[1] as an asynchronous/glitchy external signal. It is internally generated from same-clock error/status sources at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1446-1450 and intentionally latched at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1485-1493 so fatal faults cannot be cleared without reset.\nRef analysis: kmac.hjson_005 is same_behavior for fatal_fault_err and says fatal faults require reset (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:68-78). This supports the latch-until-reset behavior rather than contradicting it.\nVerdict integration: No source-level evidence shows alerts[1] crosses a clock domain or needs deglitching before the fatal latch.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0061",
+    "verdict": "CONFIRMED",
+    "confidence": 0.91,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "theory_of_operation.md_019",
+    "matched_ref_ids": [
+      "theory_of_operation.md_019"
+    ],
+    "summary": "The literal msg_mask_en_i glitch claim is imprecise, but the ref-exposed message-masking invariant is violated: top-level KMAC ignores the entropy-generated message mask and uses a constant mask.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding names msg_mask_en_i, which exists in kmac_entropy and is used as a synchronous PRNG enable at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:368 and as a buffer update qualifier at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399; that literal glitch path is not the main defect. However, the adjacent top-level message-masking path at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-927 does not use msg_mask at all.\nRef analysis: theory_of_operation.md_019 is adjacent/ref-driven and actionable: it requires CFG_SHADOWED.msg_mask to mask messages using the internal entropy generator (/home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214). Mapping that to RTL shows entropy produces msg_mask at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:398-399 and top-level KMAC should apply it, but /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 applies static_mask instead.\nVerdict integration: The final verdict is CONFIRMED as an extra finding from the ref: not because msg_mask_en_i is unsynchronized, but because the implemented top-level message mask is constant rather than entropy-driven.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0062",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_021",
+      "theory_of_operation.md_022"
+    ],
+    "summary": "NumShares is explicitly derived from EnMasking in kmac_reduced and Share is derived the same way in the main modules.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:15-18 defines NumShares = EnMasking ? 2 : 1; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:86-87 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:14-15 derive Share similarly.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says NumShares may not be bound to EnMasking. The reduced wrapper defines localparam NumShares from EnMasking at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:15-18, and the main KMAC/KMAC core use Share derived from EnMasking at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:86 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:14-15.\nRef analysis: theory_of_operation.md_021 and _022 are overlapping EnMasking/SwKeyMasked behavior; /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:32-35 and /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 describe masking as a compile-time option. The other refs are adjacent/general and do not contradict the explicit localparam binding.\nVerdict integration: The requested binding exists in RTL; no coverage gap remains at source level.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0063",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.96,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026"
+    ],
+    "summary": "process_latched is explicitly cleared when process_o is asserted, and an assertion checks the StKmacMsg case.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:208-214 asserts kmac_process in StKmacMsg when process_i/process_latched is high; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275-283 clears process_latched on process_o or done_i; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:466-467 asserts the one-cycle clear property.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says only the state transition exists and no clear exists. In RTL, StKmacMsg sets kmac_process/process_o through /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:208-214 and process_latched is cleared by process_o at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-282. The explicit assertion at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:466-467 checks st == StKmacMsg && process_latched |=> !process_latched.\nRef analysis: kmac.hjson_026 is overlapping CMD Process behavior; kmac.hjson_002 is adjacent FIFO-empty gating; kmac_testplan.hjson_009 is general error coverage.\nVerdict integration: The claimed missing clear logic is present and asserted.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0064",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.8,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac_testplan.hjson_015",
+      "kmac.hjson_027"
+    ],
+    "summary": "status_alert_fatal_fault is reset only by the module hardware reset, and the available KMAC spec/testplan requires persistence until reset, not until power-on reset specifically.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1453-1464 latches status_alert_fatal_fault until rst_ni; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:721-733 defines ALERT_FATAL_FAULT as a reset-needed fatal status.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a stricter POR-only requirement. The RTL has no separate POR input; status_alert_fatal_fault is cleared only by rst_ni at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1460 and set by alert_fatal at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1460-1462.\nRef analysis: kmac_testplan.hjson_015 is same_behavior for fatal alert until reset. kmac.hjson_027 is same_behavior for STATUS.ALERT_FATAL_FAULT (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:721-733). The other listed refs are general status/digest tests.\nVerdict integration: With the available module spec, reset clearing is intended behavior; the POR-vs-other-reset claim is not supported by the KMAC RTL/spec sources.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0065",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac_testplan.hjson_015",
+      "kmac.hjson_006"
+    ],
+    "summary": "lc_escalate_en[2] and [3] are driven from synchronized LC escalation or local fatal escalation and feed SHA3 and app logic.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1517-1525 instantiates prim_lc_sync for six copies; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1511-1515 ORs local fatal escalation into every lc_escalate_en copy; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:967-968 sends [2] to SHA3 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1131-1133 sends [3] to kmac_app.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says [2] and [3] may stick low after escalation. The top level creates six synchronized copies at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1517-1525 and assigns every copy as lc_tx_or_hi(alert_to_lc_tx, lc_escalate_en_sync[i]) at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1515. Those copies are wired to SHA3 and app at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:967-968 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1131-1133.\nRef analysis: kmac.hjson_006 is same_behavior for LC_ESCALATE_EN MUBI (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:301-303). kmac_testplan.hjson_015 is same_behavior for escalation blocking requests/status. The other refs are unrelated app/KMAC dataflow coverage.\nVerdict integration: The LC escalation fanout exists in the RTL and covers the cited consumers.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0066",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_022"
+    ],
+    "summary": "When EnMasking=0 and SwKeyMasked=1, XOR-unmasking the two software shares is the documented interface contract; invalid software shares are not hardware-detectable and are not an RTL bug.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:501-524 stores share1 when SwKeyMasked is enabled and assigns sw_key_data[0] = sw_key_data_reg[0] ^ sw_key_data_reg[1]; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:91-99 documents SwKeyMasked for interface compatibility.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says hardware should ensure the two shares are a valid masked representation. The RTL intentionally XORs them at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:521-524 when masking is disabled but SW provides masked keys. Arbitrary two-share inputs cannot be validated without knowing the intended unmasked key.\nRef analysis: theory_of_operation.md_022 is same_behavior: it states that with EnMasking unset and SwKeyMasked set, software provides masked form and hardware XORs the two shares. theory_of_operation.md_023 is adjacent masked-mode behavior.\nVerdict integration: The source implements the documented contract; malformed software input causing a wrong key is not an RTL security flaw.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0067",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.86,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac_testplan.hjson_018"
+    ],
+    "summary": "mode_i changes are explicitly constrained to Idle or TerminalError by assumption, and the FSM has defined behavior in those states.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:180-188 defines StKmacIdle transition only on kmac_en_i && start_i; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:227-250 defines terminal/escalation behavior; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:470-471 assumes mode_i changes only in StKmacIdle or StTerminalError.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says allowed mode_i changes can create undefined state transitions. The RTL explicitly assumes mode_i changes only in idle/terminal at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:470-471, and those states have defined next-state logic at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:180-188 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:227-250.\nRef analysis: Config-coverage refs such as kmac_testplan.hjson_018 are overlapping but not a failing invariant. The entropy-mode refs are unrelated to sha3 mode_i. kmac_testplan.hjson_031 is general error coverage.\nVerdict integration: The claimed missing transition guarantee is present as a stability assumption plus explicit idle/terminal FSM logic.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0068",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.84,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026",
+      "theory_of_operation.md_012"
+    ],
+    "summary": "The process_i and done_i simultaneous case is not a legal command sequence, and process_latched has defined clear behavior for legal process_o/done_i cycles.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275-283 sets process_latched only when process_i is blocked and clears it on process_o or done_i; legal command sequencing is checked in /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:183-239 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:401-461.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding focuses on simultaneous process_i and done_i. In legal operation, Process and Done are different command-sequence phases described by /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:594-675 and checked by kmac_errchk at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:183-239. The latch itself clears on process_o or done_i at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-282.\nRef analysis: kmac.hjson_026 and theory_of_operation.md_012 are same/overlapping command sequencing refs (/home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:101-113). kmac.hjson_002 and kmac_testplan.hjson_026 are adjacent FIFO/process coverage.\nVerdict integration: No legal RTL path was found where a new Process and Done overlap and keep process_latched stuck.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0069",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.94,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_034"
+    ],
+    "summary": "The apparent extra 8 zero bits for Key128/Key192 are the required fixed-width padding because those left_encode values are two bytes instead of three.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:343-360 explains and implements the 128/192-bit cases using only the lower MaxEncodedKeyLenSize bits; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:379-380 asserts MaxKeyLen=512.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims the extra 8 zeros make the key all zero. For Key128/Key192, /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:352-360 intentionally uses a wider zero pad because only the lower 16 bits of encode_keylen are valid. The key_data_i slice is still concatenated at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:355 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:359.\nRef analysis: kmac.hjson_034 is same_behavior for supported KEY_LEN values (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:913-952). theory_of_operation.md_021 is adjacent unmasked-key behavior and not used as evidence.\nVerdict integration: The encoding width adjustment is intentional padding and does not drop the key bits.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0070",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac_testplan.hjson_015",
+      "kmac.hjson_006"
+    ],
+    "summary": "lc_escalate_en[4] is explicitly wired to kmac_errchk, which unconditionally enters terminal error on loose-true LC escalation.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1223-1225 connects lc_escalate_en[4] to u_errchk; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:450-455 forces StTerminalError on escalation; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1525 drives all lc_escalate_en copies.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says there is no guarantee that [4] drives kmac_errchk. The instance port at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1223-1225 directly wires lc_escalate_en[4], and kmac_errchk uses it at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:450-455 to force terminal state.\nRef analysis: kmac.hjson_006 and kmac_testplan.hjson_015 are same_behavior LC escalation refs. They map cleanly to the prim_lc_sync/fanout logic at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1525.\nVerdict integration: The cited driver and consumer path exists and implements the escalation response.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0071",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_013",
+      "kmac.hjson_007"
+    ],
+    "summary": "In masked mode, putting the public bytepad constant in share0 and zero in share1 preserves the XOR-shared value; the zero is not a secret-key leakage defect.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:382-389 forms encoded_key_block[0] = encoded_key[0] || encode_bytepad and encoded_key_block[1] = encoded_key[1] || 16 h0 when masked; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:339-340 also sets encode_keylen[1] to zero.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats the share1 zero bytepad as an invalid asymmetry. The encoded bytepad is a public constant, and XOR shares reconstruct it with share0 carrying the constant and share1 carrying zero at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:385-388. Secret key shares are still provided via encoded_key[i] at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:349-377.\nRef analysis: theory_of_operation.md_013 is same_behavior for prepending encoded secret-key block (/home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:119-128). kmac.hjson_007 is general two-share key masking (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:304-306). EnMasking refs are adjacent.\nVerdict integration: The share1 zero is the normal sharing of a public constant, not evidence of key leakage.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0072",
+    "verdict": "CONFIRMED",
+    "confidence": 0.86,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The specific claim that a shared mask must be independent per share is incorrect for XOR sharing, but the same message-mask datapath contains a real defect: top-level KMAC applies a constant mask instead of entropy.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says all shares receive the same msg_mask_permuted. In the reduced wrapper, that is expected for preserving XOR-share reconstruction: both shares are XORed with msg_mask_permuted at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:160-164. In the top-level KMAC, however, the masking block computes msg_mask_permuted at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:915-921 and then ignores it.\nRef analysis: There are no ref_clues. Source inspection of the adjacent message-mask path shows the intended entropy-produced msg_mask at kmac_entropy and the top-level static_mask use.\nVerdict integration: The final verdict is CONFIRMED as an extra adjacent defect, not because same-mask-per-share is inherently wrong, but because the actual top-level mask is static/predictable.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0073",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_021",
+      "kmac.hjson_033"
+    ],
+    "summary": "SwKeyShare and Share intentionally differ only in the SwKeyMasked compatibility mode, where the two software shares are XORed into the single unmasked internal share.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:86-87 defines Share and SwKeyShare; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:501-524 either forwards shares directly or XOR-unmasks share0/share1; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:764-779 similarly merges KeyMgr shares when EnMasking is false.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says differing SwKeyShare/Share causes misalignment. The only differing case is EnMasking=0, SwKeyMasked=1; RTL handles it explicitly by allocating sw_key_data_reg[1] at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:501-512 and XORing into sw_key_data[0] at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:521-524.\nRef analysis: theory_of_operation.md_021 is same/contradictory for unmasked default KEY_SHARE1 ignored. kmac.hjson_033 is adjacent KEY_SHARE1 storage. kmac.hjson_007 is general masking.\nVerdict integration: The apparent type difference is deliberate interface compatibility logic, not an unchecked misalignment.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0074",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.87,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "When masking is enabled, sha3_rand_valid/early/data/aux are produced by kmac_entropy; when masking is disabled, tied-off constants are acceptable because SHA3 masking is not used.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1233-1320 instantiates kmac_entropy for EnMasking==1 and wires sha3_rand_valid/early/data/aux; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:431-447 drives rand_data_o/rand_aux_o/rand_valid_o/rand_early_o; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1321-1365 ties values only in the unmasked branch.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says no valid random data is guaranteed. The masked branch wires entropy outputs at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1275-1279 and the entropy module drives them from buffered PRNG data at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:431-447. The unmasked branch at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1335-1338 is only generated when EnMasking==0.\nRef analysis: The supplied refs are unrelated or general SHA3/config/error refs and do not describe the sha3_rand interface. They are not used as evidence.\nVerdict integration: The entropy-to-SHA3 path exists for the masked configuration; no missing-randomness bug was found on these signals.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0075",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The +16 bits are explained in RTL: they are the bytepad left_encode(w) prefix appended to encoded_key before slicing.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:291-300 describes bytepad/left_encode(w) and computes encode_bytepad; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:382-389 appends encode_bytepad to encoded_key_block; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:391-401 sets prim_slicer.InW to MaxEncodedKeyW+16.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding asks what MaxEncodedKeyW+16 represents. The comment at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:291-300 says the key block is bytepad(encode_string(K), w), and the 16-bit encode_bytepad is appended at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:383-388 before slicing at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:391-401.\nRef analysis: No ref_clues were provided; the RTL comments and assignments directly answer the question.\nVerdict integration: The constant is documented and functionally used; no bug or missing constraint is present.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0076",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_025",
+      "kmac.hjson_020"
+    ],
+    "summary": "msg_endianness is a single-bit field, so there is no illegal multi-bit encoding for conv_endian32 to check.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:449-465 defines CFG_SHADOWED.msg_endianness as bit 8; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1001-1004 passes that one bit into conv_endian32; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:471-475 implements conv_endian32 as swap ? byte_reverse : original.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes software can write an illegal msg_endianness value. The field is one bit in the register definition at /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:449-465 and is consumed as a logic swap at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1001-1004 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:471-475.\nRef analysis: kmac.hjson_025 and kmac.hjson_020 are same_behavior for message endianness. The mode/entropy refs are unrelated to this one-bit field.\nVerdict integration: Because the field has only legal 0/1 values in RTL, no missing range check exists.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0077",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_006",
+      "kmac_testplan.hjson_015"
+    ],
+    "summary": "The LC copies are generated from one synchronized lc_en vector and then separately buffered; the primitive also contains LC-specific synchronization assertions.",
+    "root_cause": "/home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:38-48 double-synchronizes lc_en_i into lc_en; /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:98-107 buffers each copy from that common lc_en; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1517-1525 instantiates it and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1515 applies the same alert OR to all copies.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says SHA3 and entropy may observe incoherent copies. prim_lc_sync uses a single synchronized lc_en vector at /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:38-48 and derives all output copies from it at /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:98-107. KMAC then applies identical OR logic to all copies at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1515.\nRef analysis: kmac.hjson_006 and kmac_testplan.hjson_015 are same_behavior escalation refs. They map to the synchronized fanout primitive and local OR logic.\nVerdict integration: No source-level inconsistency between LC copies was found.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0078",
+    "verdict": "CONFIRMED",
+    "confidence": 0.88,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_036"
+    ],
+    "summary": "The literal simultaneous-error priority policy is not itself contradicted by the spec, but the same ERR_CODE path has a real omission: msgfifo_err is not included in event_error/de/interrupt generation.",
+    "root_cause": "Actual defect: msgfifo_err is omitted from event_error. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-683 ORs sha3_err, app_err, entropy_err, and errchecker_err, but not msgfifo_err; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:686 drives hw2reg.err_code.de from event_error. Although /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:711-713 has a msgfifo_err case for hw2reg.err_code.d and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:240-266 can raise ErrPackerIntegrity/ErrMsgFifoIntegrity, a msgfifo-only error will not assert the kmac_err interrupt/de pulse. The error codes exist at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:449-452.",
+    "trigger_condition": "A message FIFO packer integrity error or FIFO integrity error occurs while no sha3/app/entropy/errchecker error is valid.",
+    "security_impact": "Software may not receive kmac_err or ERR_CODE update for a message FIFO integrity fault, reducing diagnostic/error-reporting integrity.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims lower-priority simultaneous errors are dropped. The priority encoder at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:691-718 indeed selects one code, but no source ref requires logging all simultaneous errors. While tracing the same listed signals, msgfifo_err.valid is handled in the data mux at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:711-713 but omitted from event_error at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-683.\nRef analysis: kmac.hjson_036 is overlapping/same ERR_CODE behavior: ERR_CODE should hold information when kmac_err occurs (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:989-1000). The SwIssuedCmdInAppActive ref is unrelated to the msgfifo omission; masking/config refs are unrelated.\nVerdict integration: The final verdict is CONFIRMED as an extra same-path defect: not all lower-priority errors must be logged, but msgfifo-only errors cannot generate the err_code de/interrupt despite having an ERR_CODE case.",
+    "additional_findings": [
+      "msgfifo_err.valid is not included in event_error, so ERR_CODE.de and intr_kmac_err miss msgfifo-only errors."
+    ]
+  },
+  {
+    "finding_id": "F-0079",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.94,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac_sec_cm_testplan.hjson_001",
+      "kmac_testplan.hjson_015"
+    ],
+    "summary": "prim_lc_sync is the dedicated double synchronizer for LC control signals and includes LC-specific assertions/known-output checks.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1517-1525 instantiates prim_lc_sync; /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:5-10 documents a double synchronizer; /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:38-48 instantiates prim_flop_2sync; /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:70-72 and /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:113-114 provide assertions.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says synchronization reliability is not represented. The dependency is the purpose-built prim_lc_sync module: documentation at /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:5-10, double-flop instance at /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:38-48, output-delay assertion at /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:70-72, and known-output assertion at /home/smy/opentitan/hw/ip/prim/rtl/prim_lc_sync.sv:113-114.\nRef analysis: kmac_sec_cm_testplan.hjson_001 and kmac_testplan.hjson_015 are same/overlapping LC escalation verification refs. They are satisfied by the explicit primitive instance.\nVerdict integration: The source contains the synchronizer and related assertions; no missing source-level synchronization path was found.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0080",
+    "verdict": "CONFIRMED",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "msg_mask_permuted is assigned in top-level KMAC but never used; the datapath uses static_mask instead, making the computed dynamic/permuted mask dead code.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says msg_mask_permuted may be unassigned/unread. It is assigned in /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:915-921, so the unassigned portion is false. However, source tracing confirms it is not read by the masking assignment; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 uses static_mask directly.\nRef analysis: No ref_clues were provided. RTL inspection alone shows the dead computed mask and static mask use.\nVerdict integration: Because the computed mask is not consumed and the output mask is constant, the finding is confirmed on the actual source-level defect.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0081",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_004"
+    ],
+    "summary": "status_alert_recov_ctrl_update_err is cleared by a software-controlled err_processed action after error handling; it is not autonomously cleared before software can read it.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1431-1444 sets the recoverable-control-update status on alert_recov_operation and clears it on err_processed; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:572-576 defines err_processed as the CMD write pulse.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding calls err_processed an internal signal that can clear the flag before software reads it. In RTL err_processed is generated from the software CMD.err_processed write at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:572-573; the status set/clear behavior is explicit at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1434-1444.\nRef analysis: kmac.hjson_004 is same_behavior for recov_operation_err as a shadow update error. The testplan refs exercise error/status flows but do not require the status to remain set after software declares the error processed.\nVerdict integration: Software controls the clear action, so the hardware is not silently dropping the alert before software observation.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0082",
+    "verdict": "CONFIRMED",
+    "confidence": 0.86,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_036"
+    ],
+    "summary": "The no-error d=0 behavior is harmless because de is low when event_error is low, but tracing this ERR_CODE path exposes a real msgfifo_err de omission.",
+    "root_cause": "Actual defect: msgfifo_err is omitted from event_error. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-683 ORs sha3_err, app_err, entropy_err, and errchecker_err, but not msgfifo_err; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:686 drives hw2reg.err_code.de from event_error. Although /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:711-713 has a msgfifo_err case for hw2reg.err_code.d and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:240-266 can raise ErrPackerIntegrity/ErrMsgFifoIntegrity, a msgfifo-only error will not assert the kmac_err interrupt/de pulse. The error codes exist at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:449-452.",
+    "trigger_condition": "A message FIFO packer integrity error or FIFO integrity error occurs while no sha3/app/entropy/errchecker error is valid.",
+    "security_impact": "Software may not receive kmac_err or ERR_CODE update for a message FIFO integrity fault, reducing diagnostic/error-reporting integrity.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding asks whether hw2reg.err_code.d = 0 when no error is valid is a bug. At /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:686, ERR_CODE updates only when hw2reg.err_code.de/event_error is high, so d=0 with no event is not written. However, the same signal list includes msgfifo_err.valid; that valid is not part of event_error at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-683.\nRef analysis: kmac.hjson_036 is same/overlapping ERR_CODE behavior (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:989-1000). kmac_testplan.hjson_011 is adjacent key-error testing and does not affect the msgfifo error path.\nVerdict integration: The final verdict is an extra finding: the literal no-error default is fine, but msgfifo-only errors cannot update ERR_CODE/de.",
+    "additional_findings": [
+      "msgfifo_err.valid is not included in event_error, so ERR_CODE.de and intr_kmac_err miss msgfifo-only errors."
+    ]
+  },
+  {
+    "finding_id": "F-0083",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_021",
+      "theory_of_operation.md_019"
+    ],
+    "summary": "The KMAC top-level default enables masking; unmasked variants are explicit compile-time configurations documented by the spec.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:13-22 declares EnMasking default 1 and SwKeyMasked default 0; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:81-90 also lists EnMasking default 1; unmasked behavior is explicitly documented at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:32-35.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims hardware defaults to EnMasking=0. The top-level parameter default is EnMasking=1 at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:13-15 and the hjson default is 1 at /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:81-90.\nRef analysis: theory_of_operation.md_021/_022 are contradictory/adjacent: they document what happens if masking is disabled but do not say the default is disabled. theory_of_operation.md_019 is overlapping message masking when EnMasking is enabled.\nVerdict integration: The premise is false for the main KMAC configuration; disabling masking is an explicit build variant, not the default.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0084",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.85,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_025"
+    ],
+    "summary": "engine_stable is the hardware-managed CFG_REGWEN condition and is intentionally true when SHA3 is idle; key writes are also gated by the generated register write-enable.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:478-483 defines engine_stable = sha3_fsm == StIdle and drives cfg_regwen; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-508 updates key shares only when engine_stable and the corresponding qe are true; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:345-364 documents hardware-managed CFG_REGWEN.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says external control is missing. CFG_REGWEN is explicitly hardware-managed: engine_stable is derived from SHA3 idle at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:478-483, and key-share registers require both engine_stable and qe at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:489-508.\nRef analysis: kmac.hjson_025 is overlapping CFG_SHADOWED idle-update behavior; fatal/SHA3/FIFO refs are unrelated to key update gating.\nVerdict integration: No unintended key overwrite path was found; writes are allowed only while the engine is idle by design.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0085",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.84,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_001",
+      "theory_of_operation.md_016"
+    ],
+    "summary": "The unconnected u_msg_unpacker_share0.depth_o is in kmac_reduced, an SCA wrapper; readiness still provides flow control and the main KMAC FIFO depth is connected to STATUS.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:106-121 leaves the reduced wrapper packer depth_o open; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:140-143 uses ready/valid for flow control. In main KMAC, /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1159-1161 connects fifo_depth_o to msgfifo_depth and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:471-476 exposes FIFO status.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding cites u_msg_unpacker_share0.depth_o, which is the kmac_reduced helper at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:106-121, not the main KMAC message FIFO. The reduced wrapper uses msg_ready_o and ready shares for flow control at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:140-143. The production KMAC connects depth at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1159-1161 and exposes it at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:471-476.\nRef analysis: theory_of_operation.md_001/_016 are overlapping MSG_FIFO depth/pass-through refs (/home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:129-155). theory_of_operation.md_036 is unrelated app-busy error handling.\nVerdict integration: The open depth_o in the reduced/SCA wrapper is not evidence that the main hardware lacks overflow/depth protection.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0086",
+    "verdict": "CONFIRMED",
+    "confidence": 0.94,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The DPA message-mask datapath is defective in top-level KMAC: the PRNG mask is produced but the data shares are XORed with a constant all-ones mask.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says msg_mask_permuted may be wrong or constant. In top-level KMAC, static_mask is assigned all ones at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:910-911, msg_mask_permuted is computed from static_mask at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:915-921, and msg_data_masked uses static_mask at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927. The entropy-generated msg_mask from /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:398-399 is unused in this assignment.\nRef analysis: No ref_clues were provided. Direct RTL mapping from entropy output to masked message data shows the disconnect.\nVerdict integration: The source confirms a real message-masking security defect, not merely a missing guarantee.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0087",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.83,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_009"
+    ],
+    "summary": "Invalid command encodings are not treated as normal commands by the checked command path; kmac_errchk flags sequence errors and blocks sw_cmd_o updates.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:428 forwards raw sw_cmd only into kmac_errchk; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1212-1215 connects checked_sw_cmd; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:183-239 checks allowed commands, /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:236-245 blocks sw_cmd_o when invalid/erroneous, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:319-376 reports ErrSwCmdSequence.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says invalid reg2hw.cmd.cmd.q is stored and continues as normal. The top-level raw cmd path is filtered by u_errchk: sw_cmd enters at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1212-1215, err_swsequence is computed at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:183-239, and block_swcmd prevents latching invalid sw_cmd_o at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:236-245.\nRef analysis: theory_of_operation.md_009 is overlapping Process command behavior; other entropy/CMD refs are adjacent/general but do not show invalid commands executing.\nVerdict integration: The invalid command is reported/blocked rather than accepted as a valid downstream command.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0088",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "app_err.valid is generated by kmac_app from explicit FSM/mux error conditions; accepting a module error output downstream is normal composition, not a bug.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:655-674 generates mux_err only for SW message writes outside SW mux or SW commands during app_active; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:441-558 generates fsm_err in defined error/terminal states; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:889-895 assigns error_o from those sources.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding asks for a guarantee that app_err.valid cannot be spurious. Source tracing shows app_err is the kmac_app error_o output, generated from mux_err/fsm_err at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:655-674 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_app.sv:889-895. The top-level aggregator correctly consumes it at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-696.\nRef analysis: theory_of_operation.md_030 is unrelated app output-length flow. kmac.hjson_005 is fatal-alert behavior and not evidence of an app_err spurious source.\nVerdict integration: No uninitialized or glitch-only app_err source was found in the RTL.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0089",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.94,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Recoverable alert 0 is sent directly to prim_alert_sender; only the latched local-escalation copy alerts_q[0] is intentionally unused.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1424-1429 maps alerts[0] to alert_recov_operation; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1466-1479 sends alerts[i] to prim_alert_sender for every alert; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1508 latches alerts_q[0] only for an unused local-escalation copy.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding confuses alerts_q[0] with the actual alert request. The real alert output uses alerts[0] directly at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1466-1479. The unused_alerts_q0 assignment at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1505-1508 only waives the recoverable alert local-escalation latch.\nRef analysis: No ref_clues were provided. The alert instance wiring directly refutes the claim.\nVerdict integration: Alert 0 is not ignored by the alert sender.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0090",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.85,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_004",
+      "kmac.hjson_025"
+    ],
+    "summary": "alert_recov_operation is intentionally the shadowed register update-error output from kmac_reg_top; the checker for shadowed_update_err belongs to the generated register block.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1380-1399 receives shadowed_update_err_o from kmac_reg_top; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1429 assigns alert_recov_operation = shadowed_update_err; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:365-379 defines CFG_SHADOWED update_err_alert recov_operation_err.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says shadowed_update_err itself is not revalidated. In this integration, shadowed_update_err_o is generated by the shadowed register block at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1380-1399, and hjson binds CFG_SHADOWED update errors to recov_operation_err at /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:365-379. The top-level is supposed to forward that generated error.\nRef analysis: kmac.hjson_004 and kmac.hjson_025 are same_behavior refs for shadow-register update errors. They map to the reg_top output and alert assignment.\nVerdict integration: No additional top-level validation of a generated shadow-update error is required or specified.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0091",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "inc_keyidx only increments during the KMAC core key-write datapath, not during arbitrary message beats or multi-message sequences.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:190-205 asserts kmac_valid only in StKey before sent_blocksize; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:257-268 selects kmac_data only when en_key_write is active; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:407 increments key_index on kmac_valid & msg_ready_i; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:196-200 clears keyidx after block size is sent.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says inc_keyidx increments on every KMAC message handshake. In RTL kmac_valid is asserted by the core FSM only in StKey at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:190-205; normal FIFO messages are forwarded through msg_valid_o without setting kmac_valid at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:257-263. key_index is cleared when the key block is complete at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:196-200.\nRef analysis: The sideload/error refs are unrelated to key_index incrementing, and the general command/config refs do not describe this datapath.\nVerdict integration: The counter tracks key-slice transmission as intended; no key-switch condition is missing.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0092",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.88,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026"
+    ],
+    "summary": "The apparent delayed command acceptance is the purpose of SecCmdDelay; with SecCmdDelay==0 the direct path forwards cmd_update immediately.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:24-28 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:356-380 describe SecCmdDelay; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:421-425 directly forwards cmd_update/cmd_q when SecCmdDelay==0.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding notes a possible one-cycle/delay behavior when counting_q is 0. In the delayed branch, commands are intentionally delayed until count_q reaches SecCmdDelay at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:376-380. In the default no-delay branch, cmd_update is exactly reg2hw.cmd.cmd.qe at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:421-425.\nRef analysis: kmac.hjson_026 is same CMD behavior. The entropy and smoke refs are unrelated to SecCmdDelay implementation.\nVerdict integration: The behavior is either intentional SCA command delay or absent in the default direct path.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0093",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.96,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "status_alert_recov_ctrl_update_err is declared and driven in the alert/status section of kmac.sv.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1433 declares status_alert_recov_ctrl_update_err; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1434-1442 drives it; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1444 connects it to hw2reg.status.alert_recov_ctrl_update_err.d.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says the signal is declared but not driven in the observed region. Full-source inspection shows declaration at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1433, sequential drive at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1434-1442, and status register connection at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1444.\nRef analysis: The provided status/error testplan refs are broad coverage items and not needed once the source driver is located.\nVerdict integration: The source contains the driver; this is a chunking/analysis artifact, not a bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0094",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "kmac_en_i selects whether the KMAC key-prepend datapath is active; when it is disabled, the core intentionally forwards FIFO messages to SHA3 rather than dropping them.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:32-36 documents that if kmac_en_i is cleared the core forwards incoming messages to SHA3; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:257-263 implements msg_valid_o/data/strb muxing; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:270-273 forwards process_i when kmac_en_i is false.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says messages may be processed while disabled. In this design disabled means KMAC functionality disabled, not SHA3 disabled: the comments at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:32-36 state the core forwards messages to SHA3, and the mux at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:257-263 implements that.\nRef analysis: The key/app/error refs are unrelated or only general error-sequence coverage. They do not define kmac_en_i as a global message-drop enable.\nVerdict integration: The observed forwarding behavior is intended SHA3 mode operation, not a transient security window.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0095",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.84,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac_testplan.hjson_007"
+    ],
+    "summary": "Partial strobes are supported in the main KMAC message path; the all-ones msg_strb_i note is only a reduced-wrapper driving convention.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:64 comments that reduced-wrapper msg_strb_i should be driven all ones; main kmac_msgfifo derives byte strobes from packer masks at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:139-143 and forwards msg_strb_o at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:174-177; /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:1027-1040 documents byte-write MSG_FIFO.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats msg_strb_i all-ones as an RTL requirement. In the production path, partial TLUL byte writes are packed into strb bits at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:139-143 and passed to SHA3 at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:174-177. Only kmac_reduced has a test-harness comment to drive msg_strb_i all ones at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:64.\nRef analysis: kmac_testplan.hjson_007 is contradictory/overlapping: it explicitly covers partial app-interface strb values. That supports partial-strobe legality rather than corruption.\nVerdict integration: No missing enforcement exists because partial strobes are valid in the main design.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0096",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.88,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_038",
+      "theory_of_operation.md_016",
+      "kmac_testplan.hjson_023"
+    ],
+    "summary": "The main KMAC FIFO depth output is connected to STATUS; reduced-wrapper open depth_o is not the system overflow/error mechanism.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:165-167 connects prim_fifo full/depth/error to outputs; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1159-1161 wires fifo_depth_o to msgfifo_depth; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:471-476 exposes fifo_depth/fifo_empty/fifo_full status.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says depth_o is unconnected globally. In main KMAC, depth is connected from kmac_msgfifo at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1159-1161 and exposed in STATUS at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:471-476. The open reduced-wrapper depth_o at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:120 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:137 is not the main IP path.\nRef analysis: kmac.hjson_038 and theory_of_operation.md_016 are same_behavior for MSG_FIFO pass-through/depth behavior (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:697-720, /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:146-155). kmac_testplan.hjson_023 is overlapping coverage.\nVerdict integration: The production FIFO status/depth path is connected; the claim is false for the RTL under verification.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0097",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.96,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026"
+    ],
+    "summary": "cmd_buf_q has explicit load logic in all relevant delayed-command cases.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:395-418 resets, loads, drains, and clears cmd_buf_q; loads occur at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:403 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:410, and clear occurs at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:416.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says cmd_buf_q only resets/holds. The always_ff block at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:395-418 loads cmd_buf_q from reg2hw.cmd.cmd.q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:403 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:410 and clears it on counter expiry at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:416.\nRef analysis: kmac.hjson_026 and theory_of_operation.md_009 are overlapping CMD Process behavior; smoke-test ref is general.\nVerdict integration: The source directly refutes the missing-load claim.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0098",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_027",
+      "kmac.hjson_002",
+      "theory_of_operation.md_016"
+    ],
+    "summary": "msgfifo_empty is generated and consumed in the same clk_i domain; the registered msgfifo_empty_q is for edge detection, not CDC synchronization.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:153-155 instantiates the FIFO on clk_i/rst_ni and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:179 drives fifo_empty_o; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1146-1160 instantiates kmac_msgfifo in the same clk_i domain; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:631 and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-658 register msgfifo_empty for edge/full-seen logic.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a CDC/metastability issue. kmac_msgfifo and its consumer are both clocked by clk_i: instance at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1146-1160 and FIFO internals at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:153-155. The msgfifo_empty_q register at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-658 is edge/history state, not a missing double synchronizer.\nRef analysis: kmac.hjson_027, kmac.hjson_002, and theory_of_operation.md_016 are same/overlapping FIFO status refs (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:697-720, /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:42-56, /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:146-155). They describe status behavior, not CDC.\nVerdict integration: There is no asynchronous boundary on msgfifo_empty in the source path.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0099",
+    "verdict": "CONFIRMED",
+    "confidence": 0.84,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The RndCnstMsgPerm duplicate/out-of-range premise is not the main issue, but the same message-mask permutation path is defective because top-level KMAC does not use the entropy-derived mask/permutation at all.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says RndCnstMsgPerm might be non-permutation. The type at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:179-187 constrains indices to the MsgWidth range, and hjson marks RndCnstMsgPerm randtype perm at /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:197-202. However, top-level KMAC computes msg_mask_permuted from static_mask at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:915-921 and does not use it in /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927.\nRef analysis: No ref_clues were provided. Source tracing of the adjacent RndCnstMsgPerm/msg_mask_permuted path exposes the static-mask defect.\nVerdict integration: The final verdict is CONFIRMED as an extra adjacent defect rather than a proven bad permutation constant.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0100",
+    "verdict": "CONFIRMED",
+    "confidence": 0.82,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Diffusion quality of RndCnstMsgPerm is a design-review question, but the adjacent RTL path has a concrete bug: the dynamic mask/permutation is bypassed by a constant mask.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding questions RndCnstMsgPerm cryptographic diffusion. The RTL cannot prove diffusion quality, but it does show a stronger adjacent defect: /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:910-927 uses static_mask rather than the entropy-produced msg_mask from /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:398-399.\nRef analysis: No ref_clues were provided. The actionable source-level issue is not mathematical diffusion but that the top-level datapath bypasses entropy.\nVerdict integration: Per the extra-finding rule, this is confirmed on the same message-mask path as a concrete RTL defect.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0101",
+    "verdict": "CONFIRMED",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The finding is confirmed for the top-level message-masking block: static_mask is a fixed all-ones value and is used instead of dynamic PRNG msg_mask.",
+    "root_cause": "Actual defect: top-level message masking ignores the dynamic PRNG mask. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:906-921 computes msg_mask_permuted from a constant all-ones static_mask, and /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927 XORs every share with static_mask instead of msg_mask/msg_mask_permuted. The entropy generator does produce msg_mask from rand_data_q at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_entropy.sv:390-399, and the spec requires CFG_SHADOWED.msg_mask to use the internal entropy generator at /home/smy/opentitan/hw/ip/kmac/doc/theory_of_operation.md:212-214 and /home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:559-565.",
+    "trigger_condition": "EnMasking == 1, CFG_SHADOWED.msg_mask == 1, and a message beat is accepted by SHA3/KMAC.",
+    "security_impact": "Message remasking intended for side-channel hardening is constant/predictable rather than entropy-driven.",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says fixed RndCnstMsgPerm/static_mask lacks dynamic randomization. In top-level KMAC, static_mask is assigned to a constant all-ones vector at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:910-911, msg_mask_permuted is derived from that constant at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:915-921, and the data shares use static_mask at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:923-927.\nRef analysis: No ref_clues were provided. The RTL and KMAC spec message-mask field show the intended dynamic PRNG path and the constant implementation.\nVerdict integration: This is a direct source-level security defect in the message masking implementation.",
+    "additional_findings": [
+      "Top-level KMAC computes msg_mask_permuted but does not use it; msg_data_masked uses constant static_mask."
+    ]
+  },
+  {
+    "finding_id": "F-0102",
+    "verdict": "CONFIRMED",
+    "confidence": 0.89,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_036"
+    ],
+    "summary": "The level-vs-pulse concern is imprecise, but hw2reg.err_code.de has a real generation bug: it omits msgfifo_err from event_error.",
+    "root_cause": "Actual defect: msgfifo_err is omitted from event_error. /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-683 ORs sha3_err, app_err, entropy_err, and errchecker_err, but not msgfifo_err; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:686 drives hw2reg.err_code.de from event_error. Although /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:711-713 has a msgfifo_err case for hw2reg.err_code.d and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_msgfifo.sv:240-266 can raise ErrPackerIntegrity/ErrMsgFifoIntegrity, a msgfifo-only error will not assert the kmac_err interrupt/de pulse. The error codes exist at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_pkg.sv:449-452.",
+    "trigger_condition": "A message FIFO packer integrity error or FIFO integrity error occurs while no sha3/app/entropy/errchecker error is valid.",
+    "security_impact": "Software may not receive kmac_err or ERR_CODE update for a message FIFO integrity fault, reducing diagnostic/error-reporting integrity.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding asks whether hw2reg.err_code.de duration is constrained. The RTL defines de directly from event_error at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:686, so its duration follows the valid sources. The actual defect is that event_error at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:681-683 omits msgfifo_err even though /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:711-713 has a msgfifo_err data case.\nRef analysis: kmac.hjson_036 is same ERR_CODE behavior (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:989-1000). The testplan refs are overlapping error-check expectations and support that errors should be visible through status/interrupt/ERR_CODE.\nVerdict integration: The final verdict is confirmed as an extra same-path defect: msgfifo-only integrity errors cannot assert ERR_CODE.de/kmac_err.",
+    "additional_findings": [
+      "msgfifo_err.valid is not included in event_error, so ERR_CODE.de and intr_kmac_err miss msgfifo-only errors."
+    ]
+  },
+  {
+    "finding_id": "F-0103",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_005"
+    ],
+    "summary": "key_index_error_o is handled as a counter_error, which raises fatal alert and local escalation/status.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:411-425 drives key_index_error_o from prim_count.err_o; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:897-900 receives key_index_error; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:721-728 folds it into counter_error; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1446-1450 drives alert_fatal from counter_error; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1453-1464 latches fatal status.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says key_index_error_o lacks alert/lockout handling. The signal is connected from u_kmac_core at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:897-900, ORed into counter_error at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:721-728, and then into alert_fatal/status at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1446-1464.\nRef analysis: kmac.hjson_005 is same_behavior for fatal_fault_err including message/round/key counter errors (/home/smy/opentitan/hw/ip/kmac/data/kmac.hjson:68-78). ERR_CODE and KeyNotValid refs are unrelated to counter-fatal handling.\nVerdict integration: The key-index counter error is not ignored; it triggers the fatal-fault path.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0104",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.86,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "prim_slicer is a simple bounded combinational slice with an initialization assertion ensuring InW fits the indexed unrolled width.",
+    "root_cause": "/home/smy/opentitan/hw/ip/prim/rtl/prim_slicer.sv:21-29 zero-extends data_i into unrolled_data, slices data_o with sel_i*OutW, and asserts InW <= OutW*(2**IndexW); KMAC instantiates it at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:391-401.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says prim_slicer lacks correctness guarantees. The primitive implementation at /home/smy/opentitan/hw/ip/prim/rtl/prim_slicer.sv:21-29 is a direct indexed slice with a width assertion, and KMAC passes bounded key_index width at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:391-401.\nRef analysis: The only ref is general command/error coverage and unrelated to prim_slicer behavior.\nVerdict integration: No source-level slicer wrap/overflow/glitch defect was found.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0105",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.84,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026"
+    ],
+    "summary": "Raw cmd_q is not the command consumed by the KMAC app/state path; the kmac_errchk checked_sw_cmd path reports and blocks invalid/illegal commands.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:428 sends sw_cmd to kmac_errchk; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1212-1215 wires sw_cmd_o as checked_sw_cmd; /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:183-239 flags illegal command encodings/sequences and /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:236-245 prevents updating sw_cmd_o when block_swcmd is true.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says invalid kmac_cmd_e values are forwarded directly to sw_cmd and bypass CmdNone. Raw sw_cmd is formed at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:428, but downstream app logic receives checked_sw_cmd from kmac_errchk at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1212-1215. Invalid values are not inside allowed command sets at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:183-239 and block sw_cmd_o updates at /home/smy/opentitan/hw/ip/kmac/rtl/kmac_errchk.sv:236-245.\nRef analysis: kmac.hjson_026 is same CMD sparse-encoding behavior. Run/entropy testplan refs are adjacent or unrelated and do not show invalid commands executing.\nVerdict integration: The source-level command checker refutes direct execution of invalid encodings.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0106",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "kmac.hjson_026"
+    ],
+    "summary": "The SecCmdDelay logic intentionally treats CmdManualRun as non-delayed; writing ManualRun while a delayed command exists does not directly abort the current command, and the immediate behavior is documented.",
+    "root_cause": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:376-380 states ManualRun cannot be delayed and makes cmd_update true when cmd_q == CmdManualRun; /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:400-416 preserves one buffered command and drains it on update.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says a CmdManualRun write immediately sets cmd_update and clears the pending delay. cmd_update is based on the registered cmd_q, not the just-written q value, at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:379-380. A ManualRun written while counting is first buffered at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:409-410, then becomes non-delayed once it is moved to cmd_q; this matches the comment at /home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:376-378.\nRef analysis: kmac.hjson_026 is same CMD behavior; WaitTimer/IncorrectEntropy refs concern entropy error recovery and are unrelated to SecCmdDelay arbitration.\nVerdict integration: The observed ManualRun special case is intentional and does not silently abort a pending delayed command in the source logic.",
+    "additional_findings": []
+  }
+]

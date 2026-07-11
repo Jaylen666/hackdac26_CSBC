@@ -9,29 +9,154 @@
       "fsm_err_o"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
       "hw_sel_i",
       "adv_en_i",
       "id_en_i",
       "gen_en_i",
       "op_done_i",
-      "op_start_i"
+      "op_start_i",
+      "mubi4_test_true_strict",
+      "mubi4_test_true_loose",
+      "mubi4_test_false_strict",
+      "mubi4_test_false_loose"
     ],
     "modes": [],
     "tags": [
-      "clock_domain",
-      "reset"
+      "secret",
+      "fault",
+      "handshake",
+      "error"
     ]
   },
   "guarantees": [],
-  "assumptions": [],
-  "uncertain_points": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "hw_sel_i must be a legal, stable mubi4 encoding such that the imported mubi4 test functions (strict/loose) reliably produce consistent Boolean outcomes without glitches.",
+      "cond": "during any clock cycle where the module is active",
+      "risk": "An illegal or metastable hw_sel_i could cause glitchy or mismatched evaluations in strict test functions, potentially issuing a false fsm_err_o or spuriously enabling data_hw_en_o / data_sw_en_o, leading to unintended secret access.",
+      "signals": [
+        "hw_sel_i"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:16",
+        "keymgr_data_en_state.sv:27-30"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "!$isunknown(mubi4_test_true_strict(hw_sel_i))",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "imported",
+        "signals": [
+          "hw_sel_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "!$isunknown(mubi4_test_true_strict(hw_sel_i))",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The behavioral logic of keymgr_data_en_state is not present in this chunk; the actual generation of data_hw_en_o, data_sw_en_o, and fsm_err_o from the input handshake and mubi selection signals cannot be evaluated.",
+      "cond": "when op_start_i, op_done_i, or hw_sel_i change",
+      "risk": "Missing handling may lead to unconstrained enable paths, race conditions, or incorrect error reporting.",
+      "signals": [
+        "data_hw_en_o",
+        "data_sw_en_o",
+        "fsm_err_o",
+        "op_start_i",
+        "op_done_i",
+        "hw_sel_i"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:10-25"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_hw_en_o",
+          "data_sw_en_o",
+          "fsm_err_o",
+          "op_start_i",
+          "op_done_i",
+          "hw_sel_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when op_start_i, op_done_i, or hw_sel_i change",
+        "consequent": "The behavioral logic of keymgr_data_en_state is not present in this chunk; the actual generation of data_hw_en_o, data_sw_en_o, and fsm_err_o from the input handshake and mubi selection signals cannot be evaluated",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "It is unknown whether a fault condition on fsm_err_o should force data_hw_en_o and data_sw_en_o to an inactive (safe) state or whether the enables can remain active under error.",
+      "cond": "when fsm_err_o asserts",
+      "risk": "If enables are not gated by the error, secret data could be moved or exposed during a fault window.",
+      "signals": [
+        "fsm_err_o",
+        "data_hw_en_o",
+        "data_sw_en_o"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:22-24"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "fsm_err_o == 1'b1",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fsm_err_o",
+          "data_hw_en_o",
+          "data_sw_en_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "fsm_err_o == 1'b1",
+        "consequent": "It is unknown whether a fault condition on fsm_err_o should force data_hw_en_o and data_sw_en_o to an inactive (safe) state or whether the enables can remain active under error",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "data_hw_en_o and data_sw_en_o directly control hardware/software data access enable paths in the key manager. If these enables are asserted under invalid conditions—due to a bad hw_sel_i, an unhandled fault, or a missing safety gating on fsm_err_o—secret key material could be exposed or overwritten. The module’s integrity is critical for the security posture of the overall key manager.",
   "evidence_refs": [
-    "file:8-30"
+    "keymgr_data_en_state.sv:10-25",
+    "keymgr_data_en_state.sv:16",
+    "keymgr_data_en_state.sv:22-24",
+    "keymgr_data_en_state.sv:27-30"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv",
   "line_start": 8,
-  "line_end": 30,
-  "security_implications": ""
+  "line_end": 30
 }

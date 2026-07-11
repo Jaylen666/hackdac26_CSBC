@@ -1,36 +1,473 @@
 {
   "chunk_id": "rv_dm__always_ff__p_ndm_reset__001",
-  "summary": "管理 NDM 复位请求的 pending 标志和并发生命周期复位标志，确保正确处理握手。",
-  "behavior": "该 always_ff 块在异步复位下将 ndmreset_pending_q 和 lc_rst_pending_q 清 0。正常工作时，ndmreset_pending_q 在 ndmreset_req 有效且当前未 pending 时置 1（行 327-328），在 ndmreset_ack 有效且已 pending 时清 0（行 329-331），避免同一请求重复触发。lc_rst_pending_q 仅在 ndmreset_pending_q 为 1 期间采样 lc_rst_asserted 并锁存为 1（行 333-334），同样在 ndmreset_ack 且 lc_rst_pending_q 已置位时清 0（行 335-337）。注意：两个标志的更新在同一周期内使用旧值采样，因此当 ndmreset_ack 与 lc_rst_asserted 同时有效且 ndmreset_pending_q 为 1 时，ndmreset_pending_q 会被计划清零，而 lc_rst_pending_q 会被计划置 1，导致下一周期 ndmreset_pending_q 为 0 但 lc_rst_pending_q 仍为 1。此后 lc_rst_pending_q 的清除依赖另一次 ndmreset_ack（即使 ndmreset_pending_q 已为 0），可能成为 sticky 状态，需上下文确认是否为此预期。",
+  "header": {
+    "module": "rv_dm",
+    "block_kind": "always_ff",
+    "driven": [
+      "ndmreset_pending_q",
+      "lc_rst_pending_q"
+    ],
+    "used": [
+      "ndmreset_req",
+      "ndmreset_ack",
+      "lc_rst_asserted",
+      "rst_ni",
+      "clk_i"
+    ],
+    "modes": [
+      "reset",
+      "ndmreset_pending",
+      "lc_rst_pending"
+    ],
+    "tags": [
+      "lifecycle",
+      "reset",
+      "access_control"
+    ]
+  },
   "guarantees": [
     {
-      "property": "复位后 ndmreset_pending_q 与 lc_rst_pending_q 一定为 0。",
-      "output_signals": [
+      "id": "G1",
+      "type": "reg_update",
+      "claim": "When rst_ni is low, ndmreset_pending_q and lc_rst_pending_q are both forced to 0.",
+      "cond": "!rst_ni",
+      "signals": [
+        "rst_ni",
         "ndmreset_pending_q",
         "lc_rst_pending_q"
       ],
-      "source_refs": [
-        "rv_dm.sv:322-324"
-      ]
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:322-324"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "ndmreset_pending_q == 0 && lc_rst_pending_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "ndmreset_pending_q",
+          "lc_rst_pending_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "ndmreset_pending_q == 0 && lc_rst_pending_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "property": "当 ndmreset_pending_q 为 1 时，一定标识存在已请求但未确认的 NDM 复位；当 lc_rst_pending_q 为 1 时，一定标识在最近一次 NDM 复位挂起期间发生过生命周期复位（lc_rst_asserted）。",
-      "output_signals": [
+      "id": "G2",
+      "type": "state_transition",
+      "claim": "When rst_ni is high, ndmreset_req is active and ndmreset_pending_q is currently 0, ndmreset_pending_q is set to 1 in the next cycle.",
+      "cond": "rst_ni && ndmreset_req && !ndmreset_pending_q",
+      "signals": [
+        "ndmreset_req",
+        "ndmreset_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:327-328"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_req && !ndmreset_pending_q",
+        "consequent": "ndmreset_pending_q == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_req",
+        "signals": [
+          "ndmreset_req",
+          "ndmreset_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_req && !ndmreset_pending_q",
+        "consequent": "ndmreset_pending_q == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "state_transition",
+      "claim": "When rst_ni is high, ndmreset_ack is active and ndmreset_pending_q is currently 1, ndmreset_pending_q is cleared to 0 in the next cycle.",
+      "cond": "rst_ni && ndmreset_ack && ndmreset_pending_q",
+      "signals": [
+        "ndmreset_ack",
+        "ndmreset_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:329-330"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_ack && ndmreset_pending_q",
+        "consequent": "ndmreset_pending_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_ack",
+        "signals": [
+          "ndmreset_ack",
+          "ndmreset_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_ack && ndmreset_pending_q",
+        "consequent": "ndmreset_pending_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "When rst_ni is high, ndmreset_pending_q is 1 and lc_rst_asserted is active, lc_rst_pending_q is set to 1 in the next cycle.",
+      "cond": "rst_ni && ndmreset_pending_q && lc_rst_asserted",
+      "signals": [
         "ndmreset_pending_q",
+        "lc_rst_asserted",
         "lc_rst_pending_q"
       ],
-      "source_refs": [
-        "rv_dm.sv:327-337"
-      ]
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:333-334"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_pending_q && lc_rst_asserted",
+        "consequent": "lc_rst_pending_q == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_pending_q",
+        "signals": [
+          "ndmreset_pending_q",
+          "lc_rst_asserted",
+          "lc_rst_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_pending_q && lc_rst_asserted",
+        "consequent": "lc_rst_pending_q == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "When rst_ni is high, ndmreset_ack is active and lc_rst_pending_q is currently 1, lc_rst_pending_q is cleared to 0 in the next cycle.",
+      "cond": "rst_ni && ndmreset_ack && lc_rst_pending_q",
+      "signals": [
+        "ndmreset_ack",
+        "lc_rst_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:335-336"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_ack && lc_rst_pending_q",
+        "consequent": "lc_rst_pending_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_ack",
+        "signals": [
+          "ndmreset_ack",
+          "lc_rst_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && ndmreset_ack && lc_rst_pending_q",
+        "consequent": "lc_rst_pending_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and no set/clear condition is active for ndmreset_pending_q, its value remains stable.",
+      "cond": "rst_ni && !(ndmreset_req && !ndmreset_pending_q) && !(ndmreset_ack && ndmreset_pending_q)",
+      "signals": [
+        "ndmreset_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:326-331"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(ndmreset_req && !ndmreset_pending_q) && !(ndmreset_ack && ndmreset_pending_q)",
+        "consequent": "$stable(ndmreset_pending_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_pending_q",
+        "signals": [
+          "ndmreset_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(ndmreset_req && !ndmreset_pending_q) && !(ndmreset_ack && ndmreset_pending_q)",
+        "consequent": "$stable(ndmreset_pending_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "default_fallback",
+      "claim": "When rst_ni is high and no set/clear condition is active for lc_rst_pending_q, its value remains stable.",
+      "cond": "rst_ni && !(ndmreset_pending_q && lc_rst_asserted) && !(ndmreset_ack && lc_rst_pending_q)",
+      "signals": [
+        "lc_rst_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:332-337"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(ndmreset_pending_q && lc_rst_asserted) && !(ndmreset_ack && lc_rst_pending_q)",
+        "consequent": "$stable(lc_rst_pending_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "lc_rst_pending_q",
+        "signals": [
+          "lc_rst_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(ndmreset_pending_q && lc_rst_asserted) && !(ndmreset_ack && lc_rst_pending_q)",
+        "consequent": "$stable(lc_rst_pending_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "记录在调试模块复位（NDM）过程中是否出现了生命周期复位（lc_rst），该信息可能用于安全状态机区分复位原因，触发安全响应或审计。",
-  "assumptions": [],
-  "evidence_refs": [
-    "rv_dm.sv:321-339"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "ndmreset_req, ndmreset_ack, and lc_rst_asserted are synchronous to clk_i and meet setup/hold requirements.",
+      "cond": "always, when clk_i is toggling",
+      "risk": "Metastability or missed sampling could cause ndmreset_pending_q or lc_rst_pending_q to miss events or transition incorrectly.",
+      "signals": [
+        "ndmreset_req",
+        "ndmreset_ack",
+        "lc_rst_asserted",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:321",
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:327-336"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "ndmreset_req",
+        "signals": [
+          "ndmreset_req",
+          "ndmreset_ack",
+          "lc_rst_asserted",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always, when clk_i is toggling",
+        "consequent": "ndmreset_req, ndmreset_ack, and lc_rst_asserted are synchronous to clk_i and meet setup/hold requirements",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "lc_rst_asserted is asserted for at least one full clk_i cycle (no pulse shorter than the clock period).",
+      "cond": "when lc_rst_asserted becomes active",
+      "risk": "If the pulse is too short, the always_ff block may not sample it, causing lc_rst_pending_q to remain deasserted and the lifecycle reset event to be silently missed.",
+      "signals": [
+        "lc_rst_asserted",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:333-334"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "lc_rst_asserted",
+        "signals": [
+          "lc_rst_asserted",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when lc_rst_asserted becomes active",
+        "consequent": "lc_rst_asserted is asserted for at least one full clk_i cycle (no pulse shorter than the clock period)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
   "uncertain_points": [
-    "当 ndmreset_ack 与 lc_rst_asserted 在同一周期有效且 ndmreset_pending_q 为 1 时，ndmreset_pending_q 被清零而 lc_rst_pending_q 被置 1（行 329 / 333），此后 lc_rst_pending_q 只能由另一次 ndmreset_ack 清除，即使 ndmreset_pending_q 已为 0。这在设计上是预期 sticky 行为还是需要额外的复位/清除机制，需结合外部逻辑确认。"
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The behavior when ndmreset_req and ndmreset_ack are both active in the same cycle is not explicitly documented. Depending on the current ndmreset_pending_q value, the pending flag may be set or cleared in a non‑obvious way.",
+      "cond": "ndmreset_req && ndmreset_ack",
+      "risk": "Could lead to unintended reset sequencing, e.g., accepting a new request while acknowledging the previous one, which might violate a higher-level handshake protocol.",
+      "signals": [
+        "ndmreset_req",
+        "ndmreset_ack",
+        "ndmreset_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:327-330"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "ndmreset_req && ndmreset_ack",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_req",
+        "signals": [
+          "ndmreset_req",
+          "ndmreset_ack",
+          "ndmreset_pending_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "ndmreset_req && ndmreset_ack",
+        "consequent": "The behavior when ndmreset_req and ndmreset_ack are both active in the same cycle is not explicitly documented. Depending on the current ndmreset_pending_q value, the pending flag may be set or cleared in a non‑obvious way",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "lc_rst_pending_q implements only a single‑deep tracking of lc_rst_asserted events during an active ndm reset. Multiple lc reset assertions are not distinguished or counted.",
+      "cond": "ndmreset_pending_q && lc_rst_asserted",
+      "risk": "If multiple back‑to‑back lc resets occur while ndmreset_pending_q is high, all but the first may be silently ignored, potentially masking a required safety response.",
+      "signals": [
+        "lc_rst_pending_q",
+        "lc_rst_asserted",
+        "ndmreset_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:333-334"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "lc_rst_pending_q",
+        "signals": [
+          "lc_rst_pending_q",
+          "lc_rst_asserted",
+          "ndmreset_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "ndmreset_pending_q && lc_rst_asserted",
+        "consequent": "lc_rst_pending_q implements only a single‑deep tracking of lc_rst_asserted events during an active ndm reset. Multiple lc reset assertions are not distinguished or counted",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "ndmreset_ack simultaneously clears both ndmreset_pending_q and lc_rst_pending_q without checking whether the lc reset processing has actually completed. This may prematurely remove the lc reset indicator.",
+      "cond": "ndmreset_ack && lc_rst_pending_q",
+      "risk": "Downstream logic that relies on lc_rst_pending_q for safe lifecycle sequencing could proceed before the lifecycle reset is fully handled, leading to a security state inconsistency.",
+      "signals": [
+        "ndmreset_ack",
+        "lc_rst_pending_q",
+        "ndmreset_pending_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:335-336"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "ndmreset_ack && lc_rst_pending_q",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_ack",
+        "signals": [
+          "ndmreset_ack",
+          "lc_rst_pending_q",
+          "ndmreset_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "ndmreset_ack && lc_rst_pending_q",
+        "consequent": "ndmreset_ack simultaneously clears both ndmreset_pending_q and lc_rst_pending_q without checking whether the lc reset processing has actually completed. This may prematurely remove the lc reset indicator",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The chunk manages ndmreset_pending_q and lc_rst_pending_q. lc_rst_pending_q tracks a lifecycle reset asserted during an active ndm reset. A missed or prematurely cleared lifecycle reset indicator could cause the system to skip a security-critical lifecycle transition (e.g., lc escalation/degradation), potentially leaving secure state inconsistent. The interaction between ndmreset_req and ndmreset_ack, as well as the unconditional clearing of lc_rst_pending_q by ndmreset_ack, creates a window where a lifecycle reset event may be lost or ignored.",
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:321-339"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
   "line_start": 321,

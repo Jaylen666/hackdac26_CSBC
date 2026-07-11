@@ -9,185 +9,480 @@
     ],
     "used": [
       "reg2hw.cmd.cmd.qe",
-      "reg2hw.cmd.cmd.q",
       "cmd_update",
       "counting_q",
+      "reg2hw.cmd.cmd.q",
       "rst_ni"
     ],
     "modes": [
-      "kmac_cmd_e",
-      "CmdNone",
-      "counting_q==0",
-      "counting_q!=0"
+      "kmac_cmd_e (CmdNone, ...)",
+      "counting_q (0 or 1)"
     ],
     "tags": [
-      "csr",
+      "command",
+      "queue",
       "handshake",
-      "security",
-      "command_queue"
+      "reset",
+      "enum_cast",
+      "csr"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (rst_ni low), cmd_q and cmd_buf_q are both set to CmdNone.",
+      "claim": "When rst_ni is low, cmd_q and cmd_buf_q are forced to CmdNone.",
       "cond": "!rst_ni",
-      "signals": [
-        "cmd_q",
-        "cmd_buf_q",
-        "rst_ni"
-      ],
-      "refs": [
-        "line 396-398"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "reg_update",
-      "claim": "When reg2hw.cmd.cmd.qe and cmd_update are both true, cmd_q is loaded from the previous cmd_buf_q, and cmd_buf_q is loaded from reg2hw.cmd.cmd.q (cast to kmac_cmd_e).",
-      "cond": "reg2hw.cmd.cmd.qe && cmd_update",
-      "signals": [
-        "reg2hw.cmd.cmd.qe",
-        "cmd_update",
-        "cmd_q",
-        "cmd_buf_q",
-        "reg2hw.cmd.cmd.q",
-        "kmac_cmd_e"
-      ],
-      "refs": [
-        "line 400-404"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "reg_update",
-      "claim": "When reg2hw.cmd.cmd.qe is true and cmd_update is false, cmd_q is directly loaded from reg2hw.cmd.cmd.q if counting_q is 0; otherwise, cmd_buf_q is loaded and cmd_q remains unchanged.",
-      "cond": "reg2hw.cmd.cmd.qe && !cmd_update",
-      "signals": [
-        "reg2hw.cmd.cmd.qe",
-        "counting_q",
-        "cmd_q",
-        "cmd_buf_q",
-        "reg2hw.cmd.cmd.q"
-      ],
-      "refs": [
-        "line 405-411"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "reg_update",
-      "claim": "When reg2hw.cmd.cmd.qe is false and cmd_update is true, cmd_q is loaded from cmd_buf_q and cmd_buf_q is set to CmdNone.",
-      "cond": "!reg2hw.cmd.cmd.qe && cmd_update",
-      "signals": [
-        "cmd_update",
-        "cmd_q",
-        "cmd_buf_q",
-        "CmdNone"
-      ],
-      "refs": [
-        "line 413-416"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "default_fallback",
-      "claim": "When none of the above conditions are true, cmd_q and cmd_buf_q hold their current values.",
-      "cond": "!(reg2hw.cmd.cmd.qe || cmd_update)",
       "signals": [
         "cmd_q",
         "cmd_buf_q"
       ],
       "refs": [
-        "line 399-418"
-      ]
+        "kmac.sv:396-398"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "cmd_q == CmdNone && cmd_buf_q == CmdNone",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "cmd_q",
+          "cmd_buf_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "cmd_q == CmdNone && cmd_buf_q == CmdNone",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "When both reg2hw.cmd.cmd.qe and cmd_update are asserted, the active command is updated to the previously buffered command and the new command is stored in the buffer.",
+      "cond": "reg2hw.cmd.cmd.qe && cmd_update",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q",
+        "cmd_update",
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "kmac.sv:400-403"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "cmd_q == $past(cmd_buf_q) && cmd_buf_q == reg2hw.cmd.cmd.q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_q",
+          "cmd_buf_q",
+          "reg2hw.cmd.cmd.q",
+          "cmd_update",
+          "reg2hw.cmd.cmd.qe"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "cmd_q == $past(cmd_buf_q) && cmd_buf_q == reg2hw.cmd.cmd.q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When reg2hw.cmd.cmd.qe is asserted, cmd_update is low, and counting_q is 0, the new command is placed directly into cmd_q; cmd_buf_q is unchanged.",
+      "cond": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q == 1'b0",
+      "signals": [
+        "cmd_q",
+        "reg2hw.cmd.cmd.q",
+        "counting_q",
+        "cmd_update",
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "kmac.sv:407-408"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q == 1'b0",
+        "consequent": "cmd_q == reg2hw.cmd.cmd.q && cmd_buf_q == $past(cmd_buf_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_q",
+          "reg2hw.cmd.cmd.q",
+          "counting_q",
+          "cmd_update",
+          "reg2hw.cmd.cmd.qe"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q == 1'b0",
+        "consequent": "cmd_q == reg2hw.cmd.cmd.q && cmd_buf_q == $past(cmd_buf_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "reg_update",
+      "claim": "When reg2hw.cmd.cmd.qe is asserted, cmd_update is low, and counting_q is not 0, the new command is stored in cmd_buf_q; cmd_q is unchanged.",
+      "cond": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q != 1'b0",
+      "signals": [
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q",
+        "counting_q",
+        "cmd_update",
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "kmac.sv:409-410"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q != 1'b0",
+        "consequent": "cmd_buf_q == reg2hw.cmd.cmd.q && cmd_q == $past(cmd_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_buf_q",
+          "reg2hw.cmd.cmd.q",
+          "counting_q",
+          "cmd_update",
+          "reg2hw.cmd.cmd.qe"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe && !cmd_update && counting_q != 1'b0",
+        "consequent": "cmd_buf_q == reg2hw.cmd.cmd.q && cmd_q == $past(cmd_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "reg_update",
+      "claim": "When cmd_update is asserted and reg2hw.cmd.cmd.qe is low, the buffered command moves to cmd_q and cmd_buf_q is cleared to CmdNone.",
+      "cond": "!reg2hw.cmd.cmd.qe && cmd_update",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q",
+        "cmd_update",
+        "reg2hw.cmd.cmd.qe"
+      ],
+      "refs": [
+        "kmac.sv:413-416"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "cmd_q == $past(cmd_buf_q) && cmd_buf_q == CmdNone",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_q",
+          "cmd_buf_q",
+          "cmd_update",
+          "reg2hw.cmd.cmd.qe"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "cmd_q == $past(cmd_buf_q) && cmd_buf_q == CmdNone",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "In all other conditions, cmd_q and cmd_buf_q hold their previous values.",
+      "cond": "!(reg2hw.cmd.cmd.qe && cmd_update) && !(reg2hw.cmd.cmd.qe && !cmd_update && counting_q == 1'b0) && !(reg2hw.cmd.cmd.qe && !cmd_update && counting_q != 1'b0) && !(!reg2hw.cmd.cmd.qe && cmd_update)",
+      "signals": [
+        "cmd_q",
+        "cmd_buf_q"
+      ],
+      "refs": [
+        "kmac.sv:399-417"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!(reg2hw.cmd.cmd.qe && cmd_update) && !(reg2hw.cmd.cmd.qe && !cmd_update) && !(!reg2hw.cmd.cmd.qe && cmd_update)",
+        "consequent": "cmd_q == $past(cmd_q) && cmd_buf_q == $past(cmd_buf_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_q",
+          "cmd_buf_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!(reg2hw.cmd.cmd.qe && cmd_update) && !(reg2hw.cmd.cmd.qe && !cmd_update) && !(!reg2hw.cmd.cmd.qe && cmd_update)",
+        "consequent": "cmd_q == $past(cmd_q) && cmd_buf_q == $past(cmd_buf_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "When reg2hw.cmd.cmd.qe is asserted, reg2hw.cmd.cmd.q holds a valid kmac_cmd_e encoding suitable for the direct cast to kmac_cmd_e'().",
-      "cond": "reg2hw.cmd.cmd.qe",
-      "risk": "An invalid encoding may produce an undefined or illegal command, potentially triggering unintended operations or state corruption downstream.",
+      "type": "handshake",
+      "claim": "cmd_update is a one-cycle pulse per counter expiration; it must not stay high for multiple cycles while reg2hw.cmd.cmd.qe is low.",
+      "cond": "cmd_update active",
+      "risk": "Multiple consecutive updates would flush cmd_buf_q to CmdNone and load CmdNone into cmd_q repeatedly, corrupting the command state.",
       "signals": [
-        "reg2hw.cmd.cmd.q",
-        "reg2hw.cmd.cmd.qe"
+        "cmd_update"
       ],
       "refs": [
-        "line 403, 408, 410"
-      ]
+        "kmac.sv:413-416"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "$fell(cmd_update) ##1 !cmd_update",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_update"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "$fell(cmd_update) ##1 !cmd_update",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "producer_contract",
-      "claim": "cmd_update and counting_q are correctly generated by a counter module; counting_q=0 indicates the command execution engine is idle, and cmd_update is asserted only when a counter expires to signal that the buffered command should be loaded.",
-      "cond": "always",
-      "risk": "Mis-timed or unsynchronized signals could cause commands to be loaded at incorrect times, leading to duplicate execution, command loss, or pipeline corruption.",
+      "type": "value_domain",
+      "claim": "counting_q correctly reflects whether a command processing sequence is active, and is stable when used for routing decisions.",
+      "cond": "reg2hw.cmd.cmd.qe high",
+      "risk": "If counting_q is glitchy or incorrectly 0 when a command is already in progress, a new command may be taken directly instead of buffered, causing misordering or lost buffered command.",
       "signals": [
-        "cmd_update",
         "counting_q"
       ],
       "refs": [
-        "line 400, 405, 407, 413"
-      ]
+        "kmac.sv:407"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.cmd.cmd.qe",
+        "consequent": "$stable(counting_q)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "counting_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.cmd.cmd.qe",
+        "consequent": "$stable(counting_q)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "value_domain",
+      "claim": "reg2hw.cmd.cmd.q holds a valid kmac_cmd_e enumeration value whenever reg2hw.cmd.cmd.qe is asserted.",
+      "cond": "reg2hw.cmd.cmd.qe == 1",
+      "risk": "If the value is outside the legal enum encoding, the cast kmac_cmd_e' produces X, causing unknown command state and potential X propagation through the design.",
+      "signals": [
+        "reg2hw.cmd.cmd.q"
+      ],
+      "refs": [
+        "kmac.sv:403,408,410"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe",
+        "consequent": "$onehot(reg2hw.cmd.cmd.q) && !$isunknown(reg2hw.cmd.cmd.q)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.cmd.cmd.q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe",
+        "consequent": "$onehot(reg2hw.cmd.cmd.q) && !$isunknown(reg2hw.cmd.cmd.q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The exact meaning and expected timing of the 1-bit counting_q signal is unclear; it determines whether a new command loads immediately into cmd_q or is buffered. The protocol and safety conditions governing counting_q need elaboration.",
-      "cond": "reg2hw.cmd.cmd.qe asserted and counting_q checked",
-      "risk": "If counting_q is incorrectly asserted during a write, a command could be buffered when it should have executed immediately, causing stale or out-of-order execution.",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "When counting_q is 0 but both reg2hw.cmd.cmd.qe and cmd_update are high, the new command is buffered rather than taken directly, causing a one-cycle delay. Is this scenario reachable, or does cmd_update only fire when counting_q is 1?",
+      "cond": "counting_q == 0 && reg2hw.cmd.cmd.qe && cmd_update",
+      "risk": "If reachable, command acceptance could be delayed one cycle, potentially affecting timing-critical sequences.",
       "signals": [
-        "counting_q"
+        "counting_q",
+        "cmd_update",
+        "reg2hw.cmd.cmd.qe"
       ],
       "refs": [
-        "line 407-411"
-      ]
+        "kmac.sv:400-403"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "counting_q == 0 && reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "cmd_q != reg2hw.cmd.cmd.q",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "counting_q",
+          "cmd_update",
+          "reg2hw.cmd.cmd.qe"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "counting_q == 0 && reg2hw.cmd.cmd.qe && cmd_update",
+        "consequent": "cmd_q != reg2hw.cmd.cmd.q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_temporal_window",
+      "type": "U_unhandled_legal_case",
       "priority": "high",
-      "claim": "The simultaneous assertion of reg2hw.cmd.cmd.qe and cmd_update causes a swap of cmd_q and cmd_buf_q while loading a new command; are these signals guaranteed to be mutually exclusive or properly synchronized to avoid a race condition?",
-      "cond": "reg2hw.cmd.cmd.qe && cmd_update",
-      "risk": "Setup or hold violations near the clock edge could corrupt cmd_q or cmd_buf_q, leading to an incorrect command being executed and potentially violating security policies.",
+      "claim": "The cast kmac_cmd_e'(reg2hw.cmd.cmd.q) has no guard against illegal values. If the register is writable with reserved encodings, a write of an invalid value could lead to X propagation in cmd_q or cmd_buf_q.",
+      "cond": "reg2hw.cmd.cmd.qe && invalid command value",
+      "risk": "X in the command register could cause the KMAC engine to malfunction or enter a security-relevant unknown state.",
       "signals": [
-        "reg2hw.cmd.cmd.qe",
-        "cmd_update",
+        "reg2hw.cmd.cmd.q",
         "cmd_q",
         "cmd_buf_q"
       ],
       "refs": [
-        "line 400-404"
-      ]
+        "kmac.sv:403,408,410"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe",
+        "consequent": "!$isunknown(cmd_q) && !$isunknown(cmd_buf_q)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.cmd.cmd.q",
+          "cmd_q",
+          "cmd_buf_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "reg2hw.cmd.cmd.qe",
+        "consequent": "!$isunknown(cmd_q) && !$isunknown(cmd_buf_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_fault_containment_gap",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "Only a single buffered command is supported; a new command write while a previous command is still pending (counting_q != 0 and cmd_buf_q already holds a non-CmdNone value) will overwrite the buffer, silently dropping the pending command.",
-      "cond": "reg2hw.cmd.cmd.qe asserted and counting_q != 0 and cmd_buf_q != CmdNone",
-      "risk": "A critical command (e.g., key load, start) could be lost without any error indication, leading to a security or functional failure.",
+      "claim": "The buffer cmd_buf_q can hold only one command. If a second command write arrives before cmd_update fires while counting_q is 1, the first buffered command is silently overwritten. Is this intended, or should the hardware reject the second write?",
+      "cond": "counting_q == 1, two consecutive writes with qe before cmd_update",
+      "risk": "Command overwrite could cause a critical operation (e.g., start, process, run) to be lost, potentially compromising MAC correctness or causing a security bypass.",
       "signals": [
-        "reg2hw.cmd.cmd.qe",
-        "counting_q",
-        "cmd_buf_q"
+        "cmd_buf_q",
+        "reg2hw.cmd.cmd.q",
+        "counting_q"
       ],
       "refs": [
-        "line 410"
-      ]
+        "kmac.sv:409-410"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "reg2hw.cmd.cmd.qe ##1 reg2hw.cmd.cmd.qe",
+        "consequent": "cmd_buf_q == $past(reg2hw.cmd.cmd.q, 2) ? ...",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "first",
+        "signals": [
+          "cmd_buf_q",
+          "reg2hw.cmd.cmd.q",
+          "counting_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "reg2hw.cmd.cmd.qe ##1 reg2hw.cmd.cmd.qe",
+        "consequent": "cmd_buf_q == $past(reg2hw.cmd.cmd.q, 2) ?",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Command queue registers cmd_q/cmd_buf_q control the operational sequencing of the KMAC cryptographic module. An illegal command value or unexpected overwrite could cause skipped, misordered, or unintended operations, potentially undermining MAC integrity or enabling side effects. Unhandled invalid enum values may propagate X, leading to unknown security posture. No direct key exposure is apparent, but control-flow integrity is vital.",
   "evidence_refs": [
-    "line 395-419"
+    "kmac.sv:395-419"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 395,
-  "line_end": 419,
-  "security_implications": ""
+  "line_end": 419
 }

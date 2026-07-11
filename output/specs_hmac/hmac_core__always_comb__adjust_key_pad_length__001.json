@@ -11,111 +11,279 @@
     ],
     "used": [
       "secret_key_i",
-      "key_length_i",
-      "BlockSizeSHA256",
-      "BlockSizeSHA512"
+      "key_length_i"
     ],
     "modes": [
       "Key_128",
       "Key_256",
       "Key_384",
       "Key_512",
-      "Key_1024"
+      "Key_1024",
+      "BlockSizeSHA256",
+      "BlockSizeSHA512"
     ],
     "tags": [
       "secret",
       "key",
-      "digest",
-      "integrity",
-      "error"
+      "wipe",
+      "parameterization",
+      "pad",
+      "hmac",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "mux_case",
-      "claim": "When key_length_i equals Key_128, i_pad_256 and o_pad_256 are assigned 512-bit values formed by zero-padding secret_key_i[1023:896] to 512 bits and XORing with a constant of repeated 8'h36 (i_pad) or 8'h5c (o_pad); i_pad_512 and o_pad_512 similarly use zero-padding to 1024 bits with the same XOR constants.",
-      "cond": "key_length_i == Key_128",
+      "type": "default_fallback",
+      "claim": "At the start of always_comb, all four pad outputs (i_pad_256, i_pad_512, o_pad_256, o_pad_512) are set to all zeros.",
+      "cond": "always",
       "signals": [
         "i_pad_256",
-        "o_pad_256",
         "i_pad_512",
-        "o_pad_512",
-        "secret_key_i"
+        "o_pad_256",
+        "o_pad_512"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:138-147"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:132-135"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "i_pad_256 == '0 && i_pad_512 == '0 && o_pad_256 == '0 && o_pad_512 == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "i_pad_256 == '0 && i_pad_512 == '0 && o_pad_256 == '0 && o_pad_512 == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "When key_length_i equals Key_256, pads are generated with zero-padding of secret_key_i[1023:768] to 512 or 1024 bits and XORing with 8'h36/8'h5c.",
+      "claim": "When key_length_i is Key_128, i_pad_256/i_pad_512 are formed from secret_key_i[1023:896] zero-padded and XORed with 0x36; o_pad_256/o_pad_512 are similarly formed but XORed with 0x5c.",
+      "cond": "key_length_i == Key_128",
+      "signals": [
+        "i_pad_256",
+        "i_pad_512",
+        "o_pad_256",
+        "o_pad_512",
+        "secret_key_i",
+        "key_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:138-147"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_128",
+        "consequent": "i_pad_256 == ({secret_key_i[1023:896], {(BlockSizeSHA256-128){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:896], {(BlockSizeSHA512-128){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == ({secret_key_i[1023:896], {(BlockSizeSHA256-128){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:896], {(BlockSizeSHA512-128){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512",
+          "secret_key_i",
+          "key_length_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_128",
+        "consequent": "i_pad_256 == ({secret_key_i[1023:896], {(BlockSizeSHA256-128){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:896], {(BlockSizeSHA512-128){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == ({secret_key_i[1023:896], {(BlockSizeSHA256-128){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:896], {(BlockSizeSHA512-128){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When key_length_i is Key_256, i_pad_256/i_pad_512 use secret_key_i[1023:768] zero-padded XOR 0x36; o_pad_256/o_pad_512 use same key slice XOR 0x5c.",
       "cond": "key_length_i == Key_256",
       "signals": [
         "i_pad_256",
-        "o_pad_256",
         "i_pad_512",
+        "o_pad_256",
         "o_pad_512",
         "secret_key_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:148-157"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_256",
+        "consequent": "i_pad_256 == ({secret_key_i[1023:768], {(BlockSizeSHA256-256){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:768], {(BlockSizeSHA512-256){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == ({secret_key_i[1023:768], {(BlockSizeSHA256-256){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:768], {(BlockSizeSHA512-256){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512",
+          "secret_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_256",
+        "consequent": "i_pad_256 == ({secret_key_i[1023:768], {(BlockSizeSHA256-256){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:768], {(BlockSizeSHA512-256){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == ({secret_key_i[1023:768], {(BlockSizeSHA256-256){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:768], {(BlockSizeSHA512-256){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G3",
+      "id": "G4",
       "type": "mux_case",
-      "claim": "When key_length_i equals Key_384, pads use zero-padding of secret_key_i[1023:640] to block sizes and XOR with pad constants.",
+      "claim": "When key_length_i is Key_384, i_pad_256/i_pad_512 use secret_key_i[1023:640] zero-padded XOR 0x36; o_pad_256/o_pad_512 use same key slice XOR 0x5c.",
       "cond": "key_length_i == Key_384",
       "signals": [
         "i_pad_256",
-        "o_pad_256",
         "i_pad_512",
+        "o_pad_256",
         "o_pad_512",
         "secret_key_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:158-167"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_384",
+        "consequent": "i_pad_256 == ({secret_key_i[1023:640], {(BlockSizeSHA256-384){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:640], {(BlockSizeSHA512-384){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == ({secret_key_i[1023:640], {(BlockSizeSHA256-384){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:640], {(BlockSizeSHA512-384){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512",
+          "secret_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_384",
+        "consequent": "i_pad_256 == ({secret_key_i[1023:640], {(BlockSizeSHA256-384){1'b0}}} ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:640], {(BlockSizeSHA512-384){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == ({secret_key_i[1023:640], {(BlockSizeSHA256-384){1'b0}}} ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:640], {(BlockSizeSHA512-384){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G4",
+      "id": "G5",
       "type": "mux_case",
-      "claim": "When key_length_i equals Key_512, i_pad_256 and o_pad_256 are assigned secret_key_i[1023:512] XORed with 8'h36/8'h5c constants directly (no padding needed); i_pad_512 and o_pad_512 zero-pad secret_key_i[1023:512] to 1024 bits then XOR with constants.",
+      "claim": "When key_length_i is Key_512, i_pad_256 and o_pad_256 are formed from secret_key_i[1023:512] XORed with 0x36/0x5c (no zero padding for 256). i_pad_512 and o_pad_512 use secret_key_i[1023:512] zero-padded to 1024 bits then XORed with 0x36/0x5c.",
       "cond": "key_length_i == Key_512",
       "signals": [
         "i_pad_256",
-        "o_pad_256",
         "i_pad_512",
+        "o_pad_256",
         "o_pad_512",
         "secret_key_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:168-175"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_512",
+        "consequent": "i_pad_256 == (secret_key_i[1023:512] ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:512], {(BlockSizeSHA512-512){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == (secret_key_i[1023:512] ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:512], {(BlockSizeSHA512-512){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512",
+          "secret_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_512",
+        "consequent": "i_pad_256 == (secret_key_i[1023:512] ^ {(BlockSizeSHA256/8){8'h36}}) && i_pad_512 == ({secret_key_i[1023:512], {(BlockSizeSHA512-512){1'b0}}} ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_256 == (secret_key_i[1023:512] ^ {(BlockSizeSHA256/8){8'h5c}}) && o_pad_512 == ({secret_key_i[1023:512], {(BlockSizeSHA512-512){1'b0}}} ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
-      "id": "G5",
+      "id": "G6",
       "type": "mux_case",
-      "claim": "When key_length_i equals Key_1024, i_pad_256 and o_pad_256 are forced to all zeros; i_pad_512 and o_pad_512 are assigned secret_key_i[1023:0] XORed with the corresponding 1024-bit pad constants (8'h36/8'h5c).",
+      "claim": "When key_length_i is Key_1024, i_pad_256 and o_pad_256 are forced to zero (not allowed for SHA-256). i_pad_512 and o_pad_512 are formed from secret_key_i[1023:0] XORed with 0x36 and 0x5c respectively.",
       "cond": "key_length_i == Key_1024",
       "signals": [
         "i_pad_256",
-        "o_pad_256",
         "i_pad_512",
+        "o_pad_256",
         "o_pad_512",
         "secret_key_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-183"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_1024",
+        "consequent": "i_pad_256 == '0 && o_pad_256 == '0 && i_pad_512 == (secret_key_i[1023:0] ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_512 == (secret_key_i[1023:0] ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512",
+          "secret_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i == Key_1024",
+        "consequent": "i_pad_256 == '0 && o_pad_256 == '0 && i_pad_512 == (secret_key_i[1023:0] ^ {(BlockSizeSHA512/8){8'h36}}) && o_pad_512 == (secret_key_i[1023:0] ^ {(BlockSizeSHA512/8){8'h5c}})",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G6",
+      "id": "G7",
       "type": "default_fallback",
-      "claim": "For any other value of key_length_i (including the default case), all four pad outputs remain at their default value of all zeros.",
-      "cond": "key_length_i not in {Key_128, Key_256, Key_384, Key_512, Key_1024}",
+      "claim": "For any value of key_length_i not listed in the unique case (Key_128, Key_256, Key_384, Key_512, Key_1024), all pad outputs remain at their default all-zero value.",
+      "cond": "key_length_i is not one of the enumerated keys",
       "signals": [
         "i_pad_256",
         "i_pad_512",
@@ -123,83 +291,252 @@
         "o_pad_512"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:132-135,184-185"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:184-185,132-135"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!(key_length_i inside {Key_128, Key_256, Key_384, Key_512, Key_1024})",
+        "consequent": "i_pad_256 == '0 && i_pad_512 == '0 && o_pad_256 == '0 && o_pad_512 == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!(key_length_i inside {Key_128, Key_256, Key_384, Key_512, Key_1024})",
+        "consequent": "i_pad_256 == '0 && i_pad_512 == '0 && o_pad_256 == '0 && o_pad_512 == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "key_length_i is assumed to take only the defined values (Key_128 through Key_1024) during HMAC key padding; otherwise the pads become zero, which the module does not report as an error.",
-      "cond": "When the HMAC algorithm uses these key pads.",
-      "risk": "Silently using all-zero key pads can allow HMAC computations with a weak or incorrect key, breaking message integrity protection.",
-      "signals": [
-        "key_length_i",
-        "i_pad_256",
-        "o_pad_256",
-        "i_pad_512",
-        "o_pad_512"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:137-186"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "secret_key_i must be at least 1024 bits wide (bits 1023:0 valid) because the chunk uses bit indices up to 1023.",
-      "cond": "At all times.",
-      "risk": "If the actual secret_key_i width is smaller, some bit slices will be out of range or undefined, producing incorrect pad values.",
+      "type": "producer_contract",
+      "claim": "secret_key_i must contain valid, stable key material during the entire combinational pad generation.",
+      "cond": "always while this block is active",
+      "risk": "If secret_key_i is invalid, transitioning, or driven to unknown values, the generated ipad/opad may expose or use corrupt key bits, breaking HMAC security.",
       "signals": [
         "secret_key_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:139-182"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$stable(secret_key_i) && !$isunknown(secret_key_i)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "secret_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always while this block is active",
+        "consequent": "$stable(secret_key_i) && !$isunknown(secret_key_i)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "mode_config",
+      "claim": "When the hash algorithm is SHA-256, the external configuration must not set key_length_i to Key_1024.",
+      "cond": "SHA-256 mode is active",
+      "risk": "If SHA-256 is used with Key_1024, i_pad_256 and o_pad_256 are forced to zero, effectively ignoring the key and destroying HMAC authenticity. This leads to a complete security break of the MAC.",
+      "signals": [
+        "key_length_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-181"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "sha_mode == SHA256",
+        "consequent": "key_length_i != Key_1024",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_length_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "sha_mode == SHA256",
+        "consequent": "key_length_i != Key_1024",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "mode_config",
+      "claim": "The compile-time constants BlockSizeSHA256 and BlockSizeSHA512 must equal 512 and 1024 respectively.",
+      "cond": "always (elaboration time)",
+      "risk": "Mismatched block sizes will create wrong pad widths, causing incorrect HMAC computation or synthesis errors.",
+      "signals": [],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:139-182"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "BlockSizeSHA256 == 512 && BlockSizeSHA512 == 1024",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [],
+        "temporal_shape": "always",
+        "antecedent": "always (elaboration time)",
+        "consequent": "BlockSizeSHA256 == 512 && BlockSizeSHA512 == 1024",
+        "formalizability": "none",
+        "confidence": 0.65,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The unique case default clause leaves all pads at zero when key_length_i is illegal. No error flag is asserted, and the zero pads propagate into the HMAC computation, potentially breaking the MAC security without detection.",
-      "cond": "key_length_i takes an invalid value (e.g., due to misconfiguration or fault).",
-      "risk": "HMAC results may be produced with an all-zero key pad, effectively weakening or invalidating the authentication tag.",
-      "signals": [
-        "key_length_i",
-        "i_pad_256",
-        "o_pad_256",
-        "i_pad_512",
-        "o_pad_512"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:132-135,184-185"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "For a 1024-bit key, the inner and outer pads for SHA-256 are explicitly zeroed because the configuration is 'not allowed'. However, no hardware interlock prevents the HMAC from being operated in SHA-256 mode with this key length; the zero pads are forwarded, and the operation may appear to succeed with a vulnerable key pad.",
-      "cond": "System configures HMAC for SHA-256 and selects Key_1024.",
-      "risk": "An unsupported combination may be used without raising an error, leading to an HMAC instantiation that does not meet cryptographic requirements.",
+      "claim": "The RTL zeros i_pad_256/o_pad_256 for Key_1024, relying on comment 'not allowed to be configured for SHA-2 256'. It is unclear if any external logic prevents SHA-256 mode when key_length_i == Key_1024.",
+      "cond": "SHA-256 mode active and key_length_i == Key_1024",
+      "risk": "If unprotected, a misconfiguration leads to zero inner/outer pad and effectively no-key HMAC, breaking message authentication.",
       "signals": [
         "i_pad_256",
         "o_pad_256",
         "key_length_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-183"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:176-181"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "sha_mode == SHA256 && key_length_i == Key_1024",
+        "consequent": "i_pad_256 == '0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i_pad_256",
+          "o_pad_256",
+          "key_length_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "sha_mode == SHA256 && key_length_i == Key_1024",
+        "consequent": "i_pad_256 == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If key_length_i assumes an illegal value (e.g., due to SEU or software bug) outside the five enumerated keys, the default branch leaves all pad outputs zero. There is no error indication.",
+      "cond": "key_length_i is an illegal/undefined value",
+      "risk": "HMAC core continues to operate with an all-zero inner/outer pad, effectively nullifying the key and breaking security without alert.",
+      "signals": [
+        "key_length_i",
+        "i_pad_256",
+        "i_pad_512",
+        "o_pad_256",
+        "o_pad_512"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:184-185"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!(key_length_i inside {Key_128, Key_256, Key_384, Key_512, Key_1024})",
+        "consequent": "i_pad_256 == '0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_length_i",
+          "i_pad_256",
+          "i_pad_512",
+          "o_pad_256",
+          "o_pad_512"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!(key_length_i inside {Key_128, Key_256, Key_384, Key_512, Key_1024})",
+        "consequent": "i_pad_256 == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The key slices assume secret_key_i is MSB-aligned (bits [1023:1024-KL] hold the key). It is not documented whether software must left-justify the key in the 1024-bit register.",
+      "cond": "key_length_i selects a slice",
+      "risk": "If software right-justifies the key, the extracted bits for pad generation will be misaligned, producing an incorrect HMAC.",
+      "signals": [
+        "secret_key_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:139-182"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "secret_key_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_length_i selects a slice",
+        "consequent": "The key slices assume secret_key_i is MSB-aligned (bits [1023:1024-KL] hold the key). It is not documented whether software must left-justify the key in the 1024-bit register",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This block directly computes HMAC ipad/opad from secret_key_i. If key_length is Key_1024 while SHA-256 mode is active, i_pad_256/o_pad_256 are forced to zero, effectively discarding the key and breaking MAC security. If key_length_i takes an illegal value, all pads default to zero, again nullifying the key. Absence of error detection for illegal key lengths or mode mismatches opens a path for silent key degradation.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:130-187"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
   "line_start": 130,
-  "line_end": 187,
-  "security_implications": ""
+  "line_end": 187
 }

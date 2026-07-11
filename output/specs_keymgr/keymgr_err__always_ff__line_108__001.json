@@ -7,67 +7,173 @@
       "async_fault_q"
     ],
     "used": [
-      "async_fault_o",
-      "rst_ni"
+      "async_fault_o"
     ],
     "modes": [],
     "tags": [
-      "fault"
+      "fault",
+      "error",
+      "register"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low (reset), async_fault_q is cleared to zero.",
+      "claim": "When rst_ni is asserted (low), async_fault_q is cleared to all zeros on the next posedge clk_i.",
       "cond": "!rst_ni",
       "signals": [
+        "rst_ni",
         "async_fault_q",
-        "rst_ni"
+        "clk_i"
       ],
       "refs": [
-        "keymgr_err.sv:109-110"
-      ]
+        "keymgr_err.sv:108-114"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "async_fault_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "async_fault_q",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "async_fault_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On every positive edge of clk_i when rst_ni is high, async_fault_q takes the value of async_fault_o.",
-      "cond": "rst_ni && posedge clk_i",
+      "claim": "When rst_ni is deasserted (high), async_fault_q takes the value of async_fault_o on every posedge clk_i.",
+      "cond": "rst_ni",
       "signals": [
+        "async_fault_o",
         "async_fault_q",
+        "rst_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "keymgr_err.sv:108-114"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "async_fault_q == async_fault_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "async_fault_o",
+          "async_fault_q",
+          "rst_ni",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "async_fault_q == async_fault_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "async_fault_o must be stable and meet setup/hold timing relative to clk_i for every sampling edge.",
+      "cond": "always",
+      "risk": "If async_fault_o violates timing, async_fault_q may become metastable and propagate an unreliable value, corrupting fault status.",
+      "signals": [
         "async_fault_o",
         "clk_i"
       ],
       "refs": [
-        "keymgr_err.sv:112"
-      ]
+        "keymgr_err.sv:108-114"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "async_fault_o",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "async_fault_o must be stable and meet setup/hold timing relative to clk_i for every sampling edge",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "If async_fault_o is asynchronous to clk_i, the single-flop sampling may capture a metastable value, leading to incorrect async_fault_q state.",
-      "cond": "async_fault_o changes near posedge clk_i while rst_ni is high",
-      "risk": "Fault indication could be spuriously asserted or missed, potentially affecting error handling or security response.",
+      "claim": "async_fault_o may be a pulse shorter than one clock cycle; if so, the register could miss a fault event because it only samples once per cycle.",
+      "cond": "async_fault_o pulse width < 1 clk_i period",
+      "risk": "Fault events could be dropped, leading to undetected errors and possibly bypassing security reactions (wipe, alert).",
       "signals": [
         "async_fault_o",
-        "async_fault_q",
         "clk_i"
       ],
       "refs": [
-        "keymgr_err.sv:112"
-      ]
+        "keymgr_err.sv:108-114"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "$rose(async_fault_o) && $past(async_fault_o,1)==0",
+        "consequent": "$stable(async_fault_o) for one cycle",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_err",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "async_fault_o",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "$rose(async_fault_o) && $past(async_fault_o,1)==0",
+        "consequent": "$stable(async_fault_o) for one cycle",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This register directly buffers async_fault_o into async_fault_q. In the key manager, fault signals may trigger secret wipe, key clearing, or security alerts. If async_fault_o timing is not guaranteed or if the register misses a transient fault pulse (U1), a critical security breach may go unreported and unmitigated. Metastability on async_fault_q (A1 risk) could corrupt the fault state and cause spurious or absent security responses.",
   "evidence_refs": [
     "keymgr_err.sv:108-114"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_err.sv",
   "line_start": 108,
-  "line_end": 114,
-  "security_implications": ""
+  "line_end": 114
 }

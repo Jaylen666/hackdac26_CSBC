@@ -130,8 +130,8 @@ def main() -> None:
         help="Seconds between LLM calls to avoid rate-limiting (default: 0.3)",
     )
     parser.add_argument(
-        "--workers", type=int, default=1,
-        help="Parallel workers for spec generation (default: 1 = sequential)",
+        "--workers", type=int, default=8,
+        help="Parallel workers for spec generation (default: 8)",
     )
     args = parser.parse_args()
 
@@ -200,7 +200,7 @@ def main() -> None:
                 chunk,
                 client,
                 prompt_path=args.prompt or None,
-                max_tokens=20000,
+                max_tokens=50000,
             )
             out_path.write_text(
                 json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8"

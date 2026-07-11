@@ -9,13 +9,12 @@
     ],
     "used": [
       "msgfifo_empty",
-      "msgfifo_full_seen_d",
-      "rst_ni",
-      "clk_i"
+      "msgfifo_full_seen_d"
     ],
     "modes": [],
     "tags": [
       "fifo",
+      "reset",
       "handshake"
     ]
   },
@@ -23,7 +22,7 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (rst_ni low), msgfifo_empty_q and msgfifo_full_seen_q are asynchronously set to 0.",
+      "claim": "On reset (rst_ni low), both msgfifo_empty_q and msgfifo_full_seen_q are cleared to 0.",
       "cond": "!rst_ni",
       "signals": [
         "msgfifo_empty_q",
@@ -31,77 +30,115 @@
         "rst_ni"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-656"
-      ]
+        "file:653-655"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "msgfifo_empty_q == 0 && msgfifo_full_seen_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "msgfifo_empty_q",
+          "msgfifo_full_seen_q",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "msgfifo_empty_q == 0 && msgfifo_full_seen_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When not in reset, at each posedge of clk_i, msgfifo_empty_q is updated to the value of msgfifo_empty and msgfifo_full_seen_q is updated to the value of msgfifo_full_seen_d.",
-      "cond": "rst_ni & posedge clk_i",
+      "claim": "When not in reset, msgfifo_empty_q follows the value of msgfifo_empty and msgfifo_full_seen_q follows msgfifo_full_seen_d with a one-cycle delay.",
+      "cond": "rst_ni",
       "signals": [
         "msgfifo_empty_q",
-        "msgfifo_full_seen_q",
         "msgfifo_empty",
+        "msgfifo_full_seen_q",
         "msgfifo_full_seen_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:656-659"
-      ]
+        "file:657-658"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "msgfifo_empty_q == $past(msgfifo_empty) && msgfifo_full_seen_q == $past(msgfifo_full_seen_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "msgfifo_empty_q",
+          "msgfifo_empty",
+          "msgfifo_full_seen_q",
+          "msgfifo_full_seen_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "msgfifo_empty_q == $past(msgfifo_empty) && msgfifo_full_seen_q == $past(msgfifo_full_seen_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "lifecycle",
-      "claim": "The asynchronous reset rst_ni must be asserted low during startup to force registers to known zero values.",
-      "cond": "Power-on / initial configuration",
-      "risk": "Without a reset, registers may start with X values, leading to incorrect FIFO status interpretation and downstream control errors.",
-      "signals": [
-        "rst_ni"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-656"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The combinational inputs msgfifo_empty and msgfifo_full_seen_d must be stable and valid at each rising clock edge.",
-      "cond": "Every posedge clk_i when rst_ni is high",
-      "risk": "If these signals change too close to the clock edge or contain glitches, the captured register values may be metastable or corrupted, causing the module to use stale or erroneous FIFO status.",
+      "type": "handshake",
+      "claim": "Inputs msgfifo_empty and msgfifo_full_seen_d are valid and stable at each rising clock edge when rst_ni is high.",
+      "cond": "rst_ni",
+      "risk": "Unstable or invalid inputs may cause the tracking registers to hold stale or erroneous state, possibly leading to FIFO underrun/overrun misdetection.",
       "signals": [
         "msgfifo_empty",
-        "msgfifo_full_seen_d",
-        "clk_i"
+        "msgfifo_full_seen_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:657-658"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The reset value of msgfifo_empty_q is 0, meaning 'not empty', but it is unclear why 0 is chosen and whether the actual FIFO state after reset aligns with this.",
-      "cond": "After reset is released and the first clock edge occurs while msgfifo_empty is still unknown or actually empty.",
-      "risk": "If the real FIFO is empty immediately after reset, msgfifo_empty_q being 0 could cause logic to attempt a read from an empty FIFO, leading to data corruption or protocol errors.",
-      "signals": [
-        "msgfifo_empty_q",
-        "msgfifo_empty"
+        "file:657-658"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:654"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni",
+        "consequent": "$stable(msgfifo_empty) && $stable(msgfifo_full_seen_d)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "msgfifo_empty",
+          "msgfifo_full_seen_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni",
+        "consequent": "$stable(msgfifo_empty) && $stable(msgfifo_full_seen_d)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [],
+  "security_implications": "",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:652-660"
+    "file:652-660"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 652,
-  "line_end": 660,
-  "security_implications": ""
+  "line_end": 660
 }

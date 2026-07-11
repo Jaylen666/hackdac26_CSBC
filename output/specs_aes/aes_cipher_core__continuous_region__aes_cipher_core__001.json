@@ -12,82 +12,296 @@
       "cfg_valid_i"
     ],
     "modes": [
-      "CIPH_FWD",
-      "CIPH_INV"
+      "SecMasking (0 or 1)"
     ],
     "tags": [
-      "error"
+      "secret",
+      "key",
+      "mask",
+      "entropy",
+      "error",
+      "fault",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "op_err is 1 when op_i is not equal to CIPH_FWD and not equal to CIPH_INV; otherwise 0.",
+      "type": "error_detection",
+      "claim": "op_err is asserted if op_i is neither CIPH_FWD nor CIPH_INV.",
       "cond": "always",
       "signals": [
-        "op_i",
-        "op_err"
+        "op_err",
+        "op_i"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:237"
-      ]
+        "aes_cipher_core.sv:237-237"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "op_err == !((op_i == CIPH_FWD) || (op_i == CIPH_INV))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_err",
+          "op_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "op_err == !((op_i == CIPH_FWD) || (op_i == CIPH_INV))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "cfg_valid is the logical AND of cfg_valid_i and the complement of op_err, so it is forced low whenever op_err is high.",
+      "claim": "cfg_valid is the logical AND of cfg_valid_i and the inversion of op_err.",
       "cond": "always",
       "signals": [
+        "cfg_valid",
         "cfg_valid_i",
-        "op_err",
-        "cfg_valid"
+        "op_err"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:238"
-      ]
+        "aes_cipher_core.sv:238-238"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cfg_valid == (cfg_valid_i && !op_err)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_valid",
+          "cfg_valid_i",
+          "op_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cfg_valid == (cfg_valid_i && !op_err)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "generate_param",
+      "claim": "NumShares is derived as 2 when SecMasking is 1, otherwise 1.",
+      "cond": "compile time",
+      "signals": [
+        "NumShares",
+        "SecMasking"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:105-105"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "NumShares == (SecMasking ? 2 : 1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NumShares",
+          "SecMasking"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "compile time",
+        "consequent": "NumShares == (SecMasking ? 2 : 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "op_i must be a deterministic logical value (0 or 1, no X) so that the equality checks produce a determinate result.",
-      "cond": "always when op_i is evaluated",
-      "risk": "If op_i contains X, op_err becomes X, causing cfg_valid to be X, which may break assertions or downstream gating.",
+      "type": "security_precondition",
+      "claim": "cfg_valid_i is used only for assertion gating and does not influence any functional data or control path.",
+      "cond": "during normal operation",
+      "risk": "If cfg_valid_i is used functionally, a forced low value (e.g., via op_err) could mask critical errors or disrupt cipher processing.",
       "signals": [
-        "op_i",
-        "op_err",
+        "cfg_valid_i",
         "cfg_valid"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:237"
-      ]
+        "aes_cipher_core.sv:122-122"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_valid_i",
+          "cfg_valid"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during normal operation",
+        "consequent": "cfg_valid_i is used only for assertion gating and does not influence any functional data or control path",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
-      "priority": "medium",
-      "claim": "The comment states 'op_i is one-hot encoded' but the check only allows CIPH_FWD and CIPH_INV. If the ciph_op_e enum contains other legal values, they will be treated as errors, potentially blocking valid configuration.",
-      "cond": "op_i takes any value other than CIPH_FWD or CIPH_INV.",
-      "risk": "cfg_valid stays low even if cfg_valid_i is high, preventing assertion gating and possibly stalling configuration, which could be a functional bug if other op values are defined.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Multiple internal error signals (state_sel_err, add_rk_sel_err, key_full_sel_err, key_dec_sel_err, key_words_sel_err, round_key_sel_err, mux_sel_err, sp_enc_err_d/q, sub_bytes_err, key_expand_err) are declared but not driven in this chunk; it is unclear whether they will be properly connected to alert_o and whether all error conditions are covered.",
+      "cond": "when these errors are asserted in later logic",
+      "risk": "If any error is not propagated to alert_o, a security violation could go unreported, potentially allowing faulty or injected data to be used.",
       "signals": [
-        "op_i",
-        "op_err",
-        "cfg_valid"
+        "state_sel_err",
+        "add_rk_sel_err",
+        "key_full_sel_err",
+        "key_dec_sel_err",
+        "key_words_sel_err",
+        "round_key_sel_err",
+        "mux_sel_err",
+        "sp_enc_err_d",
+        "sp_enc_err_q",
+        "sub_bytes_err",
+        "key_expand_err",
+        "alert_o"
       ],
       "refs": [
-        "output/aes_cipher_core.sv:235-238"
-      ]
+        "aes_cipher_core.sv:163-222"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_sel_err",
+          "add_rk_sel_err",
+          "key_full_sel_err",
+          "key_dec_sel_err",
+          "key_words_sel_err",
+          "round_key_sel_err",
+          "mux_sel_err",
+          "sp_enc_err_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "when these errors are asserted in later logic",
+        "consequent": "Multiple internal error signals (state_sel_err, add_rk_sel_err, key_full_sel_err, key_dec_sel_err, key_words_sel_err, round_key_sel_err, mux_sel_err, sp_enc_err_d/q, sub_bytes_err, key_expand_err) are declared but not driven in this chunk",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "medium",
+      "claim": "Parameter CiphOpFwdOnly is not referenced anywhere in this chunk; it may be unused or only used in submodules, causing a dead parameter or incomplete functionality if intended to restrict cipher direction.",
+      "cond": "unknown",
+      "risk": "If CiphOpFwdOnly is intended to enforce forward-only operation but not implemented, an attacker could trigger inverse cipher operations, possibly revealing key material.",
+      "signals": [
+        "CiphOpFwdOnly"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:98-98"
+      ],
+      "formal": {
+        "temporal_shape": "",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "CiphOpFwdOnly"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "Parameter CiphOpFwdOnly is not referenced anywhere in this chunk; it may be unused or only used in submodules, causing a dead parameter or incomplete functionality if intended to restrict cipher direction",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "cfg_valid is declared but not used in this chunk; the comment states it is for assertion gating only, but it is not explicitly guarded against functional misuse in downstream logic.",
+      "cond": "if cfg_valid is connected to any data-path control",
+      "risk": "An attacker controlling cfg_valid_i could force cfg_valid low (via op_err) and disable assertions that detect integrity violations, or potentially gate critical data paths if the signal is misused.",
+      "signals": [
+        "cfg_valid",
+        "cfg_valid_i",
+        "op_err"
+      ],
+      "refs": [
+        "aes_cipher_core.sv:122-122",
+        "aes_cipher_core.sv:238-238"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "cfg_valid_i == 0 || op_err == 1",
+        "consequent": "// no functional signal depends on cfg_valid",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cfg_valid",
+          "cfg_valid_i",
+          "op_err"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cfg_valid_i == 0 || op_err == 1",
+        "consequent": "// no functional signal depends on cfg_valid",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The op_err detection ensures that only CIPH_FWD or CIPH_INV operations are accepted; an invalid op_i triggers op_err, which is expected to propagate to alert_o as a security violation. The cfg_valid signal is gated by op_err and intended solely for assertions; if misused as a functional enable, an attacker forcing cfg_valid low (e.g., by driving cfg_valid_i low or triggering op_err) could disable security-critical checks or disrupt cipher processing. The SecMasking parameter controls the number of shares (NumShares) and thus the masking strength; a misconfiguration (SecMasking=0) disables masking, drastically reducing side-channel resistance. The CiphOpFwdOnly parameter, if intended to restrict cipher direction, must be enforced downstream to prevent unauthorized inverse operations that might leak key material.",
   "evidence_refs": [
-    "output/aes_cipher_core.sv:93-238"
+    "aes_cipher_core.sv:93-239"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 93,
-  "line_end": 239,
-  "security_implications": ""
+  "line_end": 239
 }

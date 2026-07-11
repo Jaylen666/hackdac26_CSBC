@@ -9,71 +9,142 @@
     ],
     "used": [
       "rst_ni",
-      "clk_i",
       "rx_timeout_count_d",
-      "rx_fifo_depth"
+      "rx_fifo_depth",
+      "clk_i"
     ],
     "modes": [],
     "tags": [
-      "reset",
-      "fifo"
+      "counter",
+      "fifo",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (rst_ni low), both rx_timeout_count_q and rx_fifo_depth_prev_q are synchronously assigned to 0 immediately after the clock edge where reset is sampled low.",
-      "cond": "negedge rst_ni or activelow",
+      "claim": "When rst_ni is low at the rising edge of clk_i, rx_timeout_count_q is assigned 24'd0 and rx_fifo_depth_prev_q is assigned all zeros.",
+      "cond": "~rst_ni",
       "signals": [
         "rst_ni",
         "rx_timeout_count_q",
         "rx_fifo_depth_prev_q"
       ],
       "refs": [
-        "uart_core.sv:391-399"
-      ]
+        "uart_core.sv:392-394"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "rx_timeout_count_q == 24'd0 && rx_fifo_depth_prev_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "rx_timeout_count_q",
+          "rx_fifo_depth_prev_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "rx_timeout_count_q == 24'd0 && rx_fifo_depth_prev_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On every positive clock edge when not in reset, rx_timeout_count_q updates to the value of rx_timeout_count_d and rx_fifo_depth_prev_q updates to the value of rx_fifo_depth.",
-      "cond": "posedge clk_i && rst_ni",
+      "claim": "When rst_ni is high at the rising edge of clk_i, rx_timeout_count_q takes the value of rx_timeout_count_d, and rx_fifo_depth_prev_q takes the value of rx_fifo_depth.",
+      "cond": "rst_ni",
       "signals": [
+        "rst_ni",
         "rx_timeout_count_q",
         "rx_timeout_count_d",
         "rx_fifo_depth_prev_q",
         "rx_fifo_depth"
       ],
       "refs": [
-        "uart_core.sv:391-399"
-      ]
+        "uart_core.sv:395-397"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "rx_timeout_count_q == rx_timeout_count_d && rx_fifo_depth_prev_q == rx_fifo_depth",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "rx_timeout_count_q",
+          "rx_timeout_count_d",
+          "rx_fifo_depth_prev_q",
+          "rx_fifo_depth"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "rx_timeout_count_q == rx_timeout_count_d && rx_fifo_depth_prev_q == rx_fifo_depth",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
-  "uncertain_points": [
+  "assumptions": [
     {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "rx_fifo_depth is captured directly without any synchronization; if it comes from a different clock domain (e.g., from rx_fifo in a separate clock), metastability may corrupt rx_fifo_depth_prev_q and could propagate to dependent timeout logic.",
-      "cond": "if rx_fifo_depth is asynchronous to clk_i",
-      "risk": "If rx_fifo_depth is asynchronous, glitches or metastability could cause incorrect timeout detection or FIFO depth tracking, leading to unexpected UART receive behavior.",
+      "id": "A1",
+      "type": "reset_precondition",
+      "claim": "rst_ni is properly synchronized to clk_i and deasserted away from the active clock edge so that the first non-reset cycle captures stable, valid values of rx_timeout_count_d and rx_fifo_depth.",
+      "cond": "always during reset removal",
+      "risk": "Incorrect initial values of rx_timeout_count_q or rx_fifo_depth_prev_q may lead to premature timeout assertion or corrupted FIFO depth tracking.",
       "signals": [
-        "rx_fifo_depth",
-        "rx_fifo_depth_prev_q",
-        "clk_i"
+        "rst_ni",
+        "rx_timeout_count_d",
+        "rx_fifo_depth"
       ],
       "refs": [
         "uart_core.sv:391-399"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "eventually rst_ni deasserts with synchronous timing",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "rx_timeout_count_d",
+          "rx_fifo_depth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "eventually rst_ni deasserts with synchronous timing",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [],
+  "security_implications": "",
   "evidence_refs": [
     "uart_core.sv:391-399"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 391,
-  "line_end": 399,
-  "security_implications": ""
+  "line_end": 399
 }

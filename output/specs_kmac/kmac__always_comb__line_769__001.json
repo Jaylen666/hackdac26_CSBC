@@ -24,16 +24,15 @@
       "KmacKeyBlock",
       "KmacMsgFeed",
       "KmacDigest",
-      "KmacTerminalError",
-      "CmdStart",
-      "CShake"
+      "KmacTerminalError"
     ],
     "tags": [
-      "fsm",
+      "secret",
+      "key",
       "lifecycle",
       "error",
       "fault",
-      "entropy",
+      "sparse_fsm",
       "handshake"
     ]
   },
@@ -41,260 +40,265 @@
     {
       "id": "G1",
       "type": "default_fallback",
-      "claim": "Before the case and escalation override, kmac_st_d is defaulted to kmac_st, entropy_in_keyblock to 0, and kmac_state_error to 0; these persist when no other assignment applies.",
-      "cond": "always",
+      "claim": "If lc_escalate_en[0] is MuBi4 true, kmac_st_d is forced to KmacTerminalError ignoring all case-based state transitions.",
+      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) == 1'b1",
       "signals": [
-        "kmac_st_d",
-        "entropy_in_keyblock",
-        "kmac_state_error"
+        "lc_escalate_en",
+        "kmac_st_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:770-774"
-      ]
+        "kmac.sv:849-851"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) == 1'b1",
+        "consequent": "kmac_st_d == KmacTerminalError",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en",
+          "kmac_st_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) == 1'b1",
+        "consequent": "kmac_st_d == KmacTerminalError",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "state_transition",
-      "claim": "In KmacIdle, if kmac_cmd equals CmdStart, next state becomes KmacPrefix when app_sha3_mode equals sha3_pkg::CShake, otherwise KmacMsgFeed; if kmac_cmd is not CmdStart, stays KmacIdle.",
-      "cond": "kmac_st == KmacIdle",
+      "type": "error_detection",
+      "claim": "kmac_state_error is asserted to 1 when kmac_st is KmacTerminalError or any undefined state not in {KmacIdle, KmacPrefix, KmacKeyBlock, KmacMsgFeed, KmacDigest}.",
+      "cond": "always",
       "signals": [
-        "kmac_st_d",
-        "kmac_cmd",
-        "app_sha3_mode"
+        "kmac_st",
+        "kmac_state_error"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:777-788"
-      ]
+        "kmac.sv:836-838, 840-843"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!((kmac_st == KmacIdle) || (kmac_st == KmacPrefix) || (kmac_st == KmacKeyBlock) || (kmac_st == KmacMsgFeed) || (kmac_st == KmacDigest))",
+        "consequent": "kmac_state_error == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_st",
+          "kmac_state_error"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!((kmac_st == KmacIdle) || (kmac_st == KmacPrefix) || (kmac_st == KmacKeyBlock) || (kmac_st == KmacMsgFeed) || (kmac_st == KmacDigest))",
+        "consequent": "kmac_state_error == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "state_transition",
-      "claim": "In KmacPrefix, next state becomes KmacKeyBlock if app_kmac_en is true and sha3_block_processed is true, or KmacMsgFeed if app_kmac_en is false and sha3_block_processed true; otherwise stays KmacPrefix.",
-      "cond": "kmac_st == KmacPrefix",
-      "signals": [
-        "kmac_st_d",
-        "sha3_block_processed",
-        "app_kmac_en"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:791-797"
-      ]
-    },
-    {
-      "id": "G4",
       "type": "assignment",
-      "claim": "In KmacKeyBlock, entropy_in_keyblock is driven to 1, regardless of sha3_block_processed.",
-      "cond": "kmac_st == KmacKeyBlock",
+      "claim": "entropy_in_keyblock is set to 1 exactly when kmac_st == KmacKeyBlock, otherwise 0.",
+      "cond": "always",
       "signals": [
+        "kmac_st",
         "entropy_in_keyblock"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:800-801"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "state_transition",
-      "claim": "In KmacKeyBlock, next state becomes KmacMsgFeed if sha3_block_processed is true; otherwise stays KmacKeyBlock.",
-      "cond": "kmac_st == KmacKeyBlock",
-      "signals": [
-        "kmac_st_d",
-        "sha3_block_processed"
+        "kmac.sv:801"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:802-806"
-      ]
-    },
-    {
-      "id": "G6",
-      "type": "state_transition",
-      "claim": "In KmacMsgFeed, next state becomes KmacIdle if sha3_absorbed is mubi4_true_strict and sha3_done is mubi4_true_strict; becomes KmacDigest if sha3_absorbed is mubi4_true_strict and sha3_done is mubi4_false_loose; otherwise stays KmacMsgFeed.",
-      "cond": "kmac_st == KmacMsgFeed",
-      "signals": [
-        "kmac_st_d",
-        "sha3_absorbed",
-        "sha3_done"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:809-822"
-      ]
-    },
-    {
-      "id": "G7",
-      "type": "state_transition",
-      "claim": "In KmacDigest, next state becomes KmacIdle if sha3_done is mubi4_true_strict; otherwise stays KmacDigest.",
-      "cond": "kmac_st == KmacDigest",
-      "signals": [
-        "kmac_st_d",
-        "sha3_done"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:825-831"
-      ]
-    },
-    {
-      "id": "G8",
-      "type": "error_detection",
-      "claim": "In KmacTerminalError, the FSM stays in KmacTerminalError and kmac_state_error is set to 1.",
-      "cond": "kmac_st == KmacTerminalError",
-      "signals": [
-        "kmac_st_d",
-        "kmac_state_error"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:834-838"
-      ]
-    },
-    {
-      "id": "G9",
-      "type": "default_fallback",
-      "claim": "For any state not explicitly listed (default branch), the FSM unconditionally transitions to KmacTerminalError and sets kmac_state_error to 1.",
-      "cond": "kmac_st not equal to any defined FSM state",
-      "signals": [
-        "kmac_st_d",
-        "kmac_state_error"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:840-843"
-      ]
-    },
-    {
-      "id": "G10",
-      "type": "state_transition",
-      "claim": "After the case, if lc_escalate_en[0] passes lc_tx_test_true_loose, kmac_st_d is overridden to KmacTerminalError, regardless of the previously determined next state; kmac_state_error is not set by this override but retains its prior value (which is 0 unless the case set it).",
-      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) == true",
-      "signals": [
-        "kmac_st_d",
-        "lc_escalate_en"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:846-851"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "kmac_st == KmacKeyBlock",
+        "consequent": "entropy_in_keyblock == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_st",
+          "entropy_in_keyblock"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "kmac_st == KmacKeyBlock",
+        "consequent": "entropy_in_keyblock == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "The inputs sha3_absorbed and sha3_done must be properly driven by the SHA3 core as multi-bit mubi4 signals and the protocol must ensure that sha3_done true_strict only occurs with sha3_absorbed true_strict (to enter idle) or with sha3_absorbed false_loose (to stay in digest); no ambiguous combinations should appear.",
-      "cond": "always when kmac_st == KmacMsgFeed or KmacDigest",
-      "risk": "If both are erroneously asserted true_strict when the SHA3 operation is not genuinely complete, the FSM could prematurely return to KmacIdle, possibly bypassing key block/msg feed processing and violating security sequencing.",
+      "claim": "sha3_absorbed and sha3_done are always valid MuBi4 encoded booleans (no invalid encodings).",
+      "cond": "always",
+      "risk": "If corrupted, the FSM may misclassify their true/false values, leading to stalls or incorrect transitions without error escalation.",
       "signals": [
         "sha3_absorbed",
         "sha3_done"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:811-819"
-      ]
+        "kmac.sv:811-818"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sha3_absorbed",
+          "sha3_done"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "sha3_absorbed and sha3_done are always valid MuBi4 encoded booleans (no invalid encodings)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "kmac_cmd must be stable and valid (equal to CmdStart) when kmac_st is KmacIdle and a start is intended; the FSM does not register or latch kmac_cmd, relying on it to be held until the next state change.",
-      "cond": "kmac_st == KmacIdle",
-      "risk": "If kmac_cmd changes before the edge that samples kmac_st, the FSM may not start or may start incorrectly.",
-      "signals": [
-        "kmac_cmd"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:777-788"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "lifecycle",
-      "claim": "The lc_escalate_en[0] signal must be asserted (true_loose) only under genuine life-cycle escalation conditions and must meet the encoding requirements of lc_ctrl_pkg.",
+      "type": "security_precondition",
+      "claim": "lc_escalate_en[0] is a valid MuBi4 encoded signal; its true value correctly represents a life cycle escalation request.",
       "cond": "always",
-      "risk": "A false escalation trigger forces the FSM into KmacTerminalError, halting all KMAC operations and potentially causing denial-of-service; a missed escalation would bypass the safety mechanism.",
+      "risk": "Invalid encoding could suppress or spuriously trigger the escalation override, defeating the security response.",
       "signals": [
         "lc_escalate_en"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:849"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "mode_config",
-      "claim": "The signal app_kmac_en must be stable and correctly reflect whether the key block stage is enabled before kmac_st reaches KmacPrefix; the branch is taken on sha3_block_processed, but app_kmac_en is sampled at that moment.",
-      "cond": "kmac_st == KmacPrefix and sha3_block_processed is true",
-      "risk": "If app_kmac_en changes after sha3_block_processed but before the next state is latched, the FSM may enter the wrong state (MsgFeed instead of KeyBlock) leading to missing key entropy injection.",
-      "signals": [
-        "app_kmac_en"
+        "kmac.sv:849"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:794"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "lc_escalate_en[0] is a valid MuBi4 encoded signal; its true value correctly represents a life cycle escalation request",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "When the life-cycle escalation overrides kmac_st_d to KmacTerminalError, the kmac_state_error signal is not immediately asserted; it remains 0 until the next clock cycle when kmac_st updates to KmacTerminalError and the case branch asserts it. This creates a one-cycle window where the FSM is destined for error but the error indicator is low.",
-      "cond": "lc_escalate_en[0] triggers while kmac_st is not already KmacTerminalError",
-      "risk": "A consumer of kmac_state_error expecting in-cycle reaction could miss the escalation event, allowing a single cycle of unsafe operations before the error is registered.",
+      "claim": "When lc_escalate_en triggers, kmac_st_d is forced to KmacTerminalError, but kmac_state_error is not explicitly set to 1. If the current state is not already KmacTerminalError, kmac_state_error may stay 0.",
+      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) && kmac_st != KmacTerminalError",
+      "risk": "Downstream alert logic relying on kmac_state_error may not see the escalation, potentially hiding a security-critical fault.",
       "signals": [
-        "kmac_state_error",
         "lc_escalate_en",
-        "kmac_st_d"
+        "kmac_st_d",
+        "kmac_state_error",
+        "kmac_st"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:849-851,834-838"
-      ]
+        "kmac.sv:849-851",
+        "kmac.sv:836-838"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) && !((kmac_st == KmacTerminalError) || !((kmac_st == KmacIdle) || (kmac_st == KmacPrefix) || (kmac_st == KmacKeyBlock) || (kmac_st == KmacMsgFeed) || (kmac_st == KmacDigest)))",
+        "consequent": "kmac_state_error == 1'b0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en",
+          "kmac_st_d",
+          "kmac_state_error",
+          "kmac_st"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en[0]) && !((kmac_st == KmacTerminalError) || !((kmac_st == KmacIdle) || (kmac_st == KmacPrefix) || (kmac_st == KmacKeyBlock) || (kmac_st == KmacMsgFeed) || (kmac_st == KmacDigest)))",
+        "consequent": "kmac_state_error == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_fault_containment_gap",
       "priority": "medium",
-      "claim": "The transition from KmacMsgFeed to KmacIdle requires both sha3_absorbed and sha3_done true_strict. It is unclear if the kmac_app FSM ensures that sha3_absorbed is safely deasserted after a completed absorption/digest sequence or if a stale assertion could cause the KMAC core to go idle prematurely, potentially missing a required digest.",
-      "cond": "kmac_st == KmacMsgFeed",
-      "risk": "If kmac_app erroneously holds sha3_absorbed high after a previous operation, an active message feed could be terminated early, losing data and causing incorrect hash results.",
+      "claim": "Invalid MuBi4 encodings on sha3_absorbed or sha3_done are not explicitly detected; the mubi4_test functions return false for such encodings, potentially stalling the FSM in KmacMsgFeed or KmacDigest without entering the terminal error state.",
+      "cond": "sha3_absorbed or sha3_done are invalid MuBi4 values",
+      "risk": "A deadlock in the key/absorb path may go undetected, preventing error escalation and possibly exposing key-related operations.",
       "signals": [
         "sha3_absorbed",
         "sha3_done",
         "kmac_st_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:811-816"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The default branch maps all unknown state encodings to KmacTerminalError and sets kmac_state_error. There is no explicit specification about whether an additional alert or logging is required, or if the system must be reset. The current RTL only provides the error flag.",
-      "cond": "kmac_st receives an illegal value",
-      "risk": "Without a defined system-level response, a single-bit error in the state register could lead to a terminal error state that persists indefinitely without alerting the security monitor, potentially masking the corruption.",
-      "signals": [
-        "kmac_state_error"
+        "kmac.sv:811-818"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:840-843"
-      ]
-    },
-    {
-      "id": "U4",
-      "type": "U_temporal_window",
-      "priority": "low",
-      "claim": "When in KmacDigest, sha3_absorbed is not monitored; the FSM stays until sha3_done true_strict. If sha3_absorbed were to be asserted spuriously during digest (perhaps due to a SHA3 core glitch), the FSM would not react, and the absorption signal might contradict the digest operation, but no containment exists.",
-      "cond": "kmac_st == KmacDigest and sha3_absorbed becomes true",
-      "risk": "Potentially conflicting state between KMAC FSM and SHA3 core, leading to undetected data corruption if the SHA3 core incorrectly accepts new data while KMAC believes digest is in progress.",
-      "signals": [
-        "sha3_absorbed",
-        "sha3_done"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:825-831"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sha3_absorbed",
+          "sha3_done",
+          "kmac_st_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "sha3_absorbed or sha3_done are invalid MuBi4 values",
+        "consequent": "Invalid MuBi4 encodings on sha3_absorbed or sha3_done are not explicitly detected; the mubi4_test functions return false for such encodings, potentially stalling the FSM in KmacMsgFeed or KmacDigest without entering the terminal error state",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The FSM controls key block processing (KmacKeyBlock) and responds to life cycle escalation. If kmac_state_error is not forced during escalation, downstream alerting may miss the escalation event, undermining the integrity of the error-handling path. Invalid MuBi4 signals on sha3_absorbed/done could stall the FSM without error reporting, potentially causing a deadlock in key-related operations.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:769-852"
+    "kmac.sv:769-852"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 769,
-  "line_end": 852,
-  "security_implications": ""
+  "line_end": 852
 }

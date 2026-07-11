@@ -2,12 +2,11 @@
   "chunk_id": "keymgr_sideload_key_ctrl__continuous_region__int__001",
   "header": {
     "module": "keymgr_sideload_key_ctrl",
-    "block_kind": "mixed",
-    "driven": [
-      "state_q"
-    ],
+    "block_kind": "declaration",
+    "driven": [],
     "used": [
-      "state_d"
+      "state_d",
+      "StSideloadReset"
     ],
     "modes": [
       "StSideloadReset",
@@ -17,81 +16,128 @@
     ],
     "tags": [
       "sparse_fsm",
-      "key",
       "secret",
-      "security",
-      "reset"
+      "reset",
+      "parameterization"
     ]
   },
-  "guarantees": [
-    {
-      "id": "G1",
-      "type": "reg_update",
-      "claim": "The `PRIM_FLOP_SPARSE_FSM` instance `u_state_regs` implements state_q as a registered output that updates to state_d on each clock cycle and resets to the StSideloadReset value.",
-      "cond": "always (on driving clock/reset edges)",
-      "signals": [
-        "state_q",
-        "state_d"
-      ],
-      "refs": [
-        "keymgr_sideload_key_ctrl.sv:66"
-      ]
-    }
-  ],
+  "guarantees": [],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "state_d must always hold a valid keymgr_sideload_e enumerated value (one of the four defined sparse encodings).",
-      "cond": "Every clock cycle when the FSM is active",
-      "risk": "If state_d takes an invalid or corrupted value, the sparse FSM register may store an undefined state, potentially bypassing wipe/stop protections in the key manager.",
+      "type": "security_precondition",
+      "claim": "PRIM_FLOP_SPARSE_FSM primitive correctly implements a state register that samples state_d on the clock edge, resets to StSideloadReset, and preserves the exact sparse encoding defined in the enum without optimization or glitches.",
+      "cond": "always (during normal operation)",
+      "risk": "If the primitive does not enforce the sparse encoding (e.g., synthesis optimizes it away), the FSM may become vulnerable to fault injection and could enter unintended states, compromising security guarantees.",
       "signals": [
-        "state_d"
+        "state_d",
+        "state_q",
+        "StSideloadReset"
       ],
       "refs": [
-        "keymgr_sideload_key_ctrl.sv:54-59",
-        "keymgr_sideload_key_ctrl.sv:66"
-      ]
+        "keymgr_sideload_key_ctrl.sv:66-66"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "state_q inside {StSideloadReset, StSideloadIdle, StSideloadWipe, StSideloadStop}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "clock",
+        "reset": "StSideloadReset",
+        "signals": [
+          "state_d",
+          "state_q",
+          "StSideloadReset"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (during normal operation)",
+        "consequent": "state_q inside {StSideloadReset, StSideloadIdle, StSideloadWipe, StSideloadStop}",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The sparse FSM fault resistance relies on the `PRIM_FLOP_SPARSE_FSM` primitive; its actual implementation (prevention of state encoding optimizations, Hamming distance enforcement) is not visible in this chunk.",
-      "cond": "Whenever the design depends on the sparse FSM for fault detection",
-      "risk": "If the primitive does not enforce sparse constraints, synthesis may optimize or collapse the encoding, degrading fault tolerance and allowing undetected state corruption.",
+      "claim": "The sparse FSM encoding only constrains synthesis; the primitive does not appear to include runtime invalid-state detection or fault containment. An attacker could potentially flip bits to cause an illegal state.",
+      "cond": "if a fault injection or SEU occurs",
+      "risk": "An undetected illegal state may bypass security critical state transitions (e.g., key wipe, idle) and lead to secret exposure or unauthorized key usage.",
       "signals": [
-        "u_state_regs"
+        "state_q"
       ],
       "refs": [
-        "keymgr_sideload_key_ctrl.sv:66"
-      ]
+        "keymgr_sideload_key_ctrl.sv:63-66"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!$onehot0(state_q) || (state_q != StSideloadReset && state_q != StSideloadIdle && state_q != StSideloadWipe && state_q != StSideloadStop)",
+        "consequent": "assertion failure",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!$onehot0(state_q) || (state_q != StSideloadReset && state_q != StSideloadIdle && state_q != StSideloadWipe && state_q != StSideloadStop)",
+        "consequent": "assertion failure",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The hard-coded sparse state encodings (StSideloadReset=10'b0011111011, StSideloadIdle=10'b0101000101, StSideloadWipe=10'b1110110010, StSideloadStop=10'b1000001010) lack a documented minimum Hamming distance requirement; it is unclear if they provide sufficient fault protection.",
-      "cond": "When the FSM resides in any state and a fault (single or multi-bit flip) occurs",
-      "risk": "A single-bit upset could cause an illegal but valid-looking state transition, potentially allowing key operations to proceed without proper clearing or stopping.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The logic that computes state_d is outside this chunk. It is unknown whether all reachable states are covered and whether transitions to/from StSideloadWipe and StSideloadStop are correctly handled in the full FSM.",
+      "cond": "when state_d is updated",
+      "risk": "A missing or incorrect transition in the surrounding logic could cause deadlock, unintended stop, or skipping the wipe sequence.",
       "signals": [
-        "StSideloadReset",
-        "StSideloadIdle",
-        "StSideloadWipe",
-        "StSideloadStop"
+        "state_d",
+        "state_q"
       ],
       "refs": [
-        "keymgr_sideload_key_ctrl.sv:54-59"
-      ]
+        "keymgr_sideload_key_ctrl.sv:61-66"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_sideload_key_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_d",
+          "state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "when state_d is updated",
+        "consequent": "The logic that computes state_d is outside this chunk. It is unknown whether all reachable states are covered and whether transitions to/from StSideloadWipe and StSideloadStop are correctly handled in the full FSM",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk defines the sparse FSM encoding for the key sideload controller. The SEC_CM comment explicitly marks it as a hardware countermeasure against synthesis optimizations that would weaken the resistance to fault injection. If the sparse property is not maintained or if illegal states are not detected, an attacker could flip FSM bits to bypass key wipe/stop and leak secret keys. The declared signals (keys_en, data_truncated) suggest subsequent key data handling, so an unprotected FSM could directly expose key material.",
   "evidence_refs": [
     "keymgr_sideload_key_ctrl.sv:53-69"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_sideload_key_ctrl.sv",
   "line_start": 53,
-  "line_end": 69,
-  "security_implications": ""
+  "line_end": 69
 }

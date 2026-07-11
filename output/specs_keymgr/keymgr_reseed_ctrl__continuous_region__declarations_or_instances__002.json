@@ -17,95 +17,279 @@
     "modes": [],
     "tags": [
       "counter",
+      "error",
       "reseed",
-      "error"
+      "security"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "The prim_count instance u_reseed_cnt is configured as a 16-bit (Width=16) counter whose clear (clr_i) is driven by edn_done, increment enable (incr_en_i) by (cnt_en & lfsr_en_i), decrement permanently disabled (decr_en_i=0), step=1, commit tied high (immediate commit), and set/set_cnt tied to zero.",
-      "cond": "always (static wiring)",
+      "type": "instance_connection",
+      "claim": "reseed_cnt increments by 1 every clock cycle when (cnt_en & lfsr_en_i) is high, and is cleared to 0 when edn_done is high. The counter immediately exposes its value (commit_i=1). No decrement or set capability is enabled.",
+      "cond": "always",
       "signals": [
-        "clk_i",
-        "rst_ni",
-        "edn_done",
+        "reseed_cnt",
         "cnt_en",
         "lfsr_en_i",
-        "reseed_cnt",
+        "edn_done",
+        "commit_i",
+        "step_i"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:95-110"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "edn_done || (cnt_en && lfsr_en_i)",
+        "consequent": "if (edn_done) reseed_cnt' == 0 else if (cnt_en && lfsr_en_i) reseed_cnt' == reseed_cnt + 1 else reseed_cnt' == reseed_cnt",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "reseed_cnt",
+          "cnt_en",
+          "lfsr_en_i",
+          "edn_done",
+          "commit_i",
+          "step_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "edn_done || (cnt_en && lfsr_en_i)",
+        "consequent": "if (edn_done) reseed_cnt' == 0 else if (cnt_en && lfsr_en_i) reseed_cnt' == reseed_cnt + 1 else reseed_cnt' == reseed_cnt",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "cnt_err_o is directly forwarded from the prim_count error output without any local masking or gating.",
+      "cond": "always",
+      "signals": [
         "cnt_err_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:95-110"
-      ]
+        "keymgr_reseed_ctrl.sv:109"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cnt_err_o == u_reseed_cnt.err_o",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cnt_err_o == u_reseed_cnt.err_o",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "instance_connection",
+      "claim": "cnt_after_commit_o output is left unconnected; its value is unused within the module.",
+      "cond": "always",
+      "signals": [
+        "cnt_after_commit_o"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:108"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "cnt_after_commit_o is unconnected",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_after_commit_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "cnt_after_commit_o is unconnected",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "edn_done is a single‑cycle pulse.",
-      "cond": "when edn_done asserts",
-      "risk": "If edn_done remains high, the counter stays permanently cleared, losing all increments and stalling the reseed sequence indefinitely.",
+      "type": "value_domain",
+      "claim": "External logic must not assert (cnt_en & lfsr_en_i) continuously for more than 65535 cycles; otherwise the counter overflows and wraps.",
+      "cond": "always",
+      "risk": "Counter overflow causes reseed_cnt wrap, potentially bypassing reseed scheduling and compromising key freshness.",
       "signals": [
-        "edn_done"
+        "cnt_en",
+        "lfsr_en_i",
+        "reseed_cnt"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:100"
-      ]
+        "keymgr_reseed_ctrl.sv:103-107"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "cnt_en && lfsr_en_i == 1 for 65536 cycles",
+        "consequent": "reseed_cnt wraps",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_en",
+          "lfsr_en_i",
+          "reseed_cnt"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cnt_en && lfsr_en_i == 1 for 65536 cycles",
+        "consequent": "reseed_cnt wraps",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "cnt_en and lfsr_en_i are not simultaneously active for more than 2^16 cycles between clear events.",
-      "cond": "when the counter is operating",
-      "risk": "If exceeded, the counter overflows beyond its 16‑bit width, possibly causing an error (cnt_err_o) or silent wrap, which would corrupt the reseed count and weaken key generation randomness.",
+      "type": "handshake",
+      "claim": "edn_done must be a clean pulse and must not be stuck high; else the counter remains cleared and reseeding may never occur.",
+      "cond": "during reseeding operation",
+      "risk": "If edn_done stays high, reseed_cnt stays at 0, potentially freezing reseed logic.",
       "signals": [
-        "cnt_en",
-        "lfsr_en_i"
+        "edn_done",
+        "reseed_cnt"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:103"
-      ]
+        "keymgr_reseed_ctrl.sv:100"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "edn_done == 1 for multiple consecutive cycles",
+        "consequent": "reseed_cnt remains 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "edn_done",
+          "reseed_cnt"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "edn_done == 1 for multiple consecutive cycles",
+        "consequent": "reseed_cnt remains 0",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "cnt_err_o (error output of u_reseed_cnt) is an unconnected port in this chunk; downstream handling must be verified to ensure overflow is properly detected and triggers appropriate security response (e.g., alert, reset).",
-      "cond": "when cnt_err_o asserts",
-      "risk": "If the error is ignored, a counter overflow could silently produce an invalid reseed count, breaking the key manager’s reseed policy and potentially exposing key material.",
+      "claim": "cnt_err_o is not evaluated locally; a counter overflow (e.g., when cnt_en & lfsr_en_i stay high for >65535 cycles) would propagate to the outside world without any containment in this chunk.",
+      "cond": "cnt_err_o asserted (e.g., on overflow)",
+      "risk": "If external logic ignores cnt_err_o, overflow could go undetected, allowing a reseed count wrap and violating reseed frequency requirements, potentially compromising key material freshness.",
       "signals": [
-        "cnt_err_o"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:109"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "The maximum cumulative assertion time of (cnt_en & lfsr_en_i) between clears is not bounded locally; a hardware fault or logic error could keep both signals active beyond 2^16 cycles.",
-      "cond": "continuous assertion of cnt_en and lfsr_en_i",
-      "risk": "Counter overflow occurs, potentially invalidating the reseed count before the next clear (edn_done). Combined with unhandled error, this may lead to use of stale or wrapped count.",
-      "signals": [
+        "cnt_err_o",
+        "reseed_cnt",
         "cnt_en",
         "lfsr_en_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:103"
-      ]
+        "keymgr_reseed_ctrl.sv:109"
+      ],
+      "formal": {
+        "temporal_shape": "none",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err_o",
+          "reseed_cnt",
+          "cnt_en",
+          "lfsr_en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cnt_err_o asserted (e.g., on overflow)",
+        "consequent": "cnt_err_o is not evaluated locally; a counter overflow (e.g., when cnt_en & lfsr_en_i stay high for >65535 cycles) would propagate to the outside world without any containment in this chunk",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "cnt_after_commit_o is unconnected; currently commit_i is tied to 1 (making it match cnt_o), but any future change to commit_i would leave that output undriven in the rest of the design.",
+      "cond": "if commit_i is changed from constant 1",
+      "risk": "Potential functional gap if commit_i later becomes a dynamic signal and the delayed-commit feature is needed.",
+      "signals": [
+        "cnt_after_commit_o",
+        "commit_i"
+      ],
+      "refs": [
+        "keymgr_reseed_ctrl.sv:106,108"
+      ],
+      "formal": {
+        "temporal_shape": "none",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_reseed_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_after_commit_o",
+          "commit_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "if commit_i is changed from constant 1",
+        "consequent": "cnt_after_commit_o is unconnected; currently commit_i is tied to 1 (making it match cnt_o), but any future change to commit_i would leave that output undriven in the rest of the design",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The counter reseed_cnt (16‑bit) increments on lfsr_en_i & cnt_en and clears on edn_done. If extraneous continuous assertion of the enable signals causes overflow, cnt_err_o may be asserted and reseed_cnt wraps. Without local containment (cnt_err_o is only forwarded, not gated or handled here), an overflow could allow an attacker to force the reseed count to wrap, potentially missing reseeding intervals and exposing stale key material. The error path relies entirely on external logic for fault handling, which creates a security‑critical dependency.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv:95-112"
+    "keymgr_reseed_ctrl.sv:95-112"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_reseed_ctrl.sv",
   "line_start": 95,
-  "line_end": 112,
-  "security_implications": ""
+  "line_end": 112
 }

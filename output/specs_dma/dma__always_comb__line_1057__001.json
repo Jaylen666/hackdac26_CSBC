@@ -12,20 +12,18 @@
       "dma_rsp_data"
     ],
     "modes": [
-      "transfer_width_q == 3'b001",
-      "transfer_width_q == 3'b010",
-      "default"
+      "3'b001",
+      "3'b010",
+      "others"
     ],
-    "tags": [
-      "data_steering"
-    ]
+    "tags": []
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "When transfer_width_q == 3'b001 and req_src_be_q[3] == 1, read_return_data_d is set to four copies of dma_rsp_data[31:24] (most significant byte).",
-      "cond": "transfer_width_q == 3'b001 and req_src_be_q matches pattern 4'b1???",
+      "claim": "When transfer_width_q is 3'b001 (1B/txn), read_return_data_d is set to 4 copies of a byte selected from dma_rsp_data by req_src_be_q: bit[3] -> 31:24, bit[2] -> 23:16, bit[1] -> 15:8, default -> 7:0.",
+      "cond": "transfer_width_q == 3'b001",
       "signals": [
         "transfer_width_q",
         "req_src_be_q",
@@ -33,12 +31,12 @@
         "read_return_data_d"
       ],
       "refs": [
-        "dma.sv:1058-1062"
+        "dma.sv:1060-1066"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3] == 1'b1)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[31:24]}}",
+        "antecedent": "transfer_width_q == 3'b001",
+        "consequent": "read_return_data_d == ( (req_src_be_q[3]) ? {4{dma_rsp_data[31:24]}} : (req_src_be_q[2]) ? {4{dma_rsp_data[23:16]}} : (req_src_be_q[1]) ? {4{dma_rsp_data[15:8]}} : {4{dma_rsp_data[7:0]}} )",
         "formalizability": "direct"
       },
       "risk": "",
@@ -53,8 +51,8 @@
           "read_return_data_d"
         ],
         "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3] == 1'b1)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[31:24]}}",
+        "antecedent": "transfer_width_q == 3'b001",
+        "consequent": "read_return_data_d == ( (req_src_be_q[3]) ? {4{dma_rsp_data[31:24]}} : (req_src_be_q[2]) ? {4{dma_rsp_data[23:16]}} : (req_src_be_q[1]) ? {4{dma_rsp_data[15:8]}} : {4{dma_rsp_data[7:0]}} )",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -63,21 +61,21 @@
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "When transfer_width_q == 3'b001 and req_src_be_q[3]==0 and req_src_be_q[2]==1, read_return_data_d is set to four copies of dma_rsp_data[23:16].",
-      "cond": "transfer_width_q == 3'b001 and req_src_be_q matches 4'b01??",
+      "claim": "When transfer_width_q is 3'b010 (2B/txn), read_return_data_d is the selected half‑word duplicated twice. Selection uses req_src_be_q[1:0]: if any bit is set, the lower half‑word (15:0) is used; otherwise the upper half‑word (31:16) is used.",
+      "cond": "transfer_width_q == 3'b010",
       "signals": [
         "transfer_width_q",
-        "req_src_be_q",
+        "req_src_be_q[1:0]",
         "dma_rsp_data",
         "read_return_data_d"
       ],
       "refs": [
-        "dma.sv:1058-1063"
+        "dma.sv:1069-1070"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3] == 1'b0) && (req_src_be_q[2] == 1'b1)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[23:16]}}",
+        "antecedent": "transfer_width_q == 3'b010",
+        "consequent": "read_return_data_d == {2{ ( (|req_src_be_q[1:0]) ? dma_rsp_data[15:0] : dma_rsp_data[31:16] ) }}",
         "formalizability": "direct"
       },
       "risk": "",
@@ -87,13 +85,13 @@
         "reset": "",
         "signals": [
           "transfer_width_q",
-          "req_src_be_q",
+          "req_src_be_q[1:0]",
           "dma_rsp_data",
           "read_return_data_d"
         ],
         "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3] == 1'b0) && (req_src_be_q[2] == 1'b1)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[23:16]}}",
+        "antecedent": "transfer_width_q == 3'b010",
+        "consequent": "read_return_data_d == {2{ ( (|req_src_be_q[1:0]) ? dma_rsp_data[15:0] : dma_rsp_data[31:16] ) }}",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -101,165 +99,9 @@
     },
     {
       "id": "G3",
-      "type": "mux_case",
-      "claim": "When transfer_width_q == 3'b001 and req_src_be_q[2:3]==0 and req_src_be_q[1]==1, read_return_data_d is set to four copies of dma_rsp_data[15:8].",
-      "cond": "transfer_width_q == 3'b001 and req_src_be_q matches 4'b001?",
-      "signals": [
-        "transfer_width_q",
-        "req_src_be_q",
-        "dma_rsp_data",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1058-1064"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3:1] == 3'b001)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[15:8]}}",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "transfer_width_q",
-          "req_src_be_q",
-          "dma_rsp_data",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3:1] == 3'b001)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[15:8]}}",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G4",
       "type": "default_fallback",
-      "claim": "When transfer_width_q == 3'b001 and none of the above strobe patterns match (i.e., req_src_be_q[3:1]==3'b000 or unknown), read_return_data_d is set to four copies of dma_rsp_data[7:0] (least significant byte).",
-      "cond": "transfer_width_q == 3'b001 and req_src_be_q[3:1] all zero",
-      "signals": [
-        "transfer_width_q",
-        "req_src_be_q",
-        "dma_rsp_data",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1065"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3:1] == 3'b000)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[7:0]}}",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "transfer_width_q",
-          "req_src_be_q",
-          "dma_rsp_data",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b001) && (req_src_be_q[3:1] == 3'b000)",
-        "consequent": "read_return_data_d == {4{dma_rsp_data[7:0]}}",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G5",
-      "type": "mux_case",
-      "claim": "When transfer_width_q == 3'b010, if any of req_src_be_q[1:0] is high, read_return_data_d is two copies of the lower halfword dma_rsp_data[15:0]; else it is two copies of the upper halfword dma_rsp_data[31:16].",
-      "cond": "transfer_width_q == 3'b010",
-      "signals": [
-        "transfer_width_q",
-        "req_src_be_q",
-        "dma_rsp_data",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1069-1070"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b010) && (|req_src_be_q[1:0])",
-        "consequent": "read_return_data_d == {2{dma_rsp_data[15:0]}}",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "transfer_width_q",
-          "req_src_be_q",
-          "dma_rsp_data",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b010) && (|req_src_be_q[1:0])",
-        "consequent": "read_return_data_d == {2{dma_rsp_data[15:0]}}",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G6",
-      "type": "mux_case",
-      "claim": "When transfer_width_q == 3'b010 and |req_src_be_q[1:0] is false, read_return_data_d is two copies of the upper halfword.",
-      "cond": "transfer_width_q == 3'b010 and req_src_be_q[1:0] all zero",
-      "signals": [
-        "transfer_width_q",
-        "req_src_be_q",
-        "dma_rsp_data",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1069-1070"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b010) && (! (|req_src_be_q[1:0]))",
-        "consequent": "read_return_data_d == {2{dma_rsp_data[31:16]}}",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "transfer_width_q",
-          "req_src_be_q",
-          "dma_rsp_data",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "(transfer_width_q == 3'b010) && (! (|req_src_be_q[1:0]))",
-        "consequent": "read_return_data_d == {2{dma_rsp_data[31:16]}}",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G7",
-      "type": "default_fallback",
-      "claim": "For any transfer_width_q not equal to 3'b001 or 3'b010, read_return_data_d is set to dma_rsp_data with no duplication or steering.",
-      "cond": "transfer_width_q != 3'b001 and != 3'b010",
+      "claim": "For any other transfer_width_q (not 3'b001 or 3'b010), read_return_data_d passes dma_rsp_data unchanged.",
+      "cond": "transfer_width_q != 3'b001 && transfer_width_q != 3'b010",
       "signals": [
         "transfer_width_q",
         "dma_rsp_data",
@@ -296,131 +138,22 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "When transfer_width_q == 3'b001, the byte-enable vector req_src_be_q must be one-hot (at most one bit set). The priority-based casez will otherwise replicate an arbitrary active byte, which may not match intended data.",
+      "type": "value_domain",
+      "claim": "In 1B mode, req_src_be_q is assumed non‑zero so that a valid byte lane is selected; the default case (byte 0) may produce incorrect data if req_src_be_q is all zero.",
       "cond": "transfer_width_q == 3'b001",
-      "risk": "Multiple active strobes cause read_return_data_d to replicate a byte that might not be the intended one, leading to data corruption without any error indication.",
-      "signals": [
-        "req_src_be_q",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1061-1066"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "transfer_width_q == 3'b001",
-        "consequent": "$onehot0(req_src_be_q)",
-        "formalizability": "partial"
-      },
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "req_src_be_q",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "transfer_width_q == 3'b001",
-        "consequent": "$onehot0(req_src_be_q)",
-        "formalizability": "partial",
-        "confidence": 0.95,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "When transfer_width_q == 3'b010, the byte-enable pattern must ensure that only one halfword (either bytes [1:0] or bytes [3:2]) has any strobe active. If both halves are active simultaneously, the selection logic arbitrarily picks the lower halfword.",
-      "cond": "transfer_width_q == 3'b010",
-      "risk": "If both halfwords have strobes, the duplicated data will come from the lower halfword, possibly contradicting the intended source data and corrupting the transaction.",
-      "signals": [
-        "req_src_be_q",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1069-1070"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "transfer_width_q == 3'b010",
-        "consequent": "(|req_src_be_q[1:0]) == (|req_src_be_q[3:2]) ? one-hot-like constraint : true",
-        "formalizability": "partial"
-      },
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "req_src_be_q",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "transfer_width_q == 3'b010",
-        "consequent": "(|req_src_be_q[1:0]) == (|req_src_be_q[3:2]) ? one-hot-like constraint : true",
-        "formalizability": "partial",
-        "confidence": 0.95,
-        "source": "llm"
-      }
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The default case for transfer_width_q (values other than 001/010) passes dma_rsp_data through unchanged. Is this the intended behavior for wider transfer widths (e.g., 4 bytes)? The specification should confirm that no duplication is needed.",
-      "cond": "transfer_width_q not 001 or 010",
-      "risk": "If unexpected transfer widths occur (e.g., 4, 8, 16 bytes) the output will not be duplicated, which may be correct but should be verified against higher-level logic.",
-      "signals": [
-        "transfer_width_q",
-        "read_return_data_d"
-      ],
-      "refs": [
-        "dma.sv:1071"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "transfer_width_q",
-          "read_return_data_d"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "transfer_width_q not 001 or 010",
-        "consequent": "The default case for transfer_width_q (values other than 001/010) passes dma_rsp_data through unchanged. Is this the intended behavior for wider transfer widths (e.g., 4 bytes)? The specification should confirm that no duplication is needed",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U2",
-      "type": "U_fault_containment_gap",
-      "priority": "medium",
-      "claim": "If req_src_be_q violates the assumed one-hot (width 001) or halfword-exclusive (width 010) pattern, the logic will produce erroneous data duplication without any error flagging. There is no check that the strobe pattern is legal for the configured width.",
-      "cond": "transfer_width_q in {001,010} and req_src_be_q pattern invalid per width",
-      "risk": "Silent data corruption could propagate through the DMA engine without detection, potentially causing write of wrong data to memory or peripheral.",
+      "risk": "read_return_data_d silently uses dma_rsp_data[7:0] instead of the intended byte, leading to data corruption.",
       "signals": [
         "req_src_be_q",
         "transfer_width_q"
       ],
       "refs": [
-        "dma.sv:1058-1072"
+        "dma.sv:1062-1065"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "transfer_width_q == 3'b001 && !$onehot0(req_src_be_q)",
-        "consequent": "// no error flag is asserted",
-        "formalizability": "partial"
+        "antecedent": "transfer_width_q == 3'b001",
+        "consequent": "req_src_be_q != 4'b0000",
+        "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "dma",
@@ -431,19 +164,168 @@
           "transfer_width_q"
         ],
         "temporal_shape": "comb",
-        "antecedent": "transfer_width_q == 3'b001 && !$onehot0(req_src_be_q)",
-        "consequent": "// no error flag is asserted",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "antecedent": "transfer_width_q == 3'b001",
+        "consequent": "req_src_be_q != 4'b0000",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "In 2B mode, req_src_be_q[1:0] is expected to be non‑zero to indicate the desired half‑word; if both bits are zero, the logic picks the upper half‑word, which may not be the intended data.",
+      "cond": "transfer_width_q == 3'b010",
+      "risk": "read_return_data_d may be the wrong half‑word, causing downstream data corruption or misinterpretation.",
+      "signals": [
+        "req_src_be_q[1:0]",
+        "transfer_width_q"
+      ],
+      "refs": [
+        "dma.sv:1069-1070"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b010",
+        "consequent": "|req_src_be_q[1:0] == 1'b1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "req_src_be_q[1:0]",
+          "transfer_width_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b010",
+        "consequent": "|req_src_be_q[1:0] == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "In 2B mode, if req_src_be_q[1:0] == 2'b00, the logic selects dma_rsp_data[31:16] without any error indication. It is unclear whether this case is legal or should be treated as an error.",
+      "cond": "transfer_width_q == 3'b010 && req_src_be_q[1:0] == 2'b00",
+      "risk": "If this case occurs when the upper half‑word does not contain valid data, read_return_data_d will be corrupted.",
+      "signals": [
+        "transfer_width_q",
+        "req_src_be_q[1:0]",
+        "read_return_data_d"
+      ],
+      "refs": [
+        "dma.sv:1069-1070"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b010 && req_src_be_q[1:0] == 2'b00",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "transfer_width_q",
+          "req_src_be_q[1:0]",
+          "read_return_data_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b010 && req_src_be_q[1:0] == 2'b00",
+        "consequent": "In 2B mode, if req_src_be_q[1:0] == 2'b00, the logic selects dma_rsp_data[31:16] without any error indication. It is unclear whether this case is legal or should be treated as an error",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "In 1B mode, when req_src_be_q is all zero, the default branch selects byte 0 without signaling an error. The design intent for this case is not documented.",
+      "cond": "transfer_width_q == 3'b001 && req_src_be_q == 4'b0000",
+      "risk": "Silently returning byte 0 may mask a bug in the byte-enable generation logic.",
+      "signals": [
+        "transfer_width_q",
+        "req_src_be_q",
+        "read_return_data_d"
+      ],
+      "refs": [
+        "dma.sv:1065"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b001 && req_src_be_q == 4'b0000",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "transfer_width_q",
+          "req_src_be_q",
+          "read_return_data_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b001 && req_src_be_q == 4'b0000",
+        "consequent": "In 1B mode, when req_src_be_q is all zero, the default branch selects byte 0 without signaling an error. The design intent for this case is not documented",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "In 2B mode, the logic uses only req_src_be_q[1:0] to select the half‑word and ignores req_src_be_q[3:2]. The upstream generation of these bits needs to be checked to confirm that the upper bits are never set in 2B transactions.",
+      "cond": "transfer_width_q == 3'b010 && (|req_src_be_q[3:2])",
+      "risk": "If the upper bits can be legally set while the lower bits indicate a different half‑word, the selection will be incorrect.",
+      "signals": [
+        "req_src_be_q[3:2]",
+        "transfer_width_q"
+      ],
+      "refs": [
+        "dma.sv:1069"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b010 && (req_src_be_q[3] || req_src_be_q[2])",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "req_src_be_q[3:2]",
+          "transfer_width_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "transfer_width_q == 3'b010 && (req_src_be_q[3] || req_src_be_q[2])",
+        "consequent": "In 2B mode, the logic uses only req_src_be_q[1:0] to select the half‑word and ignores req_src_be_q[3:2]. The upstream generation of these bits needs to be checked to confirm that the upper bits are never set in 2B transactions",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "",
   "evidence_refs": [
     "dma.sv:1057-1073"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 1057,
-  "line_end": 1073,
-  "security_implications": ""
+  "line_end": 1073
 }

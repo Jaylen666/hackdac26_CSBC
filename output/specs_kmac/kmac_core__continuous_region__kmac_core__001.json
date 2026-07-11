@@ -3,92 +3,323 @@
   "header": {
     "module": "kmac_core",
     "block_kind": "declaration",
-    "driven": [],
-    "used": [],
+    "driven": [
+      "fifo_ready_o",
+      "msg_valid_o",
+      "msg_data_o",
+      "msg_strb_o",
+      "process_o",
+      "sparse_fsm_error_o",
+      "key_index_error_o"
+    ],
+    "used": [
+      "clk_i",
+      "rst_ni",
+      "fifo_valid_i",
+      "fifo_data_i",
+      "fifo_strb_i",
+      "msg_ready_i",
+      "kmac_en_i",
+      "mode_i",
+      "strength_i",
+      "key_data_i",
+      "key_len_i",
+      "key_valid_i",
+      "start_i",
+      "process_i",
+      "done_i",
+      "lc_escalate_en_i",
+      "Sha3_pkg::KeccakMsgAddrW",
+      "Sha3_pkg::KeccakCountW",
+      "Sha3_pkg::KeccakRate",
+      "Sha3_pkg::L128",
+      "Sha3_pkg::L224",
+      "Sha3_pkg::L256",
+      "Sha3_pkg::L384",
+      "Sha3_pkg::L512"
+    ],
     "modes": [
-      "EnMasking",
-      "Share"
+      "sha3_pkg::sha3_mode_e",
+      "sha3_pkg::keccak_strength_e",
+      "key_len_e",
+      "prim_mubi_pkg::mubi4_t",
+      "EnMasking"
     ],
     "tags": [
+      "key",
       "mask",
-      "handshake",
-      "lifecycle",
-      "parameterization"
+      "error",
+      "access_control",
+      "sparse_fsm",
+      "lifecycle"
     ]
   },
-  "guarantees": [
-    {
-      "id": "G1",
-      "type": "generate_param",
-      "claim": "The localparam Share is assigned to 2 if EnMasking is 1, otherwise 1.",
-      "cond": "always (derived localparam)",
-      "signals": [
-        "Share",
-        "EnMasking"
-      ],
-      "refs": [
-        "15"
-      ]
-    }
-  ],
+  "guarantees": [],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "The input done_i must be a valid mubi4_t encoded value as defined in prim_mubi_pkg.",
-      "cond": "whenever done_i is used in the module's control logic (beyond this chunk)",
-      "risk": "If done_i is not a valid encoded value, the module may misinterpret the done condition, potentially causing premature or stalled completion, or unexpected state transitions.",
+      "claim": "When kmac_en_i is high and key_valid_i is asserted, key_len_i must encode a valid key length as defined by the key_len_e enum.",
+      "cond": "kmac_en_i == 1 && key_valid_i == 1",
+      "risk": "An invalid key length may cause incorrect key expansion or memory access violations, potentially compromising integrity or security.",
       "signals": [
-        "done_i"
+        "key_len_i",
+        "key_valid_i",
+        "kmac_en_i"
       ],
       "refs": [
-        "48"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:42-43"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "kmac_en_i && key_valid_i",
+        "consequent": "key_len_i inside { /* valid enum values */ }",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_len_i",
+          "key_valid_i",
+          "kmac_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "kmac_en_i && key_valid_i",
+        "consequent": "key_len_i inside { /* valid enum values */ }",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The input mubi4_t signal done_i must always carry a legal mubi4 encoding; otherwise sparse_fsm_error_o may fail to be asserted on an illegal state.",
+      "cond": "always",
+      "risk": "Corrupted mubi signal could mask FSM integrity failures, leading to silent data corruption.",
+      "signals": [
+        "done_i",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:48,56"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "prim_mubi_pkg::mubi4_invalid(done_i) == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_i",
+          "sparse_fsm_error_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "prim_mubi_pkg::mubi4_invalid(done_i) == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "When EnMasking is parameterized to 1, the external agent driving fifo_data_i and key_data_i must provide both shares (Share=2) with independent random masks. When EnMasking is 0, Share=1 and only a single unshared value is required.",
+      "cond": "always",
+      "risk": "Mismatch between hardware width and external provisioning breaks masking and may expose secret data.",
+      "signals": [
+        "fifo_data_i",
+        "key_data_i",
+        "Share"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:14-15,22,41"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "((EnMasking == 1) -> ($size(fifo_data_i,1) == 2 && $size(key_data_i,1) == 2)) && ((EnMasking == 0) -> ($size(fifo_data_i,1) == 1 && $size(key_data_i,1) == 1))",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_data_i",
+          "key_data_i",
+          "Share"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "((EnMasking == 1) -> ($size(fifo_data_i,1) == 2 && $size(key_data_i,1) == 2)) && ((EnMasking == 0) -> ($size(fifo_data_i,1) == 1 && $size(key_data_i,1) == 1))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "lifecycle",
+      "claim": "When lc_escalate_en_i is asserted (in the multi-bit lifecycle encoding), the module is expected to enter a safe state and cease processing; the external environment must ensure that the assertion reflects a genuine escalation condition.",
+      "cond": "lc_escalate_en_i == lc_ctrl_pkg::On",
+      "risk": "Inadvertent assertion may deny service; failure to assert during a security violation may allow leakage.",
+      "signals": [
+        "lc_escalate_en_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:54"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "lc_escalate_en_i == lc_ctrl_pkg::On",
+        "consequent": "the module is expected to enter a safe state and cease processing; the external environment must ensure that the assertion reflects a genuine escalation condition",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The parameter comment states that when EnMasking=1, the result digest will be two sets of 1600-bit (masked). The actual logic that generates these two sets and maintains the masking domain must be verified to ensure that unmasking or improper separation does not leak secret data.",
-      "cond": "EnMasking=1 and module is used for secret data processing",
-      "risk": "If masking is incomplete or the two sets are not properly handled (e.g., combined prematurely, exposed on a plaintext interface, or not wiped), secret data could be exposed.",
+      "claim": "The logic driving key_index_error_o is not present in this block. It must be verified that any illegal key length or key index condition is correctly detected and reported, preventing the use of a malformed key.",
+      "cond": "key_valid_i == 1",
+      "risk": "A missing or incorrect error detection path would allow the processing of a partial or wrong key, leading to incorrect MAC/digest and potential security bypass.",
       "signals": [
-        "EnMasking",
-        "msg_data_o",
-        "fifo_data_i",
-        "key_data_i"
+        "key_index_error_o",
+        "key_len_i",
+        "key_valid_i"
       ],
       "refs": [
-        "14-15",
-        "22",
-        "28",
-        "41"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:42,43,57"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "key_valid_i && !valid_key_len",
+        "consequent": "##1 key_index_error_o",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "reported",
+        "signals": [
+          "key_index_error_o",
+          "key_len_i",
+          "key_valid_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "key_valid_i && !valid_key_len",
+        "consequent": "##1 key_index_error_o",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The kmac_en_i port description says that when cleared, the core should forward incoming messages directly to the SHA3 core without KMAC processing. This forwarding bypass must be verified in the rest of the module's implementation.",
-      "cond": "kmac_en_i == 0",
-      "risk": "If the core does not properly forward messages when kmac_en_i is low, it may block the data path or apply unintended processing, causing functional failure.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The default parameter EnMasking = 0 disables data-path masking. If the design is required to resist side-channel attacks, this default may conflict with the security objective.",
+      "cond": "EnMasking == 0",
+      "risk": "Key and intermediate values travel the datapath in plaintext, increasing susceptibility to power/EM side-channel extraction.",
       "signals": [
-        "kmac_en_i",
-        "fifo_data_i",
-        "msg_data_o"
+        "EnMasking",
+        "key_data_i",
+        "fifo_data_i"
       ],
       "refs": [
-        "34-36"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:14-15"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "EnMasking",
+          "key_data_i",
+          "fifo_data_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 0",
+        "consequent": "The default parameter EnMasking = 0 disables data-path masking. If the design is required to resist side-channel attacks, this default may conflict with the security objective",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The comment states that when kmac_en_i is cleared, the core logic does not function but forwards the incoming message to the SHA3 core. A transient window may exist where a message is partially processed by the disabled core before the bypass is established.",
+      "cond": "kmac_en_i falls while processing is active",
+      "risk": "Partial or incorrect data could be forwarded to the SHA3 core, corrupting the hash/authenticated operation.",
+      "signals": [
+        "kmac_en_i",
+        "fifo_valid_i",
+        "msg_valid_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:34-35"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "kmac_en_i && $fell(kmac_en_i)",
+        "consequent": "##1 msg_valid_o == fifo_valid_i",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_en_i",
+          "fifo_valid_i",
+          "msg_valid_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "kmac_en_i && $fell(kmac_en_i)",
+        "consequent": "##1 msg_valid_o == fifo_valid_i",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The module exposes key material (key_data_i) and a masking parameter (EnMasking). When EnMasking is 0 (default), the key is processed without masking, creating a potential plaintext side-channel exposure. The lc_escalate_en_i input can disable the core under lifecycle escalation; incorrect handling could allow operations in insecure states. Sparse FSM and key index error outputs indicate integrity checks, but their implementation must be verified to prevent fault injection bypasses. Any gap in key-length validation or masking enforcement could lead to secret leakage or authentication compromise.",
   "evidence_refs": [
-    "7-67"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:7-67"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 7,
-  "line_end": 67,
-  "security_implications": ""
+  "line_end": 67
 }

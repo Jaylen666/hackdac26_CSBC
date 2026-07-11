@@ -9,7 +9,24 @@
       "gen_data",
       "start",
       "cnt",
-      "cnt_err"
+      "cnt_err",
+      "AdvByteMask",
+      "IdByteMask",
+      "GenByteMask",
+      "state_q",
+      "state_d",
+      "cnt_clr",
+      "cnt_set",
+      "cnt_en",
+      "valid",
+      "last",
+      "strb",
+      "inputs_invalid_d",
+      "inputs_invalid_q",
+      "clr_err",
+      "kmac_done_vld",
+      "cmd_chk",
+      "decoy_data"
     ],
     "used": [
       "adv_data_i",
@@ -20,12 +37,16 @@
       "gen_en_i",
       "clk_i",
       "rst_ni",
-      "cnt_clr",
-      "cnt_set",
       "rounds",
-      "cnt_en"
+      "KDFMaxWidth",
+      "KmacDataIfWidth",
+      "MaxAdvDataWidth",
+      "IdDataWidth",
+      "GenDataWidth",
+      "RandWidth"
     ],
     "modes": [
+      "data_state_e",
       "StIdle",
       "StTx",
       "StTxLast",
@@ -36,58 +57,108 @@
     "tags": [
       "secret",
       "key",
-      "mask",
-      "entropy",
+      "sparse_fsm",
       "error",
+      "fault",
       "integrity",
-      "counter",
-      "handshake"
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "adv_data is always assigned KDFMaxWidth'(adv_data_i), zero-padding to KDFMaxWidth bits.",
-      "cond": "always",
+      "type": "generate_param",
+      "claim": "Last-transfer byte masks are derived from remainders: AdvByteMask is (AdvRem > 0) ? (2**(AdvRem/8)-1) : all‑ones, with identical logic for IdByteMask and GenByteMask.",
+      "cond": "always (elaboration-time parameter)",
       "signals": [
-        "adv_data",
-        "adv_data_i"
+        "AdvByteMask",
+        "IdByteMask",
+        "GenByteMask",
+        "AdvRem",
+        "IdRem",
+        "GenRem",
+        "IfBytes"
       ],
       "refs": [
-        "135"
-      ]
+        "keymgr_kmac_if.sv:111-113"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "AdvByteMask == ((AdvRem > 0) ? (2**(AdvRem/8)-1) : {IfBytes{1'b1}})",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "AdvByteMask",
+          "IdByteMask",
+          "GenByteMask",
+          "AdvRem",
+          "IdRem",
+          "GenRem",
+          "IfBytes"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (elaboration-time parameter)",
+        "consequent": "AdvByteMask == ((AdvRem > 0) ? (2**(AdvRem/8)-1) : {IfBytes{1'b1}})",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "id_data is always assigned KDFMaxWidth'(id_data_i), zero-padding to KDFMaxWidth bits.",
+      "claim": "Input data adv_data_i, id_data_i, gen_data_i are zero‑padded to KDFMaxWidth when assigned to adv_data, id_data, gen_data respectively.",
       "cond": "always",
       "signals": [
+        "adv_data",
         "id_data",
-        "id_data_i"
+        "gen_data",
+        "adv_data_i",
+        "id_data_i",
+        "gen_data_i",
+        "KDFMaxWidth"
       ],
       "refs": [
-        "136"
-      ]
+        "keymgr_kmac_if.sv:135-137"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_data == KDFMaxWidth'(adv_data_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_data",
+          "id_data",
+          "gen_data",
+          "adv_data_i",
+          "id_data_i",
+          "gen_data_i",
+          "KDFMaxWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "adv_data == KDFMaxWidth'(adv_data_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "gen_data is always assigned KDFMaxWidth'(gen_data_i), zero-padding to KDFMaxWidth bits.",
-      "cond": "always",
-      "signals": [
-        "gen_data",
-        "gen_data_i"
-      ],
-      "refs": [
-        "137"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "start is the logical OR of adv_en_i, id_en_i, and gen_en_i.",
+      "claim": "start is asserted exactly when any of the enable inputs adv_en_i, id_en_i, or gen_en_i is high.",
       "cond": "always",
       "signals": [
         "start",
@@ -96,116 +167,258 @@
         "gen_en_i"
       ],
       "refs": [
-        "139"
-      ]
+        "keymgr_kmac_if.sv:139"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "start == (adv_en_i | id_en_i | gen_en_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "start",
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "start == (adv_en_i | id_en_i | gen_en_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G5",
+      "id": "G4",
       "type": "generate_param",
-      "claim": "A prim_count instance u_cnt is connected with incr_en_i = 0, decr_en_i = cnt_en, commit_i = 1, step_i = 1, and driven by clr_i, set_i, set_cnt_i. It outputs cnt and a redundancy check cnt_err.",
-      "cond": "always",
+      "claim": "A redundant counter prim_count with SEC_CM label is instantiated: reset value all‑ones, set to rounds, decrements when cnt_en is active, and fault output cnt_err is connected.",
+      "cond": "always (structural instantiation)",
       "signals": [
+        "u_cnt",
         "cnt",
         "cnt_err",
-        "cnt_en",
         "cnt_clr",
         "cnt_set",
-        "rounds"
+        "cnt_en",
+        "rounds",
+        "clk_i",
+        "rst_ni"
       ],
       "refs": [
-        "143-159"
-      ]
+        "keymgr_kmac_if.sv:142-159"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "u_cnt.clr_i == cnt_clr && u_cnt.set_i == cnt_set && u_cnt.decr_en_i == cnt_en && u_cnt.cnt_o == cnt && u_cnt.err_o == cnt_err",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "u_cnt",
+          "cnt",
+          "cnt_err",
+          "cnt_clr",
+          "cnt_set",
+          "cnt_en",
+          "rounds",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (structural instantiation)",
+        "consequent": "u_cnt.clr_i == cnt_clr && u_cnt.set_i == cnt_set && u_cnt.decr_en_i == cnt_en && u_cnt.cnt_o == cnt && u_cnt.err_o == cnt_err",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "MaxAdvDataWidth, IdDataWidth, GenDataWidth are such that AdvRem, IdRem, GenRem are multiples of 8 bits (checked at compile time).",
-      "cond": "always",
-      "risk": "If not true, the derived byte masks (AdvByteMask etc.) would be misaligned, leading to incorrect byte enables on the last KMAC data transfer and data corruption.",
+      "type": "mode_config",
+      "claim": "KDFMaxWidth must be at least as large as MaxAdvDataWidth, IdDataWidth, and GenDataWidth to prevent truncation when zero‑padding data inputs.",
+      "cond": "always (during integration)",
+      "risk": "If violated, upper bits of adv_data_i, id_data_i, or gen_data_i are lost, corrupting cryptographic material and potentially enabling key leakage.",
       "signals": [
-        "AdvRem",
-        "IdRem",
-        "GenRem",
-        "AdvByteMask",
-        "IdByteMask",
-        "GenByteMask"
+        "KDFMaxWidth",
+        "MaxAdvDataWidth",
+        "IdDataWidth",
+        "GenDataWidth"
       ],
       "refs": [
-        "87-89",
-        "111-113"
-      ]
+        "keymgr_kmac_if.sv:135-137"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "(KDFMaxWidth >= MaxAdvDataWidth) && (KDFMaxWidth >= IdDataWidth) && (KDFMaxWidth >= GenDataWidth)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "KDFMaxWidth",
+          "MaxAdvDataWidth",
+          "IdDataWidth",
+          "GenDataWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (during integration)",
+        "consequent": "(KDFMaxWidth >= MaxAdvDataWidth) && (KDFMaxWidth >= IdDataWidth) && (KDFMaxWidth >= GenDataWidth)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "producer_contract",
-      "claim": "External logic drives cnt_clr, cnt_set, rounds, and cnt_en correctly such that the counter decrements at the appropriate times and correctly identifies the last round.",
-      "cond": "when KMAC interface FSM is active",
-      "risk": "If these control signals are driven incorrectly, the counter may clear/set/decrement at wrong times, causing misaligned data transfers or failing to detect the last round, potentially leading to cryptographic misoperation.",
+      "claim": "The prim_count instance behaves as specified: it detects internal redundancy errors and asserts cnt_err when a fault is sensed.",
+      "cond": "during normal operation",
+      "risk": "If the counter does not reliably report errors, fault‑induced state corruption may go undetected, undermining the SEC_CM protection.",
       "signals": [
-        "cnt_clr",
-        "cnt_set",
-        "rounds",
-        "cnt_en"
+        "cnt_err",
+        "u_cnt"
       ],
       "refs": [
-        "147-154"
-      ]
+        "keymgr_kmac_if.sv:142-159"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err",
+          "u_cnt"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during normal operation",
+        "consequent": "The prim_count instance behaves as specified: it detects internal redundancy errors and asserts cnt_err when a fault is sensed",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "Decoy copies are computed as DecoyCopies = KmacDataIfWidth / RandWidth (integer division). If KmacDataIfWidth is not a multiple of RandWidth, the division truncates, leaving some data bits without decoy coverage.",
-      "cond": "when KmacDataIfWidth is not an integer multiple of RandWidth",
-      "risk": "Incomplete decoy masking could expose sensitive key material through side channels.",
+      "priority": "medium",
+      "claim": "The FSM state encoding (data_state_e) uses 10‑bit sparse values, but no SEC_CM assertion or explicit hardening is applied to the state register, unlike the counter.",
+      "cond": "unknown",
+      "risk": "A single‑bit fault in the state register could cause an illegal transition, potentially bypassing key‑management protocol steps or outputting sensitive data.",
       "signals": [
-        "DecoyCopies",
-        "KmacDataIfWidth",
-        "RandWidth"
+        "state_q",
+        "state_d",
+        "data_state_e"
       ],
       "refs": [
-        "100"
-      ]
+        "keymgr_kmac_if.sv:73-80"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "state_d",
+          "data_state_e"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "The FSM state encoding (data_state_e) uses 10‑bit sparse values, but no SEC_CM assertion or explicit hardening is applied to the state register, unlike the counter",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_fault_containment_gap",
-      "priority": "medium",
-      "claim": "cnt_err from the redundant counter is not processed in this chunk. Its connection to error handling or alarm logic is unknown.",
-      "cond": "when cnt_err is asserted",
-      "risk": "A counter redundancy failure could go undetected, allowing a fault to corrupt KMAC data transfers without any reaction.",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If MaxAdvDataWidth exceeds KDFMaxWidth, then AdvRounds > MaxRounds, causing CntWidth ($clog2(MaxRounds)) to be insufficient. The assignment LastAdvRound = LastAdvRoundInt[CntWidth-1:0] truncates the value, leading to an incorrect last‑round set point.",
+      "cond": "MaxAdvDataWidth > KDFMaxWidth (or similarly for Id/Gen)",
+      "risk": "The truncated LastAdvRound may never match the actual last transfer, resulting in either premature termination (lost data) or over‑run (extra cycles with invalid data), directly affecting key material integrity.",
       "signals": [
-        "cnt_err"
+        "MaxAdvDataWidth",
+        "KDFMaxWidth",
+        "MaxRounds",
+        "AdvRounds",
+        "LastAdvRound",
+        "CntWidth"
       ],
       "refs": [
-        "158",
-        "142"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "decoy_data is declared but not driven in this chunk; its generation logic is in another part of the module.",
-      "cond": "always",
-      "risk": "Without seeing how decoy_data is produced and inserted, we cannot verify it properly masks all sensitive data paths.",
-      "signals": [
-        "decoy_data"
+        "keymgr_kmac_if.sv:92-93",
+        "keymgr_kmac_if.sv:95",
+        "keymgr_kmac_if.sv:98",
+        "keymgr_kmac_if.sv:103-104",
+        "keymgr_kmac_if.sv:106-107"
       ],
-      "refs": [
-        "120"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "MaxAdvDataWidth > KDFMaxWidth",
+        "consequent": "AdvRounds > MaxRounds",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "MaxAdvDataWidth",
+          "KDFMaxWidth",
+          "MaxRounds",
+          "AdvRounds",
+          "LastAdvRound",
+          "CntWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "MaxAdvDataWidth > KDFMaxWidth",
+        "consequent": "AdvRounds > MaxRounds",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk handles key‑management data width preparation and a redundant counter. Zero‑padding and byte masks must preserve key integrity; if KDFMaxWidth < MaxAdvDataWidth, key material would be truncated, potentially leaking or weakening the cryptographic output. The sparse FSM encoding lacks explicit SEC_CM, leaving the state machine vulnerable to fault injection that could manipulate key‑management sequencing. The counter’s SEC_CM label indicates intent to detect faults, but its actual coverage is unverified in this chunk.",
   "evidence_refs": [
-    "72-159"
+    "keymgr_kmac_if.sv:73-80",
+    "keymgr_kmac_if.sv:92-95",
+    "keymgr_kmac_if.sv:98",
+    "keymgr_kmac_if.sv:103-104",
+    "keymgr_kmac_if.sv:106-107",
+    "keymgr_kmac_if.sv:111-113",
+    "keymgr_kmac_if.sv:135-139",
+    "keymgr_kmac_if.sv:142-159"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 72,
-  "line_end": 159,
-  "security_implications": ""
+  "line_end": 159
 }

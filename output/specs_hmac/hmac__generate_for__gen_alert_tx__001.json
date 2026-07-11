@@ -4,63 +4,65 @@
     "module": "hmac",
     "block_kind": "generate",
     "driven": [
-      "alert_tx_o[i]"
+      "alert_tx_o"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
-      "alert_test[i]",
       "alerts[0]",
-      "alert_rx_i[i]"
+      "alert_test",
+      "alert_rx_i",
+      "clk_i",
+      "rst_ni"
     ],
     "modes": [
-      "AlertAsyncOn[i]",
-      "AlertIsFatal[i]",
       "NumAlerts",
-      "i"
+      "AlertAsyncOn",
+      "AlertIsFatal"
     ],
     "tags": [
       "alert",
+      "integrity",
       "fault",
-      "handshake",
-      "parameterization",
-      "reset"
+      "generate_param"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "For each i, alert_tx_o[i] is driven by the prim_alert_sender instance u_prim_alert_sender with the given port map.",
+      "type": "instance_connect",
+      "claim": "For each alert index i, alert_tx_o[i] is driven by the corresponding prim_alert_sender instance.",
       "cond": "always",
       "signals": [
-        "alert_tx_o[i]",
-        "alerts[0]",
-        "alert_rx_i[i]",
-        "alert_test[i]"
+        "alert_tx_o"
       ],
       "refs": [
-        "hmac.sv:788-802"
-      ]
+        "hmac.sv:788-801"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "alert_tx_o[i] is connected to gen_alert_tx[i].u_prim_alert_sender.alert_tx_o",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_tx_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "alert_tx_o[i] is connected to gen_alert_tx[i].u_prim_alert_sender.alert_tx_o",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "generate_param",
-      "claim": "Each instance is parameterized with AsyncOn = AlertAsyncOn[i] and IsFatal = AlertIsFatal[i] from the generate variable i.",
-      "cond": "always",
-      "signals": [
-        "AlertAsyncOn[i]",
-        "AlertIsFatal[i]",
-        "i"
-      ],
-      "refs": [
-        "hmac.sv:789-791"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "assignment",
-      "claim": "The alert_req_i port of all prim_alert_sender instances is connected to the same signal alerts[0].",
+      "type": "instance_connect",
+      "claim": "All prim_alert_sender instances have their alert_req_i port tied to the same signals alerts[0], not per-index.",
       "cond": "always",
       "signals": [
         "alerts[0]",
@@ -68,119 +70,219 @@
       ],
       "refs": [
         "hmac.sv:796"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "The output ports alert_ack_o and alert_state_o of each prim_alert_sender are left unconnected.",
-      "cond": "always",
-      "signals": [
-        "alert_ack_o",
-        "alert_state_o"
       ],
-      "refs": [
-        "hmac.sv:797-798"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[0]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "alerts[0]",
+          "alert_req_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[0]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "prim_alert_sender correctly implements the alert handshake protocol, including acknowledging alert_req_i and driving alert_tx_o appropriately.",
-      "cond": "when an alert is triggered",
-      "risk": "alert_tx_o may not assert or the handshake may break, resulting in undelivered alerts.",
-      "signals": [
-        "prim_alert_sender",
-        "clk_i",
-        "rst_ni"
-      ],
-      "refs": [
-        "hmac.sv:788-802"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "alerts[0] is the correct combined alert request signal intended to trigger all alert sender instances.",
-      "cond": "when any alert needs to be raised",
-      "risk": "If alerts[0] does not reflect all required alert triggers, some alerts may never fire.",
+      "claim": "The externally driven signals alerts[0] must represent the correct alert request for every alert instance, as they all share the same request.",
+      "cond": "when any alert instance should be triggered",
+      "risk": "A mismatch causes false alarms or missed alerts on multiple channels simultaneously.",
       "signals": [
         "alerts[0]"
       ],
       "refs": [
         "hmac.sv:796"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "an alert condition for instance i",
+        "consequent": "alerts[0] is asserted",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts[0]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "an alert condition for instance i",
+        "consequent": "alerts[0] is asserted",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The arrays alert_test and alert_rx_i have at least NumAlerts elements, so indices 0 .. NumAlerts-1 are legal.",
+      "cond": "always",
+      "risk": "Out-of-bounds access causes elaboration or runtime errors.",
+      "signals": [
+        "alert_test",
+        "alert_rx_i",
+        "NumAlerts"
+      ],
+      "refs": [
+        "hmac.sv:795,799"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "i < NumAlerts → alert_test[i] exists",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_test",
+          "alert_rx_i",
+          "NumAlerts"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "i < NumAlerts → alert_test[i] exists",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
       "type": "mode_config",
-      "claim": "The arrays AlertAsyncOn and AlertIsFatal have at least NumAlerts elements and contain valid configuration values.",
+      "claim": "The prim_alert_sender instances work correctly with unconnected alert_ack_o and alert_state_o outputs (i.e., these are optional status signals).",
       "cond": "always",
-      "risk": "Index out of bounds or incorrect alert classification may occur.",
-      "signals": [
-        "AlertAsyncOn",
-        "AlertIsFatal",
-        "NumAlerts"
-      ],
-      "refs": [
-        "hmac.sv:789-791"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "The unconnected alert_ack_o may cause the prim_alert_sender to stall waiting for an acknowledge, preventing the alert from completing.",
-      "cond": "when alert is asserted and a handshake is expected",
-      "risk": "Alert handshake can hang, leaving the system in an unresolved fault state.",
-      "signals": [
-        "alert_ack_o",
-        "alert_req_i"
-      ],
-      "refs": [
-        "hmac.sv:797"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "All alert sender instances are triggered by the single signal alerts[0]; it is unclear whether this is intended to trigger all alerts simultaneously or if per‑alert distinction is required.",
-      "cond": "unknown design intent",
-      "risk": "Alerts may be masked or fired together incorrectly, defeating independent alert handling.",
-      "signals": [
-        "alerts[0]",
-        "alert_req_i"
-      ],
-      "refs": [
-        "hmac.sv:796"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "alert_ack_o and alert_state_o are unconnected; no feedback on alert delivery or state is available for fault detection.",
-      "cond": "always",
-      "risk": "Alert transmission failures or stuck states may go completely undetected.",
+      "risk": "If an acknowledgment handshake is mandatory, floating these ports can stall or corrupt the alert protocol.",
       "signals": [
         "alert_ack_o",
         "alert_state_o"
       ],
       "refs": [
         "hmac.sv:797-798"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "prim_alert_sender is tolerant of open outputs",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_ack_o",
+          "alert_state_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "prim_alert_sender is tolerant of open outputs",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "The generate loop connects alert_req_i of every instance to alerts[0] instead of alerts[i]; this likely is a typo that causes all alerts to fire on the same request.",
+      "cond": "when independent per‑alert triggering is intended",
+      "risk": "All alert_tx_o signals fire simultaneously, masking real faults or triggering false alarms system‑wide.",
+      "signals": [
+        "alerts[0]",
+        "alert_req_i",
+        "i"
+      ],
+      "refs": [
+        "hmac.sv:796"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[i]",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts[0]",
+          "alert_req_i",
+          "i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when independent per‑alert triggering is intended",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[i]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Unconnected alert_ack_o and alert_state_o ports – it is unclear whether the alert sender requires these signals for correct operation or if they are purely informational.",
+      "cond": "unknown",
+      "risk": "Alert may never de‑assert or may miss protocol steps, leading to stuck alerts or protocol hangs.",
+      "signals": [
+        "alert_ack_o",
+        "alert_state_o"
+      ],
+      "refs": [
+        "hmac.sv:797-798"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "ports",
+        "signals": [
+          "alert_ack_o",
+          "alert_state_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "unknown",
+        "consequent": "Unconnected alert_ack_o and alert_state_o ports – it is unclear whether the alert sender requires these signals for correct operation or if they are purely informational",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The generate loop ties the alert_req_i of all prim_alert_sender instances to the same alerts[0] signal, instead of using per‑index alerts[i]. Under any genuine alert condition on channel 0, every alert_tx_o output is asserted simultaneously, which can cause a security‑critical false‑alert storm or suppress later distinct alerts. This directly undermines alert integrity and could bypass fault‑response handling. Additionally, the unconnected alert_ack_o and alert_state_o ports may hide handshake failures if the prim_alert_sender requires an acknowledgment, potentially leaving alerts stuck or unobservable.",
   "evidence_refs": [
     "hmac.sv:788-802"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 788,
-  "line_end": 802,
-  "security_implications": ""
+  "line_end": 802
 }

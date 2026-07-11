@@ -14,36 +14,69 @@
       "tl_i.a_user.instr_type",
       "en_ifetch_i",
       "addr_align_err",
-      "tl_err"
+      "tl_err",
+      "intg_error"
     ],
     "modes": [
-      "gen_no_cmd_intg_check"
+      "gen_no_cmd_intg_check (parameter-controlled generate block)"
     ],
     "tags": [
       "error",
       "integrity",
-      "multibit",
-      "generate_param",
-      "security",
-      "instruction"
+      "access_control"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
+      "type": "generate_param",
+      "claim": "When the gen_no_cmd_intg_check generate branch is active, intg_error and intg_error_o are both tied to 1'b0.",
+      "cond": "gen_no_cmd_intg_check is compiled (i.e., CmdIntgCheck parameter is false)",
+      "signals": [
+        "intg_error",
+        "intg_error_o"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:269-270"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck == 0",
+        "consequent": "intg_error == 0 && intg_error_o == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "intg_error",
+          "intg_error_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck == 0",
+        "consequent": "intg_error == 0 && intg_error_o == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
       "type": "assignment",
-      "claim": "In the branch where gen_no_cmd_intg_check is not active (implicit if block), intg_error_o is assigned the value of intg_error_q.",
-      "cond": "gen_no_cmd_intg_check == 0",
+      "claim": "When the gen_no_cmd_intg_check generate branch is not active, intg_error_o is driven directly from intg_error_q.",
+      "cond": "Opposite of gen_no_cmd_intg_check (i.e., CmdIntgCheck is true)",
       "signals": [
         "intg_error_o",
         "intg_error_q"
       ],
       "refs": [
-        "file:267"
+        "tlul_adapter_reg.sv:267"
       ],
       "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck != 0",
         "consequent": "intg_error_o == intg_error_q",
         "formalizability": "direct"
       },
@@ -56,44 +89,9 @@
           "intg_error_o",
           "intg_error_q"
         ],
-        "temporal_shape": "comb",
-        "antecedent": "gen_no_cmd_intg_check == 0",
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck != 0",
         "consequent": "intg_error_o == intg_error_q",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G2",
-      "type": "assignment",
-      "claim": "In the gen_no_cmd_intg_check block, both intg_error and intg_error_o are forced to 1'b0.",
-      "cond": "gen_no_cmd_intg_check == 1",
-      "signals": [
-        "intg_error",
-        "intg_error_o"
-      ],
-      "refs": [
-        "file:269-270"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "(intg_error == 1'b0) && (intg_error_o == 1'b0)",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "intg_error",
-          "intg_error_o"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "gen_no_cmd_intg_check == 1",
-        "consequent": "(intg_error == 1'b0) && (intg_error_o == 1'b0)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -102,7 +100,7 @@
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "instr_error is asserted when the multibit instr_type is TrueStrict and en_ifetch_i is FalseLoose.",
+      "claim": "instr_error is the bitwise AND of two multi-bit check functions: mubi4_test_true_strict(tl_i.a_user.instr_type) and mubi4_test_false_loose(en_ifetch_i).",
       "cond": "always",
       "signals": [
         "instr_error",
@@ -110,10 +108,10 @@
         "en_ifetch_i"
       ],
       "refs": [
-        "file:278-279"
+        "tlul_adapter_reg.sv:278-279"
       ],
       "formal": {
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "",
         "consequent": "instr_error == (prim_mubi_pkg::mubi4_test_true_strict(tl_i.a_user.instr_type) & prim_mubi_pkg::mubi4_test_false_loose(en_ifetch_i))",
         "formalizability": "direct"
@@ -128,7 +126,7 @@
           "tl_i.a_user.instr_type",
           "en_ifetch_i"
         ],
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "always",
         "consequent": "instr_error == (prim_mubi_pkg::mubi4_test_true_strict(tl_i.a_user.instr_type) & prim_mubi_pkg::mubi4_test_false_loose(en_ifetch_i))",
         "formalizability": "direct",
@@ -139,7 +137,7 @@
     {
       "id": "G4",
       "type": "assignment",
-      "claim": "err_internal is the logical OR of addr_align_err, tl_err, instr_error, and intg_error.",
+      "claim": "err_internal is the OR combination of addr_align_err, tl_err, instr_error, and intg_error. It is high if any of these error sources is high.",
       "cond": "always",
       "signals": [
         "err_internal",
@@ -149,10 +147,10 @@
         "intg_error"
       ],
       "refs": [
-        "file:281"
+        "tlul_adapter_reg.sv:281"
       ],
       "formal": {
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "",
         "consequent": "err_internal == (addr_align_err | tl_err | instr_error | intg_error)",
         "formalizability": "direct"
@@ -169,7 +167,7 @@
           "instr_error",
           "intg_error"
         ],
-        "temporal_shape": "comb",
+        "temporal_shape": "always",
         "antecedent": "always",
         "consequent": "err_internal == (addr_align_err | tl_err | instr_error | intg_error)",
         "formalizability": "direct",
@@ -181,20 +179,20 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "When gen_no_cmd_intg_check is deasserted, intg_error_q must accurately reflect any command integrity violation.",
-      "cond": "gen_no_cmd_intg_check == 0",
-      "risk": "If intg_error_q is stale or incorrect, intg_error_o will propagate a wrong integrity status, potentially masking a real error.",
+      "type": "producer_contract",
+      "claim": "When the gen_no_cmd_intg_check branch is not active (CmdIntgCheck is true), intg_error must be driven elsewhere inside the true generate branch to a valid logic value. This chunk does not assign it in that path.",
+      "cond": "CmdIntgCheck is true",
+      "risk": "If intg_error is left undriven or misconnected, err_internal may miss integrity errors or be incorrectly inactive, defeating error reporting.",
       "signals": [
-        "intg_error_q",
-        "intg_error_o"
+        "intg_error"
       ],
       "refs": [
-        "file:267"
+        "tlul_adapter_reg.sv:267",
+        "tlul_adapter_reg.sv:281"
       ],
       "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck != 0",
         "consequent": "",
         "formalizability": "none"
       },
@@ -203,14 +201,13 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "intg_error_q",
-          "intg_error_o"
+          "intg_error"
         ],
-        "temporal_shape": "comb",
-        "antecedent": "gen_no_cmd_intg_check == 0",
-        "consequent": "intg_error_q must accurately reflect any command integrity violation",
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck != 0",
+        "consequent": "intg_error must be driven elsewhere inside the true generate branch to a valid logic value. This chunk does not assign it in that path",
         "formalizability": "none",
-        "confidence": 0.85,
+        "confidence": 0.8,
         "source": "llm"
       }
     }
@@ -220,19 +217,21 @@
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The condition that activates gen_no_cmd_intg_check (the else branch) is not visible in this chunk. If it is misconfigured, the forced zero on intg_error and intg_error_o could silently disable integrity error propagation.",
-      "cond": "gen_no_cmd_intg_check == 1",
-      "risk": "Undetected command integrity violations leading to silent data corruption.",
+      "claim": "In the non-gen_no_cmd_intg_check path, intg_error is not assigned in this chunk. Its source (likely an integrity checker instantiated in the omitted true branch) must be verified to confirm correct connection and behavior.",
+      "cond": "CmdIntgCheck is true",
+      "risk": "Missing or wrong drive on intg_error leads to silent integrity error bypass, violating data integrity protection and potentially allowing corrupted data to be processed.",
       "signals": [
         "intg_error",
-        "intg_error_o"
+        "intg_error_o",
+        "intg_error_q"
       ],
       "refs": [
-        "file:268"
+        "tlul_adapter_reg.sv:267",
+        "tlul_adapter_reg.sv:281"
       ],
       "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck != 0",
         "consequent": "",
         "formalizability": "none"
       },
@@ -242,11 +241,12 @@
         "reset": "",
         "signals": [
           "intg_error",
-          "intg_error_o"
+          "intg_error_o",
+          "intg_error_q"
         ],
-        "temporal_shape": "comb",
-        "antecedent": "gen_no_cmd_intg_check == 1",
-        "consequent": "The condition that activates gen_no_cmd_intg_check (the else branch) is not visible in this chunk. If it is misconfigured, the forced zero on intg_error and intg_error_o could silently disable integrity error propagation",
+        "temporal_shape": "always",
+        "antecedent": "CmdIntgCheck != 0",
+        "consequent": "In the non-gen_no_cmd_intg_check path, intg_error is not assigned in this chunk. Its source (likely an integrity checker instantiated in the omitted true branch) must be verified to confirm correct connection and behavior",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
@@ -256,15 +256,16 @@
       "id": "U2",
       "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "The exact semantics of mubi4_test_false_loose on en_ifetch_i are not provided. If en_ifetch_i can take a non-binary multibit value that is not strictly false, instr_error may be spuriously asserted or fail to assert.",
-      "cond": "when en_ifetch_i changes",
-      "risk": "Spurious instruction error causing unnecessary error response, or failure to detect an illegal instruction fetch when en_ifetch is deasserted.",
+      "claim": "instr_error is asserted when tl_i.a_user.instr_type is true (strict) and en_ifetch_i is false (loose). It is unclear whether the multi-bit encoding and the strict/loose test functions fully exclude false positives (e.g., due to noise, glitches, or mis‑decoded values) that could cause spurious instruction‑error assertions.",
+      "cond": "When tl_i.a_user.instr_type and en_ifetch_i are active in a transaction cycle",
+      "risk": "A false instr_error would assert err_internal and may cause an unwanted error response, potentially blocking legitimate accesses or leading to denial‑of‑service.",
       "signals": [
+        "tl_i.a_user.instr_type",
         "en_ifetch_i",
         "instr_error"
       ],
       "refs": [
-        "file:279"
+        "tlul_adapter_reg.sv:278-279"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -277,62 +278,24 @@
         "clock": "",
         "reset": "",
         "signals": [
+          "tl_i.a_user.instr_type",
           "en_ifetch_i",
           "instr_error"
         ],
         "temporal_shape": "comb",
-        "antecedent": "when en_ifetch_i changes",
-        "consequent": "The exact semantics of mubi4_test_false_loose on en_ifetch_i are not provided. If en_ifetch_i can take a non-binary multibit value that is not strictly false, instr_error may be spuriously asserted or fail to assert",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U3",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "In the gen_no_cmd_intg_check block, intg_error is forced to 0, so err_internal will not reflect any command integrity violation from intg_error_q. It is unclear whether this intentional masking is safe or if err_internal should still capture integrity errors.",
-      "cond": "gen_no_cmd_intg_check == 1",
-      "risk": "A critical integrity error may not be flagged by err_internal, potentially allowing corrupted operations to proceed.",
-      "signals": [
-        "intg_error",
-        "err_internal",
-        "intg_error_q"
-      ],
-      "refs": [
-        "file:281, line:269"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "intg_error",
-          "err_internal",
-          "intg_error_q"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "gen_no_cmd_intg_check == 1",
-        "consequent": "In the gen_no_cmd_intg_check block, intg_error is forced to 0, so err_internal will not reflect any command integrity violation from intg_error_q. It is unclear whether this intentional masking is safe or if err_internal should still captur",
+        "antecedent": "When tl_i.a_user.instr_type and en_ifetch_i are active in a transaction cycle",
+        "consequent": "instr_error is asserted when tl_i.a_user.instr_type is true (strict) and en_ifetch_i is false (loose). It is unclear whether the multi-bit encoding and the strict/loose test functions fully exclude false positives (e.g., due to noise, glitc",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The chunk aggregates integrity error (intg_error) and instruction‑type violation (instr_error) into err_internal. If intg_error is not properly driven in the CmdIntgCheck path, integrity faults may go undetected, allowing corrupted data to propagate without alert. instr_error enforces that instruction accesses only succeed when en_ifetch_i is enabled; a flaw in the multi‑bit check or a false assertion could be used to deny legitimate instruction fetch or to mask an illegal access. Both paths directly impact data integrity and access control enforcement.",
   "evidence_refs": [
-    "file:267-271",
-    "file:278-281"
+    "tlul_adapter_reg.sv:267-281"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 267,
-  "line_end": 281,
-  "security_implications": ""
+  "line_end": 281
 }

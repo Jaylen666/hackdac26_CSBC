@@ -7,6 +7,8 @@
       "status_alert_fatal_fault"
     ],
     "used": [
+      "clk_i",
+      "rst_ni",
       "alert_fatal"
     ],
     "modes": [],
@@ -20,93 +22,124 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On async reset (rst_ni low), status_alert_fatal_fault is cleared to 0.",
-      "cond": "negedge rst_ni",
+      "claim": "When rst_ni is low, status_alert_fatal_fault is cleared to 0 (asynchronous reset).",
+      "cond": "rst_ni == 0",
       "signals": [
         "rst_ni",
         "status_alert_fatal_fault"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1459"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1458-1459"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "status_alert_fatal_fault == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "status_alert_fatal_fault"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "status_alert_fatal_fault == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When alert_fatal is high and reset is inactive, status_alert_fatal_fault is set to 1.",
-      "cond": "alert_fatal && rst_ni",
+      "claim": "When rst_ni is high and alert_fatal is high, on the next rising clock edge, status_alert_fatal_fault is set to 1.",
+      "cond": "rst_ni && alert_fatal",
       "signals": [
+        "clk_i",
+        "rst_ni",
         "alert_fatal",
         "status_alert_fatal_fault"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1460-1461"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "alert_fatal && rst_ni",
+        "consequent": "status_alert_fatal_fault == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "alert_fatal",
+          "status_alert_fatal_fault"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "alert_fatal && rst_ni",
+        "consequent": "status_alert_fatal_fault == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "default_fallback",
-      "claim": "When reset is inactive and alert_fatal is not high, status_alert_fatal_fault retains its previous value (sticky behavior).",
+      "type": "reg_update",
+      "claim": "Once set to 1, status_alert_fatal_fault remains 1 until reset (no clear condition other than reset).",
       "cond": "rst_ni && !alert_fatal",
       "signals": [
-        "status_alert_fatal_fault"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1463"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "alert_fatal must be a correctly synchronized, glitch-free signal representing a fatal fault condition.",
-      "cond": "always when clocking",
-      "risk": "A spurious or glitched alert_fatal will cause an irreversible sticky fault indication, potentially triggering inappropriate error handling or unnecessary reset.",
-      "signals": [
-        "alert_fatal",
-        "clk_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1460"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The async reset rst_ni must be asserted and deasserted in compliance with timing requirements to avoid metastability in the status register.",
-      "cond": "during reset sequence",
-      "risk": "Metastability could lead to functional corruption of the fault indicator.",
-      "signals": [
+        "clk_i",
         "rst_ni",
-        "clk_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1458"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "status_alert_fatal_fault is sticky and only cleared by reset. If this signal is exposed as a CSR to software, there may be an expectation of software clearing (e.g., write-1-to-clear) that is not implemented here.",
-      "cond": "when software reads status_alert_fatal_fault",
-      "risk": "If clearing is expected but missing, the fault indication becomes permanent until system reset, potentially causing repeated error responses or blocking normal operation. If clearing is intentionally reset-only, the design intent needs confirmation.",
-      "signals": [
+        "alert_fatal",
         "status_alert_fatal_fault"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1463"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !alert_fatal",
+        "consequent": "status_alert_fatal_fault == $past(status_alert_fatal_fault)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "alert_fatal",
+          "status_alert_fatal_fault"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !alert_fatal",
+        "consequent": "status_alert_fatal_fault == $past(status_alert_fatal_fault)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
+  "uncertain_points": [],
+  "security_implications": "status_alert_fatal_fault latches any assertion of alert_fatal (even transient) and stays high until system reset. This sticky behavior prevents a fatal security fault (e.g., cryptographic integrity failure, tamper detect) from being missed, ensuring the system can halt or wipe secrets as needed. Absence of a software-clearable path prevents an attacker from masking such faults.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1457-1463"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1457,
-  "line_end": 1463,
-  "security_implications": ""
+  "line_end": 1463
 }

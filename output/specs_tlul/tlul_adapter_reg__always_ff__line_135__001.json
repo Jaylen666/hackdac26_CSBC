@@ -4,12 +4,14 @@
     "module": "tlul_adapter_reg",
     "block_kind": "always_ff",
     "driven": [
-      "__tlul_bug_002_read_cnt_q",
-      "__tlul_bug_002_state_q"
+      "__tlul_bug_002_state_q",
+      "__tlul_bug_002_read_cnt_q"
     ],
     "used": [
       "rst_ni",
+      "clk_i",
       "__tlul_bug_002_state_q",
+      "__tlul_bug_002_read_cnt_q",
       "__tlul_bug_002_enabled",
       "a_ack",
       "rd_req"
@@ -18,12 +20,15 @@
       "TlulBug002Idle",
       "TlulBug002HoldResp",
       "TlulBug002HoldBaseline",
-      "TlulBug002InjectLateError"
+      "TlulBug002InjectLateError",
+      "read_cnt_q range 0..7"
     ],
     "tags": [
       "error",
+      "fault",
+      "injection",
+      "state_machine",
       "counter",
-      "handshake",
       "reset"
     ]
   },
@@ -31,12 +36,12 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, __tlul_bug_002_state_q is forced to TlulBug002Idle and __tlul_bug_002_read_cnt_q is forced to 0, regardless of clk_i.",
-      "cond": "rst_ni == 0",
+      "claim": "On asynchronous reset (negedge rst_ni), __tlul_bug_002_read_cnt_q is cleared to 0 and __tlul_bug_002_state_q is set to TlulBug002Idle.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
-        "__tlul_bug_002_state_q",
-        "__tlul_bug_002_read_cnt_q"
+        "__tlul_bug_002_read_cnt_q",
+        "__tlul_bug_002_state_q"
       ],
       "refs": [
         "tlul_adapter_reg.sv:136-138"
@@ -44,22 +49,22 @@
       "formal": {
         "temporal_shape": "always",
         "antecedent": "!rst_ni",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_read_cnt_q == 3'h0",
+        "consequent": "(__tlul_bug_002_read_cnt_q == '0) && (__tlul_bug_002_state_q == TlulBug002Idle)",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "clk_i.",
+        "clock": "negedge",
         "reset": "rst_ni",
         "signals": [
           "rst_ni",
-          "__tlul_bug_002_state_q",
-          "__tlul_bug_002_read_cnt_q"
+          "__tlul_bug_002_read_cnt_q",
+          "__tlul_bug_002_state_q"
         ],
         "temporal_shape": "always",
         "antecedent": "!rst_ni",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_read_cnt_q == 3'h0",
+        "consequent": "(__tlul_bug_002_read_cnt_q == '0) && (__tlul_bug_002_state_q == TlulBug002Idle)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -68,33 +73,31 @@
     {
       "id": "G2",
       "type": "state_transition",
-      "claim": "When not in reset and current state is TlulBug002HoldResp, the next state becomes TlulBug002HoldBaseline.",
-      "cond": "rst_ni high and __tlul_bug_002_state_q == TlulBug002HoldResp",
+      "claim": "When state is not TlulBug002Idle, the next state is forced: HoldResp → HoldBaseline, HoldBaseline → InjectLateError, InjectLateError → Idle, any other → Idle.",
+      "cond": "__tlul_bug_002_state_q != TlulBug002Idle",
       "signals": [
-        "rst_ni",
         "__tlul_bug_002_state_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:142-144"
+        "tlul_adapter_reg.sv:140-154"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && __tlul_bug_002_state_q == TlulBug002HoldResp",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002HoldBaseline",
+        "antecedent": "",
+        "consequent": "next(__tlul_bug_002_state_q) == (__tlul_bug_002_state_q == TlulBug002HoldResp ? TlulBug002HoldBaseline : __tlul_bug_002_state_q == TlulBug002HoldBaseline ? TlulBug002InjectLateError : __tlul_bug_002_state_q == TlulBug002InjectLateError ? TlulBug002Idle : TlulBug002Idle)",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "rst_ni",
+        "reset": "",
         "signals": [
-          "rst_ni",
           "__tlul_bug_002_state_q"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && __tlul_bug_002_state_q == TlulBug002HoldResp",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002HoldBaseline",
+        "antecedent": "__tlul_bug_002_state_q != TlulBug002Idle",
+        "consequent": "next(__tlul_bug_002_state_q) == (__tlul_bug_002_state_q == TlulBug002HoldResp ? TlulBug002HoldBaseline : __tlul_bug_002_state_q == TlulBug002HoldBaseline ? TlulBug002InjectLateError : __tlul_bug_002_state_q == TlulBug002InjectLateError ? TlulBug002Idle : TlulBug002Idle)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -102,114 +105,9 @@
     },
     {
       "id": "G3",
-      "type": "state_transition",
-      "claim": "When not in reset and current state is TlulBug002HoldBaseline, the next state becomes TlulBug002InjectLateError.",
-      "cond": "rst_ni high and __tlul_bug_002_state_q == TlulBug002HoldBaseline",
-      "signals": [
-        "rst_ni",
-        "__tlul_bug_002_state_q"
-      ],
-      "refs": [
-        "tlul_adapter_reg.sv:145-147"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && __tlul_bug_002_state_q == TlulBug002HoldBaseline",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002InjectLateError",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "rst_ni",
-        "signals": [
-          "rst_ni",
-          "__tlul_bug_002_state_q"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && __tlul_bug_002_state_q == TlulBug002HoldBaseline",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002InjectLateError",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G4",
-      "type": "state_transition",
-      "claim": "When not in reset and current state is TlulBug002InjectLateError, the next state becomes TlulBug002Idle.",
-      "cond": "rst_ni high and __tlul_bug_002_state_q == TlulBug002InjectLateError",
-      "signals": [
-        "rst_ni",
-        "__tlul_bug_002_state_q"
-      ],
-      "refs": [
-        "tlul_adapter_reg.sv:148-150"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && __tlul_bug_002_state_q == TlulBug002InjectLateError",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002Idle",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "rst_ni",
-        "signals": [
-          "rst_ni",
-          "__tlul_bug_002_state_q"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && __tlul_bug_002_state_q == TlulBug002InjectLateError",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002Idle",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G5",
-      "type": "default_fallback",
-      "claim": "When not in reset, state is not Idle, and state is not one of the defined non-idle values, the next state becomes TlulBug002Idle.",
-      "cond": "rst_ni high, __tlul_bug_002_state_q != TlulBug002Idle, and state not HoldResp, HoldBaseline, InjectLateError",
-      "signals": [
-        "rst_ni",
-        "__tlul_bug_002_state_q"
-      ],
-      "refs": [
-        "tlul_adapter_reg.sv:151-153"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && (__tlul_bug_002_state_q != TlulBug002Idle) && !(__tlul_bug_002_state_q inside {TlulBug002HoldResp, TlulBug002HoldBaseline, TlulBug002InjectLateError})",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002Idle",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "rst_ni",
-        "signals": [
-          "rst_ni",
-          "__tlul_bug_002_state_q"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && (__tlul_bug_002_state_q != TlulBug002Idle) && !(__tlul_bug_002_state_q inside {TlulBug002HoldResp, TlulBug002HoldBaseline, TlulBug002InjectLateError})",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002Idle",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G6",
       "type": "reg_update",
-      "claim": "When state is Idle, __tlul_bug_002_enabled, a_ack, and rd_req are all high, and __tlul_bug_002_read_cnt_q is less than 7, the counter increments by 1.",
-      "cond": "__tlul_bug_002_state_q == Idle, __tlul_bug_002_enabled && a_ack && rd_req && cnt < 7",
+      "claim": "When state is Idle, __tlul_bug_002_enabled is high, both a_ack and rd_req are high, and read_cnt_q < 7, the counter increments by 1 in the next cycle.",
+      "cond": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q < 3'h7)",
       "signals": [
         "__tlul_bug_002_state_q",
         "__tlul_bug_002_enabled",
@@ -222,8 +120,8 @@
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q < 3'h7)",
-        "consequent": "__tlul_bug_002_read_cnt_q == $past(__tlul_bug_002_read_cnt_q) + 3'h1",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q < 3'h7",
+        "consequent": "next(__tlul_bug_002_read_cnt_q) == __tlul_bug_002_read_cnt_q + 3'h1",
         "formalizability": "direct"
       },
       "risk": "",
@@ -239,18 +137,18 @@
           "__tlul_bug_002_read_cnt_q"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q < 3'h7)",
-        "consequent": "__tlul_bug_002_read_cnt_q == $past(__tlul_bug_002_read_cnt_q) + 3'h1",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q < 3'h7",
+        "consequent": "next(__tlul_bug_002_read_cnt_q) == __tlul_bug_002_read_cnt_q + 3'h1",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
-      "id": "G7",
+      "id": "G4",
       "type": "state_transition",
-      "claim": "When state is Idle, __tlul_bug_002_enabled, a_ack, rd_req are high, and __tlul_bug_002_read_cnt_q equals 2, the next state becomes TlulBug002HoldResp.",
-      "cond": "__tlul_bug_002_state_q == Idle, __tlul_bug_002_enabled && a_ack && rd_req && cnt == 2",
+      "claim": "Under the same conditions as G3, if read_cnt_q equals 2, the next state becomes TlulBug002HoldResp.",
+      "cond": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q == 3'h2)",
       "signals": [
         "__tlul_bug_002_state_q",
         "__tlul_bug_002_enabled",
@@ -259,12 +157,12 @@
         "__tlul_bug_002_read_cnt_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:163-165"
+        "tlul_adapter_reg.sv:163-164"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q == 3'h2)",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002HoldResp",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q == 3'h2",
+        "consequent": "next(__tlul_bug_002_state_q) == TlulBug002HoldResp",
         "formalizability": "direct"
       },
       "risk": "",
@@ -280,32 +178,32 @@
           "__tlul_bug_002_read_cnt_q"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q == 3'h2)",
-        "consequent": "__tlul_bug_002_state_q == TlulBug002HoldResp",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q == 3'h2",
+        "consequent": "next(__tlul_bug_002_state_q) == TlulBug002HoldResp",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
-      "id": "G8",
-      "type": "reg_update",
-      "claim": "When __tlul_bug_002_read_cnt_q is 7 and the increment condition holds, the counter remains 7 (saturation).",
-      "cond": "__tlul_bug_002_state_q == Idle, __tlul_bug_002_enabled && a_ack && rd_req, and cnt == 7",
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When state is Idle and the injection trigger is not met (i.e., not (enabled && a_ack && rd_req && read_cnt_q == 2)), the state remains Idle.",
+      "cond": "__tlul_bug_002_state_q == TlulBug002Idle && !(__tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q == 3'h2)",
       "signals": [
-        "__tlul_bug_002_read_cnt_q",
         "__tlul_bug_002_state_q",
         "__tlul_bug_002_enabled",
         "a_ack",
-        "rd_req"
+        "rd_req",
+        "__tlul_bug_002_read_cnt_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:156-158"
+        "tlul_adapter_reg.sv:140-166"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q == 3'h7)",
-        "consequent": "__tlul_bug_002_read_cnt_q == 3'h7",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && !(__tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q == 3'h2)",
+        "consequent": "next(__tlul_bug_002_state_q) == TlulBug002Idle",
         "formalizability": "direct"
       },
       "risk": "",
@@ -314,53 +212,16 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "__tlul_bug_002_read_cnt_q",
           "__tlul_bug_002_state_q",
           "__tlul_bug_002_enabled",
           "a_ack",
-          "rd_req"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && __tlul_bug_002_enabled && a_ack && rd_req && (__tlul_bug_002_read_cnt_q == 3'h7)",
-        "consequent": "__tlul_bug_002_read_cnt_q == 3'h7",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G9",
-      "type": "reg_update",
-      "claim": "When not in reset and state is not Idle, __tlul_bug_002_read_cnt_q retains its value (no increment).",
-      "cond": "rst_ni high and __tlul_bug_002_state_q != TlulBug002Idle",
-      "signals": [
-        "rst_ni",
-        "__tlul_bug_002_state_q",
-        "__tlul_bug_002_read_cnt_q"
-      ],
-      "refs": [
-        "tlul_adapter_reg.sv:140,155-166"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && (__tlul_bug_002_state_q != TlulBug002Idle)",
-        "consequent": "",
-        "formalizability": "partial"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "rst_ni",
-        "signals": [
-          "rst_ni",
-          "__tlul_bug_002_state_q",
+          "rd_req",
           "__tlul_bug_002_read_cnt_q"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && (__tlul_bug_002_state_q != TlulBug002Idle)",
-        "consequent": "__tlul_bug_002_read_cnt_q retains its value (no increment)",
-        "formalizability": "partial",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002Idle && !(__tlul_bug_002_enabled && a_ack && rd_req && __tlul_bug_002_read_cnt_q == 3'h2)",
+        "consequent": "next(__tlul_bug_002_state_q) == TlulBug002Idle",
+        "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
@@ -369,54 +230,55 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "lifecycle",
-      "claim": "rst_ni is an active-low asynchronous reset that must be asserted (low) at least once during operation to properly initialize the state machine and counter.",
-      "cond": "before normal operation",
-      "risk": "If never asserted, flops may power up in unknown states, causing illegal state transitions or incorrect error injection behavior.",
+      "type": "producer_contract",
+      "claim": "While the state machine is in TlulBug002HoldResp or TlulBug002HoldBaseline, the rd_req signal must go low before the machine enters TlulBug002InjectLateError (within 2 cycles) to ensure the error pulse targets the buffered response, not a live request.",
+      "cond": "__tlul_bug_002_state_q == TlulBug002HoldResp || __tlul_bug_002_state_q == TlulBug002HoldBaseline",
+      "risk": "If rd_req stays high, the late error may coincide with an active read request, corrupting the TLUL transaction or causing unexpected behavior.",
       "signals": [
-        "rst_ni"
+        "__tlul_bug_002_state_q",
+        "rd_req"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:136-138"
+        "tlul_adapter_reg.sv:159-162"
       ],
       "formal": {
-        "temporal_shape": "always",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
+        "temporal_shape": "next_cycle",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002HoldResp",
+        "consequent": "##2 rd_req == 0",
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "rst_ni",
+        "reset": "",
         "signals": [
-          "rst_ni"
+          "__tlul_bug_002_state_q",
+          "rd_req"
         ],
-        "temporal_shape": "always",
-        "antecedent": "before normal operation",
-        "consequent": "rst_ni is an active-low asynchronous reset that must be asserted (low) at least once during operation to properly initialize the state machine and counter",
-        "formalizability": "none",
-        "confidence": 0.85,
+        "temporal_shape": "next_cycle",
+        "antecedent": "__tlul_bug_002_state_q == TlulBug002HoldResp",
+        "consequent": "##2 rd_req == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
         "source": "llm"
       }
     },
     {
       "id": "A2",
-      "type": "producer_contract",
-      "claim": "During the injection sequence (states TlulBug002HoldResp, TlulBug002HoldBaseline, TlulBug002InjectLateError), the external rd_req signal must be deasserted (low) long enough for the backpressure window to complete, as described in the comment.",
-      "cond": "injection sequence is active",
-      "risk": "If rd_req remains high, the synthetic backpressure may fail, causing the late error pulse to be missed or causing an upstream protocol violation.",
+      "type": "security_precondition",
+      "claim": "__tlul_bug_002_enabled is asserted only in a controlled test/debug mode, never inadvertently in production.",
+      "cond": "any time",
+      "risk": "Accidental or malicious assertion would cause spurious error injections, compromising data integrity or security.",
       "signals": [
-        "rd_req",
-        "__tlul_bug_002_state_q"
+        "__tlul_bug_002_enabled"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:159-162 (comment)"
+        "tlul_adapter_reg.sv:140"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "",
+        "consequent": "__tlul_bug_002_enabled is properly gated",
         "formalizability": "none"
       },
       "formal_sketch": {
@@ -424,14 +286,13 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "rd_req",
-          "__tlul_bug_002_state_q"
+          "__tlul_bug_002_enabled"
         ],
         "temporal_shape": "always",
-        "antecedent": "injection sequence is active",
-        "consequent": "During the injection sequence (states TlulBug002HoldResp, TlulBug002HoldBaseline, TlulBug002InjectLateError), the external rd_req signal must be deasserted (low) long enough for the backpressure window to complete, as described in the comme",
+        "antecedent": "any time",
+        "consequent": "__tlul_bug_002_enabled is properly gated",
         "formalizability": "none",
-        "confidence": 0.8,
+        "confidence": 0.85,
         "source": "llm"
       }
     }
@@ -440,58 +301,85 @@
     {
       "id": "U1",
       "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "The counter __tlul_bug_002_read_cnt_q increments on each enabled read and saturates at 7. The transition to the error injection sequence only occurs when the counter is exactly 2. After saturation, no further injections can happen, even if reads continue. It is unclear whether this single-injection-per-reset behavior is intended or a missing counter reset/ wrap-around.",
-      "cond": "after reset and during operation",
-      "risk": "If multiple fault injections are expected, this design will lose the injection capability after 8 qualifying reads, potentially undermining security or test coverage.",
+      "priority": "medium",
+      "claim": "The counter saturates at 7 with no wrap-around, limiting error injections to 7 per reset. Is this intentional, or should it reset after a complete injection sequence?",
+      "cond": "after 7 injections",
+      "risk": "If repeated testing is needed, the design will stop injecting errors, reducing test coverage. If not intended, it may mask injection capability.",
       "signals": [
-        "__tlul_bug_002_read_cnt_q",
-        "__tlul_bug_002_state_q",
-        "__tlul_bug_002_enabled",
-        "a_ack",
-        "rd_req"
+        "__tlul_bug_002_read_cnt_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:156-165"
+        "tlul_adapter_reg.sv:156-158"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
         "consequent": "",
-        "formalizability": "partial"
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "reset",
+        "reset": "reset.",
         "signals": [
-          "__tlul_bug_002_read_cnt_q",
-          "__tlul_bug_002_state_q",
-          "__tlul_bug_002_enabled",
-          "a_ack",
-          "rd_req"
+          "__tlul_bug_002_read_cnt_q"
         ],
         "temporal_shape": "always",
-        "antecedent": "after reset and during operation",
-        "consequent": "The counter __tlul_bug_002_read_cnt_q increments on each enabled read and saturates at 7. The transition to the error injection sequence only occurs when the counter is exactly 2. After saturation, no further injections can happen, even if",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "antecedent": "after 7 injections",
+        "consequent": "The counter saturates at 7 with no wrap-around, limiting error injections to 7 per reset. Is this intentional, or should it reset after a complete injection sequence?",
+        "formalizability": "none",
+        "confidence": 0.85,
         "source": "llm"
       }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The comment mentions 'rd_req_q fall low', implying a registered version of rd_req not present in this chunk. The injection window relies on rd_req_q deassertion timing, which must be verified in the context of the full adapter.",
-      "cond": "during injection sequence",
-      "risk": "If rd_req_q does not fall low in time, the late error pulse might be incorrectly masked or delivered.",
+      "type": "U_fault_containment_gap",
+      "priority": "low",
+      "claim": "The unique case default silently resets any undefined state to Idle without logging a fault. An SEU or glitch that corrupts the state machine encoding could be masked.",
+      "cond": "if state becomes an illegal value",
+      "risk": "A hidden state corruption could cause unintended behavior or hide a reliability issue, especially in a security-sensitive block.",
       "signals": [
-        "rd_req",
         "__tlul_bug_002_state_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:160-162 (comment)"
+        "tlul_adapter_reg.sv:151-153"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "resets",
+        "signals": [
+          "__tlul_bug_002_state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "if state becomes an illegal value",
+        "consequent": "The unique case default silently resets any undefined state to Idle without logging a fault. An SEU or glitch that corrupts the state machine encoding could be masked",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The exact protocol for aligning __tlul_bug_002_enabled with a valid read transaction (a_ack && rd_req) is not enforced here. If enabled is asserted outside a read ack window, a spurious injection could occur.",
+      "cond": "__tlul_bug_002_enabled high",
+      "risk": "Spurious error injection could corrupt unrelated transactions or violate protocol.",
+      "signals": [
+        "__tlul_bug_002_enabled",
+        "a_ack",
+        "rd_req"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:155"
       ],
       "formal": {
         "temporal_shape": "always",
@@ -504,23 +392,24 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "rd_req",
-          "__tlul_bug_002_state_q"
+          "__tlul_bug_002_enabled",
+          "a_ack",
+          "rd_req"
         ],
         "temporal_shape": "always",
-        "antecedent": "during injection sequence",
-        "consequent": "The comment mentions 'rd_req_q fall low', implying a registered version of rd_req not present in this chunk. The injection window relies on rd_req_q deassertion timing, which must be verified in the context of the full adapter",
+        "antecedent": "__tlul_bug_002_enabled high",
+        "consequent": "The exact protocol for aligning __tlul_bug_002_enabled with a valid read transaction (a_ack && rd_req) is not enforced here. If enabled is asserted outside a read ack window, a spurious injection could occur",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The chunk implements a directed error injection state machine that can mutate a buffered read response with a late error pulse. If __tlul_bug_002_enabled is set maliciously or left enabled in production, it could deliberately corrupt TLUL read data, potentially bypassing integrity checks or causing denial of service. The feature may be intended for fault-injection testing; without proper access control or lifecycle gating, it becomes an attack surface for data integrity violations.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:135-168"
+    "tlul_adapter_reg.sv:135-168"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 135,
-  "line_end": 168,
-  "security_implications": ""
+  "line_end": 168
 }

@@ -4,14 +4,16 @@
     "module": "kmac",
     "block_kind": "mixed",
     "driven": [
+      "msgfifo_ready",
+      "msg_valid",
+      "msg_data",
+      "msg_strb",
       "kmac2sha3_process",
       "kmac_core_state_error",
       "key_index_error",
       "static_mask"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
       "msgfifo_valid",
       "msgfifo_data",
       "msgfifo_strb",
@@ -25,114 +27,246 @@
       "sha3_start",
       "msgfifo2kmac_process",
       "sha3_done",
-      "lc_escalate_en[1]",
-      "MsgWidth",
-      "EnMasking"
+      "lc_escalate_en"
     ],
     "modes": [
       "EnMasking",
       "MsgWidth"
     ],
     "tags": [
+      "key",
       "secret",
       "mask",
-      "entropy",
-      "lifecycle",
+      "escalation",
+      "alert",
       "error",
-      "fault",
-      "integrity"
+      "lifecycle",
+      "fifo",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "kmac2sha3_process is directly connected to the process_o output of the kmac_core instance.",
-      "cond": "always",
+      "claim": "Under EnMasking==1, static_mask is constantly driven to all ones (MsgWidth bits).",
+      "cond": "EnMasking == 1",
       "signals": [
-        "kmac2sha3_process",
-        "u_kmac_core.process_o"
+        "static_mask",
+        "EnMasking",
+        "MsgWidth"
       ],
       "refs": [
-        "file:860-900"
-      ]
+        "860-911:910-911"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 1",
+        "consequent": "static_mask == {MsgWidth{1'b1}}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "static_mask",
+          "EnMasking",
+          "MsgWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 1",
+        "consequent": "static_mask == {MsgWidth{1'b1}}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "kmac_core_state_error is directly connected to the sparse_fsm_error_o output of the kmac_core instance.",
+      "type": "instance",
+      "claim": "The kmac_core instance u_kmac_core directly drives its sparse_fsm_error_o output onto the local wire kmac_core_state_error.",
       "cond": "always",
       "signals": [
         "kmac_core_state_error",
         "u_kmac_core.sparse_fsm_error_o"
       ],
       "refs": [
-        "file:860-900"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "assignment",
-      "claim": "key_index_error is directly connected to the key_index_error_o output of the kmac_core instance.",
-      "cond": "always",
-      "signals": [
-        "key_index_error",
-        "u_kmac_core.key_index_error_o"
+        "860-898"
       ],
-      "refs": [
-        "file:860-900"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "When the EnMasking parameter equals 1, static_mask is driven to a vector of all ones of width MsgWidth.",
-      "cond": "EnMasking == 1",
-      "signals": [
-        "static_mask",
-        "MsgWidth"
-      ],
-      "refs": [
-        "file:906-911"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "kmac_core_state_error == u_kmac_core.sparse_fsm_error_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_core_state_error",
+          "u_kmac_core.sparse_fsm_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "kmac_core_state_error == u_kmac_core.sparse_fsm_error_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "The lc_escalate_en[1] bit is expected to be correctly driven by the lifecycle controller to reflect a valid escalation condition.",
-      "cond": "during normal operation when lc_escalate_en is relevant",
-      "risk": "If this bit is incorrect, the SHA3 core may not detect lifecycle escalation, potentially leaving secrets uncleared or allowing operation in an insecure state.",
+      "type": "value_domain",
+      "claim": "The vector lc_escalate_en must be at least 2 bits wide so that index 1 is legal.",
+      "cond": "always (static parameter/width assumption)",
+      "risk": "If lc_escalate_en has fewer than 2 bits, the connection to lc_escalate_en[1] is out of bounds, potentially miswiring the escalation signal and breaking security escalation.",
       "signals": [
-        "lc_escalate_en[1]"
+        "lc_escalate_en"
       ],
       "refs": [
-        "file:894-896"
-      ]
+        "860-895"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$bits(lc_escalate_en) >= 2",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always (static parameter/width assumption)",
+        "consequent": "$bits(lc_escalate_en) >= 2",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The signal msg_mask_permuted is declared but not assigned within this region; it may be undriven if not assigned elsewhere.",
-      "cond": "EnMasking == 1 and no other assignment exists in the design",
-      "risk": "A missing assignment could break the entropy masking scheme, leading to reduced side-channel resistance and potential leakage of key or data information.",
+      "claim": "When EnMasking is enabled, static_mask is driven to the constant all-ones value ({MsgWidth{1'b1}}). This appears to provide no entropy, which may conflict with the design intent of 'Enhanced entropy masking' (comment line 904-905) and could leave secret data unprotected against side-channel attacks.",
+      "cond": "EnMasking == 1",
+      "risk": "Secret key or intermediate data processed by kmac_core could be completely unmasked, exposing sensitive information through power or electromagnetic leakage.",
+      "signals": [
+        "static_mask",
+        "EnMasking"
+      ],
+      "refs": [
+        "904-911"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 1",
+        "consequent": "static_mask == {MsgWidth{1'b1}}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "static_mask",
+          "EnMasking"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 1",
+        "consequent": "static_mask == {MsgWidth{1'b1}}",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The generate block g_msg_mask begins but only shows declaration of msg_mask_permuted and the static_mask all-ones assignment. The usage of msg_mask_permuted and the final masking logic are not visible in this chunk, leaving it unclear whether the constant static_mask is a placeholder or the final implementation.",
+      "cond": "EnMasking == 1",
+      "risk": "If the masking implementation is incomplete or the constant mask is final, side-channel resistance is compromised.",
+      "signals": [
+        "msg_mask_permuted",
+        "static_mask"
+      ],
+      "refs": [
+        "906-911"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted",
+          "static_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 1",
+        "consequent": "The generate block g_msg_mask begins but only shows declaration of msg_mask_permuted and the static_mask all-ones assignment. The usage of msg_mask_permuted and the final masking logic are not visible in this chunk, leaving it unclear wheth",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The signal msg_mask_permuted is declared inside the generate block but is not assigned or read in this chunk. It may be dead code or intended for later use.",
+      "cond": "EnMasking == 1",
+      "risk": "If msg_mask_permuted is truly unused, it could indicate an incomplete masking data path or unnecessary resource waste.",
       "signals": [
         "msg_mask_permuted"
       ],
       "refs": [
-        "file:907"
-      ]
+        "907"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "EnMasking == 1",
+        "consequent": "The signal msg_mask_permuted is declared inside the generate block but is not assigned or read in this chunk. It may be dead code or intended for later use",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Static mask is constant all-ones (line 911) when EnMasking is active. This completely removes entropy from the masking scheme and can expose the secret key processed in kmac_core to power/EM side-channel analysis. The lifecycle escalation input lc_escalate_en[1] (line 895) is a critical security control; an erroneous width assumption could disable escalation. The sparse FSM error (line 898) and key index error (line 899) outputs are explicitly wired for error alerting, reinforcing the high-security context of this block.",
   "evidence_refs": [
-    "file:860-911"
+    "860-911"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 860,
-  "line_end": 911,
-  "security_implications": ""
+  "line_end": 911
 }

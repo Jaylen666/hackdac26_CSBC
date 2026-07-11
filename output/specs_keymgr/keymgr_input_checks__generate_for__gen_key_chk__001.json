@@ -2,24 +2,21 @@
   "chunk_id": "keymgr_input_checks__generate_for__gen_key_chk__001",
   "header": {
     "module": "keymgr_input_checks",
-    "block_kind": "generate",
+    "block_kind": "mixed",
     "driven": [
-      "key_padded[i]",
-      "key_chk[i]"
+      "key_padded",
+      "key_chk"
     ],
     "used": [
-      "key_i.key[i]",
-      "valid_chk"
-    ],
-    "modes": [
-      "KeyShares",
+      "key_i.key",
+      "valid_chk",
       "KeyWidth",
-      "MaxWidth"
+      "MaxWidth",
+      "KeyShares"
     ],
+    "modes": [],
     "tags": [
-      "secret",
       "key",
-      "mask",
       "integrity",
       "parameterization"
     ]
@@ -27,99 +24,203 @@
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "For each share i, key_padded[i] is the MSB-extended version of key_i.key[i] from KeyWidth to MaxWidth using prim_msb_extend.",
-      "cond": "always (for each i in gen_key_chk)",
+      "type": "generate_instance",
+      "claim": "For every i in 0..KeyShares-1, key_padded[i] is the result of prim_msb_extend(key_i.key[i]), extending from KeyWidth to MaxWidth.",
+      "cond": "always",
       "signals": [
-        "key_i.key[i]",
-        "key_padded[i]",
+        "key_padded",
+        "key_i.key",
         "KeyWidth",
         "MaxWidth"
       ],
       "refs": [
-        "87-94"
-      ]
+        "keymgr_input_checks.sv:88-94"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_padded",
+          "key_i.key",
+          "KeyWidth",
+          "MaxWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "For every i in 0..KeyShares-1, key_padded[i] is the result of prim_msb_extend(key_i.key[i]), extending from KeyWidth to MaxWidth",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "For each share i, key_chk[i] is assigned the result of the valid_chk function applied to key_padded[i].",
+      "claim": "For every i, key_chk[i] is assigned the value of valid_chk(key_padded[i]) combinatorially, with no reset or latching.",
       "cond": "always",
       "signals": [
-        "key_padded[i]",
-        "key_chk[i]",
+        "key_chk",
+        "key_padded",
         "valid_chk"
       ],
       "refs": [
-        "96"
-      ]
+        "keymgr_input_checks.sv:96"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "key_chk[i] == valid_chk(key_padded[i])",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "key_chk",
+          "key_padded",
+          "valid_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_chk[i] == valid_chk(key_padded[i])",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "The external function valid_chk correctly identifies invalid key patterns (e.g., all-zero, all-one) and returns a de-asserted valid signal for such inputs.",
-      "cond": "when key integrity checks are required",
-      "risk": "Invalid key material could be marked as valid, compromising key-dependent security operations.",
+      "type": "value_domain",
+      "claim": "key_i.key[i] is a valid digital signal of exactly KeyWidth bits, free from X or Z states.",
+      "cond": "always",
+      "risk": "Unknown or invalid input propagates through key_padded and valid_chk, potentially causing erroneous key integrity checking (false pass or false fail).",
       "signals": [
-        "valid_chk"
-      ],
-      "refs": [
-        "96"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "mode_config",
-      "claim": "Parameter MaxWidth must be >= KeyWidth, as required by the MSB-extend primitive contract.",
-      "cond": "when KeyWidth > MaxWidth",
-      "risk": "key_padded[i] would be truncated, potentially evaluating a shorter key and allowing an invalid full key to pass the check.",
-      "signals": [
-        "MaxWidth",
+        "key_i.key",
         "KeyWidth"
       ],
       "refs": [
-        "88-94"
-      ]
+        "keymgr_input_checks.sv:88-92"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "!$isunknown(key_i.key[i]) && $size(key_i.key[i]) == KeyWidth",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_i.key",
+          "KeyWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "!$isunknown(key_i.key[i]) && $size(key_i.key[i]) == KeyWidth",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "The valid_chk function implementation is not provided here; its actual key validity criteria must be verified against keymgr security requirements (e.g., rejecting all-zero or weak keys).",
-      "cond": "when key checking is expected to reject certain patterns",
-      "risk": "A permissive valid_chk could allow compromised or degenerate keys to proceed, breaking key integrity.",
+      "claim": "The exact implementation and expected behavior of the valid_chk function are not visible in this chunk. It is unclear what constitutes a valid key share and which failure modes it detects (parity, ECC, constant check).",
+      "cond": "always",
+      "risk": "If valid_chk is too weak or incorrectly specified, corrupted key shares may be accepted, leading to use of a broken secret in downstream key derivation and complete loss of confidentiality/integrity.",
       "signals": [
-        "valid_chk"
+        "valid_chk",
+        "key_chk"
       ],
       "refs": [
-        "96"
-      ]
+        "keymgr_input_checks.sv:96"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid_chk",
+          "key_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The exact implementation and expected behavior of the valid_chk function are not visible in this chunk. It is unclear what constitutes a valid key share and which failure modes it detects (parity, ECC, constant check)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "If MaxWidth is configured smaller than KeyWidth, prim_msb_extend will truncate high-order bits; the key_chk result is then based on a truncated key.",
-      "cond": "top-level configuration where MaxWidth may be set below KeyWidth",
-      "risk": "A truncated key could appear valid while the original full-width key is invalid, weakening key strength checks.",
+      "type": "U_spec_gap",
+      "priority": "high",
+      "claim": "prim_msb_extend performs sign extension (MSB copying). With an unsigned key or when the MSB of KeyWidth is high, the extended value differs from a zero-extended value. Whether sign extension is intentional for key shares must be confirmed.",
+      "cond": "always",
+      "risk": "If the key share is treated as an unsigned bit pattern, sign extension may alter the value, causing valid_chk to see a different number and potentially either reject a valid key or accept an invalid one, breaking key integrity verification.",
       "signals": [
-        "MaxWidth",
-        "KeyWidth"
+        "prim_msb_extend",
+        "key_padded",
+        "key_i.key",
+        "KeyWidth",
+        "MaxWidth"
       ],
       "refs": [
-        "88-94"
-      ]
+        "keymgr_input_checks.sv:88-94"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_input_checks",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prim_msb_extend",
+          "key_padded",
+          "key_i.key",
+          "KeyWidth",
+          "MaxWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "prim_msb_extend performs sign extension (MSB copying). With an unsigned key or when the MSB of KeyWidth is high, the extended value differs from a zero-extended value. Whether sign extension is intentional for key shares must be confirmed",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk implements per-share key integrity checking. If valid_chk function is mis-specified or the sign extension in prim_msb_extend is incorrect for the key's numeric representation, a corrupted key share may pass as valid. This directly compromises the secrecy and integrity of the key material used by the key manager, potentially enabling side-channel attacks or operational failures that rely on correct key values.",
   "evidence_refs": [
-    "87-97"
+    "keymgr_input_checks.sv:87-97"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_input_checks.sv",
   "line_start": 87,
-  "line_end": 97,
-  "security_implications": ""
+  "line_end": 97
 }

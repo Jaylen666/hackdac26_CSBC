@@ -7,174 +7,279 @@
       "state_q"
     ],
     "used": [
-      "clk_i",
       "rst_ni",
       "state_we",
-      "state_d",
-      "SP2V_HIGH"
+      "SP2V_HIGH",
+      "state_d"
     ],
     "modes": [],
     "tags": [
-      "secret",
-      "wipe",
-      "reset"
+      "reset",
+      "state",
+      "secret"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, state_q is synchronously cleared to all zeros ('{default: '0}).",
-      "cond": "!rst_ni",
+      "claim": "When reset is active low (rst_ni==0), state_q is synchronously cleared to all zeros.",
+      "cond": "rst_ni == 0",
       "signals": [
         "rst_ni",
         "state_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:257-259"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:258-259"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 0",
+        "consequent": "state_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 0",
+        "consequent": "state_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When rst_ni is high and state_we equals SP2V_HIGH, state_q is updated with the value of state_d.",
-      "cond": "rst_ni && state_we == SP2V_HIGH",
+      "claim": "When write enable equals the defined constant SP2V_HIGH and reset is inactive, state_q is updated with state_d on the next rising clock edge.",
+      "cond": "rst_ni == 1 && state_we == SP2V_HIGH",
       "signals": [
-        "clk_i",
-        "rst_ni",
         "state_we",
+        "SP2V_HIGH",
         "state_d",
         "state_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:257,260-261"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:260-261"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1 && state_we == SP2V_HIGH",
+        "consequent": "state_q == state_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "clock",
+        "reset": "reset",
+        "signals": [
+          "state_we",
+          "SP2V_HIGH",
+          "state_d",
+          "state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1 && state_we == SP2V_HIGH",
+        "consequent": "state_q == state_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "reg_update",
-      "claim": "When rst_ni is high and state_we is not equal to SP2V_HIGH, state_q retains its previous value (implicit hold).",
-      "cond": "rst_ni && state_we != SP2V_HIGH",
+      "type": "default_fallback",
+      "claim": "When reset is inactive and state_we is not equal to SP2V_HIGH, state_q retains its previous value.",
+      "cond": "rst_ni == 1 && !(state_we == SP2V_HIGH)",
       "signals": [
-        "state_q"
+        "state_q",
+        "state_we",
+        "SP2V_HIGH"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:257-263"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:257-263"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1 && !(state_we == SP2V_HIGH)",
+        "consequent": "state_q == $past(state_q)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "state_q",
+          "state_we",
+          "SP2V_HIGH"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1 && !(state_we == SP2V_HIGH)",
+        "consequent": "state_q == $past(state_q)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "state_d must be stable and valid at the positive clock edge when state_we equals SP2V_HIGH.",
+      "type": "producer_contract",
+      "claim": "When state_we equals SP2V_HIGH, state_d must provide a valid next-state value for the AES cipher state (not arbitrary) and meet setup/hold timing.",
       "cond": "state_we == SP2V_HIGH",
-      "risk": "Stale or invalid data is captured into the secret-state register state_q.",
+      "risk": "If state_d is corrupted or not valid, state_q will load an incorrect AES state, leading to wrong cipher output or potential leakage of internal state.",
       "signals": [
-        "state_we",
         "state_d",
-        "clk_i"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:260-261"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "mode_config",
-      "claim": "SP2V_HIGH must be defined as the active-high logic level that matches the write-enable signaling of state_we.",
-      "cond": "always",
-      "risk": "If SP2V_HIGH is incorrectly defined, write-enable may never be true or may always be true, breaking the update mechanism.",
-      "signals": [
-        "SP2V_HIGH",
         "state_we"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:260"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "security_precondition",
-      "claim": "rst_ni must be asserted (low) whenever the secret material in state_q needs to be cleared for security reasons.",
-      "cond": "security-critical wipe requirement",
-      "risk": "If rst_ni is not used properly, residual secret data may persist in state_q across operational phases.",
-      "signals": [
-        "rst_ni",
-        "state_q"
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:260-261"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:258-259"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "handshake",
-      "claim": "rst_ni must be synchronously de-asserted with respect to clk_i to avoid metastability or partial-state corruption.",
-      "cond": "de-assertion of rst_ni",
-      "risk": "Asynchronous or poorly timed reset release could leave state_q in an unknown or partially-cleared state.",
-      "signals": [
-        "clk_i",
-        "rst_ni"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:257-259"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_we == SP2V_HIGH",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_d",
+          "state_we"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_we == SP2V_HIGH",
+        "consequent": "state_d must provide a valid next-state value for the AES cipher state (not arbitrary) and meet setup/hold timing",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "The timing relationship between state_we and state_d is not locally controlled; a mismatch may cause state_q to capture transitional or invalid data.",
-      "cond": "state_we transition relative to clk_i",
-      "risk": "Corruption of secret state matrix, leading to incorrect cipher output or key leakage.",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "SP2V_HIGH is a constant used in a comparison with state_we. If state_we is a multi-bit signal and only one specific encoding equals SP2V_HIGH, any other valid but non-matching value will silently prevent update, possibly leading to stall or dead state.",
+      "cond": "state_we has width > 1 and SP2V_HIGH is only one possible value",
+      "risk": "Operator might unintentionally drive a different encoding, freezing the AES state and causing functional failure or denial-of-service.",
       "signals": [
         "state_we",
-        "state_d",
-        "clk_i"
+        "SP2V_HIGH"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:260-261"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:260"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_we",
+          "SP2V_HIGH"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_we has width > 1 and SP2V_HIGH is only one possible value",
+        "consequent": "SP2V_HIGH is a constant used in a comparison with state_we. If state_we is a multi-bit signal and only one specific encoding equals SP2V_HIGH, any other valid but non-matching value will silently prevent update, possibly leading to stall or",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "state_q is only cleared by reset; there is no explicit data-independent clearing (wipe) at operation end or on error, which may leave secret data in the register.",
-      "cond": "post-operation or error condition",
-      "risk": "Secret residual data exposure if a subsequent process can read state_q or if the design does not overwrite it before reuse.",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "After reset deassertion, state_q is zeroed. It is unclear whether all-zero state is a valid initial state for AES operation (e.g., could be interpreted as a weak key or known starting point).",
+      "cond": "After reset, before first write",
+      "risk": "If an operation starts with state_q=0, it may produce a predictable output or bypass security assumptions.",
       "signals": [
-        "state_q",
-        "rst_ni"
+        "state_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:258-259"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:259"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1 && $past(rst_ni) == 0",
+        "consequent": "state_q == '0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "state_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1 && $past(rst_ni) == 0",
+        "consequent": "state_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "The write-enable constant SP2V_HIGH is not defined in this block; incorrect parameter override could break the enable logic.",
-      "cond": "parameter overlay or instantiation",
-      "risk": "Functional failure (stuck state or perpetual write) leading to AES state corruption.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "state_q holds AES cryptographic state (round keys, plaintext, intermediate values) but there is no explicit mechanism in this chunk to wipe the register on key change, error, or completion. Stale data remains until next reset or overwrite.",
+      "cond": "After an AES operation completes or a key change occurs",
+      "risk": "An attacker or subsequent process could read the residual state via side channels or debugging interfaces, leaking key material or plaintext.",
       "signals": [
-        "SP2V_HIGH",
-        "state_we"
+        "state_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:260"
-      ]
+        "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:261"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "After an AES operation completes or a key change occurs",
+        "consequent": "state_q holds AES cryptographic state (round keys, plaintext, intermediate values) but there is no explicit mechanism in this chunk to wipe the register on key change, error, or completion. Stale data remains until next reset or overwrite",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "state_q stores AES cryptographic state (potentially key, plaintext, round keys). The register is only cleared on reset and has no wipe-on-demand or zeroization after operation; stale secrets persist and could be leaked through observation or unintended readback. Additionally, the reliance on an external SP2V_HIGH constant for write enable creates a risk if that constant is misconfigured, allowing unintended updates or stalls that could be exploited.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:257-263"
+    "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:257-263"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 257,
-  "line_end": 263,
-  "security_implications": ""
+  "line_end": 263
 }

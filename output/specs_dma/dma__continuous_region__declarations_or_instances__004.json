@@ -40,45 +40,42 @@
       "req_dst_be_d",
       "clear_index_en",
       "clear_index_d",
-      "sha2_consumed_d",
-      "sha2_hash_done_d",
       "control_q.opcode",
       "ctrl_state_q",
-      "reg2hw.total_data_size.q"
+      "reg2hw.total_data_size"
     ],
     "modes": [
-      "dma_ctrl_state_e",
-      "control_state_t",
+      "DmaIdle",
+      "DmaShaFinalize",
       "OpcSha256",
       "OpcSha384",
       "OpcSha512"
     ],
     "tags": [
-      "secret",
       "digest",
-      "integrity",
+      "fifo",
       "reset",
       "parameterization",
-      "csr"
+      "clock_domain"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "use_inline_hashing = 1 iff control_q.opcode is one of OpcSha256, OpcSha384, OpcSha512; otherwise 0.",
+      "claim": "use_inline_hashing is high when control_q.opcode is OpcSha256, OpcSha384, or OpcSha512; low otherwise.",
       "cond": "always",
       "signals": [
         "use_inline_hashing",
         "control_q.opcode"
       ],
       "refs": [
-        "dma.sv:411-411"
+        "dma.sv:411"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "use_inline_hashing == (control_q.opcode == OpcSha256 || control_q.opcode == OpcSha384 || control_q.opcode == OpcSha512)",
+        "consequent": "use_inline_hashing == (control_q.opcode inside {OpcSha256, OpcSha384, OpcSha512})",
         "formalizability": "direct"
       },
       "risk": "",
@@ -92,7 +89,7 @@
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "use_inline_hashing == (control_q.opcode == OpcSha256 || control_q.opcode == OpcSha384 || control_q.opcode == OpcSha512)",
+        "consequent": "use_inline_hashing == (control_q.opcode inside {OpcSha256, OpcSha384, OpcSha512})",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -101,14 +98,14 @@
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "sha2_hash_process = 1 when ctrl_state_q == DmaShaFinalize, else 0.",
+      "claim": "sha2_hash_process is high when ctrl_state_q equals DmaShaFinalize; low otherwise.",
       "cond": "always",
       "signals": [
         "sha2_hash_process",
         "ctrl_state_q"
       ],
       "refs": [
-        "dma.sv:413-413"
+        "dma.sv:413"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -136,14 +133,14 @@
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "sha2_message_len_bits is set to reg2hw.total_data_size.q shifted left by 3 bits (bytes to bits).",
+      "claim": "sha2_message_len_bits equals reg2hw.total_data_size.q left-shifted by 3 (bytes to bits).",
       "cond": "always",
       "signals": [
         "sha2_message_len_bits",
-        "reg2hw.total_data_size.q"
+        "reg2hw.total_data_size"
       ],
       "refs": [
-        "dma.sv:438-438"
+        "dma.sv:438"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -158,7 +155,7 @@
         "reset": "",
         "signals": [
           "sha2_message_len_bits",
-          "reg2hw.total_data_size.q"
+          "reg2hw.total_data_size"
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
@@ -171,23 +168,41 @@
     {
       "id": "G4",
       "type": "reg_update",
-      "claim": "control_q is a registered version of control_d, sampled when capture_state = 1 on rising gated_clk, and reset to 0 (default).",
-      "cond": "posedge gated_clk",
+      "claim": "All prim_flop and prim_flop_en instances in this region update their q_o to d_i on the rising edge of gated_clk while rst_ni is high. For prim_flop_en instances, update occurs only when en_i is high; for prim_flop instances, update every cycle. During reset (rst_ni low), outputs are forced to reset values (0 or DmaIdle).",
+      "cond": "gated_clk rising edge, rst_ni high",
       "signals": [
         "control_q",
-        "control_d",
-        "capture_state",
-        "gated_clk",
-        "rst_ni"
+        "ctrl_state_logic",
+        "transfer_byte_q",
+        "chunk_byte_q",
+        "transfer_width_q",
+        "src_addr_q",
+        "dst_addr_q",
+        "req_src_be_q",
+        "req_dst_be_q",
+        "clear_index_q",
+        "sha2_consumed_q",
+        "sha2_hash_done_q"
       ],
       "refs": [
-        "dma.sv:289-297"
+        "dma.sv:289-297",
+        "dma.sv:299-307",
+        "dma.sv:314-322",
+        "dma.sv:326-334",
+        "dma.sv:338-346",
+        "dma.sv:351-359",
+        "dma.sv:361-369",
+        "dma.sv:374-382",
+        "dma.sv:384-392",
+        "dma.sv:394-402",
+        "dma.sv:416-423",
+        "dma.sv:427-434"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "capture_state",
-        "consequent": "control_q == $past(control_d)",
-        "formalizability": "partial"
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
       },
       "risk": "",
       "formal_sketch": {
@@ -196,135 +211,19 @@
         "reset": "rst_ni",
         "signals": [
           "control_q",
-          "control_d",
-          "capture_state",
-          "gated_clk",
-          "rst_ni"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "capture_state",
-        "consequent": "control_q == $past(control_d)",
-        "formalizability": "partial",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G5",
-      "type": "reg_update",
-      "claim": "ctrl_state_logic is a registered version of ctrl_state_d, updated every cycle on rising gated_clk, and reset to DmaIdle.",
-      "cond": "posedge gated_clk",
-      "signals": [
-        "ctrl_state_logic",
-        "ctrl_state_d",
-        "gated_clk",
-        "rst_ni"
-      ],
-      "refs": [
-        "dma.sv:299-307"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "1",
-        "consequent": "ctrl_state_logic == $past(ctrl_state_d)",
-        "formalizability": "partial"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "gated_clk",
-        "reset": "rst_ni",
-        "signals": [
           "ctrl_state_logic",
-          "ctrl_state_d",
-          "gated_clk",
-          "rst_ni"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "1",
-        "consequent": "ctrl_state_logic == $past(ctrl_state_d)",
-        "formalizability": "partial",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G6",
-      "type": "reg_update",
-      "claim": "transfer_byte_q is a registered version of transfer_byte_d, sampled when capture_transfer_byte = 1 on rising gated_clk, and reset to 0.",
-      "cond": "posedge gated_clk",
-      "signals": [
-        "transfer_byte_q",
-        "transfer_byte_d",
-        "capture_transfer_byte",
-        "gated_clk",
-        "rst_ni"
-      ],
-      "refs": [
-        "dma.sv:314-322"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "capture_transfer_byte",
-        "consequent": "transfer_byte_q == $past(transfer_byte_d)",
-        "formalizability": "partial"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "gated_clk",
-        "reset": "rst_ni",
-        "signals": [
           "transfer_byte_q",
-          "transfer_byte_d",
-          "capture_transfer_byte",
-          "gated_clk",
-          "rst_ni"
+          "chunk_byte_q",
+          "transfer_width_q",
+          "src_addr_q",
+          "dst_addr_q",
+          "req_src_be_q"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "capture_transfer_byte",
-        "consequent": "transfer_byte_q == $past(transfer_byte_d)",
-        "formalizability": "partial",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G7",
-      "type": "reg_update",
-      "claim": "sha2_hash_done_q is a registered version of sha2_hash_done_d, updated every cycle on rising gated_clk, and reset to 0.",
-      "cond": "posedge gated_clk",
-      "signals": [
-        "sha2_hash_done_q",
-        "sha2_hash_done_d",
-        "gated_clk",
-        "rst_ni"
-      ],
-      "refs": [
-        "dma.sv:427-434"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "1",
-        "consequent": "sha2_hash_done_q == $past(sha2_hash_done_d)",
-        "formalizability": "partial"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "dma",
-        "clock": "gated_clk",
-        "reset": "rst_ni",
-        "signals": [
-          "sha2_hash_done_q",
-          "sha2_hash_done_d",
-          "gated_clk",
-          "rst_ni"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "1",
-        "consequent": "sha2_hash_done_q == $past(sha2_hash_done_d)",
-        "formalizability": "partial",
-        "confidence": 1.0,
+        "antecedent": "gated_clk rising edge, rst_ni high",
+        "consequent": "All prim_flop and prim_flop_en instances in this region update their q_o to d_i on the rising edge of gated_clk while rst_ni is high. For prim_flop_en instances, update occurs only when en_i is high; for prim_flop instances, update every cy",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     }
@@ -333,58 +232,72 @@
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "ctrl_state_q must be identical to ctrl_state_logic (the output of the aff_ctrl_state_q instance).",
-      "cond": "always",
-      "risk": "If ctrl_state_q is not connected to ctrl_state_logic, sha2_hash_process may be computed from a stale or unconnected signal, causing incorrect or missing SHA finalization step.",
+      "claim": "capture_state must be a glitch-free one-cycle pulse, and control_d must be stable during the cycle when capture_state is high.",
+      "cond": "When capture_state is high",
+      "risk": "If violated, control_q may capture corrupted opcode/control, leading to wrong DMA mode (e.g., incorrect SHA mode), potentially bypassing security.",
       "signals": [
-        "ctrl_state_q",
-        "ctrl_state_logic"
+        "capture_state",
+        "control_d",
+        "control_q"
       ],
       "refs": [
-        "dma.sv:302-307,413"
+        "dma.sv:289-297"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "ctrl_state_q == ctrl_state_logic",
-        "formalizability": "direct"
+        "antecedent": "$rose(capture_state)",
+        "consequent": "$stable(control_d)",
+        "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "dma",
         "clock": "",
         "reset": "",
         "signals": [
-          "ctrl_state_q",
-          "ctrl_state_logic"
+          "capture_state",
+          "control_d",
+          "control_q"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
-        "consequent": "ctrl_state_q == ctrl_state_logic",
-        "formalizability": "direct",
+        "antecedent": "$rose(capture_state)",
+        "consequent": "$stable(control_d)",
+        "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
       "id": "A2",
-      "type": "handshake",
-      "claim": "Capture enables (capture_state, capture_transfer_byte, capture_chunk_byte, capture_transfer_width, capture_addr, capture_be, clear_index_en) must be synchronous and glitch-free, and the corresponding data inputs must be stable when the enable is asserted.",
-      "cond": "rising edge of gated_clk",
-      "risk": "Glitches or setup/hold violations on capture enables may cause metastability or latching of invalid data, leading to corrupted transfer parameters, address, or byte enables.",
+      "type": "producer_contract",
+      "claim": "The capture enables for other flops (capture_transfer_byte, capture_chunk_byte, capture_transfer_width, capture_addr, capture_be, clear_index_en) must also be clean single-cycle pulses, and their corresponding d inputs must be stable during the enable cycle.",
+      "cond": "When respective capture_en is high",
+      "risk": "Misconfigured transfer parameters, address corruption, or interrupt clear errors, leading to functional and possible security failures.",
       "signals": [
-        "capture_state",
         "capture_transfer_byte",
+        "transfer_byte_d",
         "capture_chunk_byte",
+        "chunk_byte_d",
         "capture_transfer_width",
+        "transfer_width_d",
         "capture_addr",
+        "src_addr_d",
+        "dst_addr_d",
         "capture_be",
-        "clear_index_en"
+        "req_src_be_d",
+        "req_dst_be_d",
+        "clear_index_en",
+        "clear_index_d"
       ],
       "refs": [
-        "dma.sv:289-402"
+        "dma.sv:314-322",
+        "dma.sv:326-334",
+        "dma.sv:338-346",
+        "dma.sv:351-369",
+        "dma.sv:374-392",
+        "dma.sv:394-402"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
+        "temporal_shape": "comb",
         "antecedent": "",
         "consequent": "",
         "formalizability": "none"
@@ -394,17 +307,18 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "capture_state",
           "capture_transfer_byte",
+          "transfer_byte_d",
           "capture_chunk_byte",
+          "chunk_byte_d",
           "capture_transfer_width",
+          "transfer_width_d",
           "capture_addr",
-          "capture_be",
-          "clear_index_en"
+          "src_addr_d"
         ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "rising edge of gated_clk",
-        "consequent": "Capture enables (capture_state, capture_transfer_byte, capture_chunk_byte, capture_transfer_width, capture_addr, capture_be, clear_index_en) must be synchronous and glitch-free, and the corresponding data inputs must be stable when the enab",
+        "temporal_shape": "comb",
+        "antecedent": "When respective capture_en is high",
+        "consequent": "The capture enables for other flops (capture_transfer_byte, capture_chunk_byte, capture_transfer_width, capture_addr, capture_be, clear_index_en) must also be clean single-cycle pulses, and their corresponding d inputs must be stable during",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
@@ -412,35 +326,107 @@
     },
     {
       "id": "A3",
-      "type": "value_domain",
-      "claim": "The product reg2hw.total_data_size.q * 8 must fit in 64 bits; i.e., reg2hw.total_data_size.q <= 0x1FFFFFFFFFFFFFFF to avoid overflow in the left-shift by 3.",
-      "cond": "always prior to computing sha2_message_len_bits",
-      "risk": "If reg2hw.total_data_size.q is too large, sha2_message_len_bits may be truncated, leading to an incorrect message length for SHA and potentially broken integrity or security.",
+      "type": "clock_domain",
+      "claim": "gated_clk must be a glitch-free, properly gated version of clk_i, with no spurious edges or runt pulses.",
+      "cond": "always",
+      "risk": "Flops may capture unintended data, causing functional and security state corruption (e.g., SHA control signals).",
       "signals": [
-        "reg2hw.total_data_size.q",
-        "sha2_message_len_bits"
+        "gated_clk"
       ],
       "refs": [
-        "dma.sv:438"
+        "dma.sv:289-434"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "gated_clk",
+        "reset": "",
+        "signals": [
+          "gated_clk"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "gated_clk must be a glitch-free, properly gated version of clk_i, with no spurious edges or runt pulses",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "handshake",
+      "claim": "sha2_consumed_d and sha2_hash_done_d must be correctly driven by the external SHA interface, reflecting actual data consumption and digest completion.",
+      "cond": "During SHA operations",
+      "risk": "sha2_consumed_q / sha2_hash_done_q may hold stale values, causing the DMA state machine to hang or proceed too early, corrupting the digest or stalling the system.",
+      "signals": [
+        "sha2_consumed_d",
+        "sha2_hash_done_d",
+        "sha2_consumed_q",
+        "sha2_hash_done_q"
+      ],
+      "refs": [
+        "dma.sv:415-434"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "(reg2hw.total_data_size.q << 3) < 64'h1_0000_0000_0000_0000",
-        "formalizability": "direct"
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "dma",
         "clock": "",
         "reset": "",
         "signals": [
-          "reg2hw.total_data_size.q",
-          "sha2_message_len_bits"
+          "sha2_consumed_d",
+          "sha2_hash_done_d",
+          "sha2_consumed_q",
+          "sha2_hash_done_q"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always prior to computing sha2_message_len_bits",
-        "consequent": "(reg2hw.total_data_size.q << 3) < 64'h1_0000_0000_0000_0000",
-        "formalizability": "direct",
+        "antecedent": "During SHA operations",
+        "consequent": "sha2_consumed_d and sha2_hash_done_d must be correctly driven by the external SHA interface, reflecting actual data consumption and digest completion",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A5",
+      "type": "value_domain",
+      "claim": "reg2hw.total_data_size.q must remain stable during the entire DMA transfer and must not exceed 2^61-1 bytes (to avoid overflow when shifted left by 3).",
+      "cond": "When sha2_hash_process is active or use_inline_hashing is true",
+      "risk": "If total_data_size changes or overflows, sha2_message_len_bits becomes invalid, leading to SHA length mismatch and hash integrity failure.",
+      "signals": [
+        "reg2hw.total_data_size",
+        "sha2_message_len_bits"
+      ],
+      "refs": [
+        "dma.sv:436-438"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "sha2_hash_process || use_inline_hashing",
+        "consequent": "$stable(reg2hw.total_data_size.q)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.total_data_size",
+          "sha2_message_len_bits"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "sha2_hash_process || use_inline_hashing",
+        "consequent": "$stable(reg2hw.total_data_size.q)",
+        "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
       }
@@ -449,57 +435,52 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "A connection must exist between ctrl_state_logic (output of aff_ctrl_state_q) and ctrl_state_q (used in sha2_hash_process). The code shows the register driving ctrl_state_logic, but the assignment reads ctrl_state_q; if these are not the same net, the SHA finalize trigger will be broken.",
-      "cond": "when computing sha2_hash_process",
-      "risk": "Incorrect or missing SHA digest finalize step, leading to silent data corruption or security compromise.",
+      "claim": "use_inline_hashing only decodes OpcSha256, OpcSha384, OpcSha512. Are there other legal opcodes that should also enable inline SHA? Missing an opcode would deassert use_inline_hashing, bypassing the hash engine and compromising data integrity.",
+      "cond": "When control_q.opcode is any opcode that requires hashing but is not listed",
+      "risk": "SHA hash not applied to sensitive data, potentially allowing forged or modified data to be accepted.",
       "signals": [
-        "ctrl_state_logic",
-        "ctrl_state_q",
-        "sha2_hash_process"
+        "use_inline_hashing",
+        "control_q.opcode"
       ],
       "refs": [
-        "dma.sv:302-307",
-        "dma.sv:413"
+        "dma.sv:411"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "ctrl_state_q == ctrl_state_logic",
-        "formalizability": "direct"
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "dma",
         "clock": "",
         "reset": "",
         "signals": [
-          "ctrl_state_logic",
-          "ctrl_state_q",
-          "sha2_hash_process"
+          "use_inline_hashing",
+          "control_q.opcode"
         ],
         "temporal_shape": "comb",
-        "antecedent": "when computing sha2_hash_process",
-        "consequent": "ctrl_state_q == ctrl_state_logic",
-        "formalizability": "direct",
-        "confidence": 1.0,
+        "antecedent": "When control_q.opcode is any opcode that requires hashing but is not listed",
+        "consequent": "use_inline_hashing only decodes OpcSha256, OpcSha384, OpcSha512. Are there other legal opcodes that should also enable inline SHA? Missing an opcode would deassert use_inline_hashing, bypassing the hash engine and compromising data integrit",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     },
     {
       "id": "U2",
-      "type": "U_unhandled_legal_case",
-      "priority": "medium",
-      "claim": "The FSM register aff_ctrl_state_q can load any arbitrary value of dma_ctrl_state_e through ctrl_state_d. There is no local logic to ensure that only legal state encodings are written; a transient or permanent fault could set an illegal state, and downstream logic (like the sha2_hash_process condition) would interpret it, potentially causing deadlock or erroneous actions.",
-      "cond": "when ctrl_state_d is captured",
-      "risk": "Invalid FSM state could disable checks, cause infinite loops, or allow unintended operations.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "sha2_hash_process is asserted only in DmaShaFinalize. If the FSM can be forced to enter DmaShaFinalize before all data is loaded, the SHA engine computes digest over incomplete data, resulting in an incorrect hash. This dependency on the state machine needs verification.",
+      "cond": "If FSM transitions to DmaShaFinalize prematurely",
+      "risk": "Forged digest verification, enabling unauthorized data manipulation.",
       "signals": [
-        "ctrl_state_d",
-        "ctrl_state_logic",
-        "sha2_hash_process"
+        "sha2_hash_process",
+        "ctrl_state_q"
       ],
       "refs": [
-        "dma.sv:299-307",
         "dma.sv:413"
       ],
       "formal": {
@@ -513,13 +494,12 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "ctrl_state_d",
-          "ctrl_state_logic",
-          "sha2_hash_process"
+          "sha2_hash_process",
+          "ctrl_state_q"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "when ctrl_state_d is captured",
-        "consequent": "The FSM register aff_ctrl_state_q can load any arbitrary value of dma_ctrl_state_e through ctrl_state_d. There is no local logic to ensure that only legal state encodings are written; a transient or permanent fault could set an illegal stat",
+        "antecedent": "If FSM transitions to DmaShaFinalize prematurely",
+        "consequent": "sha2_hash_process is asserted only in DmaShaFinalize. If the FSM can be forced to enter DmaShaFinalize before all data is loaded, the SHA engine computes digest over incomplete data, resulting in an incorrect hash. This dependency on the st",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
@@ -527,25 +507,57 @@
     },
     {
       "id": "U3",
-      "type": "U_dead_or_unused_signal",
-      "priority": "low",
-      "claim": "The SHA-related signals sha2_hash_start, sha2_valid, sha2_ready, sha2_digest_set, sha2_data, sha2_mode, and sha2_digest are declared but not connected or driven within this chunk. They may be used in other parts of the design, but if left unconnected the SHA pipeline could be incomplete or stuck.",
-      "cond": "unknown",
-      "risk": "If these signals are never assigned, SHA operations will not function, and digest data may be invalid or absent.",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "sha2_message_len_bits is a combinational wire depending on reg2hw.total_data_size.q. If total_data_size can be updated (e.g., by software) during an active DMA transfer that uses SHA, the hash length will be incorrect mid-stream, breaking hash integrity. This temporal window needs analysis.",
+      "cond": "During a DMA transfer with use_inline_hashing == 1 and sha2_hash_process == 1",
+      "risk": "Corrupted SHA length leads to wrong digest, potentially exploitable to bypass security checks.",
       "signals": [
-        "sha2_hash_start",
-        "sha2_valid",
-        "sha2_ready",
-        "sha2_digest_set",
-        "sha2_data",
-        "sha2_mode",
-        "sha2_digest"
+        "sha2_message_len_bits",
+        "reg2hw.total_data_size"
       ],
       "refs": [
-        "dma.sv:405-409"
+        "dma.sv:436-438"
       ],
       "formal": {
-        "temporal_shape": "",
+        "temporal_shape": "always",
+        "antecedent": "use_inline_hashing && (sha2_hash_process || some_dma_active)",
+        "consequent": "$stable(reg2hw.total_data_size.q)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "temporal",
+        "signals": [
+          "sha2_message_len_bits",
+          "reg2hw.total_data_size"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "use_inline_hashing && (sha2_hash_process || some_dma_active)",
+        "consequent": "$stable(reg2hw.total_data_size.q)",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "clear_index capture logic (clear_index_en, clear_index_d) relies on external sequencing. No local protection against double-clearing or missing an interrupt index. The cross-chunk protocol may be fragile.",
+      "cond": "When clear_index_en is asserted",
+      "risk": "May cause lost or spurious interrupts, degrading system reliability.",
+      "signals": [
+        "clear_index_en",
+        "clear_index_d",
+        "clear_index_q"
+      ],
+      "refs": [
+        "dma.sv:394-402"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
         "antecedent": "",
         "consequent": "",
         "formalizability": "none"
@@ -555,28 +567,62 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "sha2_hash_start",
-          "sha2_valid",
-          "sha2_ready",
-          "sha2_digest_set",
-          "sha2_data",
-          "sha2_mode",
-          "sha2_digest"
+          "clear_index_en",
+          "clear_index_d",
+          "clear_index_q"
         ],
-        "temporal_shape": "always",
-        "antecedent": "unknown",
-        "consequent": "The SHA-related signals sha2_hash_start, sha2_valid, sha2_ready, sha2_digest_set, sha2_data, sha2_mode, and sha2_digest are declared but not connected or driven within this chunk. They may be used in other parts of the design, but if left u",
+        "temporal_shape": "next_cycle",
+        "antecedent": "When clear_index_en is asserted",
+        "consequent": "clear_index capture logic (clear_index_en, clear_index_d) relies on external sequencing. No local protection against double-clearing or missing an interrupt index. The cross-chunk protocol may be fragile",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U5",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "transfer_remaining_bytes, chunk_remaining_bytes, remaining_bytes are declared but not assigned here; their values come from external logic. Any glitch or miscalculation could affect state machine control, including SHA finalize timing.",
+      "cond": "When these signals are used in the FSM",
+      "risk": "Incorrect transfer length tracking may cause premature or missed SHA finalize, affecting functionality.",
+      "signals": [
+        "transfer_remaining_bytes",
+        "chunk_remaining_bytes",
+        "remaining_bytes"
+      ],
+      "refs": [
+        "dma.sv:310-312"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "transfer_remaining_bytes",
+          "chunk_remaining_bytes",
+          "remaining_bytes"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "When these signals are used in the FSM",
+        "consequent": "transfer_remaining_bytes, chunk_remaining_bytes, remaining_bytes are declared but not assigned here; their values come from external logic. Any glitch or miscalculation could affect state machine control, including SHA finalize timing",
         "formalizability": "none",
         "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The use_inline_hashing and sha2_hash_process assignments directly control whether the SHA engine processes incoming data. An incorrect opcode check or a premature entry into DmaShaFinalize state could cause hash computation over incomplete or wrong data, leading to integrity failure (e.g., bypass of digest verification). The sha2_message_len_bits signal, computed from total_data_size, could be corrupted if total_data_size is unstable, allowing an attacker to cause hash length manipulation. These behaviors are critical for security.",
   "evidence_refs": [
     "dma.sv:289-438"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 289,
-  "line_end": 438,
-  "security_implications": ""
+  "line_end": 438
 }

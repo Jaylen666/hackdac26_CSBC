@@ -7,24 +7,24 @@
       "wr_err"
     ],
     "used": [
-      "reg_we",
       "addr_hit",
       "HMAC_PERMIT",
-      "reg_be"
+      "reg_be",
+      "reg_we"
     ],
     "modes": [],
     "tags": [
+      "access_control",
       "csr",
-      "error",
-      "access_control"
+      "error"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "error_detection",
-      "claim": "wr_err is asserted when reg_we is 1 and for at least one bit addr_hit[i] (i in 0..58) the expression (|(HMAC_PERMIT[i] & ~reg_be)) is true; otherwise wr_err is low.",
-      "cond": "always_comb evaluation",
+      "type": "assignment",
+      "claim": "wr_err is asserted (1) if reg_we is high and any addr_hit[i] is high and the bitwise reduction OR of (HMAC_PERMIT[i] & ~reg_be) is non-zero; otherwise wr_err is 0.",
+      "cond": "always",
       "signals": [
         "wr_err",
         "reg_we",
@@ -33,61 +33,152 @@
         "reg_be"
       ],
       "refs": [
-        "file:2009-2070"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2009-2070"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "wr_err == (reg_we & (|((addr_hit ? HMAC_PERMIT : '0) & ~reg_be)))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wr_err",
+          "reg_we",
+          "addr_hit",
+          "HMAC_PERMIT",
+          "reg_be"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "wr_err == (reg_we & (|((addr_hit ? HMAC_PERMIT : '0) & ~reg_be)))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "External register write control logic must suppress the write transaction and not update any register when wr_err is asserted.",
-      "cond": "reg_we is high and wr_err becomes high",
-      "risk": "If the write proceeds despite wr_err=1, a write to a prohibited byte lane in a security-sensitive register (e.g., key, digest, configuration lock) may succeed, breaking access control and potentially corrupting or exposing secrets.",
+      "type": "value_domain",
+      "claim": "HMAC_PERMIT[i] correctly encodes the set of byte lanes that are legal to write for the register decoded at addr_hit[i]; any mismatch (too permissive or too restrictive) will cause wr_err to misflag.",
+      "cond": "when reg_we is active",
+      "risk": "Legal writes may be blocked (if too restrictive) or illegal partial writes may go undetected (if too permissive), leading to register corruption.",
       "signals": [
-        "wr_err",
-        "reg_we"
+        "HMAC_PERMIT",
+        "addr_hit",
+        "reg_be"
       ],
       "refs": [
-        "file:2010"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2010-2069"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reg_we && addr_hit[i]",
+        "consequent": "HMAC_PERMIT[i] == expected_permit_for_register_i",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "HMAC_PERMIT",
+          "addr_hit",
+          "reg_be"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reg_we && addr_hit[i]",
+        "consequent": "HMAC_PERMIT[i] == expected_permit_for_register_i",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "producer_contract",
-      "claim": "addr_hit is a one-hot vector; exactly one addr_hit[i] is high for the currently addressed register.",
-      "cond": "during any register access with reg_we=1",
-      "risk": "Multiple simultaneous addr_hit assertions could cause wr_err to be spuriously asserted due to a permission mismatch on a non-accessed register, falsely aborting a valid write.",
+      "claim": "addr_hit is a one-hot decoded signal; at most one bit is set at any time.",
+      "cond": "always",
+      "risk": "If multiple addr_hit bits are high simultaneously, a write error could be spuriously asserted even if the targeted register’s byte enable matches its permit, confusing software error handling.",
       "signals": [
         "addr_hit"
       ],
       "refs": [
-        "file:2011-2069"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2010-2069"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$onehot0(addr_hit)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "addr_hit"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$onehot0(addr_hit)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The error condition ORs across all addr_hit bits; it is unclear if this is the intended behavior or if the protection should only consider the actual one-hot register. If multiple addr_hit bits are asserted due to a decoder bug, the resulting spurious wr_err may not be handled correctly.",
-      "cond": "when addr_hit is not one-hot (e.g., decoder glitch or error)",
-      "risk": "A valid access could be mistakenly rejected, potentially causing a denial-of-service or an unexpected bus error within the HMAC IP.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The values of HMAC_PERMIT array (indexed 0..58) are defined elsewhere; they must enforce that secret/key registers (e.g., KEY, config) are only writable with specific byte-enable masks (likely full-word only). If any HMAC_PERMIT[i] is too permissive, an attacker could partially overwrite key material.",
+      "cond": "when a write targets a security-sensitive register (e.g., KEY)",
+      "risk": "Partial overwrite of HMAC key register, leading to key extraction or integrity failure; or silent bypass of write-protection.",
       "signals": [
+        "HMAC_PERMIT",
         "addr_hit",
-        "wr_err"
+        "reg_be"
       ],
       "refs": [
-        "file:2011-2069"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2011-2069"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "addr_hit[key_reg_index] && reg_we",
+        "consequent": "HMAC_PERMIT[key_reg_index] == `FULL_WORD_MASK",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "HMAC_PERMIT",
+          "addr_hit",
+          "reg_be"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "addr_hit[key_reg_index] && reg_we",
+        "consequent": "HMAC_PERMIT[key_reg_index] == `FULL_WORD_MASK",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "wr_err is the write-error detector for the HMAC register interface. If HMAC_PERMIT masks for key registers are not set to require full-word writes, or if the logic fails to assert wr_err on mismatched byte enables, an attacker could partially overwrite HMAC key material (e.g., overwriting only one byte of the key) and potentially infer the key or bypass authentication. This chunk must be verified to correctly flag any partial write to security-critical registers.",
   "evidence_refs": [
-    "file:2009-2070"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2009-2070"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
   "line_start": 2009,
-  "line_end": 2070,
-  "security_implications": ""
+  "line_end": 2070
 }

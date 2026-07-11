@@ -13,30 +13,34 @@
       "RegDw",
       "top_pkg::TL_DW"
     ],
-    "modes": [],
+    "modes": [
+      "RegDw",
+      "TL_DW"
+    ],
     "tags": [
       "error",
-      "integrity",
-      "parameterization"
+      "parameterization",
+      "assertion"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "tl_err is driven exclusively by the err_o output of the tlul_err instance u_err.",
+      "claim": "tl_err is driven by the output err_o of the tlul_err instance u_err.",
       "cond": "always",
       "signals": [
-        "tl_err"
+        "tl_err",
+        "u_err.err_o"
       ],
       "refs": [
-        "file:298-303"
+        "tlul_adapter_reg.sv:298-303"
       ],
       "formal": {
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "",
         "consequent": "tl_err == u_err.err_o",
-        "formalizability": "partial"
+        "formalizability": "none"
       },
       "risk": "",
       "formal_sketch": {
@@ -44,31 +48,32 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "tl_err"
+          "tl_err",
+          "u_err.err_o"
         ],
-        "temporal_shape": "always",
+        "temporal_shape": "comb",
         "antecedent": "always",
         "consequent": "tl_err == u_err.err_o",
-        "formalizability": "partial",
-        "confidence": 1.0,
+        "formalizability": "none",
+        "confidence": 0.85,
         "source": "llm"
       }
     },
     {
       "id": "G2",
       "type": "generate_param",
-      "claim": "The ASSERT_INIT macro enforces that RegDw equals top_pkg::TL_DW at compile time; a mismatch generates a fatal elaboration error.",
-      "cond": "always (static)",
+      "claim": "The static assertion ensures that local parameter RegDw matches the top-level bus width TL_DW at compile time.",
+      "cond": "always",
       "signals": [
         "RegDw",
         "top_pkg::TL_DW"
       ],
       "refs": [
-        "file:305-305"
+        "tlul_adapter_reg.sv:305"
       ],
       "formal": {
         "temporal_shape": "always",
-        "antecedent": "",
+        "antecedent": "1",
         "consequent": "RegDw == top_pkg::TL_DW",
         "formalizability": "direct"
       },
@@ -82,7 +87,7 @@
           "top_pkg::TL_DW"
         ],
         "temporal_shape": "always",
-        "antecedent": "always (static)",
+        "antecedent": "1",
         "consequent": "RegDw == top_pkg::TL_DW",
         "formalizability": "direct",
         "confidence": 1.0,
@@ -93,20 +98,61 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "The TL-UL input tl_i must present signals conforming to the TL-UL protocol specification (valid opcode, address, etc.) as expected by the standard tlul_err error generator.",
-      "cond": "when tlul_adapter_reg is active and processing a transaction",
-      "risk": "Invalid tl_i could cause tlul_err to generate an incorrect error response, violating bus integrity or causing downstream misinterpretation.",
+      "type": "value_domain",
+      "claim": "The inputs clk_i, rst_ni, and tl_i provided to u_err are stable and meet the timing/validity requirements of tlul_err.",
+      "cond": "every cycle where tl_err is observed",
+      "risk": "If clk_i has glitches, rst_ni is not properly deasserted, or tl_i does not follow TL-UL protocol, u_err may produce incorrect err_o, leading to false or missed bus-error detection.",
       "signals": [
+        "clk_i",
+        "rst_ni",
         "tl_i"
       ],
       "refs": [
-        "file:298-303"
+        "tlul_adapter_reg.sv:298-301"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1",
+        "consequent": "valid_interface(clk_i, rst_ni, tl_i)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "tl_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1",
+        "consequent": "valid_interface(clk_i, rst_ni, tl_i)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The error-detection behavior of tlul_err (u_err) is opaque; the conditions under which err_o is asserted and whether all TL-UL protocol violations are correctly captured cannot be verified from this module alone.",
+      "cond": "any bus transaction",
+      "risk": "A bug in tlul_err may fail to assert err_o on a protocol violation, allowing an illegal access to proceed silently, or may spuriously assert err_o, triggering unnecessary fault handling and potentially masking real security alerts.",
+      "signals": [
+        "tl_i",
+        "tl_err"
+      ],
+      "refs": [
+        "tlul_adapter_reg.sv:298-302"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "tl_i is a valid TL-UL request",
+        "consequent": "",
         "formalizability": "none"
       },
       "formal_sketch": {
@@ -114,23 +160,23 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "tl_i"
+          "tl_i",
+          "tl_err"
         ],
         "temporal_shape": "comb",
-        "antecedent": "when tlul_adapter_reg is active and processing a transaction",
-        "consequent": "tl_i is a valid TL-UL request",
+        "antecedent": "any bus transaction",
+        "consequent": "The error-detection behavior of tlul_err (u_err) is opaque; the conditions under which err_o is asserted and whether all TL-UL protocol violations are correctly captured cannot be verified from this module alone",
         "formalizability": "none",
-        "confidence": 0.85,
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
-  "uncertain_points": [],
+  "security_implications": "The tl_err signal indicates a TL-UL bus error. If the u_err logic (not visible here) is defective, a protocol-level violation (e.g., illegal address, access outside allowed region) may go undetected, allowing unauthorized reads/writes to security-critical registers or memories. Conversely, a false tl_err could lead to spurious alert escalation that degrades availability. The static width assertion prevents mismatched bus width which could otherwise cause silent data truncation or extractions.",
   "evidence_refs": [
-    "file:298-307"
+    "tlul_adapter_reg.sv:298-307"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 298,
-  "line_end": 307,
-  "security_implications": ""
+  "line_end": 307
 }

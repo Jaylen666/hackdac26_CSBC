@@ -22,8 +22,41 @@
   "guarantees": [
     {
       "id": "G1",
+      "type": "default_fallback",
+      "claim": "All bits of msg_mask_permuted that are not assigned in the for-loop remain 0 from the initial '0 assignment.",
+      "cond": "always",
+      "signals": [
+        "msg_mask_permuted"
+      ],
+      "refs": [
+        "kmac.sv:916"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(j >= MsgWidth) -> (msg_mask_permuted[j] == 0)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(j >= MsgWidth) -> (msg_mask_permuted[j] == 0)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
       "type": "assignment",
-      "claim": "msg_mask_permuted[i] is always equal to static_mask[RndCnstMsgPerm[i]] for i in 0..MsgWidth-1.",
+      "claim": "For each integer i in 0 to MsgWidth-1, msg_mask_permuted[i] is driven by static_mask[RndCnstMsgPerm[i]].",
       "cond": "always",
       "signals": [
         "msg_mask_permuted",
@@ -31,24 +64,103 @@
         "RndCnstMsgPerm"
       ],
       "refs": [
-        "915-921"
-      ]
+        "kmac.sv:917-919"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(0 <= i) && (i < MsgWidth)",
+        "consequent": "msg_mask_permuted[i] == static_mask[RndCnstMsgPerm[i]]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted",
+          "static_mask",
+          "RndCnstMsgPerm"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(0 <= i) && (i < MsgWidth)",
+        "consequent": "msg_mask_permuted[i] == static_mask[RndCnstMsgPerm[i]]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "RndCnstMsgPerm[i] must be less than the bit-width of static_mask for all i in 0..MsgWidth-1.",
+      "claim": "For every i from 0 to MsgWidth-1, RndCnstMsgPerm[i] must be a valid index into the static_mask vector.",
       "cond": "always",
-      "risk": "Out-of-bounds index may cause simulation / synthesis failure or undefined mask bits, compromising the mask value.",
+      "risk": "Index out of bounds causes undefined read (X propagation, synthesis mismatch).",
       "signals": [
         "RndCnstMsgPerm",
         "static_mask"
       ],
       "refs": [
-        "919"
-      ]
+        "kmac.sv:919"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(0 <= i) && (i < MsgWidth)",
+        "consequent": "RndCnstMsgPerm[i] < $bits(static_mask)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "RndCnstMsgPerm",
+          "static_mask"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(0 <= i) && (i < MsgWidth)",
+        "consequent": "RndCnstMsgPerm[i] < $bits(static_mask)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The parameter MsgWidth must not exceed the bit-width of msg_mask_permuted.",
+      "cond": "always",
+      "risk": "Loop writes to non-existent bits; simulation may show out-of-bound writes or silent truncation.",
+      "signals": [
+        "msg_mask_permuted",
+        "MsgWidth"
+      ],
+      "refs": [
+        "kmac.sv:917-919"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "MsgWidth <= $bits(msg_mask_permuted)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted",
+          "MsgWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "MsgWidth <= $bits(msg_mask_permuted)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -56,24 +168,46 @@
       "id": "U1",
       "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The comment 'Performance enhancement: Use static mask instead of dynamic LFSR' suggests a trade-off that may reduce entropy of the message mask.",
-      "cond": "When the mask is intended to provide side-channel or fault-injection protection.",
-      "risk": "A static mask creates a predictable pattern, potentially allowing an attacker to undo the mask and recover secret data or weaken differential security.",
+      "claim": "Design uses a static mask (static_mask) and a fixed permutation (RndCnstMsgPerm) instead of a dynamic LFSR; it is not clear if this static mask is adequately unpredictable to resist side-channel analysis.",
+      "cond": "always",
+      "risk": "If the mask or permutation can be predicted or observed, secret-dependent message masking may be ineffective, leading to side-channel leakage.",
       "signals": [
         "static_mask",
-        "msg_mask_permuted",
-        "RndCnstMsgPerm"
+        "RndCnstMsgPerm",
+        "msg_mask_permuted"
       ],
       "refs": [
-        "918"
-      ]
+        "kmac.sv:918-919"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "static_mask",
+          "RndCnstMsgPerm",
+          "msg_mask_permuted"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "Design uses a static mask (static_mask) and a fixed permutation (RndCnstMsgPerm) instead of a dynamic LFSR; it is not clear if this static mask is adequately unpredictable to resist side-channel analysis",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "msg_mask_permuted is generated from static_mask and RndCnstMsgPerm for message masking. If the mask values or the permutation are not cryptographically independent from secret data, an attacker could extract side-channel information. The static nature of the mask (instead of LFSR) may reduce resistance to differential power/EM analysis. Additionally, a mismatch in MsgWidth could lead to incomplete masking of full-width secret data.",
   "evidence_refs": [
-    "915-921"
+    "kmac.sv:915-921"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 915,
-  "line_end": 921,
-  "security_implications": ""
+  "line_end": 921
 }

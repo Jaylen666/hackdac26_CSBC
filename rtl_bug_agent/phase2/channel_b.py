@@ -789,6 +789,14 @@ def _annotate_semantic_finding(
         item["assumption"] = assumption
         item["relevant_guarantees"] = guarantees
         item["_semantic_query_kind"] = query.get("kind", "")
+
+        # Extract embedding similarity score from the best-ranked match
+        # This measures how semantically related the query (assumption/uncertain)
+        # and the matched guarantee are, based on BGE-M3 dense+signal scoring.
+        # Used downstream in fusion.py for ranking findings.
+        best_score = max((m.get("score", 0.0) for m in matches), default=0.0)
+        item["_embedding_similarity"] = best_score
+
         summary = summarise_formal_context(
             [assumption, *guarantees] if assumption else guarantees
         )

@@ -23,7 +23,7 @@ from rtl_bug_agent.phase2.signal_graph import SignalGraph
 from rtl_bug_agent.phase2.trace import TraceSink, append_trace
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase3/verify.md"
+DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase3/verify_agent.md"
 
 
 def _call_with_retry(fn, attempts: int = 3, delay: float = 1.0):
@@ -91,7 +91,18 @@ def verify_finding(
         else:
             source_sections.remove(largest)
 
-    if official_claims:
+    # Reference intent: prefer per-finding retrieved ref_clues (attached by
+    # ref_library.attach_refs before Phase 3). These are already filtered to
+    # the top-k relevant refs for THIS finding, so they stay small and precise.
+    # Fall back to whole-batch official_claims for legacy callers that don't
+    # run the retrieval step.
+    ref_clues = finding.get("ref_clues", []) or []
+    if ref_clues:
+        payload["reference_intent"] = [
+            {"source": c.get("source", ""), "claim": c.get("text", "")}
+            for c in ref_clues
+        ]
+    elif official_claims:
         payload["official_spec"] = [
             {"claim": c.get("claim", ""), "source": c.get("source", "")}
             for c in official_claims

@@ -6,76 +6,216 @@
     "driven": [],
     "used": [],
     "modes": [
-      "EntropyWidth",
-      "EntropyRounds",
-      "EntropyRndWidth",
-      "CntWidth",
-      "EccDataWidth",
-      "EccWidth",
-      "EccWords",
-      "TotalEccWords"
+      "KmacEnMasking"
     ],
     "tags": [
-      "lifecycle",
-      "security",
-      "parameterization"
+      "secret",
+      "key",
+      "wipe",
+      "error",
+      "fault",
+      "integrity",
+      "lifecycle"
     ]
   },
   "guarantees": [],
   "assumptions": [
     {
       "id": "A1",
-      "type": "lifecycle",
-      "claim": "The lifecycle enable input en_i must be asserted for the controller to be operational, as implied by the lifecycle enforcement comment.",
-      "cond": "Whenever the keymgr_ctrl is expected to process operations.",
-      "risk": "If en_i is deasserted while the controller is not designed to be fully disabled, it may produce invalid outputs, hang, or bypass security controls.",
+      "type": "value_domain",
+      "claim": "KeyWidth must be a multiple of 64 (EccDataWidth) to avoid integer truncation in ECC word calculation.",
+      "cond": "always",
+      "risk": "EccWords will truncate if KeyWidth is not a multiple of 64, causing ECC data misalignment across shares and CDIs, potentially undetected data corruption.",
       "signals": [
-        "en_i"
+        "KeyWidth",
+        "EccDataWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:20-21"
-      ]
+        "keymgr_ctrl.sv:79-81"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "KeyWidth % 64 == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "KeyWidth",
+          "EccDataWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "KeyWidth % 64 == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "value_domain",
-      "claim": "Fault inputs not related to current operations (regfile_intg_err_i, shadowed_update_err_i, shadowed_storage_err_i, reseed_cnt_err_i, sideload_sel_err_i, sideload_fsm_err_i) are valid and stable when en_i is asserted.",
-      "cond": "During active operation with en_i = 1.",
-      "risk": "Glitches or undefined values on these inputs could cause false error/fault reporting or missed containment.",
+      "claim": "LfsrWidth must be even to produce integer EntropyWidth.",
+      "cond": "always",
+      "risk": "An odd LfsrWidth causes fractional EntropyWidth, leading to truncated EntropyRounds and potentially broken PRNG reseed scheduling.",
       "signals": [
-        "regfile_intg_err_i",
-        "shadowed_update_err_i",
-        "shadowed_storage_err_i",
-        "reseed_cnt_err_i",
-        "sideload_sel_err_i",
-        "sideload_fsm_err_i"
+        "LfsrWidth",
+        "EntropyWidth"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:24-29"
-      ]
+        "keymgr_ctrl.sv:75-77"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "LfsrWidth % 2 == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "LfsrWidth",
+          "EntropyWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "LfsrWidth % 2 == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_width_param_hazard",
       "priority": "high",
-      "claim": "The comment 'SEC_CM: CTRL.FSM.GLOBAL_ESC' on en_i hints at a security countermeasure, but the actual FSM implementation that enforces global escalation is not present in this chunk.",
-      "cond": "When en_i transitions or is deasserted.",
-      "risk": "Without reviewing the FSM logic, it is unclear if en_i properly triggers a global escalation that wipes or disables sensitive state, leading to potential security bypass.",
+      "claim": "KeyWidth may not be a multiple of 64, causing ECC word misalignment across Shares and CDIs.",
+      "cond": "When KeyWidth is configured to a non-multiple of 64.",
+      "risk": "ECC check bits could be applied to wrong data chunks, causing silent data corruption in key material.",
+      "signals": [
+        "KeyWidth",
+        "EccWords",
+        "TotalEccWords"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:79-82"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "KeyWidth % 64 != 0",
+        "consequent": "",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "KeyWidth",
+          "EccWords",
+          "TotalEccWords"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "KeyWidth % 64 != 0",
+        "consequent": "KeyWidth may not be a multiple of 64, causing ECC word misalignment across Shares and CDIs",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Error and fault aggregation from inputs (shadowed_*_err_i, sideload_*_err_i) to outputs (error_o, fault_o) is not defined in this chunk.",
+      "cond": "Any input error signal asserts.",
+      "risk": "Incorrect or incomplete prioritization could mask a critical fault, allowing compromised key operations.",
+      "signals": [
+        "error_o",
+        "fault_o",
+        "regfile_intg_err_i",
+        "shadowed_update_err_i",
+        "shadowed_storage_err_i",
+        "sideload_sel_err_i",
+        "sideload_fsm_err_i"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:24-38"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "error_o",
+          "fault_o",
+          "regfile_intg_err_i",
+          "shadowed_update_err_i",
+          "shadowed_storage_err_i",
+          "sideload_sel_err_i",
+          "sideload_fsm_err_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Any input error signal asserts",
+        "consequent": "Error and fault aggregation from inputs (shadowed_*_err_i, sideload_*_err_i) to outputs (error_o, fault_o) is not defined in this chunk",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Lifecycle enforcement input en_i is only declared; usage is elsewhere and critical for security gating.",
+      "cond": "en_i deasserted.",
+      "risk": "If en_i is not properly used to gate all sensitive state transitions, operations could execute in unauthorized lifecycle states, exposing keys.",
       "signals": [
         "en_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:20"
-      ]
+        "keymgr_ctrl.sv:20-21"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "en_i deasserted",
+        "consequent": "Lifecycle enforcement input en_i is only declared; usage is elsewhere and critical for security gating",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Secret key material (root_key_i, kmac_data_i) is present in the interface. The output wipe_key_o is intended to zeroize keys; if not driven correctly, key material could persist. Error inputs (shadowed_update_err_i, etc.) and fault outputs aggregate integrity errors; if error handling logic is flawed, undetected faults could lead to bypass of security checks. The lifecycle enable en_i controls global operation; misuse could allow key operations in unauthorized lifecycle states.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:8-82"
+    "keymgr_ctrl.sv:8-82"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 8,
-  "line_end": 82,
-  "security_implications": ""
+  "line_end": 82
 }

@@ -2,27 +2,30 @@
   "chunk_id": "uart_core__continuous_region__declarations_or_instances__003",
   "header": {
     "module": "uart_core",
-    "block_kind": "instance",
+    "block_kind": "mixed",
     "driven": [
       "rx_sync"
     ],
     "used": [
-      "rx",
       "clk_i",
-      "rst_ni"
+      "rst_ni",
+      "rx"
     ],
-    "modes": [],
+    "modes": [
+      "Width=1",
+      "ResetValue=1'b1"
+    ],
     "tags": [
-      "synchronizer",
       "reset",
-      "asynchronous"
+      "clock_domain",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "sync_rx instantiates a two-flop synchronizer that always drives rx_sync from rx, with a reset value of 1'b1, ensuring rx_sync is logic 1 during reset and follows rx after two clk_i cycles once reset is released.",
+      "type": "instance",
+      "claim": "Instance sync_rx of prim_flop_2sync with Width=1 and ResetValue=1'b1 connects rx to rx_sync through a double-flop synchronizer.",
       "cond": "always",
       "signals": [
         "rx",
@@ -31,26 +34,71 @@
         "rst_ni"
       ],
       "refs": [
-        "233-241"
-      ]
+        "uart_core.sv:233-241"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rx",
+          "rx_sync",
+          "clk_i",
+          "rst_ni"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "Instance sync_rx of prim_flop_2sync with Width=1 and ResetValue=1'b1 connects rx to rx_sync through a double-flop synchronizer",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "The external UART receive line rx idles at logic 1 (high), consistent with standard UART idle, so the synchronizer's reset value 1'b1 does not cause a false start bit when reset is released.",
-      "cond": "when rst_ni is de-asserted and rx is low",
-      "risk": "If rx idles low, after reset release rx_sync will immediately sample low, potentially triggering a false start bit and beginning an erroneous reception.",
+      "type": "value_domain",
+      "claim": "When rst_ni deasserts and for the first few cycles afterward, the UART receive line rx must be idle high (logic 1) to prevent a false start bit from being captured by the synchronizer.",
+      "cond": "during and immediately after reset release",
+      "risk": "If rx is low at that time, rx_sync could output a 0 on the first active edge, which may be interpreted as a start bit by downstream logic, leading to a spurious byte reception.",
       "signals": [
         "rx",
         "rst_ni",
         "rx_sync"
       ],
       "refs": [
-        "233-241",
-        "233-245"
-      ]
+        "uart_core.sv:233-241"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "$rose(rst_ni)",
+        "consequent": "rx == 1'b1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rx",
+          "rst_ni",
+          "rx_sync"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "$rose(rst_ni)",
+        "consequent": "rx == 1'b1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -58,26 +106,50 @@
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The majority filter that produces rx_in_maj from rx_sync (using rx_sync_q1, rx_sync_q2, rx_in_mx) is not defined in this chunk; its actual implementation and filtering threshold must be verified to ensure it reliably rejects noise spikes on the UART receive line as intended by the comment.",
-      "cond": "when noise pulses appear on rx",
-      "risk": "Insufficient noise filtering could allow glitches on rx_sync to disturb the receiver state machine, inject spurious start/stop bits, or corrupt data, potentially affecting UART-driven control paths.",
+      "claim": "Signals rx_sync_q1, rx_sync_q2, rx_in_mx, rx_in_maj are declared but not connected here. The actual majority-filter logic must be verified to correctly use rx_sync and produce a deglitched rx_in_maj.",
+      "cond": "unknown",
+      "risk": "Missing or incorrect filter implementation could allow noise spikes on rx to corrupt received data, breaking communication integrity.",
       "signals": [
-        "rx_sync",
         "rx_sync_q1",
         "rx_sync_q2",
         "rx_in_mx",
-        "rx_in_maj"
+        "rx_in_maj",
+        "rx_sync"
       ],
       "refs": [
-        "243-245"
-      ]
+        "uart_core.sv:245"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rx_sync_q1",
+          "rx_sync_q2",
+          "rx_in_mx",
+          "rx_in_maj",
+          "rx_sync"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "Signals rx_sync_q1, rx_sync_q2, rx_in_mx, rx_in_maj are declared but not connected here. The actual majority-filter logic must be verified to correctly use rx_sync and produce a deglitched rx_in_maj",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "",
   "evidence_refs": [
-    "233-245"
+    "uart_core.sv:233-245"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 233,
-  "line_end": 245,
-  "security_implications": ""
+  "line_end": 245
 }

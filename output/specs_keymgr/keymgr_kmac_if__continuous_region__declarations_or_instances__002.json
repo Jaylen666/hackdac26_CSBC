@@ -9,171 +9,189 @@
     "used": [
       "start",
       "done_o",
-      "kmac_data_i",
-      "entropy_i",
+      "kmac_data_i.digest_share1",
+      "kmac_data_i.digest_share0",
+      "entropy_i[1]",
+      "entropy_i[0]",
       "DecoyOutputCopies"
     ],
-    "modes": [
-      "digest_mode (start && done_o)",
-      "decoy_mode (! (start && done_o))"
-    ],
+    "modes": [],
     "tags": [
-      "secret",
       "digest",
-      "entropy",
+      "secret",
       "mask",
-      "handshake",
-      "parameterization"
+      "entropy",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "When start and done_o are both true, data_o outputs the concatenation of kmac_data_i.digest_share1 and kmac_data_i.digest_share0.",
+      "claim": "When start and done_o are both asserted, data_o is driven with the concatenation of digest_share1 (MSB) and digest_share0 (LSB).",
       "cond": "start && done_o",
       "signals": [
+        "data_o",
         "start",
         "done_o",
-        "kmac_data_i",
-        "data_o"
+        "kmac_data_i.digest_share1",
+        "kmac_data_i.digest_share0"
       ],
       "refs": [
-        "file:288-290"
-      ]
+        "keymgr_kmac_if.sv:288-290"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "start && done_o",
+        "consequent": "data_o == {kmac_data_i.digest_share1, kmac_data_i.digest_share0}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_o",
+          "start",
+          "done_o",
+          "kmac_data_i.digest_share1",
+          "kmac_data_i.digest_share0"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "start && done_o",
+        "consequent": "data_o == {kmac_data_i.digest_share1, kmac_data_i.digest_share0}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "Otherwise, data_o outputs a decoy value consisting of DecoyOutputCopies copies of entropy_i[1] concatenated with DecoyOutputCopies copies of entropy_i[0].",
-      "cond": "! (start && done_o)",
+      "type": "default_fallback",
+      "claim": "When start or done_o is deasserted, data_o is driven with a decoy value formed by replicating entropy_i[1] (MSB half) and entropy_i[0] (LSB half), each repeated DecoyOutputCopies times.",
+      "cond": "!(start && done_o)",
       "signals": [
         "data_o",
-        "entropy_i",
+        "start",
+        "done_o",
+        "entropy_i[1]",
+        "entropy_i[0]",
         "DecoyOutputCopies"
       ],
       "refs": [
-        "file:291-292"
-      ]
+        "keymgr_kmac_if.sv:291-292"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!(start && done_o)",
+        "consequent": "data_o == {{DecoyOutputCopies{entropy_i[1]}}, {DecoyOutputCopies{entropy_i[0]}}}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_o",
+          "start",
+          "done_o",
+          "entropy_i[1]",
+          "entropy_i[0]",
+          "DecoyOutputCopies"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!(start && done_o)",
+        "consequent": "data_o == {{DecoyOutputCopies{entropy_i[1]}}, {DecoyOutputCopies{entropy_i[0]}}}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "start and done_o must accurately indicate that the KMAC operation is complete and the digest shares are valid.",
-      "cond": "When start && done_o is used to gate digest output.",
-      "risk": "If start or done_o are mis-timed or glitch, the real digest could be output prematurely or a stale digest could be output, causing security violations.",
-      "signals": [
-        "start",
-        "done_o"
-      ],
-      "refs": [
-        "file:288"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "kmac_data_i.digest_share1 and digest_share0 must contain valid digest shares when start && done_o is true.",
-      "cond": "start && done_o",
-      "risk": "If the shares are not yet valid or are corrupted, data_o may output incorrect digest data, potentially impacting key derivation.",
-      "signals": [
-        "kmac_data_i",
-        "start",
-        "done_o"
-      ],
-      "refs": [
-        "file:288-290"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "security_precondition",
-      "claim": "entropy_i must provide sufficient randomness and toggling to serve as an effective decoy mask on the output.",
-      "cond": "Always, but especially when outputting decoy (i.e., when not outputting real digest).",
-      "risk": "If entropy_i is static or predictable, the decoy output may leak information about the operational state and fail to mask side-channel emissions.",
-      "signals": [
-        "entropy_i",
-        "data_o"
-      ],
-      "refs": [
-        "file:291-292"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "mode_config",
-      "claim": "The parameter DecoyOutputCopies must equal the bit-width of each digest share (digest_share1 and digest_share0) to ensure correct output width.",
-      "cond": "When the module is instantiated.",
-      "risk": "A mismatch would cause truncation or width extension of the digest signal on data_o, leading to functional failure.",
+      "type": "value_domain",
+      "claim": "DecoyOutputCopies must equal the bit width of digest_share0 (and digest_share1, assumed equal) so that replication produces the correct output width.",
+      "cond": "always",
+      "risk": "If DecoyOutputCopies does not match the digest-share width, the decoy path yields a different bit width than the true-digest path, causing a multidriven net or synthesis mismatch, or leaking partial/uninitialized bits on the output.",
       "signals": [
         "DecoyOutputCopies",
-        "kmac_data_i.digest_share1",
-        "kmac_data_i.digest_share0",
-        "data_o"
+        "digest_share0",
+        "digest_share1"
       ],
       "refs": [
-        "file:288-292"
-      ]
+        "keymgr_kmac_if.sv:291-292"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "DecoyOutputCopies == $bits(kmac_data_i.digest_share0) && DecoyOutputCopies == $bits(kmac_data_i.digest_share1)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "DecoyOutputCopies",
+          "digest_share0",
+          "digest_share1"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "DecoyOutputCopies == $bits(kmac_data_i.digest_share0) && DecoyOutputCopies == $bits(kmac_data_i.digest_share1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "The condition start && done_o may become true before kmac_data_i.digest_share* are stable, causing data_o to briefly output invalid digest shares.",
-      "cond": "When start && done_o transitions to true.",
-      "risk": "Downstream logic might capture a transient wrong digest, leading to key derivation errors or security bypass.",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "If entropy_i[1:0] stays constant for many cycles during non-done periods, the decoy output becomes static and may leak timing or allow an attacker to distinguish the true-digest window.",
+      "cond": "!(start && done_o) applied across multiple cycles with stable entropy_i",
+      "risk": "A predictable decoy pattern weakens the security benefit; an observer could infer when the real digest is exposed by detecting a change in data_o.",
       "signals": [
-        "start",
-        "done_o",
-        "kmac_data_i",
+        "entropy_i[1:0]",
         "data_o"
       ],
       "refs": [
-        "file:288-290"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "medium",
-      "claim": "The decoy value is only a replication of two single entropy bits, which may not provide sufficient switching factor to mask the output data bus transitions.",
-      "cond": "When decoy mode is active.",
-      "risk": "Side-channel analysis might distinguish decoy output from real digest output or infer entropy bit values, reducing protection.",
-      "signals": [
-        "data_o",
-        "entropy_i",
-        "DecoyOutputCopies"
+        "keymgr_kmac_if.sv:291-292"
       ],
-      "refs": [
-        "file:291-292"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "No compile-time check ensures that DecoyOutputCopies equals the width of kmac_data_i.digest_share1 (and share0), so a mismatch may go undetected.",
-      "cond": "When DecoyOutputCopies is set incorrectly relative to digest share widths.",
-      "risk": "Size mismatch on the data_o bus could cause functional failure or silent data corruption.",
-      "signals": [
-        "DecoyOutputCopies",
-        "kmac_data_i",
-        "data_o"
-      ],
-      "refs": [
-        "file:288-292"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "entropy_i[1:0]",
+          "data_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!(start && done_o) applied across multiple cycles with stable entropy_i",
+        "consequent": "the decoy output becomes static and may leak timing or allow an attacker to distinguish the true-digest window",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "data_o normally outputs raw digest shares (potentially secret key material) when start && done_o is true; during other times a decoy value built from entropy_i is presented. The direct exposure of digest_share0/1 on data_o without additional masking assumes downstream consumers follow protocol and do not observe the bus during non-done windows. The width of DecoyOutputCopies must exactly match the digest-share width, otherwise bit-width mismatch could expose or truncate the decoy, weakening the masking property.",
   "evidence_refs": [
-    "file:288-292"
+    "keymgr_kmac_if.sv:288-292"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 288,
-  "line_end": 292,
-  "security_implications": ""
+  "line_end": 292
 }

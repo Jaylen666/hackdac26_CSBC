@@ -7,124 +7,313 @@
       "fifo_wdata_sel_o"
     ],
     "used": [
+      "rst_ni",
       "clr_fifo_wdata_sel",
       "fifo_wsel_o",
       "fifo_wvalid_o"
     ],
-    "modes": [
-      "counter"
-    ],
+    "modes": [],
     "tags": [
       "fifo",
       "counter",
-      "potential_overflow"
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (negedge rst_ni), fifo_wdata_sel_o is cleared to all zeros.",
-      "cond": "negedge rst_ni",
+      "claim": "When rst_ni is low, fifo_wdata_sel_o is cleared to zero.",
+      "cond": "!rst_ni",
       "signals": [
-        "fifo_wdata_sel_o",
-        "rst_ni"
+        "rst_ni",
+        "fifo_wdata_sel_o"
       ],
       "refs": [
-        "hmac_core.sv:297-298"
-      ]
+        "hmac_core.sv:296-298"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "fifo_wdata_sel_o == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "fifo_wdata_sel_o == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When clr_fifo_wdata_sel is high (and not in reset), fifo_wdata_sel_o is cleared to all zeros.",
-      "cond": "clr_fifo_wdata_sel && !rst_ni_reset_active",
+      "claim": "When clr_fifo_wdata_sel is asserted, fifo_wdata_sel_o is cleared to zero on the next clock cycle (priority over increment).",
+      "cond": "clr_fifo_wdata_sel",
       "signals": [
-        "fifo_wdata_sel_o",
-        "clr_fifo_wdata_sel"
+        "clr_fifo_wdata_sel",
+        "fifo_wdata_sel_o"
       ],
       "refs": [
         "hmac_core.sv:299-300"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "clr_fifo_wdata_sel",
+        "consequent": "fifo_wdata_sel_o == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "clr_fifo_wdata_sel",
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "clr_fifo_wdata_sel",
+        "consequent": "fifo_wdata_sel_o == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When clr_fifo_wdata_sel is low and (fifo_wsel_o && fifo_wvalid_o) is true, fifo_wdata_sel_o increments by 1.",
-      "cond": "!clr_fifo_wdata_sel && fifo_wsel_o && fifo_wvalid_o",
+      "claim": "When fifo_wsel_o and fifo_wvalid_o are both high and no reset or clear, fifo_wdata_sel_o increments by 1 on the next cycle.",
+      "cond": "fifo_wsel_o && fifo_wvalid_o && rst_ni && !clr_fifo_wdata_sel",
       "signals": [
-        "fifo_wdata_sel_o",
         "fifo_wsel_o",
-        "fifo_wvalid_o"
+        "fifo_wvalid_o",
+        "fifo_wdata_sel_o"
       ],
       "refs": [
         "hmac_core.sv:301-302"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "fifo_wsel_o && fifo_wvalid_o && rst_ni && !clr_fifo_wdata_sel",
+        "consequent": "fifo_wdata_sel_o == $past(fifo_wdata_sel_o) + 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "fifo_wsel_o",
+          "fifo_wvalid_o",
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "fifo_wsel_o && fifo_wvalid_o && rst_ni && !clr_fifo_wdata_sel",
+        "consequent": "fifo_wdata_sel_o == $past(fifo_wdata_sel_o) + 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "default_fallback",
-      "claim": "In all other conditions (no reset, no clear, no valid write handshake), fifo_wdata_sel_o retains its previous value.",
-      "cond": "always_ff no update path taken",
+      "claim": "When none of the above conditions hold, fifo_wdata_sel_o retains its previous value.",
+      "cond": "default (no reset, clear, or valid & wsel)",
       "signals": [
         "fifo_wdata_sel_o"
       ],
       "refs": [
-        "hmac_core.sv:296-304"
-      ]
+        "hmac_core.sv:296-303"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !clr_fifo_wdata_sel && !(fifo_wsel_o && fifo_wvalid_o)",
+        "consequent": "fifo_wdata_sel_o == $past(fifo_wdata_sel_o)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !clr_fifo_wdata_sel && !(fifo_wsel_o && fifo_wvalid_o)",
+        "consequent": "fifo_wdata_sel_o == $past(fifo_wdata_sel_o)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "clr_fifo_wdata_sel is asserted appropriately to reset the counter before a new data sequence; its timing must not leave stale non‑zero values.",
-      "cond": "whenever a new FIFO write data selection context starts",
-      "risk": "Stale counter value causes mis‑selection of write data, potentially mixing HMAC message data or corrupting internal state.",
+      "type": "producer_contract",
+      "claim": "Inputs fifo_wsel_o, fifo_wvalid_o, and clr_fifo_wdata_sel are stable and glitch-free at the clock edge.",
+      "cond": "always",
+      "risk": "Glitches could cause spurious increments or clears, corrupting the FIFO write selector.",
       "signals": [
+        "fifo_wsel_o",
+        "fifo_wvalid_o",
         "clr_fifo_wdata_sel"
       ],
       "refs": [
-        "hmac_core.sv:299-300"
-      ]
+        "hmac_core.sv:301-302"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$stable(fifo_wsel_o) && $stable(fifo_wvalid_o) && $stable(clr_fifo_wdata_sel)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "fifo_wsel_o",
+          "fifo_wvalid_o",
+          "clr_fifo_wdata_sel"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$stable(fifo_wsel_o) && $stable(fifo_wvalid_o) && $stable(clr_fifo_wdata_sel)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "value_domain",
-      "claim": "The bit‑width of fifo_wdata_sel_o is sufficient that the counter never wraps around within a single operation sequence.",
-      "cond": "for any legal number of write transfers (fifo_wsel_o && fifo_wvalid_o) before a clear",
-      "risk": "Wrap‑around to zero reuses earlier selection values, which could lead to incorrect data placement, leakage, or HMAC integrity failure.",
-      "signals": [
-        "fifo_wdata_sel_o",
-        "fifo_wsel_o",
-        "fifo_wvalid_o"
-      ],
-      "refs": [
-        "hmac_core.sv:302"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The width of fifo_wdata_sel_o is not visible in this chunk; if it is too narrow, the counter wraps without any saturation logic, potentially causing overwrite or mis‑indexing of security‑sensitive data paths.",
-      "cond": "when fifo_wdata_sel_o reaches all‑ones and a further write occurs",
-      "risk": "Wrap‑around may reuse selection values that point to intermixed HMAC message bytes, violating data integrity or exposing secrets.",
+      "claim": "The width of fifo_wdata_sel_o must be large enough to avoid overflow during normal operation.",
+      "cond": "during operation",
+      "risk": "Overflow would cause the selector to wrap to zero, potentially selecting an unintended data source and causing data corruption or security violation.",
       "signals": [
         "fifo_wdata_sel_o"
       ],
       "refs": [
         "hmac_core.sv:302"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "fifo_wdata_sel_o < 2^$bits(fifo_wdata_sel_o) - 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during operation",
+        "consequent": "fifo_wdata_sel_o < 2^$bits(fifo_wdata_sel_o) - 1",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The design intent for overflow of fifo_wdata_sel_o is unclear. The counter increments indefinitely and wraps on overflow. If it is meant to cycle through a finite set of sources, the wrap may be intended, but the maximum count is not defined.",
+      "cond": "fifo_wdata_sel_o reaches maximum representation",
+      "risk": "Wrap may select an inappropriate data source, potentially causing wrong data to be written to the HMAC FIFO, affecting digest computation or secret handling.",
+      "signals": [
+        "fifo_wdata_sel_o"
+      ],
+      "refs": [
+        "hmac_core.sv:302"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "fifo_wsel_o && fifo_wvalid_o && fifo_wdata_sel_o == {($bits(fifo_wdata_sel_o)){1'b1}}",
+        "consequent": "fifo_wdata_sel_o == '0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "fifo_wsel_o && fifo_wvalid_o && fifo_wdata_sel_o == {($bits(fifo_wdata_sel_o)){1'b1}}",
+        "consequent": "fifo_wdata_sel_o == '0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "When both clr_fifo_wdata_sel and fifo_wsel && fifo_wvalid are active on the same cycle, the clear takes priority and the selector is zeroed instead of incrementing. The FIFO may be written in the same cycle with the selector value before the clear or after, depending on the datapath. This timing relationship could result in a write using an incorrect selector.",
+      "cond": "simultaneous clr_fifo_wdata_sel and fifo_wsel_o && fifo_wvalid_o",
+      "risk": "A FIFO write could use a stale or unexpected selector value, leading to data misidentification.",
+      "signals": [
+        "clr_fifo_wdata_sel",
+        "fifo_wsel_o",
+        "fifo_wvalid_o",
+        "fifo_wdata_sel_o"
+      ],
+      "refs": [
+        "hmac_core.sv:299-302"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "clr_fifo_wdata_sel && fifo_wsel_o && fifo_wvalid_o",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "clr_fifo_wdata_sel",
+          "fifo_wsel_o",
+          "fifo_wvalid_o",
+          "fifo_wdata_sel_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "clr_fifo_wdata_sel && fifo_wsel_o && fifo_wvalid_o",
+        "consequent": "the clear takes priority and the selector is zeroed instead of incrementing. The FIFO may be written in the same cycle with the selector value before the clear or after, depending on the datapath. This timing relationship could result in a",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "fifo_wdata_sel_o controls which data source is written into the HMAC core's internal FIFO. If key material or digest state is routed through this selector, overflow, glitches, or priority mismatches could lead to selecting and writing incorrect secret data, potentially causing leakage or integrity failure in the HMAC operation.",
   "evidence_refs": [
     "hmac_core.sv:296-304"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
   "line_start": 296,
-  "line_end": 304,
-  "security_implications": ""
+  "line_end": 304
 }

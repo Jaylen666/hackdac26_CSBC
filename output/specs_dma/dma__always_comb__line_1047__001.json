@@ -14,11 +14,10 @@
     ],
     "modes": [
       "OtInternalAddr",
-      "SocControlAddr",
-      "default"
+      "SocControlAddr"
     ],
     "tags": [
-      "access_control",
+      "data_path",
       "mux"
     ]
   },
@@ -26,22 +25,20 @@
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "dma_rsp_data is selected based on src_asid: OtInternalAddr -> dma_host_tlul_rsp_data, SocControlAddr -> dma_ctn_tlul_rsp_data, otherwise -> sys_resp_q.read_data.",
-      "cond": "always",
+      "claim": "When src_asid == OtInternalAddr, dma_rsp_data gets the value of dma_host_tlul_rsp_data.",
+      "cond": "src_asid == OtInternalAddr",
       "signals": [
         "src_asid",
         "dma_rsp_data",
-        "dma_host_tlul_rsp_data",
-        "dma_ctn_tlul_rsp_data",
-        "sys_resp_q.read_data"
+        "dma_host_tlul_rsp_data"
       ],
       "refs": [
-        "dma.sv:1049-1051"
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:1048-1049"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "dma_rsp_data == (src_asid == OtInternalAddr ? dma_host_tlul_rsp_data : src_asid == SocControlAddr ? dma_ctn_tlul_rsp_data : sys_resp_q.read_data)",
+        "antecedent": "src_asid == OtInternalAddr",
+        "consequent": "dma_rsp_data == dma_host_tlul_rsp_data",
         "formalizability": "direct"
       },
       "risk": "",
@@ -52,13 +49,85 @@
         "signals": [
           "src_asid",
           "dma_rsp_data",
-          "dma_host_tlul_rsp_data",
-          "dma_ctn_tlul_rsp_data",
+          "dma_host_tlul_rsp_data"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "src_asid == OtInternalAddr",
+        "consequent": "dma_rsp_data == dma_host_tlul_rsp_data",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When src_asid == SocControlAddr, dma_rsp_data gets the value of dma_ctn_tlul_rsp_data.",
+      "cond": "src_asid == SocControlAddr",
+      "signals": [
+        "src_asid",
+        "dma_rsp_data",
+        "dma_ctn_tlul_rsp_data"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:1048,1050"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "src_asid == SocControlAddr",
+        "consequent": "dma_rsp_data == dma_ctn_tlul_rsp_data",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "src_asid",
+          "dma_rsp_data",
+          "dma_ctn_tlul_rsp_data"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "src_asid == SocControlAddr",
+        "consequent": "dma_rsp_data == dma_ctn_tlul_rsp_data",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "When src_asid matches neither OtInternalAddr nor SocControlAddr, dma_rsp_data gets the value from sys_resp_q.read_data.",
+      "cond": "src_asid != OtInternalAddr && src_asid != SocControlAddr",
+      "signals": [
+        "src_asid",
+        "dma_rsp_data",
+        "sys_resp_q.read_data"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:1048,1051"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "src_asid != OtInternalAddr && src_asid != SocControlAddr",
+        "consequent": "dma_rsp_data == sys_resp_q.read_data",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "dma",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "src_asid",
+          "dma_rsp_data",
           "sys_resp_q.read_data"
         ],
         "temporal_shape": "comb",
-        "antecedent": "always",
-        "consequent": "dma_rsp_data == (src_asid == OtInternalAddr ? dma_host_tlul_rsp_data : src_asid == SocControlAddr ? dma_ctn_tlul_rsp_data : sys_resp_q.read_data)",
+        "antecedent": "src_asid != OtInternalAddr && src_asid != SocControlAddr",
+        "consequent": "dma_rsp_data == sys_resp_q.read_data",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -69,24 +138,24 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_unhandled_legal_case",
       "priority": "high",
-      "claim": "Default case uses sys_resp_q.read_data, which may expose internal system response queue data if src_asid is set to an invalid or malicious value.",
-      "cond": "src_asid != OtInternalAddr && src_asid != SocControlAddr",
-      "risk": "Potential unauthorized data exposure through dma_rsp_data.",
+      "claim": "The default branch assigns sys_resp_q.read_data to dma_rsp_data when src_asid is not OtInternalAddr or SocControlAddr. It is unknown whether such values are legal or whether sys_resp_q.read_data may contain sensitive information.",
+      "cond": "src_asid takes an illegal/undefined value",
+      "risk": "An illegal src_asid (e.g., due to a glitch or bug) could cause exposure of internal data from sys_resp_q.read_data, leading to data leakage or incorrect operation.",
       "signals": [
         "src_asid",
-        "sys_resp_q.read_data",
-        "dma_rsp_data"
+        "dma_rsp_data",
+        "sys_resp_q.read_data"
       ],
       "refs": [
-        "dma.sv:1051"
+        "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:1048,1051"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "src_asid != OtInternalAddr && src_asid != SocControlAddr",
-        "consequent": "dma_rsp_data == sys_resp_q.read_data",
-        "formalizability": "direct"
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "dma",
@@ -94,23 +163,23 @@
         "reset": "",
         "signals": [
           "src_asid",
-          "sys_resp_q.read_data",
-          "dma_rsp_data"
+          "dma_rsp_data",
+          "sys_resp_q.read_data"
         ],
         "temporal_shape": "comb",
-        "antecedent": "src_asid != OtInternalAddr && src_asid != SocControlAddr",
-        "consequent": "dma_rsp_data == sys_resp_q.read_data",
-        "formalizability": "direct",
-        "confidence": 1.0,
+        "antecedent": "src_asid takes an illegal/undefined value",
+        "consequent": "The default branch assigns sys_resp_q.read_data to dma_rsp_data when src_asid is not OtInternalAddr or SocControlAddr. It is unknown whether such values are legal or whether sys_resp_q.read_data may contain sensitive information",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The mux selects response data based on src_asid. An undefined src_asid falling to the default branch could expose data from sys_resp_q.read_data, which may carry sensitive internal state (e.g., uninitialized memory, pending transaction data) if no additional downstream filtering exists.",
   "evidence_refs": [
-    "dma.sv:1047-1053"
+    "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv:1047-1053"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/dma/rtl/dma.sv",
   "line_start": 1047,
-  "line_end": 1053,
-  "security_implications": ""
+  "line_end": 1053
 }

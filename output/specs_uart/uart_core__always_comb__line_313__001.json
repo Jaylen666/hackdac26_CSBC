@@ -13,50 +13,94 @@
       "TxFifoDepth",
       "tx_fifo_depth"
     ],
-    "modes": [
-      "TxFifoDepth",
-      "TxFifoDepthW",
-      "uart_fifo_txilvl"
-    ],
+    "modes": [],
     "tags": [
       "fifo",
       "watermark",
-      "handshake"
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "tx_watermark_thresh gets the value 1'b1 left-shifted by uart_fifo_txilvl when uart_fifo_txilvl is less than (TxFifoDepthW-2).",
-      "cond": "uart_fifo_txilvl < (TxFifoDepthW-2)",
-      "signals": [
-        "tx_watermark_thresh",
-        "uart_fifo_txilvl"
-      ],
-      "refs": [
-        "uart_core.sv:318-319"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "default_fallback",
-      "claim": "tx_watermark_thresh gets the value TxFifoDepth/2, cast to TxFifoDepthW, when uart_fifo_txilvl is greater than or equal to (TxFifoDepthW-2).",
+      "type": "mux_case",
+      "claim": "When uart_fifo_txilvl >= (TxFifoDepthW-2), tx_watermark_thresh is set to TxFifoDepthW'(TxFifoDepth/2).",
       "cond": "uart_fifo_txilvl >= (TxFifoDepthW-2)",
       "signals": [
         "tx_watermark_thresh",
-        "TxFifoDepth",
+        "uart_fifo_txilvl",
         "TxFifoDepthW",
-        "uart_fifo_txilvl"
+        "TxFifoDepth"
       ],
       "refs": [
         "uart_core.sv:316-317"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "uart_fifo_txilvl >= (TxFifoDepthW-2)",
+        "consequent": "tx_watermark_thresh == TxFifoDepthW'(TxFifoDepth/2)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_watermark_thresh",
+          "uart_fifo_txilvl",
+          "TxFifoDepthW",
+          "TxFifoDepth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "uart_fifo_txilvl >= (TxFifoDepthW-2)",
+        "consequent": "tx_watermark_thresh == TxFifoDepthW'(TxFifoDepth/2)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When uart_fifo_txilvl < (TxFifoDepthW-2), tx_watermark_thresh is set to 1'b1 << uart_fifo_txilvl.",
+      "cond": "uart_fifo_txilvl < (TxFifoDepthW-2)",
+      "signals": [
+        "tx_watermark_thresh",
+        "uart_fifo_txilvl",
+        "TxFifoDepthW"
+      ],
+      "refs": [
+        "uart_core.sv:318-319"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "uart_fifo_txilvl < (TxFifoDepthW-2)",
+        "consequent": "tx_watermark_thresh == (1'b1 << uart_fifo_txilvl)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_watermark_thresh",
+          "uart_fifo_txilvl",
+          "TxFifoDepthW"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "uart_fifo_txilvl < (TxFifoDepthW-2)",
+        "consequent": "tx_watermark_thresh == (1'b1 << uart_fifo_txilvl)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "assignment",
-      "claim": "event_tx_watermark is always true when tx_fifo_depth is less than tx_watermark_thresh, false otherwise.",
+      "claim": "event_tx_watermark is always combinational equal to (tx_fifo_depth < tx_watermark_thresh).",
       "cond": "always",
       "signals": [
         "event_tx_watermark",
@@ -65,34 +109,114 @@
       ],
       "refs": [
         "uart_core.sv:321"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "event_tx_watermark == (tx_fifo_depth < tx_watermark_thresh)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "event_tx_watermark",
+          "tx_fifo_depth",
+          "tx_watermark_thresh"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "event_tx_watermark == (tx_fifo_depth < tx_watermark_thresh)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
-  "uncertain_points": [
+  "assumptions": [
     {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The saturation condition (uart_fifo_txilvl >= TxFifoDepthW-2) assumes TxFifoDepthW is the bit width of TxFifoDepth (e.g., $clog2(TxFifoDepth)). If TxFifoDepthW is defined incorrectly elsewhere, the threshold may saturate at a wrong point, causing the watermark event to trigger too early or too late.",
-      "cond": "TxFifoDepthW and TxFifoDepth in the module hierarchy",
-      "risk": "event_tx_watermark may not accurately reflect the intended half-FIFO watermark, leading to missed or false watermark events that affect UART flow control.",
+      "id": "A1",
+      "type": "mode_config",
+      "claim": "TxFifoDepthW must be at least 2 to avoid a negative index in the saturation condition and to guarantee well-defined shift and comparison behavior.",
+      "cond": "always",
+      "risk": "If TxFifoDepthW < 2, the expression TxFifoDepthW-2 underflows or wraps, corrupting the saturation threshold and possibly allowing unsafe shift amounts, leading to incorrect tx_watermark_thresh.",
       "signals": [
-        "uart_fifo_txilvl",
         "TxFifoDepthW",
-        "TxFifoDepth",
-        "event_tx_watermark"
+        "TxFifoDepth"
       ],
       "refs": [
         "uart_core.sv:316"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "TxFifoDepthW >= 2",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "TxFifoDepthW",
+          "TxFifoDepth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "TxFifoDepthW >= 2",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "The shift left operand is the 1-bit literal 1'b1, causing the shift result to be 0 for any uart_fifo_txilvl >= 1, instead of the intended power-of-two threshold.",
+      "cond": "uart_fifo_txilvl > 0 && uart_fifo_txilvl < (TxFifoDepthW-2)",
+      "risk": "tx_watermark_thresh becomes 0, forcing event_tx_watermark high whenever the TX FIFO is not empty, which may cause spurious TX data requests, performance degradation, or protocol mismatches.",
+      "signals": [
+        "uart_fifo_txilvl",
+        "tx_watermark_thresh",
+        "event_tx_watermark"
+      ],
+      "refs": [
+        "uart_core.sv:319"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "uart_fifo_txilvl > 0 && uart_fifo_txilvl < (TxFifoDepthW-2)",
+        "consequent": "tx_watermark_thresh == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "uart_fifo_txilvl",
+          "tx_watermark_thresh",
+          "event_tx_watermark"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "uart_fifo_txilvl > 0 && uart_fifo_txilvl < (TxFifoDepthW-2)",
+        "consequent": "tx_watermark_thresh == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "",
   "evidence_refs": [
     "uart_core.sv:313-322"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 313,
-  "line_end": 322,
-  "security_implications": ""
+  "line_end": 322
 }

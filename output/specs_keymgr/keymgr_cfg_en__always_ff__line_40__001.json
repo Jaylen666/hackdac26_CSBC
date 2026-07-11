@@ -9,155 +9,218 @@
     "used": [
       "clk_i",
       "rst_ni",
-      "init_i",
       "en_i",
+      "init_i",
       "init_q"
     ],
     "modes": [],
     "tags": [
-      "reset",
-      "lifecycle",
-      "key"
+      "config",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "When rst_ni is low, init_q is cleared to 0.",
+      "type": "reg_update",
+      "claim": "当异步复位信号 rst_ni 为低时，init_q 立即被清零。",
       "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "init_q"
       ],
       "refs": [
-        "40:42"
-      ]
+        "keymgr_cfg_en.sv:41-42"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "init_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_cfg_en",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "init_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "init_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "When init_q is high and en_i is low, init_q is cleared to 0.",
-      "cond": "init_q && !en_i",
+      "type": "reg_update",
+      "claim": "在复位无效且 init_q 为 1 且 en_i 为 0 时，下一个时钟沿 init_q 被清零。",
+      "cond": "!rst_ni && init_q && !en_i",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "init_q",
+        "en_i"
+      ],
+      "refs": [
+        "keymgr_cfg_en.sv:43-44"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "init_q && !en_i",
+        "consequent": "init_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_cfg_en",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "init_q",
+          "en_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "init_q && !en_i",
+        "consequent": "init_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "在复位无效且 init_i 为 1 且 en_i 为 1 时，下一个时钟沿 init_q 被置位为 1。",
+      "cond": "!rst_ni && init_i && en_i",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "init_i",
+        "en_i",
+        "init_q"
+      ],
+      "refs": [
+        "keymgr_cfg_en.sv:45-46"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "init_i && en_i",
+        "consequent": "init_q == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_cfg_en",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "init_i",
+          "en_i",
+          "init_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "init_i && en_i",
+        "consequent": "init_q == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "在复位无效且不满足清零条件 (init_q && !en_i) 也不满足置位条件 (init_i && en_i) 时，init_q 保持其原有值。",
+      "cond": "!rst_ni && !(init_q && !en_i) && !(init_i && en_i)",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "init_q",
+        "en_i",
+        "init_i"
+      ],
+      "refs": [
+        "keymgr_cfg_en.sv:40-48"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!(init_q && !en_i) && !(init_i && en_i)",
+        "consequent": "$stable(init_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_cfg_en",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "init_q",
+          "en_i",
+          "init_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!(init_q && !en_i) && !(init_i && en_i)",
+        "consequent": "$stable(init_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "assumptions": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "init_q 信号可能作为密钥管理器的关键配置使能，其清除路径（en_i==0）由模块外部控制。需检查 en_i 的来源是否可靠，以及 init_q 的扇出是否会影响安全状态。",
+      "cond": "未知",
+      "risk": "若 en_i 在安全操作期间意外变低，init_q 被错误清零，可能导致配置使能失效，从而关闭密钥访问、配置锁定或其他安全关键功能。",
       "signals": [
         "init_q",
         "en_i"
       ],
       "refs": [
-        "43:44"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "assignment",
-      "claim": "When init_i and en_i are both high, init_q is set to 1.",
-      "cond": "init_i && en_i",
-      "signals": [
-        "init_i",
-        "en_i",
-        "init_q"
+        "keymgr_cfg_en.sv:43-44"
       ],
-      "refs": [
-        "45:46"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "default_fallback",
-      "claim": "In all other cases (no reset, not init_q&&!en_i, not init_i&&en_i), init_q retains its previous value.",
-      "cond": "else (implicit)",
-      "signals": [
-        "init_q"
-      ],
-      "refs": [
-        "47"
-      ]
+      "formal": {
+        "temporal_shape": "none",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_cfg_en",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "init_q",
+          "en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "未知",
+        "consequent": "init_q 信号可能作为密钥管理器的关键配置使能，其清除路径（en_i==0）由模块外部控制。需检查 en_i 的来源是否可靠，以及 init_q 的扇出是否会影响安全状态",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "External logic must ensure that when init_i is asserted, en_i is also asserted; otherwise init_q will not be set.",
-      "cond": "when init_i is asserted",
-      "risk": "Missed initialization may leave the key manager in an unconfigured state.",
-      "signals": [
-        "init_i",
-        "en_i",
-        "init_q"
-      ],
-      "refs": [
-        "45:46"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "handshake",
-      "claim": "External logic must ensure en_i remains asserted throughout the initialization period, because any deassertion of en_i while init_q is high will clear init_q.",
-      "cond": "when init_q is high",
-      "risk": "Premature clearing of init_q could abort initialization, leaving partial or unsafe state.",
-      "signals": [
-        "en_i",
-        "init_q"
-      ],
-      "refs": [
-        "43:44"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The intended behavior of init_q (sticky flag, pulse, or level-sensitive status) is unclear. The clearing on !en_i suggests en_i serves as an active-low clear, but the overall protocol is ambiguous.",
-      "cond": "unknown",
-      "risk": "Incorrect integration with other blocks could lead to unexpected init_q toggling or missed initialization sequences.",
-      "signals": [
-        "init_q",
-        "en_i",
-        "init_i"
-      ],
-      "refs": [
-        "40:48"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_unhandled_legal_case",
-      "priority": "medium",
-      "claim": "When init_q is high and en_i is high, init_q remains 1 regardless of init_i. If en_i never goes low, init_q stays high permanently, potentially acting as a stuck enable. Is this intended?",
-      "cond": "init_q == 1 and en_i == 1 and init_i == 0 (or any init_i)",
-      "risk": "A stuck init_q could permanently enable a critical path or mask re-initialization requests.",
-      "signals": [
-        "init_q",
-        "en_i",
-        "init_i"
-      ],
-      "refs": [
-        "43:47"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "The usage of init_q outside this module is not visible; it likely gates other logic. Need to verify that the clearing condition (en_i deassertion) does not violate assumptions of downstream consumers.",
-      "cond": "when init_q changes",
-      "risk": "If downstream logic expects init_q to remain set until explicit clear, unexpected deassertion could cause data corruption.",
-      "signals": [
-        "init_q"
-      ],
-      "refs": [
-        "40:48"
-      ]
-    }
-  ],
+  "security_implications": "init_q 疑似为密钥管理器配置使能信号，由 en_i 和 init_i 控制。若 en_i 被意外拉低，init_q 即被清零，可能在任何状态下禁用关键配置（如密钥加载、生命周期控制），导致安全策略被绕过或配置锁定失效。需审查 en_i 的来源及 init_q 的实际用途，确保该清除行为不会在安全状态下被错误触发。",
   "evidence_refs": [
-    "40:48"
+    "keymgr_cfg_en.sv:40-48"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_cfg_en.sv",
   "line_start": 40,
-  "line_end": 48,
-  "security_implications": ""
+  "line_end": 48
 }

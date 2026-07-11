@@ -9,7 +9,6 @@
     "used": [
       "rst_ni",
       "st_d",
-      "clk_i",
       "StIdle"
     ],
     "modes": [
@@ -17,67 +16,233 @@
     ],
     "tags": [
       "reset",
-      "fsm"
+      "fsm",
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "state_transition",
-      "claim": "When reset is active (rst_ni low), st_q is driven to StIdle. Otherwise, on each rising clock edge, st_q is updated to st_d.",
-      "cond": "posedge clk_i or negedge rst_ni",
+      "type": "reg_update",
+      "claim": "On every posedge clk_i, st_q is updated to st_d, unless reset is asserted (active-low).",
+      "cond": "always",
       "signals": [
-        "rst_ni",
         "st_q",
         "st_d",
-        "StIdle",
-        "clk_i"
+        "rst_ni"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:308-311"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "st_q == $past(st_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "posedge",
+        "reset": "rst_ni",
+        "signals": [
+          "st_q",
+          "st_d",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "always",
+        "consequent": "st_q == $past(st_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "When rst_ni is low (active-low reset), st_q is forced to StIdle regardless of st_d.",
+      "cond": "!rst_ni",
+      "signals": [
+        "st_q",
+        "StIdle",
+        "rst_ni"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:309"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "st_q == StIdle",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "st_q",
+          "StIdle",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "st_q == StIdle",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "st_d must always be driven to a legal state encoding (one of the defined FSM states) before each rising clock edge during non-reset operation.",
-      "cond": "!rst_ni is deasserted and a clock edge occurs",
-      "risk": "State machine may enter an undefined or illegal state, leading to incorrect control flow or potential security bypass.",
+      "type": "handshake",
+      "claim": "st_d must be stable and valid at every posedge clk_i for correct state transitions.",
+      "cond": "always",
+      "risk": "If st_d is glitchy or derived from combinational logic that changes during a cycle, st_q may capture a transient value leading to unintended state jumps.",
       "signals": [
-        "st_d",
-        "st_q",
-        "rst_ni",
-        "clk_i"
+        "st_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:308-311"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:310"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "st_d is stable",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "posedge",
+        "reset": "",
+        "signals": [
+          "st_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "always",
+        "consequent": "st_d is stable",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "StIdle must be a legal state encoding and safe starting state for the HMAC FSM.",
+      "cond": "rst_ni deassertion",
+      "risk": "If StIdle is not a safe state (e.g., leaves internal secrets uncleared), reset exit may expose secrets or skip security initialization.",
+      "signals": [
+        "StIdle"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:309"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !$past(rst_ni)",
+        "consequent": "security_state == idle",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "StIdle"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !$past(rst_ni)",
+        "consequent": "security_state == idle",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "The identifier StIdle is used as reset value but its definition is not visible in this chunk; verify it is declared and matches the intended idle state for the FSM.",
-      "cond": "always",
-      "risk": "If StIdle is misdefined or represents an incorrect state, the FSM could start in an unexpected state, potentially affecting initialization and security.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Reset to StIdle does not explicitly wipe internal HMAC state (digest, key, etc.). If secret data persists in other registers across reset, a reset-to-idle transition could leak residual state when new operation starts.",
+      "cond": "!rst_ni",
+      "risk": "Secret key or intermediate digest values may survive reset and be used or observed in subsequent operations, violating zeroization requirements.",
       "signals": [
+        "st_q",
         "StIdle",
-        "st_q"
+        "other internal state registers"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:309"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "all secret registers become 0",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "Reset",
+        "signals": [
+          "st_q",
+          "StIdle",
+          "other internal state registers"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "all secret registers become 0",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The encoding of StIdle and other states is not shown here; sparse or non-contiguous encoding may protect against fault injection, but we cannot verify if st_q is hardened against bit flips.",
+      "cond": "always",
+      "risk": "A single-bit fault in st_q could cause the FSM to jump to a state that bypasses security checks, e.g., skipping key loading or digest finalization.",
+      "signals": [
+        "st_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:310"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "st_q != StIdle && st_q != StX",
+        "consequent": "st_q encoding has Hamming distance > 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "st_q != StIdle && st_q != StX",
+        "consequent": "st_q encoding has Hamming distance > 1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk is the state register for the HMAC core FSM. Reset forces the state to StIdle. A missing explicit wipe of internal key/digest registers at reset may retain secret data, potentially leading to leakage if a new operation starts without clearing. Lack of sparse FSM encoding could allow fault-induced state jumps that bypass security flows. The assumed stability of st_d is critical for deterministic FSM behavior; glitches could cause inadvertent transitions to states that expose or manipulate sensitive data.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv:308-311"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
   "line_start": 308,
-  "line_end": 311,
-  "security_implications": ""
+  "line_end": 311
 }

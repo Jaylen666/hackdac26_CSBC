@@ -8,6 +8,7 @@
       "error_q"
     ],
     "used": [
+      "clk_i",
       "rst_ni",
       "a_ack",
       "error_i",
@@ -15,45 +16,50 @@
       "wr_req",
       "rdata_i"
     ],
-    "modes": [],
+    "modes": [
+      "reset",
+      "ack_cycle"
+    ],
     "tags": [
+      "error",
       "handshake",
-      "adapter"
+      "reset",
+      "response"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset (rst_ni = 0), rdata_q is set to 0 and error_q is set to 0 on the next rising clock edge.",
-      "cond": "!rst_ni",
+      "claim": "On negedge rst_ni, rdata_q is cleared to all zeros and error_q is cleared to 0.",
+      "cond": "always on negedge rst_ni",
       "signals": [
         "rst_ni",
         "rdata_q",
         "error_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:218-219"
+        "216-218"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
+        "temporal_shape": "always",
         "antecedent": "!rst_ni",
-        "consequent": "rdata_q == '0 && error_q == 1'b0",
+        "consequent": "rdata_q == '0 && error_q == '0",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
-        "clock": "clock",
+        "clock": "negedge",
         "reset": "rst_ni",
         "signals": [
           "rst_ni",
           "rdata_q",
           "error_q"
         ],
-        "temporal_shape": "next_cycle",
+        "temporal_shape": "always",
         "antecedent": "!rst_ni",
-        "consequent": "rdata_q == '0 && error_q == 1'b0",
+        "consequent": "rdata_q == '0 && error_q == '0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -61,9 +67,9 @@
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "When a_ack is asserted and not reset, rdata_q is updated to all-ones if (error_i || err_internal || wr_req) is true, otherwise to rdata_i.",
-      "cond": "a_ack && rst_ni",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and a_ack is asserted, rdata_q is updated to all-ones if error_i, err_internal, or wr_req is true; otherwise it takes rdata_i.",
+      "cond": "rst_ni && a_ack",
       "signals": [
         "rdata_q",
         "a_ack",
@@ -73,19 +79,19 @@
         "rdata_i"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:221"
+        "220-221"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
         "antecedent": "rst_ni && a_ack",
-        "consequent": "rdata_q == ((error_i || err_internal || wr_req) ? '1 : rdata_i)",
+        "consequent": "(error_i || err_internal || wr_req) ? (rdata_q == '1) : (rdata_q == rdata_i)",
         "formalizability": "direct"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "reset",
+        "reset": "rst_ni",
         "signals": [
           "rdata_q",
           "a_ack",
@@ -96,7 +102,7 @@
         ],
         "temporal_shape": "next_cycle",
         "antecedent": "rst_ni && a_ack",
-        "consequent": "rdata_q == ((error_i || err_internal || wr_req) ? '1 : rdata_i)",
+        "consequent": "(error_i || err_internal || wr_req) ? (rdata_q == '1) : (rdata_q == rdata_i)",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -104,9 +110,9 @@
     },
     {
       "id": "G3",
-      "type": "assignment",
-      "claim": "When a_ack is asserted and not reset, error_q is updated to (error_i || err_internal).",
-      "cond": "a_ack && rst_ni",
+      "type": "reg_update",
+      "claim": "When rst_ni is high and a_ack is asserted, error_q is updated to (error_i || err_internal).",
+      "cond": "rst_ni && a_ack",
       "signals": [
         "error_q",
         "a_ack",
@@ -114,7 +120,7 @@
         "err_internal"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:222"
+        "222"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
@@ -126,7 +132,7 @@
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "reset",
+        "reset": "rst_ni",
         "signals": [
           "error_q",
           "a_ack",
@@ -140,67 +146,30 @@
         "confidence": 1.0,
         "source": "llm"
       }
-    },
-    {
-      "id": "G4",
-      "type": "default_fallback",
-      "claim": "When a_ack is not asserted and not in reset, rdata_q and error_q hold their previous values.",
-      "cond": "!a_ack && rst_ni",
-      "signals": [
-        "rdata_q",
-        "error_q",
-        "a_ack"
-      ],
-      "refs": [
-        "tlul_adapter_reg.sv:220-223"
-      ],
-      "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && !a_ack",
-        "consequent": "rdata_q == $past(rdata_q) && error_q == $past(error_q)",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_adapter_reg",
-        "clock": "",
-        "reset": "reset",
-        "signals": [
-          "rdata_q",
-          "error_q",
-          "a_ack"
-        ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && !a_ack",
-        "consequent": "rdata_q == $past(rdata_q) && error_q == $past(error_q)",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "When a_ack is asserted, inputs rdata_i, error_i, err_internal, and wr_req must be valid and stable.",
-      "cond": "always when a_ack high",
-      "risk": "Storing incorrect data or error status if inputs are glitching or undefined.",
+      "type": "handshake",
+      "claim": "When a_ack is asserted, the inputs error_i, err_internal, wr_req, and rdata_i are stable and valid.",
+      "cond": "a_ack == 1",
+      "risk": "If any input changes during a_ack, rdata_q or error_q may capture transient values, causing spurious error responses or data corruption.",
       "signals": [
         "a_ack",
-        "rdata_i",
         "error_i",
         "err_internal",
-        "wr_req"
+        "wr_req",
+        "rdata_i"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:221-222"
+        "220-222"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "a_ack",
-        "consequent": "$stable(rdata_i) && $stable(error_i) && $stable(err_internal) && $stable(wr_req)",
-        "formalizability": "partial"
+        "consequent": "stable(error_i, err_internal, wr_req, rdata_i)",
+        "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
@@ -208,34 +177,68 @@
         "reset": "",
         "signals": [
           "a_ack",
-          "rdata_i",
           "error_i",
           "err_internal",
-          "wr_req"
+          "wr_req",
+          "rdata_i"
         ],
         "temporal_shape": "comb",
         "antecedent": "a_ack",
-        "consequent": "$stable(rdata_i) && $stable(error_i) && $stable(err_internal) && $stable(wr_req)",
-        "formalizability": "partial",
+        "consequent": "stable(error_i, err_internal, wr_req, rdata_i)",
+        "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
       "id": "A2",
-      "type": "handshake",
-      "claim": "Signal a_ack is asserted only during valid bus transactions, not spuriously.",
-      "cond": "always",
-      "risk": "Spurious a_ack will overwrite rdata_q/error_q with unintended data, potentially leaking or corrupting responses.",
+      "type": "lifecycle",
+      "claim": "rst_ni is asserted low for at least one clock cycle to properly clear rdata_q and error_q.",
+      "cond": "upon reset event",
+      "risk": "Insufficient reset pulse may leave rdata_q/error_q with unknown values, causing undefined behavior.",
       "signals": [
-        "a_ack"
+        "rst_ni"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:220"
+        "217-219"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "upon reset event",
+        "consequent": "rst_ni is asserted low for at least one clock cycle to properly clear rdata_q and error_q",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "error_i and err_internal are asserted only when a real error condition exists, and are not spuriously toggled.",
+      "cond": "always",
+      "risk": "False error assertion forces rdata_q to all-ones and error_q high, potentially causing the bus master to treat a valid access as an error, leading to functional fault or denial of service.",
+      "signals": [
+        "error_i",
+        "err_internal"
+      ],
+      "refs": [
+        "221-222"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "a_ack",
+        "antecedent": "",
         "consequent": "",
         "formalizability": "none"
       },
@@ -244,11 +247,12 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "a_ack"
+          "error_i",
+          "err_internal"
         ],
         "temporal_shape": "comb",
-        "antecedent": "a_ack",
-        "consequent": "Signal a_ack is asserted only during valid bus transactions, not spuriously",
+        "antecedent": "always",
+        "consequent": "error_i and err_internal are asserted only when a real error condition exists, and are not spuriously toggled",
         "formalizability": "none",
         "confidence": 0.85,
         "source": "llm"
@@ -258,35 +262,39 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "When wr_req is high and no errors, rdata_q is set to all-ones, but the intent may be to return a write response with undefined data or to mirror write data for verification. The spec does not clarify if this is correct.",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "wr_req assertion during a_ack causes rdata_q to become all-ones, but error_q is not set (only depends on error_i and err_internal). This could allow a write error to be reported as all-ones read data without an error flag.",
       "cond": "a_ack && wr_req && !error_i && !err_internal",
-      "risk": "Downstream consumers may misinterpret all-ones as an error or valid data, leading to functional issues.",
+      "risk": "A bus master may misinterpret all-ones as valid read data (e.g., a secret or counter) and proceed, while the transaction was a write error, potentially leading to data leakage or integrity violation.",
       "signals": [
+        "wr_req",
         "rdata_q",
-        "wr_req"
+        "error_q",
+        "a_ack"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:221"
+        "221-222"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
         "antecedent": "rst_ni && a_ack && wr_req && !error_i && !err_internal",
-        "consequent": "rdata_q == '1",
+        "consequent": "rdata_q == '1 && error_q == 0",
         "formalizability": "direct"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "",
+        "reset": "reported",
         "signals": [
+          "wr_req",
           "rdata_q",
-          "wr_req"
+          "error_q",
+          "a_ack"
         ],
         "temporal_shape": "next_cycle",
         "antecedent": "rst_ni && a_ack && wr_req && !error_i && !err_internal",
-        "consequent": "rdata_q == '1",
+        "consequent": "rdata_q == '1 && error_q == 0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -296,46 +304,86 @@
       "id": "U2",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The signal err_internal is sourced from outside this module; its safety and timing properties are not enforced here. An untimely or glitchy err_internal could corrupt error_q and rdata_q.",
-      "cond": "a_ack assertion",
-      "risk": "Error status may be incorrectly reported or cleared, affecting system integrity.",
+      "claim": "The intention of wr_req relative to a_ack is unclear. It may signal a write error that should also set error_q.",
+      "cond": "unknown",
+      "risk": "If wr_req is meant to flag an error, the missing error_q update is a bug; otherwise, the behavior may be acceptable but lacks clarity.",
       "signals": [
-        "err_internal",
-        "error_q",
-        "rdata_q"
+        "wr_req",
+        "error_q"
       ],
       "refs": [
-        "tlul_adapter_reg.sv:221-222"
+        "221-222"
       ],
       "formal": {
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && a_ack",
-        "consequent": "error_q == (error_i || err_internal) && rdata_q == ((error_i || err_internal || wr_req) ? '1 : rdata_i)",
-        "formalizability": "partial"
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
         "reset": "",
         "signals": [
-          "err_internal",
-          "error_q",
-          "rdata_q"
+          "wr_req",
+          "error_q"
         ],
-        "temporal_shape": "next_cycle",
-        "antecedent": "rst_ni && a_ack",
-        "consequent": "error_q == (error_i || err_internal) && rdata_q == ((error_i || err_internal || wr_req) ? '1 : rdata_i)",
-        "formalizability": "partial",
-        "confidence": 0.95,
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "The intention of wr_req relative to a_ack is unclear. It may signal a write error that should also set error_q",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "Using all-ones ('1) as an error indicator on rdata_q may alias legitimate data. If rdata_i can also be all-ones, a consumer cannot distinguish error from valid data.",
+      "cond": "rdata_i is all-ones and no error",
+      "risk": "A valid read returning all-ones could be falsely interpreted as an error, causing a denial-of-service or misclassification.",
+      "signals": [
+        "rdata_q",
+        "rdata_i",
+        "error_i",
+        "err_internal",
+        "wr_req"
+      ],
+      "refs": [
+        "221"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!error_i && !err_internal && !wr_req && rdata_i == '1",
+        "consequent": "rdata_q == '1 && error_q == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "rdata_q",
+          "rdata_i",
+          "error_i",
+          "err_internal",
+          "wr_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!error_i && !err_internal && !wr_req && rdata_i == '1",
+        "consequent": "rdata_q == '1 && error_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The register drives rdata_q to all-ones on error_i, err_internal, or wr_req during a_ack. If downstream logic does not interpret all-ones as an error indication, a security-sensitive operation could proceed with invalid data. Specifically, when wr_req is true but error_i/err_internal are false, error_q remains 0 while rdata_q becomes all-ones, potentially allowing a write error to be misconstrued as a successful read with all-ones data. This could leak a constant or mask a real integrity error.",
   "evidence_refs": [
-    "tlul_adapter_reg.sv:216-224"
+    "216-224"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 216,
-  "line_end": 224,
-  "security_implications": ""
+  "line_end": 224
 }

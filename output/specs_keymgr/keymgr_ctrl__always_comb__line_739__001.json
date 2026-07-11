@@ -12,108 +12,172 @@
       "fault_o",
       "op_start_i"
     ],
-    "modes": [
-      "OpIdle",
-      "OpDoneFail",
-      "OpDoneSuccess",
-      "OpWip"
-    ],
+    "modes": [],
     "tags": [
       "error",
       "fault",
-      "handshake",
-      "status"
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "status_o is combinatorially assigned: OpDoneFail when op_done_o && (error_o || fault_o); OpDoneSuccess when op_done_o && !(error_o || fault_o); OpWip else if op_start_i; OpIdle otherwise.",
-      "cond": "always",
+      "type": "default_fallback",
+      "claim": "status_o defaults to OpIdle when neither op_done_o nor op_start_i is asserted.",
+      "cond": "!op_done_o && !op_start_i",
       "signals": [
         "status_o",
         "op_done_o",
-        "error_o",
-        "fault_o",
         "op_start_i"
       ],
       "refs": [
-        "file:740-748"
-      ]
-    }
-  ],
-  "assumptions": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:740"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!op_done_o && !op_start_i",
+        "consequent": "status_o == OpIdle",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "status_o",
+          "op_done_o",
+          "op_start_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!op_done_o && !op_start_i",
+        "consequent": "status_o == OpIdle",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
     {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "When op_done_o is high, error_o and fault_o must be valid Boolean values (no X/Z).",
-      "cond": "op_done_o asserted",
-      "risk": "If undefined, status_o becomes X, potentially propagating to downstream safety/error logic.",
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "When op_done_o is high, status_o becomes OpDoneFail if error_o or fault_o is asserted, else OpDoneSuccess.",
+      "cond": "op_done_o",
       "signals": [
         "op_done_o",
         "error_o",
-        "fault_o"
+        "fault_o",
+        "status_o"
       ],
       "refs": [
-        "file:741-745"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:741-745"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "op_done_o",
+        "consequent": "status_o == (|{error_o, fault_o} ? OpDoneFail : OpDoneSuccess)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done_o",
+          "error_o",
+          "fault_o",
+          "status_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "op_done_o",
+        "consequent": "status_o == (|{error_o, fault_o} ? OpDoneFail : OpDoneSuccess)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "A2",
-      "type": "handshake",
-      "claim": "op_start_i must be externally gated by the enable signal (en_i) such that it only asserts when the interface is truly active.",
-      "cond": "normal operation",
-      "risk": "If op_start_i asserts spuriously (when en_i low), status_o will show OpWip, fooling downstream logic into thinking an operation is in progress.",
+      "id": "G3",
+      "type": "mux_case",
+      "claim": "When op_done_o is low and op_start_i is high, status_o is set to OpWip.",
+      "cond": "!op_done_o && op_start_i",
       "signals": [
+        "op_done_o",
         "op_start_i",
         "status_o"
       ],
       "refs": [
-        "file:742-744",
-        "file:746-747"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:746-748"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!op_done_o && op_start_i",
+        "consequent": "status_o == OpWip",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "op_done_o",
+          "op_start_i",
+          "status_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!op_done_o && op_start_i",
+        "consequent": "status_o == OpWip",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The comment describes a one‑cycle‑behind main FSM and an enable signal (en_i) not present in this block; it is unclear whether status_o aligns correctly with the enabled FSM state when en_i goes low the same cycle op_done_o asserts.",
-      "cond": "op_done_o asserts in the cycle en_i goes low",
-      "risk": "The consumer may interpret a done/fail status while the interface is disabled, leading to incorrect state transitions or missed operations.",
-      "signals": [
-        "status_o",
-        "op_done_o",
-        "en_i (implied)"
-      ],
-      "refs": [
-        "file:742-744"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "op_done_o is likely a single‑cycle assertion; status_o will only indicate done/fail for that one cycle before falling back to OpIdle or OpWip, risking a missed status if the consumer samples later.",
-      "cond": "op_done_o is a pulse",
-      "risk": "A critical error/fault indication could be lost, preventing proper error handling or recovery.",
+      "claim": "The comment indicates the main FSM lags one cycle behind. The exact arrival cycle of op_done_o relative to the real operation end may cause a temporal window where status_o remains OpWip while the operation is already complete.",
+      "cond": "op_done_o may be delayed by one cycle",
+      "risk": "Downstream logic that samples status_o prematurely could see OpWip instead of a done/fail status, leading to incorrect state transitions or missed error handling.",
       "signals": [
         "op_done_o",
         "status_o"
       ],
       "refs": [
-        "file:741-745",
-        "file:749"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:742-744"
+      ],
+      "formal": {
+        "temporal_shape": "none",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "temporal",
+        "signals": [
+          "op_done_o",
+          "status_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "op_done_o may be delayed by one cycle",
+        "consequent": "The comment indicates the main FSM lags one cycle behind. The exact arrival cycle of op_done_o relative to the real operation end may cause a temporal window where status_o remains OpWip while the operation is already complete",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "status_o encodes the operational outcome based on error_o and fault_o, which may indicate security-critical faults (e.g., integrity failures). A glitch or misinterpretation of the status due to the combinational path or timing uncertainty could cause a security condition to be overlooked by the consumer.",
   "evidence_refs": [
-    "file:739-749"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:739-749"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 739,
-  "line_end": 749,
-  "security_implications": ""
+  "line_end": 749
 }

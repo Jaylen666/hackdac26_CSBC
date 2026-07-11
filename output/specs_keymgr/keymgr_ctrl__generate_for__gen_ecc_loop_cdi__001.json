@@ -2,119 +2,245 @@
   "chunk_id": "keymgr_ctrl__generate_for__gen_ecc_loop_cdi__001",
   "header": {
     "module": "keymgr_ctrl",
-    "block_kind": "generate_for",
+    "block_kind": "generate",
     "driven": [
       "ecc_errs"
     ],
     "used": [
       "key_state_ecc_q",
-      "key_state_q",
-      "CDIs",
-      "Shares",
-      "EccWords"
+      "key_state_q"
     ],
-    "modes": [
-      "CDIs",
-      "Shares",
-      "EccWords"
-    ],
+    "modes": [],
     "tags": [
-      "key",
       "integrity",
       "error",
-      "ecc"
+      "ecc",
+      "key",
+      "generate"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For each (i,j,k) within generator bounds, ecc_errs[i][j][k] is assigned 1 if the corresponding SECDED decoder detects any error (correctable or uncorrectable) on {key_state_ecc_q[i][j][k], key_state_q[i][j][k]}, else 0.",
-      "cond": "always (combinational)",
+      "claim": "For each CDI, share, and word, the ECC error flag ecc_errs[i][j][k] is asserted (set to 1) iff the 2-bit decoder error output errs has any bit high (OR-reduction).",
+      "cond": "always",
       "signals": [
         "ecc_errs",
-        "key_state_ecc_q",
-        "key_state_q",
         "errs"
       ],
       "refs": [
-        "keymgr_ctrl.sv:321-334"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:331"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "ecc_errs[i][j][k] == (|errs)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "ecc_errs",
+          "errs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "ecc_errs[i][j][k] == (|errs)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "The concatenated input {key_state_ecc_q[i][j][k], key_state_q[i][j][k]} is a valid SECDED-encoded codeword for each i,j,k.",
-      "cond": "when ECC checking is meaningful for key integrity",
-      "risk": "If the data is not properly encoded, ecc_errs may spuriously indicate errors, leading to false error handling, potential key invalidation, or denial of service.",
+      "type": "value_domain",
+      "claim": "The concatenated input {key_state_ecc_q[i][j][k], key_state_q[i][j][k]} must form a valid 72-bit data packet matching the decoder's expected input width.",
+      "cond": "always",
+      "risk": "Width or dimension mismatch can cause erroneous decoding, leading to false error flags or undetected errors in key material.",
       "signals": [
-        "key_state_ecc_q",
-        "key_state_q",
-        "ecc_errs"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:325-326"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "mode_config",
-      "claim": "Parameters CDIs, Shares, EccWords match the declared dimensions of the key_state_ecc_q and key_state_q arrays.",
-      "cond": "synthesis and correct behavior",
-      "risk": "Mismatch would cause out-of-bounds array access, synthesis errors, or undefined behavior.",
-      "signals": [
-        "CDIs",
-        "Shares",
-        "EccWords",
         "key_state_ecc_q",
         "key_state_q"
       ],
       "refs": [
-        "keymgr_ctrl.sv:321-323"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:326"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "width of {key_state_ecc_q[i][j][k], key_state_q[i][j][k]} == 72",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_state_ecc_q",
+          "key_state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "width of {key_state_ecc_q[i][j][k], key_state_q[i][j][k]} == 72",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The prim_secded_inv_72_64_dec instance produces error flags err_o correctly according to SECDED72 algorithm; specifically, err_o[0] signals correctable and err_o[1] signals uncorrectable errors.",
+      "cond": "always",
+      "risk": "Internal decoder misbehavior could lead to incorrect ecc_errs flagging, missing or spurious error responses in the key manager.",
+      "signals": [
+        "err_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:325",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:329"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "errs == expected_ECC_error_flags_for_input",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "err_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "errs == expected_ECC_error_flags_for_input",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "SEC-DED corrected data_o and syndrome_o are unconnected; only the error flag is captured. Key material stored in key_state_q may be used directly even when ecc_errs indicates an error, without correction or wipe.",
-      "cond": "when ecc_errs asserts (any error detected)",
-      "risk": "If corrupted or uncorrectable key data is used, it could lead to cryptographic failures, secret leakage, or security bypass.",
+      "claim": "The decoder's corrected data output (data_o) and syndrome (syndrome_o) are left unconnected; it is unclear whether this is intentional or whether corrected key state should be propagated.",
+      "cond": "always",
+      "risk": "If single-bit errors occur in key state, they remain uncorrected, potentially leading to key corruption and security failure downstream.",
       "signals": [
         "data_o",
-        "syndrome_o",
-        "key_state_q",
-        "ecc_errs"
+        "syndrome_o"
       ],
       "refs": [
-        "keymgr_ctrl.sv:327-328"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:327",
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:328"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "data_o is used for key_state updates",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_o",
+          "syndrome_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "data_o is used for key_state updates",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "ecc_errs reduces 2-bit decoder error output (correctable/uncorrectable) to a single bit via reduction OR. The design intent for handling different error types is unclear.",
-      "cond": "when SECDED decoder signals a correctable vs uncorrectable error",
-      "risk": "Loss of information may prevent appropriate responses (e.g., silent correction vs. alert) leading to insufficient error handling.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The ecc_errs array is driven here but not consumed locally; the downstream logic must act on error flags (e.g. wipe key, trigger alert) to prevent corrupted key usage.",
+      "cond": "on any ECC error",
+      "risk": "If the error is not escalated in the wider keymgr, corrupted key material may be used in cryptographic operations without detection.",
       "signals": [
-        "ecc_errs",
-        "errs"
+        "ecc_errs"
       ],
       "refs": [
-        "keymgr_ctrl.sv:331"
-      ]
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:331"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "ecc_errs[i][j][k] == 1",
+        "consequent": "some key wipe or alert signal is asserted within N cycles",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "ecc_errs"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "ecc_errs[i][j][k] == 1",
+        "consequent": "some key wipe or alert signal is asserted within N cycles",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The error flag ecc_errs is formed by OR-reduction of the 2-bit errs, treating correctable and uncorrectable ECC errors identically; design intent may require separate handling.",
+      "cond": "ECC error occurs",
+      "risk": "Inappropriate response to a correctable error (e.g. triggering an uncorrectable-fatal alert) may cause unnecessary denial of service or conversely mask a real double-bit failure.",
+      "signals": [
+        "errs",
+        "ecc_errs"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:331"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "errs == 2'b01",
+        "consequent": "ecc_errs remains 1 but caller should distinguish",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "errs",
+          "ecc_errs"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "errs == 2'b01",
+        "consequent": "ecc_errs remains 1 but caller should distinguish",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk detects ECC errors on key state across all CDIs, shares, and words. The ecc_errs flag is set for any error (correctable or uncorrectable) but the corrected data is discarded. If downstream logic fails to react to ecc_errs, corrupted (or uncorrected) key material could be used, breaking key integrity and potentially leading to secret exposure or incorrect cryptographic operations. The lack of corrected data consumes single-bit errors as failures rather than repairs, increasing the attack surface.",
   "evidence_refs": [
-    "keymgr_ctrl.sv:321-334"
+    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv:321-334"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 321,
-  "line_end": 334,
-  "security_implications": ""
+  "line_end": 334
 }

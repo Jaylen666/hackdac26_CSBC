@@ -2,17 +2,16 @@
   "chunk_id": "uart__generate_for__gen_alert_tx__001",
   "header": {
     "module": "uart",
-    "block_kind": "generate",
+    "block_kind": "instance",
     "driven": [
-      "alert_tx_o"
+      "alert_tx_o[i]"
     ],
     "used": [
+      "clk_i",
+      "rst_ni",
+      "alert_test[i]",
       "alerts[0]",
-      "alert_test",
-      "alert_rx_i",
-      "AlertAsyncOn",
-      "NumAlerts",
-      "i"
+      "alert_rx_i[i]"
     ],
     "modes": [
       "NumAlerts",
@@ -20,42 +19,121 @@
     ],
     "tags": [
       "alert",
-      "generate",
       "fatal",
-      "unconnected_output",
-      "shared_request"
+      "generate",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "instantiation",
-      "claim": "All alert sender instances receive the same alert_req_i signal alerts[0].",
+      "type": "generate_param",
+      "claim": "For each i in [0, NumAlerts-1], a prim_alert_sender is instantiated with .IsFatal(1'b1) and .AsyncOn(AlertAsyncOn[i]).",
       "cond": "always",
       "signals": [
-        "alerts[0]",
-        "u_prim_alert_sender.alert_req_i"
+        "i",
+        "NumAlerts",
+        "AlertAsyncOn"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:108"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:100-104"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "IsFatal[gen_alert_tx[i].u_prim_alert_sender] == 1'b1 && AsyncOn[gen_alert_tx[i].u_prim_alert_sender] == AlertAsyncOn[i]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "i",
+          "NumAlerts",
+          "AlertAsyncOn"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "IsFatal[gen_alert_tx[i].u_prim_alert_sender] == 1'b1 && AsyncOn[gen_alert_tx[i].u_prim_alert_sender] == AlertAsyncOn[i]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "instantiation",
-      "claim": "Every alert sender instance is configured with IsFatal = 1 (fatal alert).",
-      "cond": "during elaboration",
+      "type": "assignment",
+      "claim": "For each i, the alert_req_i input of the prim_alert_sender is driven by alerts[0], meaning all instances share the same request line.",
+      "cond": "always",
       "signals": [
-        "IsFatal"
+        "alert_req_i",
+        "alerts[0]"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:103"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:108"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[0]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_req_i",
+          "alerts[0]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[0]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "instantiation",
-      "claim": "The alert_ack_o and alert_state_o outputs of all instances are left unconnected (no external net driven).",
+      "type": "assignment",
+      "claim": "For each i, alert_tx_o[i] is driven directly by the corresponding prim_alert_sender instance output.",
+      "cond": "always",
+      "signals": [
+        "alert_tx_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:112"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "alert_tx_o[i] == gen_alert_tx[i].u_prim_alert_sender.alert_tx_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_tx_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "alert_tx_o[i] == gen_alert_tx[i].u_prim_alert_sender.alert_tx_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "The alert_ack_o and alert_state_o outputs of each prim_alert_sender are left unconnected, so their values are ignored by the enclosing design layer.",
       "cond": "always",
       "signals": [
         "alert_ack_o",
@@ -63,35 +141,105 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:109-110"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "!alert_ack_o |-> ##1 (no update from alert_ack_o wire)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_ack_o",
+          "alert_state_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "!alert_ack_o |-> ##1 (no update from alert_ack_o wire)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "producer_contract",
-      "claim": "The prim_alert_sender module must operate correctly (e.g., clear its internal state) even when its alert_ack_o output is left unconnected.",
-      "cond": "after an alert request is asserted",
-      "risk": "The sender may never deassert the alert, causing a stuck fatal condition.",
+      "claim": "The alerts[0] signal is intended to serve as a common request for all alert channels; when asserted, all alert_tx_o[i] outputs are expected to become active.",
+      "cond": "when alerts[0] is asserted",
+      "risk": "If alerts[0] was meant to be per‑channel (alerts[i]), a single request can spuriously trigger all alert outputs, causing false alarms and masking the real source.",
       "signals": [
-        "alert_ack_o"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:109"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "The external logic driving alerts[0] must coordinate the semantics of multiple alert senders that react to the same request.",
-      "cond": "always",
-      "risk": "All alerts fire simultaneously, losing per-alert discrimination and possibly overwhelming the system.",
-      "signals": [
-        "alerts[0]"
+        "alerts"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:108"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "alerts[0] == 1",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == 1 (for all i)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "alerts[0] == 1",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == 1 (for all i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "value_domain",
+      "claim": "The array widths of alert_rx_i, alert_test, alert_tx_o, and AlertAsyncOn each match NumAlerts.",
+      "cond": "at elaboration",
+      "risk": "Width mismatch will cause elaboration errors or silent truncation, breaking the alert path.",
+      "signals": [
+        "alert_rx_i",
+        "alert_test",
+        "alert_tx_o",
+        "AlertAsyncOn",
+        "NumAlerts"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:100-114"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$size(alert_rx_i) == NumAlerts && $size(alert_test) >= NumAlerts && $size(alert_tx_o) == NumAlerts && $size(AlertAsyncOn) == NumAlerts",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_rx_i",
+          "alert_test",
+          "alert_tx_o",
+          "AlertAsyncOn",
+          "NumAlerts"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "at elaboration",
+        "consequent": "$size(alert_rx_i) == NumAlerts && $size(alert_test) >= NumAlerts && $size(alert_tx_o) == NumAlerts && $size(AlertAsyncOn) == NumAlerts",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -99,65 +247,114 @@
       "id": "U1",
       "type": "U_spec_gap",
       "priority": "high",
-      "claim": "Why are all alert sender instances driven by the same alerts[0]? Is it intended to fire all alerts at once on a single event?",
-      "cond": "when alerts[0] asserts",
-      "risk": "Unintended mass-alert activation, hiding the specific alert source and potentially causing unnecessary fatal error escalation.",
+      "claim": "alert_req_i of all prim_alert_sender instances is tied to alerts[0] instead of a per‑channel signal (alerts[i]). This flattens all alert channels to a single request, which may be unintended.",
+      "cond": "always",
+      "risk": "A single event on alerts[0] triggers all alert outputs simultaneously, making it impossible to distinguish alert sources and potentially violating alert classification.",
       "signals": [
-        "alerts[0]",
-        "NumAlerts"
+        "alerts",
+        "alert_req_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:108"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "i != 0",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[0] && (alerts[i] may be ignored)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts",
+          "alert_req_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "i != 0",
+        "consequent": "gen_alert_tx[i].u_prim_alert_sender.alert_req_i == alerts[0] && (alerts[i] may be ignored)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "alert_ack_o is unconnected. If the alert sender requires an external acknowledge to deassert, the alert may become permanently active after the first assertion.",
-      "cond": "after an alert request",
-      "risk": "Persisting fatal alert that prevents recovery and may mask future alerts.",
-      "signals": [
-        "alert_ack_o"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:109"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_security_intent_gap",
       "priority": "medium",
-      "claim": "alert_state_o is unconnected, losing visibility into the sender’s operational state (e.g., idle, pending, fired).",
-      "cond": "always",
-      "risk": "A dead or stuck sender may go undetected, undermining the alert system’s fault coverage.",
+      "claim": "alert_ack_o and alert_state_o are left unconnected. If the prim_alert_sender uses these to deassert the alert or report state, the missing connection may prevent normal alert clearing and status reporting.",
+      "cond": "after an alert event",
+      "risk": "Alerts may remain asserted longer than necessary, or their state may be lost, hindering fault recovery and diagnostic visibility.",
       "signals": [
+        "alert_ack_o",
         "alert_state_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:110"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:109-110"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "alert_ack_o (internal) == 1",
+        "consequent": "alert_tx_o remains unchanged (uncleared)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "report",
+        "signals": [
+          "alert_ack_o",
+          "alert_state_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "alert_ack_o (internal) == 1",
+        "consequent": "alert_tx_o remains unchanged (uncleared)",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
-      "id": "U4",
+      "id": "U3",
       "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "All alerts are configured as fatal (IsFatal=1). Is there a design requirement for any non-fatal alert, or is this correct?",
-      "cond": "any alert trigger",
-      "risk": "Loss of flexibility to handle recoverable faults without a fatal escalation.",
+      "priority": "medium",
+      "claim": "IsFatal is hardwired to 1'b1 for all alert channels, making every UART alert fatal and unrecoverable. It is unclear whether this matches the designer’s intent for all alert types.",
+      "cond": "always",
+      "risk": "A non‑fatal alert (e.g., recoverable protocol error) may be escalated to a fatal, causing unnecessary system shutdown or error escalation.",
       "signals": [
         "IsFatal"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:103"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "IsFatal == 1'b1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "IsFatal"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "IsFatal == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Touch to alerts/errors category. The alert_req_i connection tying all channels to alerts[0] can cause a single alert source to activate all alert outputs, undermining isolation and precise fault attribution. Combined with unconnected alert_ack_o and alert_state_o, the alert subsystem may not be able to clear or monitor the alerts correctly, potentially leaving the system in an unquiesced state. The forced fatal (`IsFatal=1`) without configurability could escalate recoverable faults to unrecoverable, affecting availability.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv:100-114"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart.sv",
   "line_start": 100,
-  "line_end": 114,
-  "security_implications": ""
+  "line_end": 114
 }

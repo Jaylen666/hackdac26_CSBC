@@ -1,0 +1,617 @@
+[
+  {
+    "finding_id": "F-0001",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.97,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The finding is only a chunking artifact: intg_error is explicitly used in tlul_adapter_reg error handling.",
+    "root_cause": "No RTL defect. In /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:253-258 u_cmd_intg_chk drives intg_error, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281 ORs intg_error into err_internal, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:82-83 gates we_o/re_o with err_internal.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The claim says intg_error is not used, while err_internal uses it. Source tracing shows intg_error is declared at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:65, driven by u_cmd_intg_chk at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:253-258, latched for intg_error_o at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:259-267, and included in err_internal at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281. Ref analysis: No ref_clues supplied. Verdict integration: Because the RTL explicitly uses intg_error for transactional error response and register access suppression, the original contradiction is not a hardware bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0002",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.98,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "intg_error_q is not unused; it is the sticky integrity error output.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:254 declares intg_error_q, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:260-266 sets it on intg_error, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:267 drives intg_error_o from it.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims intg_error_q is declared but never used. The generate branch shows intg_error_q is a sticky latch: reset clears it, intg_error sets it, and it drives intg_error_o at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:260-267. Ref analysis: No ref_clues supplied. Verdict integration: The alleged unused signal premise is factually refuted by the RTL, and the sticky behavior is documented in the source comment at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:259.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0003",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.94,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_023"
+    ],
+    "summary": "The alleged rdata_q contradiction mixes mutually exclusive AccessLatency generate branches.",
+    "root_cause": "No RTL defect. AccessLatency==1 holds rdata_q during a_ack in /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:181-197, while AccessLatency==0 updates rdata_q during a_ack in /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:216-223; these branches are mutually exclusive by /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:112 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:213.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding combines a hold guarantee from the AccessLatency==1 branch with an update rule from the AccessLatency==0 branch. In source, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:112 starts gen_access_latency1, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:213 starts the else branch. Only one elaborates. Ref analysis: TlulProtocolChecker.md_009 is unrelated to rdata_q because it is about a_mask contiguity. TlulProtocolChecker.md_023 is overlapping: d_data must be known for AccessAckData; the adapter drives d_data from rdata at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:238, and no X source is introduced by the claimed branch conflict. TlulProtocolChecker.md_019 is overlapping but satisfied because d_source is latched from a_source at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-106 and returned at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:235-236. Verdict integration: The contradiction disappears once the generate parameter is respected, and the relevant D-channel refs are not violated.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0004",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "a_ack is handshake-derived and cannot remain high for the same transaction after outstanding_q is set.",
+    "root_cause": "No RTL defect. a_ack is tl_i.a_valid & tl_o.a_ready at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:76, a_ready is ~(outstanding_q | busy_i) at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231, and outstanding_q is set on a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:93-96.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The claim assumes an external multi-cycle a_ack can be forced. In this module a_ack is not an input; it is generated from tl_i.a_valid and tl_o.a_ready at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:76. After an accepted request, outstanding_q becomes 1 at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:95, causing a_ready to deassert through /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231. Ref analysis: No ref_clues supplied. Verdict integration: The source contains the mechanism the finding says is missing, so the multi-response scenario is not reachable for a single transaction.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0005",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.88,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The finding treats interface timing assumptions as missing internal stabilization logic; the adapter samples or uses inputs in their documented latency window.",
+    "root_cause": "No RTL defect. The register inputs rdata_i and error_i are documented as returned in AccessLatency cycles at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:49-53; AccessLatency==0 samples them on a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:220-222, while AccessLatency==1 captures/holds response phase values at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:181-212.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says lack of stability constraints during a_ack can corrupt rdata_q. In AccessLatency==1, a_ack does not update rdata_q; /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:191-197 updates rdata_q only in the response phase. In AccessLatency==0, the design intentionally samples error_i, err_internal, wr_req, and rdata_i on a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:220-222. Ref analysis: No ref_clues supplied. Verdict integration: The module relies on its stated register-interface latency contract rather than internally stabilizing external inputs beyond that contract; the claimed hardware contradiction is not present.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0006",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.86,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_024"
+    ],
+    "summary": "The response-phase rdata/error behavior follows the AccessLatency==1 interface contract and does not show an RTL-side stability bug.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:181-212 registers rd_req_q/wr_req_q and captures rdata/error during the response phase; d_valid is driven from outstanding_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232, and d_error is driven from error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says error and rdata can flip during response because they are combinational. The adapter is defined for a register interface whose rdata_i/error_i are returned in AccessLatency cycles at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:49-53; AccessLatency==1 captures response-phase rdata into rdata_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:194-197 and then uses rdata_q for backpressure at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:205 or /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:209. Ref analysis: tlul_testplan.hjson_004 is unrelated because it is an xbar unmapped-address test, not tlul_adapter_reg response timing. TlulProtocolChecker.md_024 is overlapping: d_error must be known when d_valid is high; the RTL drives d_error from a one-bit error expression at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240. Verdict integration: The finding does not identify an input sequence violating the adapter contract, and the relevant D-channel knownness rule is satisfied when the register-side inputs are valid.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0007",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.91,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Reset release does not expose stale rdata_q; reset clears the state and a post-reset a_ack is just a normal accepted request.",
+    "root_cause": "No RTL defect. Reset clears outstanding_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:93-96 and clears rdata_q/error_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:181-186 or /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:216-219. The TLUL README states devices tolerate shorter reset windows at /home/smy/opentitan/hw/ip/tlul/README.md:133-135.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says a_ack could remain high after reset and expose invalid old rdata_q. The reset logic clears outstanding and data state, and a_ready after reset is a normal function of outstanding_q and busy_i at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231. Ref analysis: TlulProtocolChecker.md_016 is adjacent and is satisfied because rspop_q is set from rd_req at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-108. TlulProtocolChecker.md_023 is overlapping and not violated because reset clears rdata_q. TlulProtocolChecker.md_009 is unrelated to reset release. Verdict integration: The RTL has reset initialization and handshake control; there is no stale-data reset-release bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0008",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "rdata_q may retain prior data internally, but d_data is only protocol-valid when d_valid is asserted.",
+    "root_cause": "No RTL defect. d_valid is outstanding_q & ~hold_d_valid at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232, and rdata is assigned to d_data at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:238. When there is no outstanding response, the stale value is not a valid TLUL transfer.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes rdata_q must be scrubbed whenever rd_req_q and wr_req_q are 0. In RTL, rdata_q is a response holding register cleared on reset at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:181-186 or /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:216-219; the TLUL consumer must qualify d_data with d_valid, which is driven at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232. Ref analysis: TlulProtocolChecker.md_016 and TlulProtocolChecker.md_019 are overlapping response-protocol refs; they constrain valid responses, not idle bus values, and the adapter latches opcode/source at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-108 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:235-236. Verdict integration: Holding internal response data outside a valid response is not a TLUL leak by itself.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0009",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.96,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_016"
+    ],
+    "summary": "rspop_q is explicitly covered and set to AccessAckData for reads, including errored reads.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-108 latches rspop_q to AccessAckData when rd_req is true and AccessAck otherwise; /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:233 drives tl_o_pre.d_opcode from rspop_q.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says read response opcode behavior is uncovered. The RTL comment and assignment at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:107-108 explicitly return AccessAckData for rd_req regardless of error. Ref analysis: TlulProtocolChecker.md_016 is same_behavior: Get requests require AccessAckData responses. The RTL maps rd_req to AccessAckData and exposes it on d_opcode at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:233, satisfying the ref. Verdict integration: The official response opcode rule and the source agree, so this is not a protocol bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0010",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.88,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "error_i is a transaction response input, not an asynchronous global fault input that must be reported while no request is active.",
+    "root_cause": "No RTL defect. The module comments define rdata_i/error_i as returned in AccessLatency cycles at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:49-53. In AccessLatency==1, error only includes error_i while rd_req_q or wr_req_q is active at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats error_i as an always-on fault line. The source defines it as a read or write error returned with the register access at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:49-53, and the response error calculation at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212 uses it only for an active delayed request. Ref analysis: tlul_testplan.hjson_004 is unrelated xbar unmapped-address behavior. TlulProtocolChecker.md_024 is only a knownness check for d_error when d_valid is high. TlulProtocolChecker.md_020 is an end-of-sim pending-request check, not an error_i latch requirement. Verdict integration: No official or RTL requirement says idle error_i must be latched, so the alleged missed fault is outside this adapter's interface contract.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0011",
+    "verdict": "CONFIRMED",
+    "confidence": 0.91,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The literal claim is wrong because late_error is wired into rdata under VERILATOR, but the same path exposes a real bug: late_error corrupts read data without asserting d_error.",
+    "root_cause": "Actual defect: In the VERILATOR AccessLatency==1 path, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175 asserts __tlul_bug_002_late_error, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 forces rdata to all ones, but /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212 computes error without __tlul_bug_002_late_error and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240 drives d_error from that error.",
+    "trigger_condition": "Build with VERILATOR, instantiate tlul_adapter_reg with AccessLatency==1, pass +TLUL_BUG_002_INJECT, accept the third read transaction after reset, and reach TlulBug002InjectLateError with no other error_i/error_q set.",
+    "security_impact": "A TLUL read response can return attacker-observable all-ones data with d_error deasserted; response integrity generation at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:243-250 can make the corrupted response self-consistent.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The stated claim says late_error is absent from rdata logic, but /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 proves it is present under VERILATOR. The adjacent signal path is nevertheless defective: __tlul_bug_002_late_error affects rdata but not error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212, so d_error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240 can remain 0. Ref analysis: No ref_clues supplied. Verdict integration: The original missing-rdata-gate theory is false, but the same late_error/rdata path contains a real data-integrity violation, so this is confirmed as an extra finding.",
+    "additional_findings": [
+      "The late_error path should also assert d_error or otherwise prevent a successful AccessAckData response."
+    ]
+  },
+  {
+    "finding_id": "F-0012",
+    "verdict": "CONFIRMED",
+    "confidence": 0.86,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The illegal-state claim is not the real issue, but the inspected state machine does implement a real Verilator-only corrupted-read response path.",
+    "root_cause": "Actual defect: The VERILATOR-only state machine in /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:115-175 transitions through HoldResp, HoldBaseline, and InjectLateError; InjectLateError forces rdata to all ones at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 while d_error ignores the late error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240.",
+    "trigger_condition": "VERILATOR build, +TLUL_BUG_002_INJECT, AccessLatency==1, third accepted read after reset.",
+    "security_impact": "The response channel can deliver corrupted read data as a successful AccessAckData response.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding says the enum default masks illegal encodings. The enum at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:115-121 is 2 bits with four declared states, so there is no unused concrete 2-bit state; the default at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:151-153 is not itself evidence of an illegal-state security bug. Ref analysis: No ref_clues supplied. Verdict integration: While the illegal-state premise is false, reading the same __tlul_bug_002_state_q path exposes the real late-error data corruption described by /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212; therefore the verdict is confirmed as an extra finding.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0013",
+    "verdict": "CONFIRMED",
+    "confidence": 0.86,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The enable is correctly gated by a valid read ack, but that gated trigger still activates a real corrupted-read injection path.",
+    "root_cause": "Actual defect: /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:128-132 enables injection from +TLUL_BUG_002_INJECT, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:155-164 triggers the state machine on an accepted read, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 corrupts rdata without d_error coverage in /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212.",
+    "trigger_condition": "VERILATOR build with +TLUL_BUG_002_INJECT; the third accepted Get transaction when AccessLatency==1.",
+    "security_impact": "A legal read can receive corrupted data with no TLUL error indication.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal non-read trigger claim is false: rd_req is a_ack & Get at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:80, and the injection trigger requires __tlul_bug_002_enabled && a_ack && rd_req at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:155. Ref analysis: No ref_clues supplied. Verdict integration: The original worry about non-read activation is refuted, but the same enable/a_ack/rd_req trigger path creates the confirmed late-error read-data corruption, so this is an extra finding.",
+    "additional_findings": [
+      "The injection trigger is read-only but still creates a successful corrupted read response."
+    ]
+  },
+  {
+    "finding_id": "F-0014",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Stale rdata_q during a_ack is not a valid downstream data transfer.",
+    "root_cause": "No RTL defect. In AccessLatency==1, rdata_q is held during a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:191-197, but d_valid is based on outstanding_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232. In AccessLatency==0, rdata_q is updated on a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:220-222.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes downstream logic samples rdata_q during an address handshake. rdata_q is internal, and TLUL-visible d_data at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:238 is meaningful only with d_valid at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232. Ref analysis: No ref_clues supplied. Verdict integration: There is no source-level path where stale rdata_q is a valid response solely because a_ack is high.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0015",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_018",
+      "TlulProtocolChecker.md_005"
+    ],
+    "summary": "The alleged multi-cycle a_ack is blocked by outstanding_q/a_ready feedback.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:76 defines a_ack from a_ready, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:93-96 sets outstanding_q on a_ack, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231 deasserts a_ready while outstanding_q is set.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The claim says reqid_q, reqsz_q, and rspop_q can update repeatedly for one transaction. They update only on a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:104-108, and the a_ready feedback prevents a second a_ack until the outstanding response is cleared. Ref analysis: TlulProtocolChecker.md_018 is same_behavior for response size; reqsz_q is latched from a_size at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:106 and returned at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:235. TlulProtocolChecker.md_005 is overlapping pending-source behavior; this one-outstanding adapter deasserts a_ready during outstanding responses. Verdict integration: The relevant source and refs support a single outstanding transaction, not duplicate responses.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0016",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_007"
+    ],
+    "summary": "Reads do not bypass TLUL alignment checking; subword reads are allowed by the register-tool specification.",
+    "root_cause": "No RTL defect. tlul_err checks a_address alignment to a_size for all valid opcodes at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:61-94, and tlul_adapter_reg ORs tl_err into err_internal at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281. The separate addr_align_err word-alignment check at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:287-294 intentionally applies only to writes.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says unaligned reads are silently word-aligned. Full-word unaligned reads are caught by tlul_err's addr_sz_chk at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:77-80 and propagated through err_internal at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281. Subword reads are not an error in the register tool: /home/smy/opentitan/util/reggen/README.md:662-663 says reads smaller than 32b return full register content and do not signal error. Ref analysis: TlulProtocolChecker.md_007 is same_behavior for a_address aligned to a_size. The RTL satisfies this via tlul_err; the finding's stronger word-alignment-for-reads rule is contradicted by reggen documentation. Verdict integration: The read path implements TLUL size alignment and the documented register-interface subword read behavior.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0017",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "tlul_testplan.hjson_004"
+    ],
+    "summary": "All-ones data is not the sole error indication; d_error carries the error status.",
+    "root_cause": "No RTL defect. tl_o_pre.d_data is rdata and tl_o_pre.d_error is error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:238-240. A legitimate rdata_i value of all ones can be returned with error_q/error deasserted, while actual errors assert d_error through /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:221-222 or /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes consumers must infer error from all-ones data. The RTL provides a separate d_error bit at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240; rdata all ones with d_error 0 is a legal read value, and rdata all ones with d_error 1 is an error response. Ref analysis: tlul_testplan.hjson_004 is overlapping and supports the separate d_error convention for error responses. TlulProtocolChecker.md_001 and TlulProtocolChecker.md_012 are unrelated to the all-ones read-data alias claim. Verdict integration: Since error status is not encoded solely in d_data, the alleged ambiguity is not an RTL bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0018",
+    "verdict": "CONFIRMED",
+    "confidence": 0.88,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The production-software part of the claim is overstated, but the VERILATOR RTL path contains a real unprotected TLUL write-data corruption injector.",
+    "root_cause": "Actual defect: Under VERILATOR, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:51-54 enables tlul_bug_001_inject_en from +TLUL_BUG_001_INJECT, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:57-63 triggers on an accepted magic PutFullData write, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:69-82 writes corrupted data plus recomputed data_intg into the request FIFO.",
+    "trigger_condition": "VERILATOR build, +TLUL_BUG_001_INJECT, accepted PutFullData with a_data 0xdead_beef and a_address 0x4000_0010 while tl_h_o.a_ready is high.",
+    "security_impact": "The downstream TLUL device receives modified write data with matching data integrity bits, so normal TLUL data-integrity checking cannot detect the tampering.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The claim that production software can write an enable is not supported: the enable is a VERILATOR-only bit set by a plusarg at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:42 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:51-54. The actual source-level defect is that the active Verilator path corrupts a real accepted TLUL request word at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:69-82. Ref analysis: TlulProtocolChecker.md_023 is unrelated to this A-channel write-data corruption because it constrains D-channel d_data knownness. Verdict integration: The literal production attack is imprecise, but the adjacent tlul_bug_001 signal path is a real data-integrity bypass in the Verilator RTL, so this is confirmed as an extra finding.",
+    "additional_findings": [
+      "The corrupted write data is accompanied by recomputed data_intg at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:67-68."
+    ]
+  },
+  {
+    "finding_id": "F-0019",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.86,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "tlul_adapter_reg is not expected to prove semantic correctness of register read data; error_i is the register-side error indication.",
+    "root_cause": "No RTL defect. rdata_i and error_i are register-interface inputs documented at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:49-53. The adapter forwards rdata_i for a delayed read at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:203-205 or /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:207-209, and can generate response integrity at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:243-250.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding asks the bus adapter to validate correctness of arbitrary register data. The RTL has no independent copy or ECC of rdata_i; it relies on the register block to provide error_i and optionally generates TLUL response integrity over the value it returns. Ref analysis: No ref_clues supplied. Verdict integration: Absence of semantic validation of rdata_i is an interface responsibility boundary, not an internal TLUL adapter bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0020",
+    "verdict": "CONFIRMED",
+    "confidence": 0.84,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "hold_d_ack does not create the claimed deadlock, but the same hold path is part of the confirmed late-error corrupted read response.",
+    "root_cause": "Actual defect: /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:170-173 holds d_ack/d_valid low for two states, after which /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175 asserts __tlul_bug_002_late_error; rdata is forced to all ones at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 while d_error ignores that late error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:240.",
+    "trigger_condition": "VERILATOR build with +TLUL_BUG_002_INJECT, AccessLatency==1, third accepted read; the state machine passes through HoldResp and HoldBaseline before InjectLateError.",
+    "security_impact": "The response is delayed and then returned with corrupted data and no error indication.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal deadlock claim is false because the hold states are finite transitions at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:140-150, and a_ready is blocked by outstanding_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231 so a new request is not accepted during the hold. Ref analysis: No ref_clues supplied. Verdict integration: Although hold_d_ack itself does not deadlock, it is on the same signal path that creates the late-error data corruption, so this is confirmed as an extra finding.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0021",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Idle rdata may equal the previous rdata_q, but it is not a valid TLUL response without d_valid.",
+    "root_cause": "No RTL defect. rdata can fall back to rdata_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:205 or /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:209, but d_valid is separately driven by outstanding_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats idle d_data bus value as an information leak. TLUL semantics qualify d_data with d_valid; the adapter drives d_valid only while a response is outstanding at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232. Ref analysis: No ref_clues supplied. Verdict integration: An unqualified idle bus value is not a software-visible transaction, so the alleged stale-data leak does not hold.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0022",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "tl_err is not opaque; tlul_err source implements the protocol checks and feeds err_internal.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:297-303 instantiates tlul_err, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:38-94 defines err_o from opcode, address/size, mask, full-data, and instruction-type checks.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says err_o behavior cannot be confirmed from the module chunk. Phase3 source tracing expands into /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv, where opcode_allowed and a_config_allowed are computed at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:41-94 and err_o is assigned at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:38-39. Ref analysis: No ref_clues supplied. Verdict integration: The behavior is available in source and is connected into err_internal at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281, so this is a chunking false alarm.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0023",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Read requests do not bypass size alignment; the only missing word-alignment error is intentional for subword reads.",
+    "root_cause": "No RTL defect. tlul_err checks address alignment to a_size at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:47-94; reggen documents that reads smaller than 32b do not signal error at /home/smy/opentitan/util/reggen/README.md:662-663.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says reads may bypass alignment entirely. Source shows tlul_err applies addr_sz_chk for all valid requests when tl_i.a_valid is high at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:61-94. The additional addr_align_err in tlul_adapter_reg is a stricter write-only word alignment check at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:287-294. Ref analysis: No ref_clues supplied. Verdict integration: Full-word unaligned reads are rejected by tlul_err; subword reads are documented as legal for generated register files, so the claimed bypass is false.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0024",
+    "verdict": "CONFIRMED",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "__tlul_bug_002_late_error is VERILATOR-only and creates observable Verilator-vs-non-Verilator response behavior divergence.",
+    "root_cause": "Confirmed defect in the stated compile-time path: /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:115-175 declares and drives __tlul_bug_002_late_error only under VERILATOR, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 uses it to force rdata to all ones, while the non-VERILATOR mux at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:206-210 has no equivalent condition.",
+    "trigger_condition": "Compare a VERILATOR build with +TLUL_BUG_002_INJECT and AccessLatency==1 against a non-VERILATOR build for the third accepted read transaction.",
+    "security_impact": "Verilator simulation can produce a corrupted successful read response that non-Verilator/synthesis builds do not model, undermining validation consistency for this TLUL path.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The source confirms the signal is compile-time gated by VERILATOR: declaration and state logic are at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:115-175, while the else branch only ties hold_d_ack and hold_d_valid to zero at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:176-179. Ref analysis: tlul_testplan.hjson_003 is adjacent general DV delay guidance, not a direct requirement for this injected signal. Verdict integration: The finding's core flow-divergence claim is true at source level, and the divergence has a concrete response-data effect at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-210.",
+    "additional_findings": [
+      "The same Verilator path also omits late_error from d_error generation."
+    ]
+  },
+  {
+    "finding_id": "F-0025",
+    "verdict": "CONFIRMED",
+    "confidence": 0.84,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "rd_req does go low before InjectLateError under normal handshaking, but the same timing window is deliberately used to return corrupted read data.",
+    "root_cause": "Actual defect: The state machine enters HoldResp on the selected read at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:155-164, holds the response at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:170-173, then asserts __tlul_bug_002_late_error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175, which forces rdata at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 without setting d_error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212.",
+    "trigger_condition": "VERILATOR build with +TLUL_BUG_002_INJECT, AccessLatency==1, third accepted read transaction.",
+    "security_impact": "A held read response is released as successful but contains corrupted data.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal concern that rd_req might not go low is refuted by a_ready/outstanding feedback: a_ready is low while outstanding_q is set at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231, and rd_req requires a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:80. Ref analysis: No ref_clues supplied. Verdict integration: The rd_req timing assumption holds, but inspecting this same state sequence exposes the real late-error data corruption, so the verdict is confirmed as an extra finding.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0026",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.96,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The sticky intg_error_q behavior is intentional and documented in the RTL.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:259 comments permanently latch integrity error until reset, /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:260-266 implements that latch, and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:267 drives intg_error_o.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding accurately observes stickiness but incorrectly classifies it as a bug. The code comment and implementation at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:259-267 show permanent latching until reset is the intended security behavior. Ref analysis: No ref_clues supplied. Verdict integration: Sticky integrity errors are a common alert pattern and are explicitly implemented here, so no defect is confirmed.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0027",
+    "verdict": "CONFIRMED",
+    "confidence": 0.89,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Cross-chunk review finds the tlul_bug_001 driver and confirms it corrupts accepted request FIFO data under a Verilator plusarg.",
+    "root_cause": "Confirmed defect: /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:57-68 defines tlul_bug_001_fire, tlul_bug_001_corrupted_data, and tlul_bug_001_corrupted_data_intg; /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:69-82 selects the corrupted request word into reqfifo_wdata when tlul_bug_001_fire is true.",
+    "trigger_condition": "VERILATOR build with +TLUL_BUG_001_INJECT; an accepted PutFullData to address 0x4000_0010 carrying 0xdead_beef.",
+    "security_impact": "The request FIFO forwards attacker-visible corrupted write data with matching data integrity, bypassing downstream TLUL data-integrity detection.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding asks for cross-chunk review of the tlul_bug_001 driver. The driver is in the same source file: plusarg enable at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:51-54, fire condition at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:57-63, corruption at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:65-68, and FIFO insertion at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:69-82. Ref analysis: TlulProtocolChecker.md_023 is unrelated because it constrains D-channel d_data knownness, not A-channel request data integrity. Verdict integration: The requested source trace confirms a real data corruption injector in the active Verilator RTL path.",
+    "additional_findings": [
+      "Command integrity does not cover a_data; data integrity is recomputed for the corrupted data."
+    ]
+  },
+  {
+    "finding_id": "F-0028",
+    "verdict": "CONFIRMED",
+    "confidence": 0.84,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The enum timing is visible in source; its actual effect is a confirmed corrupted-read response path.",
+    "root_cause": "Actual defect: The tlul_bug_002_state_e states at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:115-121 drive a finite sequence at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:140-150, suppress d_valid through hold_d_valid at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:170-173, and then assert late_error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175, corrupting rdata at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 without d_error coverage.",
+    "trigger_condition": "VERILATOR build with +TLUL_BUG_002_INJECT, AccessLatency==1, third accepted read.",
+    "security_impact": "The state sequence releases a corrupted successful read response.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal documentation-gap claim is not itself a hardware bug; source lines /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:140-175 show the timing and channel effects. Ref analysis: No ref_clues supplied. Verdict integration: Reading the enum path reveals the real late-error response corruption, so this is confirmed as an extra finding rather than as a documentation-only issue.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0029",
+    "verdict": "CONFIRMED",
+    "confidence": 0.83,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "hold_d_ack is assigned, so the literal claim is false, but that assigned path participates in the confirmed late-error corrupted read.",
+    "root_cause": "Actual defect: hold_d_ack/hold_d_valid are assigned from __tlul_bug_002_state_q at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:170-173; the sequence then asserts __tlul_bug_002_late_error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175 and forces rdata without d_error at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-212.",
+    "trigger_condition": "VERILATOR +TLUL_BUG_002_INJECT, AccessLatency==1, third accepted read, transition through HoldResp/HoldBaseline.",
+    "security_impact": "The response is held and then returned with corrupted data as a non-error response.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding says hold_d_ack is not assigned in the region. Source refutes this: non-Verilator and AccessLatency==0 tie it low at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:177 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:214, while the Verilator AccessLatency==1 branch assigns it at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:170-171. Ref analysis: TlulProtocolChecker.md_016 and TlulProtocolChecker.md_019 are overlapping response-protocol refs; the original unassigned-signal claim is not a ref violation. Verdict integration: The literal claim is false, but the assigned hold_d_ack path is part of the confirmed late-error corrupted-read bug, so this is an extra finding.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0030",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.92,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_013"
+    ],
+    "summary": "The strict/loose MuBi checks are intentional, and invalid instr_type encodings are covered by tlul_err.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:277-279 asserts instr_error only for strict instruction transactions when en_ifetch_i is loosely false; invalid instr_type is checked in /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:35-39.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding questions whether multi-bit encoding anomalies are handled. prim_mubi_pkg defines invalid, strict true, and loose false checks at /home/smy/opentitan/hw/ip/prim/rtl/prim_mubi_pkg.sv:30-33, /home/smy/opentitan/hw/ip/prim/rtl/prim_mubi_pkg.sv:40-45, and /home/smy/opentitan/hw/ip/prim/rtl/prim_mubi_pkg.sv:68-73. tlul_err raises instr_type_err for invalid encodings at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_err.sv:35-39. Ref analysis: TlulProtocolChecker.md_013 is overlapping: a_user must be known when a_valid is high; the runtime protocol checker and tlul_err cover malformed instr_type rather than leaving it unchecked. Verdict integration: The split between invalid encoding detection and ifetch permission checking is deliberate and source-backed.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0031",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.97,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "err_internal generation is present and directly gates re_o and we_o.",
+    "root_cause": "No RTL defect. /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281 assigns err_internal from addr_align_err, tl_err, instr_error, and intg_error; /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:82-83 uses it to suppress we_o and re_o.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says no logic within the chunk generates err_internal. Full-source review shows err_internal is generated at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:281, with tl_err coming from the instantiated checker at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:297-303 and intg_error from /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:253-258. Ref analysis: No ref_clues supplied. Verdict integration: The source contains the missing generation logic, so the finding is a false alarm.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0032",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.93,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "TlulProtocolChecker.md_020"
+    ],
+    "summary": "a_ack and d_ack are not simultaneously asserted in this one-outstanding adapter.",
+    "root_cause": "No RTL defect. a_ready is low when outstanding_q is high at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:231, while d_valid is high only when outstanding_q is high at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:232; therefore a_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:76 and d_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:77 cannot both represent normal simultaneous handshakes.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding worries that the always_ff priority gives a_ack precedence over d_ack. In this adapter a_ready and d_valid are complementary functions of outstanding_q in normal operation, so both handshakes cannot be true for the same cycle. Ref analysis: TlulProtocolChecker.md_020 is overlapping no-outstanding-at-end behavior; outstanding_q is cleared on d_ack at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:96, and new requests are blocked while outstanding. Verdict integration: The priority order is not reachable as a conflicting simultaneous-handshake case.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0033",
+    "verdict": "CONFIRMED",
+    "confidence": 0.88,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The command-integrity premise is false because cmd_intg does not cover a_data, but the same path confirms a real data-integrity-bypassing corruption injector.",
+    "root_cause": "Actual defect: tlul_fifo_sync corrupts a_data and recomputes data_intg at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:65-82. Command integrity excludes a_data because tl_h2d_cmd_intg_t contains instr_type, addr, opcode, and mask at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_pkg.sv:60-65 and extract_h2d_cmd_intg fills those fields at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_pkg.sv:149-158.",
+    "trigger_condition": "VERILATOR +TLUL_BUG_001_INJECT; accepted magic PutFullData write to 0x4000_0010 with data 0xdead_beef.",
+    "security_impact": "The corrupted write data is integrity-consistent on the TLUL data-integrity field, so downstream logic can accept a tampered write as valid.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding asks whether reusing original cmd_intg after corrupting a_data is a bug. Source shows cmd_intg does not cover a_data; data integrity covers a_data and is recomputed for the corrupted value at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:67-68. Ref analysis: TlulProtocolChecker.md_023 is unrelated D-channel data knownness. TlulProtocolChecker.md_013 is adjacent a_user knownness and does not constrain this corruption. Verdict integration: The original cmd_intg concern is inaccurate, but the same corruption path is a real bug because data_intg is recomputed to hide the modified write data.",
+    "additional_findings": [
+      "Same underlying tlul_bug_001 request-word corruption issue as F-0027."
+    ]
+  },
+  {
+    "finding_id": "F-0034",
+    "verdict": "CONFIRMED",
+    "confidence": 0.86,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The a_ready timing is well-defined by the FIFO, but the fire condition it qualifies triggers a real write-data corruption.",
+    "root_cause": "Actual defect: tlul_bug_001_fire uses tl_h_o.a_ready in /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:57-63, and when true selects corrupted reqfifo_wdata at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:69-82. tl_h_o.a_ready is the reqfifo wready output connected at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:102-108.",
+    "trigger_condition": "VERILATOR +TLUL_BUG_001_INJECT; the magic PutFullData request is accepted when reqfifo asserts wready.",
+    "security_impact": "The FIFO accepts and forwards a tampered write request word.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal timing uncertainty is resolved by source: tl_h_o.a_ready is driven by prim_fifo_sync.wready_o at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:102-108. Ref analysis: No ref_clues supplied. Verdict integration: The unknown-driver premise is false, but the same handshake-qualified tlul_bug_001_fire path confirms the real request-data corruption bug.",
+    "additional_findings": [
+      "Same underlying tlul_bug_001 request-word corruption issue as F-0027."
+    ]
+  },
+  {
+    "finding_id": "F-0035",
+    "verdict": "CONFIRMED",
+    "confidence": 0.82,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Counter saturation is not itself a bug, but the counter controls the confirmed tlul_bug_002 corrupted-read trigger.",
+    "root_cause": "Actual defect: __tlul_bug_002_read_cnt_q increments and triggers the state machine when its old value is 3'h2 at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:155-164; that state machine later forces rdata at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205 without d_error coverage at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212.",
+    "trigger_condition": "VERILATOR +TLUL_BUG_002_INJECT; the third accepted read after reset while AccessLatency==1.",
+    "security_impact": "The counter selects a read transaction for successful corrupted-data response.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal question about saturating at 7 is not a security defect by itself; /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:156-158 simply limits the counter. Ref analysis: No ref_clues supplied. Verdict integration: The same counter path is security-relevant because the old value 3'h2 arms the confirmed late-error corruption sequence at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:163-164, so this is an extra finding.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0036",
+    "verdict": "CONFIRMED",
+    "confidence": 0.82,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The non-Verilator undriven-signal claim is false, but the Verilator late_error signal itself is part of a confirmed corrupted-read bug.",
+    "root_cause": "Actual defect: __tlul_bug_002_late_error is assigned in the VERILATOR branch at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:174-175 and used in the VERILATOR rdata mux at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:201-205, but it is not included in the error calculation at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:211-212.",
+    "trigger_condition": "VERILATOR +TLUL_BUG_002_INJECT; AccessLatency==1; third accepted read reaches InjectLateError.",
+    "security_impact": "The late_error signal changes data without marking the TLUL response as an error.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The literal claim that the else compile-time branch leaves __tlul_bug_002_late_error undriven is false because that signal is not referenced in the non-VERILATOR rdata mux at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:206-210, and the else branch only drives hold signals at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:176-179. Ref analysis: No ref_clues supplied. Verdict integration: The undriven-else theory is false, but inspecting the same late_error source path exposes the confirmed data-without-error defect, so this is an extra finding.",
+    "additional_findings": [
+      "Same underlying late_error-without-d_error issue as F-0011."
+    ]
+  },
+  {
+    "finding_id": "F-0037",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.87,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "tlul_fifo_sync intentionally has no external flush port; tying internal clr_i low is consistent with its documented interface.",
+    "root_cause": "No RTL defect. tlul_fifo_sync exposes TLUL and spare-bit ports only at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:16-26, and connects the internal prim_fifo_sync clr_i ports to 1'b0 at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:102-128 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:144-173. The README interface table lists no flush input at /home/smy/opentitan/hw/ip/tlul/README.md:473-505.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a security policy requiring explicit FIFO flush. The module contract describes an elasticity FIFO with reset and handshake ports, not a flush-capable security boundary. Ref analysis: No ref_clues supplied. Verdict integration: A permanently low internal clear is a design choice matching the public module interface, not an RTL bug absent a violated flush requirement.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0038",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Leaving full/depth/err unconnected does not imply FIFO overflow is undetected by control logic; wready enforces backpressure.",
+    "root_cause": "No RTL defect. reqfifo and rspfifo leave full_o/depth_o/err_o unconnected at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:126-128 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:171-173, but wready_o is connected to TLUL ready at /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:106-108 and /home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv:148-149. prim_fifo_sync derives wready_o from full_o/backpressure at /home/smy/opentitan/hw/ip/prim/rtl/prim_fifo_sync.sv:70-83 or /home/smy/opentitan/hw/ip/prim/rtl/prim_fifo_sync.sv:159-182.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says there is no mechanism to detect or recover from overflow because full/depth/error outputs are unconnected. The handshake mechanism does not need exported full/depth to prevent overflow: prim_fifo_sync drives wready_o low when full, and tlul_fifo_sync maps that to a_ready/d_ready. Ref analysis: No ref_clues supplied. Verdict integration: Overflow prevention is implemented through ready/valid backpressure; the unconnected informational outputs are not evidence of a security defect.",
+    "additional_findings": []
+  }
+]

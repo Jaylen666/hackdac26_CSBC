@@ -6,7 +6,6 @@
     "driven": [],
     "used": [
       "st",
-      "process_latched",
       "kmac_en_i",
       "mode_i",
       "strength_i",
@@ -14,26 +13,26 @@
       "key_len_i",
       "key_data_i",
       "fifo_valid_i",
-      "fifo_ready_o"
+      "fifo_ready_o",
+      "process_latched"
     ],
     "modes": [
       "StKmacIdle",
-      "StKmacMsg",
-      "StTerminalError"
+      "StTerminalError",
+      "StKmacMsg"
     ],
     "tags": [
-      "state",
-      "fifo",
-      "csr",
+      "key",
+      "error",
       "handshake",
-      "security_precondition"
+      "sparse_fsm"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "state_transition",
-      "claim": "When fifo_valid_i, fifo_ready_o, and kmac_en_i are all true, the FSM state must be StKmacMsg.",
+      "claim": "When fifo_valid_i, fifo_ready_o, and kmac_en_i are all asserted, the FSM state st must equal StKmacMsg.",
       "cond": "fifo_valid_i && fifo_ready_o && kmac_en_i",
       "signals": [
         "fifo_valid_i",
@@ -42,121 +41,254 @@
         "st"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:480-481"
-      ]
+        "kmac_core.sv:480-481"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "fifo_valid_i && fifo_ready_o && kmac_en_i",
+        "consequent": "st == StKmacMsg",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_valid_i",
+          "fifo_ready_o",
+          "kmac_en_i",
+          "st"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "fifo_valid_i && fifo_ready_o && kmac_en_i",
+        "consequent": "st == StKmacMsg",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "mode_config",
-      "claim": "kmac_en_i changes only when state is Idle or TerminalError.",
+      "claim": "When kmac_en_i changes value, the state st must be in {StKmacIdle, StTerminalError}.",
       "cond": "$changed(kmac_en_i)",
-      "risk": "Toggling enable during active operation could cause state corruption or incomplete processing.",
+      "risk": "Changing kmac_en_i during an active operation (not idle or error) could corrupt the ongoing processing.",
       "signals": [
         "kmac_en_i",
         "st"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:470"
-      ]
+        "kmac_core.sv:470"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "$changed(kmac_en_i)",
+        "consequent": "st inside {StKmacIdle, StTerminalError}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_en_i",
+          "st"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "$changed(kmac_en_i)",
+        "consequent": "st inside {StKmacIdle, StTerminalError}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "mode_config",
-      "claim": "mode_i changes only when state is Idle or TerminalError.",
+      "claim": "When mode_i changes value, the state st must be in {StKmacIdle, StTerminalError}.",
       "cond": "$changed(mode_i)",
-      "risk": "Mode alteration mid-operation may lead to incorrect algorithm execution or security downgrade.",
+      "risk": "Mode change during an active operation may lead to misconfigured or unsafe behavior.",
       "signals": [
         "mode_i",
         "st"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:471"
-      ]
+        "kmac_core.sv:471"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "$changed(mode_i)",
+        "consequent": "st inside {StKmacIdle, StTerminalError}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "mode_i",
+          "st"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "$changed(mode_i)",
+        "consequent": "st inside {StKmacIdle, StTerminalError}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
       "type": "mode_config",
-      "claim": "strength_i changes only when state is Idle, TerminalError, or the previous state was Idle.",
+      "claim": "When strength_i changes, st must be in {StKmacIdle, StTerminalError} or the previous state was StKmacIdle.",
       "cond": "$changed(strength_i)",
-      "risk": "Strength adjustment during operation could violate security requirements or cause faulty processing.",
+      "risk": "Strength change mid‑operation could break the security level or internal datapath sizing.",
       "signals": [
         "strength_i",
         "st"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:472-475"
-      ]
+        "kmac_core.sv:472-475"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "$changed(strength_i)",
+        "consequent": "(st inside {StKmacIdle, StTerminalError}) || ($past(st) == StKmacIdle)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strength_i",
+          "st"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "$changed(strength_i)",
+        "consequent": "(st inside {StKmacIdle, StTerminalError}) || ($past(st) == StKmacIdle)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A4",
       "type": "security_precondition",
-      "claim": "When key_valid_i is asserted (and not just newly asserted), key_len_i must remain stable.",
+      "claim": "After key_valid_i is asserted (and not at its rising edge), key_len_i must remain stable.",
       "cond": "key_valid_i && !$rose(key_valid_i)",
-      "risk": "Key length change after validation could cause incorrect key loading and compromise cryptographic operations.",
+      "risk": "A changing key length while key_valid_i is high could cause the module to use an inconsistent key length, corrupting the MAC or exposing secret material.",
       "signals": [
         "key_valid_i",
         "key_len_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:476"
-      ]
+        "kmac_core.sv:476"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_valid_i && !$rose(key_valid_i)",
+        "consequent": "$stable(key_len_i)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_valid_i",
+          "key_len_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_valid_i && !$rose(key_valid_i)",
+        "consequent": "$stable(key_len_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A5",
       "type": "security_precondition",
-      "claim": "When key_valid_i is asserted (and not just newly asserted), key_data_i must remain stable.",
+      "claim": "After key_valid_i is asserted (and not at its rising edge), key_data_i must remain stable.",
       "cond": "key_valid_i && !$rose(key_valid_i)",
-      "risk": "Key material change during valid window could leak or corrupt secret data.",
+      "risk": "A changing key while key_valid_i is high could cause incorrect key use, resulting in a weak or broken MAC and possible secret leakage.",
       "signals": [
         "key_valid_i",
         "key_data_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:477"
-      ]
-    },
-    {
-      "id": "A6",
-      "type": "handshake",
-      "claim": "When state is StKmacMsg and process_latched is high, process_latched must become low in the next cycle.",
-      "cond": "st == StKmacMsg && process_latched",
-      "risk": "If process_latched stays high, it may indicate a stuck handshake, stalling the pipeline.",
-      "signals": [
-        "st",
-        "process_latched"
+        "kmac_core.sv:477"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:467"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_valid_i && !$rose(key_valid_i)",
+        "consequent": "$stable(key_data_i)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_valid_i",
+          "key_data_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_valid_i && !$rose(key_valid_i)",
+        "consequent": "$stable(key_data_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The design assumes configuration inputs (kmac_en_i, mode_i, strength_i, key_len_i, key_data_i) are stable outside idle/error states, but no local enforcement is visible in this chunk; an adversary that drives these inputs could change them mid-operation, leading to security downgrade or secret leakage.",
-      "cond": "Any violation of the stability assumptions",
-      "risk": "Secret exposure or algorithm‑strength bypass if an attacker can inject timing‑uncorrelated config changes.",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "Incomplete assertion fragment 'st == StKmacMsg && process_latched |=> !process_latched)' appears; full property specification is missing.",
+      "cond": "unknown",
+      "risk": "An improperly specified or truncated property may fail to capture the intended check, possibly hiding a functional bug.",
       "signals": [
-        "kmac_en_i",
-        "mode_i",
-        "strength_i",
-        "key_len_i",
-        "key_data_i"
+        "st",
+        "process_latched"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:470-477"
-      ]
+        "kmac_core.sv:467"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "process_latched"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "Incomplete assertion fragment 'st == StKmacMsg && process_latched |=> !process_latched)' appears; full property specification is missing",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk enumerates formal assumptions and an assertion directly involving key material (key_len_i, key_data_i, key_valid_i) and the FSM state. Violation of the key stability assumptions (A4, A5) could lead to key corruption or misuse, threatening the MAC integrity. The assertion (G1) links the FIFO handshake to the StKmacMsg state; a failure would allow data to be accepted in an unsafe state, potentially leaking or corrupting output.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:467-483"
+    "kmac_core.sv:467-483"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 467,
-  "line_end": 483,
-  "security_implications": ""
+  "line_end": 483
 }

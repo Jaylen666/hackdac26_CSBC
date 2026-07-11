@@ -26,46 +26,59 @@
     "modes": [],
     "tags": [
       "error",
-      "priority",
-      "csr"
+      "fault",
+      "priority"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "mux_case",
-      "claim": "hw2reg.err_code.d is assigned the concatenation {code, info} of the highest priority error source with valid=1; if no source valid, assigned 0.",
-      "cond": "priority order: app_err > errchecker_err > sha3_err > entropy_err > msgfifo_err",
+      "type": "default_fallback",
+      "claim": "When no error source asserts its valid signal, hw2reg.err_code.d is driven to all zeros.",
+      "cond": "always",
       "signals": [
-        "hw2reg.err_code.d",
         "app_err.valid",
-        "app_err.code",
-        "app_err.info",
         "errchecker_err.valid",
-        "errchecker_err.code",
-        "errchecker_err.info",
         "sha3_err.valid",
-        "sha3_err.code",
-        "sha3_err.info",
         "entropy_err.valid",
-        "entropy_err.code",
-        "entropy_err.info",
         "msgfifo_err.valid",
-        "msgfifo_err.code",
-        "msgfifo_err.info"
+        "hw2reg.err_code.d"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:688-719"
-      ]
-    }
-  ],
-  "assumptions": [
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "app_err.valid == 0 && errchecker_err.valid == 0 && sha3_err.valid == 0 && entropy_err.valid == 0 && msgfifo_err.valid == 0",
+        "consequent": "hw2reg.err_code.d == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "app_err.valid",
+          "errchecker_err.valid",
+          "sha3_err.valid",
+          "entropy_err.valid",
+          "msgfifo_err.valid",
+          "hw2reg.err_code.d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "app_err.valid == 0 && errchecker_err.valid == 0 && sha3_err.valid == 0 && entropy_err.valid == 0 && msgfifo_err.valid == 0",
+        "consequent": "hw2reg.err_code.d == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
     {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "When any x_err.valid is asserted, the corresponding x_err.code and x_err.info must be stable and valid; glitches or transitions while valid is high may produce transient erroneous error codes.",
-      "cond": "any clock cycle where an error source valid is high",
-      "risk": "The subsequent register (hw2reg.err_code) may capture an incorrect error code, causing false error responses or masking real errors.",
+      "id": "G2",
+      "type": "mux_case",
+      "claim": "The always_comb block implements a priority encoder: hw2reg.err_code.d equals the {code, info} of the highest priority error source with a valid flag, with priority order app_err > errchecker_err > sha3_err > entropy_err > msgfifo_err.",
+      "cond": "always",
       "signals": [
         "app_err.valid",
         "app_err.code",
@@ -81,66 +94,128 @@
         "entropy_err.info",
         "msgfifo_err.valid",
         "msgfifo_err.code",
-        "msgfifo_err.info"
+        "msgfifo_err.info",
+        "hw2reg.err_code.d"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:688-719"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw2reg.err_code.d == (app_err.valid ? {app_err.code, app_err.info} : (errchecker_err.valid ? {errchecker_err.code, errchecker_err.info} : (sha3_err.valid ? {sha3_err.code, sha3_err.info} : (entropy_err.valid ? {entropy_err.code, entropy_err.info} : (msgfifo_err.valid ? {msgfifo_err.code, msgfifo_err.info} : '0)))))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "app_err.valid",
+          "app_err.code",
+          "app_err.info",
+          "errchecker_err.valid",
+          "errchecker_err.code",
+          "errchecker_err.info",
+          "sha3_err.valid",
+          "sha3_err.code"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw2reg.err_code.d == (app_err.valid ? {app_err.code, app_err.info} : (errchecker_err.valid ? {errchecker_err.code, errchecker_err.info} : (sha3_err.valid ? {sha3_err.code, sha3_err.info} : (entropy_err.valid ? {entropy_err.code, entropy_err.info} : (msgfifo_err.valid ? {msgfifo_err.code, msgfifo_err.info} : '0)))))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "The priority case discards lower priority error sources when multiple valid signals are asserted simultaneously. It is unclear if this loss is intentional or if a separate mechanism should capture all concurrent errors.",
-      "cond": "Multiple error valid signals high at the same time",
-      "risk": "Critical lower priority errors could go unlogged or unhandled, potentially hiding security or functional faults.",
+      "claim": "When no error valid is asserted, hw2reg.err_code.d is set to '0. It is unclear whether '0 is a legal error code value or carries special meaning (e.g., 'no error'). The intended error reporting behavior may require retention of the last error or a separate valid flag.",
+      "cond": "All error valid signals deasserted",
+      "risk": "Software may misinterpret a zero code as 'no error' when a transient error occurred but was not latched, or may use zero as a normal operational indicator, causing a false positive or missed fault.",
       "signals": [
-        "app_err.valid",
-        "errchecker_err.valid",
-        "sha3_err.valid",
-        "entropy_err.valid",
-        "msgfifo_err.valid"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:691-718"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "low",
-      "claim": "The combinational assignment of hw2reg.err_code.d may be sensitive to glitches on any error valid, code, or info signal if they are not synchronous and stable; this could cause a false error code to be latched.",
-      "cond": "Asynchronous or glitchy transitions on error source signals",
-      "risk": "Spurious error code capture leading to false alarms or masked real errors.",
-      "signals": [
-        "app_err.valid",
-        "app_err.code",
-        "app_err.info",
-        "errchecker_err.valid",
-        "errchecker_err.code",
-        "errchecker_err.info",
-        "sha3_err.valid",
-        "sha3_err.code",
-        "sha3_err.info",
-        "entropy_err.valid",
-        "entropy_err.code",
-        "entropy_err.info",
-        "msgfifo_err.valid",
-        "msgfifo_err.code",
-        "msgfifo_err.info"
+        "hw2reg.err_code.d"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:688-719"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "app_err.valid == 0 && errchecker_err.valid == 0 && sha3_err.valid == 0 && entropy_err.valid == 0 && msgfifo_err.valid == 0",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "reporting",
+        "signals": [
+          "hw2reg.err_code.d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "app_err.valid == 0 && errchecker_err.valid == 0 && sha3_err.valid == 0 && entropy_err.valid == 0 && msgfifo_err.valid == 0",
+        "consequent": "hw2reg.err_code.d is set to '0. It is unclear whether '0 is a legal error code value or carries special meaning (e.g., 'no error'). The intended error reporting behavior may require retention of the last error or a separate valid flag",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "If a high-priority error and a low-priority error occur simultaneously, only the high-priority error is captured. The lower-priority error information (code+info) is overwritten and lost.",
+      "cond": "Multiple error valid signals asserted in the same cycle",
+      "risk": "A lower-priority security‑critical error (e.g., sha3 integrity failure) could be masked by a higher-priority non‑security error, preventing software from reacting to the integrity violation.",
+      "signals": [
+        "app_err.valid",
+        "errchecker_err.valid",
+        "sha3_err.valid",
+        "entropy_err.valid",
+        "msgfifo_err.valid",
+        "hw2reg.err_code.d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:688-719"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "app_err.valid",
+          "errchecker_err.valid",
+          "sha3_err.valid",
+          "entropy_err.valid",
+          "msgfifo_err.valid",
+          "hw2reg.err_code.d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "Multiple error valid signals asserted in the same cycle",
+        "consequent": "only the high-priority error is captured. The lower-priority error information (code+info) is overwritten and lost",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The error code register hw2reg.err_code.d aggregates error indications from multiple sources, some of which may relate to security (sha3 integrity, entropy errors, errchecker). The priority encoding can silently drop lower-priority errors, potentially suppressing evidence of a security violation (e.g., a SHA3 fault) if a higher-priority non‑security error is active concurrently. Additionally, clearing the register to zero when no error is active may erase transient evidence of a security event before software can read it, hindering forensic analysis.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:688-719"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 688,
-  "line_end": 719,
-  "security_implications": ""
+  "line_end": 719
 }

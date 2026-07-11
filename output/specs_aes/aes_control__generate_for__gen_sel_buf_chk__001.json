@@ -1,29 +1,213 @@
 {
   "chunk_id": "aes_control__generate_for__gen_sel_buf_chk__001",
-  "summary": "为每路 sp2v 选择信号实例化一个可配置安全缓冲检查模块，并输出错误标志和类型转换后的选择结果。",
-  "behavior": "本 generate 循环对 i 从 0 到 NumSp2VSig-1 展开，每个迭代例化一个 aes_sel_buf_chk 模块。该模块通过参数 Sp2VNum（选择信号的可选值个数）、Sp2VWidth（位宽）和 Sp2VEnSecBuf[i]（安全缓冲使能）进行配置。实例接收时钟 clk_i 和异步复位 rst_ni，输入原始选择信号 sp2v_sig[i]，输出检查后的选择值 sp2v_sig_chk_raw[i] 和指示错误的标志 sp2v_sig_err[i]。外部直接通过组合 assign 将 sp2v_sig_chk_raw[i] 强制转换为枚举类型 sp2v_e，赋值给 sp2v_sig_chk[i]，转换仅改变类型不改变数值。整个结构为每条 sp2v 路径提供独立的检查与错误报告通道。",
+  "header": {
+    "module": "aes_control",
+    "block_kind": "mixed",
+    "driven": [
+      "sp2v_sig_err[i]",
+      "sp2v_sig_chk_raw[i]",
+      "sp2v_sig_chk[i]"
+    ],
+    "used": [
+      "sp2v_sig[i]",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [],
+    "tags": [
+      "error",
+      "fault",
+      "parameterization",
+      "security"
+    ]
+  },
   "guarantees": [
     {
-      "property": "sp2v_sig_chk[i] 的数值与 sp2v_sig_chk_raw[i] 完全一致，仅类型不同（sp2v_e 枚举）。",
-      "output_signals": [
-        "sp2v_sig_chk[i]"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "For each i, sp2v_sig_chk[i] is a type-cast copy of sp2v_sig_chk_raw[i] (same bits, sp2v_e interpretation).",
+      "cond": "always",
+      "signals": [
+        "sp2v_sig_chk[i]",
+        "sp2v_sig_chk_raw[i]"
       ],
-      "source_refs": [
-        "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_control.sv:555"
-      ]
+      "refs": [
+        "aes_control.sv:555"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sp2v_sig_chk[i] == sp2v_sig_chk_raw[i]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_control",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_chk[i]",
+          "sp2v_sig_chk_raw[i]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sp2v_sig_chk[i] == sp2v_sig_chk_raw[i]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "instance_connection",
+      "claim": "For each i, sp2v_sig_err[i] is directly driven by the checker instance's err_o output.",
+      "cond": "always",
+      "signals": [
+        "sp2v_sig_err[i]"
+      ],
+      "refs": [
+        "aes_control.sv:553"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sp2v_sig_err[i] == u_aes_sp2v_sig_buf_chk_i.err_o",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_control",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_err[i]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "sp2v_sig_err[i] == u_aes_sp2v_sig_buf_chk_i.err_o",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "模块名为 aes_sel_buf_chk，参数 EnSecBuf 指示可选的安全缓冲使能，表明设计意图是对可能关键的选择信号进行安全校验。err_o 输出可用于检测非法或受损的选择值，配合系统安全响应。但具体检查机制（如编码合法性、完整性保护等）需查看模块内部实现。",
-  "assumptions": [],
-  "evidence_refs": [
-    "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_control.sv:543-556"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "sp2v_sig_chk_raw[i] always carries a legal bit pattern of the sp2v_e enum.",
+      "cond": "always",
+      "risk": "If violated, the static cast may produce an out-of-range value that silently corrupts the sp2v selector path, bypassing any downstream error handling.",
+      "signals": [
+        "sp2v_sig_chk_raw[i]",
+        "sp2v_e"
+      ],
+      "refs": [
+        "aes_control.sv:555"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$isunknown(sp2v_sig_chk_raw[i]) == 0 && sp2v_sig_chk_raw[i] inside {sp2v_e}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_control",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_chk_raw[i]",
+          "sp2v_e"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "$isunknown(sp2v_sig_chk_raw[i]) == 0 && sp2v_sig_chk_raw[i] inside {sp2v_e}",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The instantiated aes_sel_buf_chk module correctly asserts err_o when its sel_i input is invalid.",
+      "cond": "when sp2v_sig[i] is out of range",
+      "risk": "A bug in the checker would allow invalid selectors to propagate without error detection.",
+      "signals": [
+        "sp2v_sig[i]",
+        "sp2v_sig_err[i]"
+      ],
+      "refs": [
+        "aes_control.sv:544-554"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "sp2v_sig[i] outside legal range",
+        "consequent": "sp2v_sig_err[i] == 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_control",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig[i]",
+          "sp2v_sig_err[i]"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "sp2v_sig[i] outside legal range",
+        "consequent": "sp2v_sig_err[i] == 1",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
   "uncertain_points": [
-    "aes_sel_buf_chk 模块的具体功能（如 sel_i 到 sel_o 的变换规则、err_o 的触发条件、EnSecBuf=1 时增加的安全行为）未定义，必须查看该模块源码才能准确描述。",
-    "sp2v_sig_chk_raw[i] 的位宽与枚举 sp2v_e 的底层表示是否完全兼容未知；若位宽不匹配，sp2v_e' 可能导致截断或语义错误。",
-    "参数 Sp2VNum 和 Sp2VWidth 的具体值由上层传入，未在本片段给出，可能影响模块内部的有效性检查范围。"
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "The static cast from sp2v_sig_chk_raw[i] to sp2v_e may hide a corrupted value (e.g., from a bit flip) without any local validity check. If sp2v_sig_err[i] is ignored downstream, an illegal selector could be used in the AES data path.",
+      "cond": "sp2v_sig_chk_raw[i] carries an out-of-range value",
+      "risk": "Secret-dependent selector corruption could cause key/data misrouting, side-channel leakage, or functional deadlock.",
+      "signals": [
+        "sp2v_sig_chk_raw[i]",
+        "sp2v_sig_chk[i]",
+        "sp2v_sig_err[i]"
+      ],
+      "refs": [
+        "aes_control.sv:555"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "sp2v_sig_chk_raw[i] not inside {sp2v_e}",
+        "consequent": "sp2v_sig_chk[i] holds a corrupted value",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_control",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_chk_raw[i]",
+          "sp2v_sig_chk[i]",
+          "sp2v_sig_err[i]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "sp2v_sig_chk_raw[i] not inside {sp2v_e}",
+        "consequent": "sp2v_sig_chk[i] holds a corrupted value",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    }
   ],
-  "source_file": "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_control.sv",
+  "security_implications": "This instantiation and type conversion lie on the path of sp2v selector signals, which could control critical AES resources (key bytes, S-box, etc.). The static cast (line 555) assumes sp2v_sig_chk_raw[i] is always a legal sp2v_e value; a fault-injected out-of-range raw value would silently become a pseudo-legal selector, potentially misrouting secret material without raising an error flag. Combined with the optional security buffer (Sp2VEnSecBuf), a mismatch or corruption here could compromise the intended side-channel hardening.",
+  "evidence_refs": [
+    "aes_control.sv:543-556"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv",
   "line_start": 543,
   "line_end": 556
 }

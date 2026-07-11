@@ -11,7 +11,7 @@ from rtl_bug_agent.phase2.formal_sketch import attach_formal_sketches
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/chunk_spec_agu_structured_slim_en.md"
+DEFAULT_PROMPT = _PROJECT_ROOT / "scripts/prompts/chunk_spec_agu_structured_slim_en.md"
 
 
 def generate_chunk_spec(

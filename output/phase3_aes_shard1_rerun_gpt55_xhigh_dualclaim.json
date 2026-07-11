@@ -1,0 +1,853 @@
+[
+  {
+    "finding_id": "F-0001",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_030"
+    ],
+    "summary": "NumShares is never 1 on the masked unmasking path that indexes share 1; the unmasked configuration uses a separate state_done[0] path.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:21 derives NumShares as SecMasking ? 2 : 1, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:514-539 selects state_done[0] only for !SecMasking while the [1]/[0] unmasking code is only inside gen_state_out_masked.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims SecMasking=0 makes NumShares=1 while RTL still indexes state_done_buf[1]. In /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:514-539 the [1] access is guarded by the SecMasking branch, so the legal unmasked elaboration never contains that path.\nRef analysis: aes.hjson_030 is adjacent key-share documentation: /home/smy/opentitan/hw/ip/aes/data/aes.hjson:441-449 says the software-visible initial key is share0 XOR share1. RTL satisfies this by combining key_init_q[0] ^ key_init_q[1] for the unmasked cipher input at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:454-457, while the output unmasking claim is unrelated to initial key register writes.\nVerdict integration: The finding-side out-of-bounds claim is refuted by elaboration structure, and the cheap ref-side key-share invariant is satisfied; no adjacent RTL violation is exposed.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0002",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_002",
+      "theory_of_operation.md_011"
+    ],
+    "summary": "The FSM error-trigger alert logic is visible and the AES RTL drives the fatal alert path for invalid sparse FSM states.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:429-447 drives alert_o in CIPHER_CTRL_ERROR/default and transitions to error on mux/sparse/round/op/fatal errors; /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:254-295 binds ASSERT_PRIM_FSM_ERROR_TRIGGER_ALERT to alert_tx_o[1].",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding only says the macro internals were not visible. They are visible: /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:254-295 instantiates the assertions for control, CTR, and cipher FSMs; /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:429-447 implements terminal error alert behavior in RTL.\nRef analysis: aes.hjson_002 and theory_of_operation.md_011 describe the same fatal-fault property. /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:382-384 says detected countermeasure faults trigger fatal alert and lockup; /home/smy/opentitan/hw/ip/aes/doc/interfaces.md:26 lists internal FSM invalid state as a fatal_fault cause. The RTL maps that to alert[1] at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:928-937 and alert_tx_o[1] at /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:227-240.\nVerdict integration: The relevant refs require invalid FSM/fault conditions to produce fatal alert, and the RTL plus assertion hooks implement that path, so the claimed uncertainty is not a bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0003",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_030",
+      "aes.hjson_031"
+    ],
+    "summary": "NumShares cannot be configured to zero; the generate loops always have either one or two shares.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:21 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:105 derive NumShares only as SecMasking ? 2 : 1.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a legal NumShares=0 elaboration. The RTL does not expose NumShares as a free parameter; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:21 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:105 derive it from a bit parameter and therefore only 1 or 2 is possible.\nRef analysis: aes.hjson_030 and aes.hjson_031 are adjacent initial-key share requirements from /home/smy/opentitan/hw/ip/aes/data/aes.hjson:441-449 and /home/smy/opentitan/hw/ip/aes/data/aes.hjson:469-477. RTL uses two initial key shares independent of cipher masking via NumSharesKey=2 at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:13-15 and key_init arrays at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:100-107; those refs are satisfied and do not support NumShares=0.\nVerdict integration: The finding-side condition is unreachable, and the key-share refs are satisfied by separate NumSharesKey logic.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0004",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "KEY_DEC_CLEAR really writes key_expand_out instead of pseudo-random clearing data; the same clear defect also affects KEY_FULL_CLEAR.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444 drives KEY_FULL_CLEAR to key_expand_out, the same source as KEY_FULL_ROUND, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463 drives KEY_DEC_CLEAR to key_expand_out, the same source as KEY_DEC_EXPAND. /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412 asserts key_full_we_o/key_dec_we_o with KEY_FULL_CLEAR/KEY_DEC_CLEAR during CIPHER_CTRL_CLEAR_KD, so the clear operation writes expanded key material rather than pseudo-random clearing data.",
+    "trigger_condition": "Software or reset-triggered register clearing reaches CIPHER_CTRL_CLEAR_KD with key_clear_q_i=1; the control FSM asserts key_full_we_o and key_dec_we_o while selecting KEY_FULL_CLEAR and KEY_DEC_CLEAR.",
+    "security_impact": "Internal Full Key and Decryption Key registers are not wiped with pseudo-random data during KEY.SEC_WIPE, leaving deterministic key-derived residue instead of the documented secure wipe value.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding states KEY_DEC_CLEAR behaves like KEY_DEC_EXPAND. That is exactly what /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463 implements: both KEY_DEC_EXPAND and KEY_DEC_CLEAR assign key_dec_d = key_expand_out. The control FSM drives KEY_DEC_CLEAR with key_dec_we_o in /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412.\nRef analysis: aes_sec_cm_testplan.hjson_006 / /home/smy/opentitan/hw/ip/aes/data/aes_sec_cm_testplan.hjson:97-101 requires KEY.SEC_WIPE to change initial key registers using pseudo-random data, and /home/smy/opentitan/hw/ip/aes/data/aes.hjson:852-857 says KEY_IV_DATA_IN_CLEAR clears Initial Key, internal Full Key, and Decryption Key registers with pseudo-random data. The initial key path in /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 uses prd_clearing_key_init, but the internal full/decryption key paths above do not. aes.hjson_015 is adjacent DATA_REG.KEY.SCA/state-clearing documentation at /home/smy/opentitan/hw/ip/aes/data/aes.hjson:363-365; the state clear path uses STATE_CLEAR at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-253 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:398-402, so that adjacent state ref is satisfied and is not the cause of this bug.\nVerdict integration: The finding-side KEY_DEC_CLEAR claim is true, and the KEY.SEC_WIPE ref requires PRD clearing; integration confirms a source-level secure-wipe defect rather than a naming artifact.",
+    "additional_findings": [
+      "The same clear command also fails to PRD-clear the internal Full Key register because KEY_FULL_CLEAR selects key_expand_out."
+    ]
+  },
+  {
+    "finding_id": "F-0005",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_015"
+    ],
+    "summary": "state_we, key_full_we, and key_dec_we are not required to be one-hot relative to each other; simultaneous writes to different registers are legal and individually sparse-checked.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:738-763 maps three independent sparse write enables through aes_sel_buf_chk, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:182-198, /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:286-303, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412 intentionally assert multiple enables in legal states.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a one-hot relationship across state_we/key_full_we/key_dec_we. RTL contradicts this: state_we and key_full_we are both asserted when loading or advancing rounds at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:182-198 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:286-291, and key_full_we/key_dec_we are both asserted during key clear at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412.\nRef analysis: aes_sec_cm_testplan.hjson_004 (KEY.SW_UNREADABLE) from /home/smy/opentitan/hw/ip/aes/data/aes_sec_cm_testplan.hjson:79-83 is unrelated to simultaneous internal write enables. aes.hjson_015 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:363-365 is adjacent state PRD wipe; the state clear path exists at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-253 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:398-402.\nVerdict integration: Because simultaneous enables are intentional independent register writes and each sparse value is checked by {SELCHK}:58-69, the finding-side contention model is false and the refs expose no additional defect.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0006",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012",
+      "theory_of_operation.md_011"
+    ],
+    "summary": "The cited DataRegKeySca assertion is an SVA consistency check, not a missing synthesized datapath comparator requirement.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:816-828 contains the assertion, while state clearing is controlled by STATE_CLEAR at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-253 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:337-372; fatal alert collection is at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:928-937.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims RTL must compare state_q/add_round_key_out/state_init_i/prd_clearing_equals_output and assert alert_o. In source, those comparisons appear only inside assertion helper logic at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:811-828 under INC_ASSERT. The hardware control path clears the state by selecting STATE_CLEAR and asserting state_we in /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:337-372.\nRef analysis: theory_of_operation.md_012 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:340-344 requires major key/data registers and cipher state registers be cleared with PRD; RTL satisfies this for cipher state through /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-253 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:337-372. theory_of_operation.md_011 and MAIN/CTR FSM refs concern detected FSM/sparse faults; those are handled by mux_sel_err/sp_enc_err to alert in /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:442-447 and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:928-937.\nVerdict integration: The finding-side claim turns an assertion-side audit predicate into a required datapath alert comparator. The relevant PRD-clearing and fatal-alert refs are satisfied by existing control and alert logic, so this is not a confirmed RTL bug.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0007",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "sp2v_e width is fixed to Sp2VWidth and invalid key_init_we encodings are checked downstream before register use.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:426-432 defines sp2v_e as logic [Sp2VWidth-1:0]; /home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:211-218 casts log_key_init_we to that exact enum; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-856 checks and latches invalid sparse encodings before key_init_we is used at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims width mismatch or invalid log_key_init_we can silently become a bad key_init_we_o. Width mismatch is refuted by the enum typedef at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:426-432, and invalid encodings are not silent because /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:827-856 instantiates aes_sel_buf_chk for each key_init_we_ctrl bit and collects sp_enc_err.\nRef analysis: aes_sec_cm_testplan.hjson_004 is SW unreadability and unrelated. aes_sec_cm_testplan.hjson_006 is adjacent KEY.SEC_WIPE; initial key clear uses KEY_INIT_CLEAR -> prd_clearing_key_init at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 and key_init_reg at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333, so this specific ref-side initial-key invariant is satisfied.\nVerdict integration: The finding-side conversion hazard is covered by type width and sparse-value checking, and the actionable ref-side initial-key wipe behavior is implemented.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0008",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "key_init_we_o is not trusted blindly; aes_core rechecks every sparse write-enable element before it reaches key_init_reg.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:211-218 forms key_init_we_o, while /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:812-839 checks key_init_we_ctrl through aes_sel_buf_chk and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:842-856 uses the checked sp2v_sig_chk version.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says invalid key_init_we_o can propagate into key registers. The signal path goes through /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:812-839, where each sparse element is buffered and checked; key_init_we is assigned only from sp2v_sig_chk at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:842-844.\nRef analysis: aes_sec_cm_testplan.hjson_004 is unrelated SW unreadability. aes_sec_cm_testplan.hjson_006 is adjacent initial-key wipe; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333 implement the PRD-clear write when key_init_sel is KEY_INIT_CLEAR.\nVerdict integration: The finding-side invalid-enum premise is mitigated in RTL, and the relevant wipe ref is satisfied for the initial-key registers involved here.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0009",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.84,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_testplan.hjson_004"
+    ],
+    "summary": "AES routes EDN data to the clearing PRNG; guaranteeing entropy quality or non-X data from the external EDN source is an environment obligation, not an AES RTL defect.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:149-165 synchronizes EDN ack/data into edn_data, /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:192-197 connects edn_data to aes_core entropy inputs, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:191-212 passes entropy_clearing_i into aes_prng_clearing.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims AES lacks a guarantee that entropy_clearing_i is valid when ack is high. The AES source cannot prove external entropy quality; it correctly wires the synchronized EDN bus to the PRNG at /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:149-165 and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:199-211.\nRef analysis: aes_testplan.hjson_004 is a random trigger/clear corner-case test and does not require AES to validate EDN entropy data. The EDN propagation ref from /home/smy/opentitan/hw/ip/aes/data/aes_testplan.hjson:137-143 is satisfied structurally by the edn_data connections.\nVerdict integration: The only unsupported property is an external source-quality/liveness assumption, not an internal AES signal-path contradiction.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0010",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The sp2v_sig width is derived exactly large enough for all key, IV, data_in_prev, and data_out indices.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806 defines NumSp2VSig = NumSharesKey * NumRegsKey + NumSlicesCtr + 2; indices through +1 are assigned at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:812-821 and read at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:842-851.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes the highest data_out index can equal or exceed $bits(sp2v_sig). The declaration at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-810 creates exactly two extra slots beyond key and IV, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:820-821 / /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:850-851 use those slots.\nRef analysis: aes_sec_cm_testplan.hjson_004 and aes_sec_cm_testplan.hjson_006 are adjacent key-register refs and do not constrain this vector layout. NumRegsKey is fixed at /home/smy/opentitan/hw/ip/aes/rtl/aes_reg_pkg.sv:9-11 and NumSlicesCtr is fixed to 8 by /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:17-20 and asserted at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:968-970.\nVerdict integration: The finding-side out-of-range condition is algebraically impossible in the compiled source, and the refs do not expose a separate violation.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0011",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.8,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "reg2hw key_share q/qe are register-interface outputs and key writes are controlled by idle/status logic; no source-level glitch bug is present.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:242-248 reads reg2hw key shares, /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:330-334 only propagates key_init_we_o while not starting work, and /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:656-670 tracks complete clean key updates.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding asserts an unconstrained analog/glitch hazard on reg2hw outputs. The RTL-level signal path is synchronous: key_init_d is sampled only on clk_i when checked key_init_we equals SP2V_HIGH at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333, and control only forwards key writes in idle/non-start windows at /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:330-334.\nRef analysis: aes_sec_cm_testplan.hjson_004 / /home/smy/opentitan/hw/ip/aes/data/aes_sec_cm_testplan.hjson:79-83 is same asset but about software unreadability, not glitches. aes_sec_cm_testplan.hjson_006 is adjacent wipe behavior and is satisfied for initial key registers by /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-333.\nVerdict integration: No RTL claim of an unstable sampled source is supported, and the actionable key refs are either unrelated or satisfied.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0012",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_009"
+    ],
+    "summary": "The clearing entropy request is allowed to stay asserted across the multi-beat reseed handshake; the top wrapper also holds EDN req until ack to avoid protocol loss.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:61-72 keeps entropy_req_o tied to reseed_req_i for the two-half-width reseed case, and /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:135-146 deliberately holds edn_req until edn_ack.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding requires entropy_clearing_req to drop immediately after an ack. That is not the implemented protocol: /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:65-91 buffers two entropy halves when Width/2 == EntropyWidth, so request can remain high until the seed is complete. /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:135-146 additionally holds EDN request until acknowledged.\nRef analysis: aes_testplan.hjson_004 is unrelated clearing-trigger stress. theory_of_operation.md_009 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:301-303 describes PRNG reseed sources, not a one-cycle request deassertion rule.\nVerdict integration: The finding-side protocol rule is not the AES protocol implemented in source; keeping req high is intentional and no ref requires deassertion in the next cycle.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0013",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.84,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "AES asserts EDN requests and arbitrates masking acknowledgments, but eventual external EDN response is not something AES RTL can force.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:130-140 ORs clearing/masking requests, prioritizes clearing, and holds edn_req until ack; /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:149-165 synchronizes the req/ack/data channel.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims top-level logic must force entropy_masking_ack_i to eventually return. The AES wrapper can request entropy and grant ack when EDN responds; it cannot force the external EDN endpoint to acknowledge. Source implements the local protocol at /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:130-165.\nRef analysis: There are no ref_clues. The related EDN/reseed behavior in design docs is an external-interface liveness assumption, not a module-internal invariant that source can enforce.\nVerdict integration: The claim is outside AES RTL controllability, and the local source-level request/ack arbitration is present.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0014",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The claimed sp2v_sig_chk out-of-range condition is impossible because NumSp2VSig is defined from the same maximum index plus two.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-851 declares NumSp2VSig as NumSharesKey * NumRegsKey + NumSlicesCtr + 2 and uses indices from 0 through NumSharesKey * NumRegsKey + NumSlicesCtr + 1.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes parameter values can make the data_in_prev/data_out sp2v_sig_chk reads exceed vector width. In the source, the vector width is a localparam expression derived from the maximum used index at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806, and all assignments/reads at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:812-851 stay within it.\nRef analysis: The KEY.SEC_WIPE, KEY.SW_UNREADABLE, and random KEY/IV/DATA ordering refs attached to this finding are adjacent register-feature refs; they do not define this internal vector layout. The cheap key/IV parameter checks are satisfied by fixed NumRegsKey at /home/smy/opentitan/hw/ip/aes/rtl/aes_reg_pkg.sv:9-11 and NumSlicesCtr == 8 asserted at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:968-970.\nVerdict integration: The finding-side range condition is algebraically refuted by the RTL declaration, and the refs do not reveal a separate source violation.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0015",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The finding conflates different local sp2v_sig vectors in aes_core and aes_control; their bit layouts cannot overlap across module boundaries.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-821 has the key/IV/data sp2v_sig layout, while /home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:524-536 has a separate local aes_control sp2v_sig with fixed bits 0..4 and ctr_we bits 5+i.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims aes_core iv_we_ctrl indices can overlap aes_control fixed bits such as cipher_crypt_i and ctr_ready_i. These are separate module-local arrays: aes_core uses /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-821; aes_control uses /home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:524-536.\nRef analysis: aes_testplan.hjson_010 is an adjacent functional coverage goal for KEY/IV/DATA write ordering, not a bit-layout invariant. KEY.SEC_WIPE is unrelated to the alleged cross-module vector overlap.\nVerdict integration: Because the alleged overlapping bits live in different signals/modules, the finding-side misrouting cannot occur.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0016",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006",
+      "aes.hjson_015"
+    ],
+    "summary": "key_init_q intentionally holds the initial key until software/reset-triggered clearing; the RTL implements the documented KEY_INIT_CLEAR path for those initial key registers.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 selects prd_clearing_key_init for KEY_INIT_CLEAR and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333 writes it into key_init_q under checked key_init_we.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims key_init combinational/register state must be automatically cleared after key use. The spec instead provides explicit/reset clearing. Source implements that path using KEY_INIT_CLEAR at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-333; retaining key_init_q otherwise is normal key-register behavior.\nRef analysis: aes_sec_cm_testplan.hjson_006 / /home/smy/opentitan/hw/ip/aes/data/aes_sec_cm_testplan.hjson:97-101 is same-feature KEY.SEC_WIPE and is satisfied for the initial key registers cited by this finding. aes.hjson_015 is adjacent state wipe and is satisfied by /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-253 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:337-372. aes_testplan.hjson_010 is unrelated coverage.\nVerdict integration: The finding-side automatic-clear requirement is not a documented RTL requirement, and the relevant explicit wipe refs are implemented for key_init_q.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0017",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "round_key_sel is sparse-encoded and checked; illegal selector encodings do not silently select the default branch without alert/error handling.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:699-714 instantiates aes_sel_buf_chk for round_key_sel and folds round_key_sel_err into mux_sel_err; /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:537-542 is the mux itself.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding focuses on the default branch of round_key_mux at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:537-542. It omits the preceding selector checker at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:699-714; invalid encodings set round_key_sel_err and mux_sel_err, which is passed to the control FSM at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:588-592 and drives error handling in /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:442-447.\nRef analysis: aes.hjson_015 is adjacent PRD state wipe, KEY.SW_UNREADABLE/aes.hjson_010 are unrelated key CSR readability refs. They do not require a different round-key mux default.\nVerdict integration: The source has the missing legality check the finding says is absent; no ref-side key-readability or state-wipe invariant is violated by round_key_sel.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0018",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_testplan.hjson_008",
+      "theory_of_operation.md_009"
+    ],
+    "summary": "prng_reseed_q_i is the latched reseed request condition; if it is zero, no reseed is required by the controller.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:790-795 sets PRNG_RESEED after a new key when configured, /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:367-373 passes block-counter reseed requests to the cipher core, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:269-270 / /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:334-335 keep requesting while the latched bit is high and not done.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes an independent hidden need_reseed condition that should override prng_reseed_q_i. In source, prng_reseed_q_i is exactly the latched request state: it is set from triggers/block counter before use and cleared after completion in /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:308-313 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:390-394.\nRef analysis: aes_testplan.hjson_008 / /home/smy/opentitan/hw/ip/aes/data/aes_testplan.hjson:137-143 and theory_of_operation.md_009 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:301-303 require manual/key-touch/block-counter reseeding. The RTL implements those request sources in /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:790-795 and /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:367-373.\nVerdict integration: The finding-side blocked-reseed scenario is missing the real request source: when reseed is needed, the controller sets the latch; when the latch is zero, no source-level obligation is violated.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0019",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_013",
+      "aes.hjson_030"
+    ],
+    "summary": "key_init_d is a synchronous mux of registered/software-controlled sources and PRD; no RTL evidence shows an unstable sampled input during key_init_we.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-333 selects and samples key_init_d; /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:330-334 only forwards software key writes when the core is not starting; /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:656-670 tracks clean complete key updates.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding asserts key_init_d may change during key_init_we. The actual sources are reg2hw key_share flops, keymgr sideload, or prd_clearing_key_init selected at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 and sampled on clk_i at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333. Control gating at /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:330-334 prevents non-idle software updates.\nRef analysis: theory_of_operation.md_013 and aes.hjson_030 are same-feature idle/update refs: /home/smy/opentitan/hw/ip/aes/data/aes.hjson:441-449 says key registers can only be updated idle and non-idle writes are ignored. RTL satisfies this by only propagating key_init_qe_i in CTRL_IDLE when !start_core at /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:315-334. SW_UNREADABLE and SEC_WIPE refs are adjacent/satisfied as above.\nVerdict integration: The finding-side stability hazard is not a source-level defect, and the relevant idle/write ref is satisfied by the control FSM.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0020",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.83,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_012",
+      "aes_sec_cm_testplan.hjson_006",
+      "aes.hjson_015"
+    ],
+    "summary": "The clear path uses the AES clearing PRNG output; runtime proof of entropy quality is outside combinational RTL and not a missing source check.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:191-212 instantiates aes_prng_clearing, /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:228-231 builds prd_clearing_key_init from prd_clearing, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 selects it for KEY_INIT_CLEAR.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says prd_clearing_key_init is just transparently connected and no randomness check exists. RTL does transparently route PRNG output by design: the pseudo-random generator is /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:118-142, and its output is replicated into clear words in /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-231.\nRef analysis: aes.hjson_012 / /home/smy/opentitan/hw/ip/aes/doc/interfaces.md:41 and aes_sec_cm_testplan.hjson_006 / /home/smy/opentitan/hw/ip/aes/data/aes_sec_cm_testplan.hjson:97-101 require key register PRD wipe. The initial-key path named in this finding satisfies that requirement via /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-333. aes.hjson_015 is adjacent state wipe and is also implemented.\nVerdict integration: The ref requires PRD-sourced clearing, not an on-chip statistical randomness verifier; the named key_init clear path is correctly PRD-sourced.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0021",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_testplan.hjson_008",
+      "theory_of_operation.md_009"
+    ],
+    "summary": "The control FSM assigns defaults and reset values for num_rounds_d, rnd_ctr_d, and prng_reseed_done_d; no unassigned X path is visible.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:130-148 defaults num_rounds_d/rnd_ctr_d/prng_reseed_done_d each cycle, /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:454-463 resets and registers the corresponding q values, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:200-204 initializes round count/counter on start.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims security-critical next-state signals are unconstrained. The always_comb block explicitly defaults them from q at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:136-143 and assigns operation-specific values before the sequential register at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:454-463.\nRef analysis: aes_testplan.hjson_008 and theory_of_operation.md_009 are PRNG reseed refs. The same FSM keeps prng_reseed_req_o asserted while the latched request is pending at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:269-270, /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:334-335, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:383-385.\nVerdict integration: The finding-side X-propagation premise is refuted by the complete default/register structure; the PRNG refs are satisfied by the reseed request states.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0022",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "Sp2VEnSecBuf=0 in aes_control disables only the secure anchor buffer choice, not the sparse-value checker; other AES sparse paths use all-ones where needed.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:539-555 uses Sp2VEnSecBuf=0 but still instantiates aes_sel_buf_chk and collects sp2v_sig_err at /home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:567-570; /home/smy/opentitan/hw/ip/aes/rtl/aes_sel_buf_chk.sv:38-52 selects buffer type and /home/smy/opentitan/hw/ip/aes/rtl/aes_sel_buf_chk.sv:58-69 still checks legality.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says all-zero Sp2VEnSecBuf disables u_aes_sp2v_sig_buf_chk. In /home/smy/opentitan/hw/ip/aes/rtl/aes_sel_buf_chk.sv:38-52 EnSecBuf chooses prim_sec_anchor_buf versus prim_buf only; the checker logic remains active at /home/smy/opentitan/hw/ip/aes/rtl/aes_sel_buf_chk.sv:58-69. aes_control collects these errors at /home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:567-570.\nRef analysis: aes.hjson_032 and theory_of_operation.md_002 are unrelated IV/decryption latency refs. The cheap relevant source comment at /home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:539 says these sp2v signals are driven and consumed by multi-rail FSMs, explaining why secure anchor buffers are not selected there.\nVerdict integration: The finding-side interpretation of EnSecBuf is wrong: checker coverage remains present, so no security-buffer-check disablement is confirmed.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0023",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_testplan.hjson_008"
+    ],
+    "summary": "The top-level EDN arbitration explicitly gives clearing PRNG priority over masking PRNG during simultaneous requests.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:130-133 implements edn_req_int as OR, entropy_clearing_ack = entropy_clearing_req & edn_ack, and entropy_masking_ack = ~entropy_clearing_req & entropy_masking_req & edn_ack.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says clearing-over-masking priority is not guaranteed or maybe not implemented. It is directly implemented at /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:130-133: when entropy_clearing_req is high, entropy_masking_ack is forced low.\nRef analysis: aes_testplan.hjson_004 is unrelated clearing-trigger stress. aes_testplan.hjson_008 / /home/smy/opentitan/hw/ip/aes/data/aes_testplan.hjson:137-143 is adjacent PRNG reseed coverage; top-level arbitration and data routing at /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:130-165 satisfy the source-level routing part.\nVerdict integration: The finding-side missing-priority premise is contradicted by the top-level assigns, and the PRNG refs do not expose an additional starvation bug in this local logic.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0024",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The claimed sp2v_sig_chk out-of-range condition is impossible because NumSp2VSig is defined from the same maximum index plus two.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-851 declares NumSp2VSig as NumSharesKey * NumRegsKey + NumSlicesCtr + 2 and uses indices from 0 through NumSharesKey * NumRegsKey + NumSlicesCtr + 1.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes parameter values can make the data_in_prev/data_out sp2v_sig_chk reads exceed vector width. In the source, the vector width is a localparam expression derived from the maximum used index at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806, and all assignments/reads at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:812-851 stay within it.\nRef analysis: The KEY.SEC_WIPE, KEY.SW_UNREADABLE, and random KEY/IV/DATA ordering refs attached to this finding are adjacent register-feature refs; they do not define this internal vector layout. The cheap key/IV parameter checks are satisfied by fixed NumRegsKey at /home/smy/opentitan/hw/ip/aes/rtl/aes_reg_pkg.sv:9-11 and NumSlicesCtr == 8 asserted at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:968-970.\nVerdict integration: The finding-side range condition is algebraically refuted by the RTL declaration, and the refs do not reveal a separate source violation.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0025",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_036"
+    ],
+    "summary": "The top-level AES ignores the SecAllowForcingMasks parameter and hardwires the core to allow FORCE_MASKS.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:23-25 declares SecAllowForcingMasks as an SCA-only parameter with default-security intent, but /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:175-181 instantiates aes_core with .SecAllowForcingMasks(1), ignoring the top-level parameter. /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:90-103 then sets StrictLockupProtection(!SecAllowForcingMasks) and allows SecAllowForcingMasks & force_masks_i to hold the PRNG in a constant-mask state.",
+    "trigger_condition": "Build the top-level AES with the default top parameter SecAllowForcingMasks=0, then software writes CTRL_AUX_SHADOWED.FORCE_MASKS=1; because aes_core is hardwired with SecAllowForcingMasks=1, the masking PRNG accepts force_masks_i.",
+    "security_impact": "Software can force constant masks despite the default parameter intending to forbid this SCA-only mode, weakening or disabling first-order masking protection.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding says SecAllowForcingMasks is security-sensitive and can allow external forcing of masks. Source confirms the dangerous enable is not just hypothetical: /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:23-25 defines the parameter, but /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:175-181 passes literal 1 to aes_core.\nRef analysis: aes.hjson_036 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:82-89 documents SecAllowForcingMasks default 0 and says forcing masks is useful for SCA measurements only; /home/smy/opentitan/hw/ip/aes/data/aes.hjson:795-803 documents FORCE_MASKS as applicable only if both Masking and SecAllowForcingMasks are one. The RTL violates that parameter binding by hardwiring the core parameter to one. aes_testplan.hjson_011 is broad configuration coverage and does not contradict this source-level parameter binding.\nVerdict integration: The finding-side security concern and the ref-side SCA-only/default-0 rule integrate to a confirmed bug: production-default top-level configuration still enables FORCE_MASKS inside the masking PRNG.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0026",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "key_init_sel legality is checked by aes_sel_buf_chk before the key_init mux output is trusted.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:760-771 checks key_init_sel_ctrl with aes_sel_buf_chk and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:786-788 folds key_init_sel_err into mux_sel_err before the mux at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 is used.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding focuses on key_init_mux default behavior. The source includes the missing legality check at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:760-771; invalid key_init_sel raises key_init_sel_err and mux_sel_err at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:786-788.\nRef analysis: KEY.SW_UNREADABLE is unrelated. KEY.SEC_WIPE is adjacent and the initial-key clear branch uses prd_clearing_key_init at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321, so that ref-side invariant for key_init is satisfied.\nVerdict integration: The selector is not unprotected as claimed, and the relevant initial-key wipe ref does not expose a defect in key_init_sel.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0027",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "aes.hjson_036",
+    "matched_ref_ids": [
+      "aes.hjson_036"
+    ],
+    "summary": "The literal key-expand mask freshness claim is too broad, but ref/source integration exposes the real FORCE_MASKS defect: the default top-level still enables forced constant masks.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:23-25 declares SecAllowForcingMasks as an SCA-only parameter with default-security intent, but /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:175-181 instantiates aes_core with .SecAllowForcingMasks(1), ignoring the top-level parameter. /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:90-103 then sets StrictLockupProtection(!SecAllowForcingMasks) and allows SecAllowForcingMasks & force_masks_i to hold the PRNG in a constant-mask state.",
+    "trigger_condition": "Build the top-level AES with the default top parameter SecAllowForcingMasks=0, then software writes CTRL_AUX_SHADOWED.FORCE_MASKS=1; because aes_core is hardwired with SecAllowForcingMasks=1, the masking PRNG accepts force_masks_i.",
+    "security_impact": "Software can force constant masks despite the default parameter intending to forbid this SCA-only mode, weakening or disabling first-order masking protection.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims a masking-freshness failure around key-expand mask freshness. The local cipher core does contain freshness/update structure: PRD is buffered on state_we at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:329-339, key-expand PRD write sync is at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:489-504, and freshness assertions/allowed FORCE_MASKS exceptions are at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:840-877. The literal stale-PRD claim is therefore imprecise.\nRef analysis: aes.hjson_036 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:82-89 documents SecAllowForcingMasks default 0 and says forcing masks is useful for SCA measurements only; /home/smy/opentitan/hw/ip/aes/data/aes.hjson:795-803 documents FORCE_MASKS as applicable only if both Masking and SecAllowForcingMasks are one. The RTL violates that parameter binding by hardwiring the core parameter to one.\nVerdict integration: Although the literal stale-PRD path is not shown as an ordinary-control failure, the ref explicitly makes FORCE_MASKS conditional on SecAllowForcingMasks. Since the top hardwires that parameter to one, software can enter the constant-mask exception path despite the default-security parameter, so this finding is confirmed as a ref-driven extra defect.",
+    "additional_findings": [
+      "Actual defect is the top-level SecAllowForcingMasks hardwire, not a missing local PRD update in normal non-forcing operation."
+    ]
+  },
+  {
+    "finding_id": "F-0028",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "aes_sec_cm_testplan.hjson_006",
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "The key_full_sel one-hot premise is false, but the same key_full mux contains a real KEY_FULL_CLEAR secure-wipe defect.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444 drives KEY_FULL_CLEAR to key_expand_out, the same source as KEY_FULL_ROUND, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463 drives KEY_DEC_CLEAR to key_expand_out, the same source as KEY_DEC_EXPAND. /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412 asserts key_full_we_o/key_dec_we_o with KEY_FULL_CLEAR/KEY_DEC_CLEAR during CIPHER_CTRL_CLEAR_KD, so the clear operation writes expanded key material rather than pseudo-random clearing data.",
+    "trigger_condition": "Software or reset-triggered register clearing reaches CIPHER_CTRL_CLEAR_KD with key_clear_q_i=1; the control FSM asserts key_full_we_o and key_dec_we_o while selecting KEY_FULL_CLEAR and KEY_DEC_CLEAR.",
+    "security_impact": "Internal Full Key and Decryption Key registers are not wiped with pseudo-random data during KEY.SEC_WIPE, leaving deterministic key-derived residue instead of the documented secure wipe value.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims key_full_sel must be one-hot. That is false: key_full_sel_e is a sparse enum, not a one-hot vector, defined at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:386-393 and checked by aes_sel_buf_chk at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:660-671. However, inspection of the same mux shows KEY_FULL_CLEAR selects key_expand_out at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444.\nRef analysis: aes_sec_cm_testplan.hjson_006 / /home/smy/opentitan/hw/ip/aes/data/aes_sec_cm_testplan.hjson:97-101 requires KEY.SEC_WIPE to change initial key registers using pseudo-random data, and /home/smy/opentitan/hw/ip/aes/data/aes.hjson:852-857 says KEY_IV_DATA_IN_CLEAR clears Initial Key, internal Full Key, and Decryption Key registers with pseudo-random data. The initial key path in /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-321 uses prd_clearing_key_init, but the internal full/decryption key paths above do not.\nVerdict integration: The original one-hot claim is refuted, but source inspection of the same mux plus the KEY.SEC_WIPE ref confirms an adjacent secure-wipe defect.",
+    "additional_findings": [
+      "Original key_full_sel encoding claim is false; confirmed defect is KEY_FULL_CLEAR using key_expand_out."
+    ]
+  },
+  {
+    "finding_id": "F-0029",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The claimed sp2v_sig_chk out-of-range condition is impossible because NumSp2VSig is defined from the same maximum index plus two.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806-851 declares NumSp2VSig as NumSharesKey * NumRegsKey + NumSlicesCtr + 2 and uses indices from 0 through NumSharesKey * NumRegsKey + NumSlicesCtr + 1.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes parameter values can make the data_in_prev/data_out sp2v_sig_chk reads exceed vector width. In the source, the vector width is a localparam expression derived from the maximum used index at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:806, and all assignments/reads at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:812-851 stay within it.\nRef analysis: The KEY.SEC_WIPE, KEY.SW_UNREADABLE, and random KEY/IV/DATA ordering refs attached to this finding are adjacent register-feature refs; they do not define this internal vector layout. The cheap key/IV parameter checks are satisfied by fixed NumRegsKey at /home/smy/opentitan/hw/ip/aes/rtl/aes_reg_pkg.sv:9-11 and NumSlicesCtr == 8 asserted at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:968-970.\nVerdict integration: The finding-side range condition is algebraically refuted by the RTL declaration, and the refs do not reveal a separate source violation.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0030",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.82,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "key_init_we is a sparse checked synchronous write-enable path; the finding is an unproven glitch assumption rather than an RTL logic bug.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_control.sv:211-218 forms key_init_we_o, /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:827-856 checks the sparse encoding, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333 samples key_init_d only on clk_i when key_init_we == SP2V_HIGH.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says combinational key_init_we may glitch and corrupt key registers. RTL-level behavior is checked and synchronous: invalid sparse values set sp_enc_err at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:827-856, and the register samples only at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333.\nRef analysis: KEY.SW_UNREADABLE is unrelated; KEY.SEC_WIPE is adjacent and implemented for key_init via /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:316-333.\nVerdict integration: No concrete source-level missing case or invalid default is present; the attached refs do not require key_init_we to be registered rather than checked/synchronous.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0031",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "The key_full_sel one-hot allegation is false, but KEY_FULL_CLEAR on the same signal path really fails to select pseudo-random clearing data.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444 drives KEY_FULL_CLEAR to key_expand_out, the same source as KEY_FULL_ROUND, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463 drives KEY_DEC_CLEAR to key_expand_out, the same source as KEY_DEC_EXPAND. /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412 asserts key_full_we_o/key_dec_we_o with KEY_FULL_CLEAR/KEY_DEC_CLEAR during CIPHER_CTRL_CLEAR_KD, so the clear operation writes expanded key material rather than pseudo-random clearing data.",
+    "trigger_condition": "Software or reset-triggered register clearing reaches CIPHER_CTRL_CLEAR_KD with key_clear_q_i=1; the control FSM asserts key_full_we_o and key_dec_we_o while selecting KEY_FULL_CLEAR and KEY_DEC_CLEAR.",
+    "security_impact": "Internal Full Key and Decryption Key registers are not wiped with pseudo-random data during KEY.SEC_WIPE, leaving deterministic key-derived residue instead of the documented secure wipe value.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding says key_full_sel/key_full_sel_raw lack one-hot assurance. That is wrong: key_full_sel is a sparse enum checked at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:660-671. But because the finding points at key_full_d and KEY_FULL_CLEAR, inspecting the mux reveals KEY_FULL_CLEAR assigns key_expand_out at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444.\nRef analysis: aes_testplan.hjson_010 and KEY.SW_UNREADABLE refs are not same-behavior for secure wipe. The source-level adjacent defect is nevertheless on the same key_full_d/KEY_FULL_CLEAR path: /home/smy/opentitan/hw/ip/aes/data/aes.hjson:852-857 documents that internal Full Key registers should be PRD-cleared by KEY_IV_DATA_IN_CLEAR.\nVerdict integration: The final verdict is confirmed as a signal-path adjacent finding: not because key_full_sel is one-hot-unsafe, but because KEY_FULL_CLEAR writes key_expand_out instead of PRD.",
+    "additional_findings": [
+      "Original one-hot claim is false; actual adjacent defect is KEY_FULL_CLEAR secure-wipe behavior."
+    ]
+  },
+  {
+    "finding_id": "F-0032",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "aes_sec_cm_testplan.hjson_006",
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_006"
+    ],
+    "summary": "The key_dec_d validity premise is not established, but the key_dec path has a real KEY_DEC_CLEAR secure-wipe defect.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:438-444 drives KEY_FULL_CLEAR to key_expand_out, the same source as KEY_FULL_ROUND, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463 drives KEY_DEC_CLEAR to key_expand_out, the same source as KEY_DEC_EXPAND. /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412 asserts key_full_we_o/key_dec_we_o with KEY_FULL_CLEAR/KEY_DEC_CLEAR during CIPHER_CTRL_CLEAR_KD, so the clear operation writes expanded key material rather than pseudo-random clearing data.",
+    "trigger_condition": "Software or reset-triggered register clearing reaches CIPHER_CTRL_CLEAR_KD with key_clear_q_i=1; the control FSM asserts key_full_we_o and key_dec_we_o while selecting KEY_FULL_CLEAR and KEY_DEC_CLEAR.",
+    "security_impact": "Internal Full Key and Decryption Key registers are not wiped with pseudo-random data during KEY.SEC_WIPE, leaving deterministic key-derived residue instead of the documented secure wipe value.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims key_dec_d may be invalid/X when sampled. The normal source path comes from key_expand_out or PRD under /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463 and is sampled at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:467-472. The concrete source defect on this path is that KEY_DEC_CLEAR also selects key_expand_out at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:459-463.\nRef analysis: aes_sec_cm_testplan.hjson_006 is adjacent/same secure-wipe behavior for key registers, and /home/smy/opentitan/hw/ip/aes/data/aes.hjson:852-857 explicitly includes Decryption Key registers in the KEY_IV_DATA_IN_CLEAR PRD clear operation. The RTL violates this for key_dec_d/key_dec_q.\nVerdict integration: The original X-validity claim is too speculative, but ref-driven inspection of the same key_dec path confirms the PRD secure-wipe violation.",
+    "additional_findings": [
+      "Original key_dec_d X/stability claim is not confirmed; actual defect is KEY_DEC_CLEAR selecting key_expand_out."
+    ]
+  },
+  {
+    "finding_id": "F-0033",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_030",
+      "aes.hjson_031"
+    ],
+    "summary": "Reset-zero key registers are not treated as a valid new key unless the clean-key status tracker has been satisfied.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:325-333 resets key_init_q to zero, but /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:656-670 requires complete clean key updates before use and /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:330-334 only accepts key writes while idle/not starting.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says reset-zero key_init can be selected as a weak AES key. Reset values alone are not sufficient for start: the control FSM tracks clean key update status at /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:656-670 and only propagates writes/uses according to that status.\nRef analysis: aes.hjson_030 and aes.hjson_031 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:441-477 require all key registers in both shares be written at least once and only updated idle. RTL implements those requirements through key_init_we_o gating at /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:330-334 and aes_reg_status at /home/smy/opentitan/hw/ip/aes/rtl/aes_control_fsm.sv:656-670. KEY.SEC_WIPE and KEY.SW_UNREADABLE refs are adjacent and do not support using reset-zero as valid.\nVerdict integration: The finding-side weak-key scenario ignores the clean-key tracker; the relevant refs are satisfied by requiring complete key writes before use.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0034",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_015"
+    ],
+    "summary": "In the masked cipher core, state_o is still an array of shares; unmasking happens only at the aes_core final output boundary.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:784-785 assigns state_o = add_round_key_out as a share array, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:514-539 conditionally unmasks the final output only when SecMasking is true.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:784-785 as assigning an unmasked scalar output. But state_o is declared as state_o [NumShares] at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:149-152; the assignment preserves shares. The top/core wrapper then gates final output unmasking with cipher_out_valid and PRD at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:514-539.\nRef analysis: aes.hjson_015 is adjacent state PRD wipe and is satisfied by /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:337-372 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:247-253. KEY.SW_UNREADABLE is unrelated to internal share forwarding.\nVerdict integration: The finding-side masking-bypass claim is refuted by the array typing and wrapper unmasking logic; refs expose no adjacent defect.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0035",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012"
+    ],
+    "summary": "prd_clearing_128 is fully driven; package constants make NumChunksPRDClearing128 * WidthPRDClearing = 2 * 64 = 128.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25 defines WidthPRDClearing=64 and chunk counts from 128/256; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:181-186 declares the PRD clear vectors and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-236 drives every chunk.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a mismatched chunk product can leave high bits undriven. With the source constants at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25, the generate loops at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-236 exactly cover the declared 128-bit and 256-bit vectors.\nRef analysis: theory_of_operation.md_012 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:340-344 requires PRD clearing of major key/data/state registers. This specific width invariant is satisfied by the declarations/generates; aes_testplan.hjson_004 is clearing stress coverage and does not contradict that.\nVerdict integration: The finding-side undriven-high-bit condition is not reachable in this source configuration.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0036",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes.hjson_015"
+    ],
+    "summary": "The three write enables are independent sparse two-value signals, not a one-hot vector; simultaneous legal writes are intentional.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:738-763 maps state_we/key_full_we/key_dec_we as independent checked sp2v_e values, and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:182-198, /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:286-303, /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:405-412 legally assert multiple writes.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding treats sp2v_sig_chk[2:0] as a one-hot vector. In RTL it is an array of three sp2v_e encodings, each checked separately by /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:746-759. Simultaneous register writes are explicitly used by the control FSM.\nRef analysis: aes.hjson_015 state wipe is adjacent and satisfied; KEY.SW_UNREADABLE is unrelated. theory_of_operation.md_001 says AES uses a single shared datapath, which is unrelated to whether distinct internal registers can be written in the same cycle.\nVerdict integration: Because the one-hot premise is incorrect and the legal control FSM uses simultaneous writes, the finding is a false alarm.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0037",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "WidthPRDRow is fixed to 32 in this source configuration, and the optional unused_prd_masking reconstruction is only elaborated when WidthPRDSBox > 8.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:28-33 fixes WidthPRDSBox=8 and WidthPRDMasking=160; /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:370-373 derives WidthPRDRow=4*WidthPRDSBox; /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:887-928 guards the unused_prd_masking reconstruction under if (WidthPRDSBox > 8).",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes WidthPRDRow can be zero or unused_prd_masking too narrow. WidthPRDSBox is a package parameter fixed at 8 in /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:28-33, so WidthPRDRow is 32 at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:370. The unused_prd_masking logic cited by the finding is not elaborated for the default WidthPRDSBox=8 path.\nRef analysis: theory_of_operation.md_012 is adjacent PRD clearing documentation, not masking PRD extraction width. The source extraction width is internally consistent.\nVerdict integration: The parameter condition required by the finding is absent in the source; no ref-driven defect is exposed.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0038",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012"
+    ],
+    "summary": "prd_clearing_256 is fully driven; package constants make NumChunksPRDClearing256 * WidthPRDClearing = 4 * 64 = 256.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25 defines WidthPRDClearing=64 and chunk counts from 128/256; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:181-186 declares the PRD clear vectors and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-236 drives every chunk.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a mismatched chunk product can leave high bits undriven. With the source constants at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25, the generate loops at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-236 exactly cover the declared 128-bit and 256-bit vectors.\nRef analysis: theory_of_operation.md_012 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:340-344 requires PRD clearing of major key/data/state registers. This specific width invariant is satisfied by the declarations/generates; aes_testplan.hjson_004 is clearing stress coverage and does not contradict that.\nVerdict integration: The finding-side undriven-high-bit condition is not reachable in this source configuration.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0039",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "aes.hjson_036",
+    "matched_ref_ids": [
+      "aes.hjson_036"
+    ],
+    "summary": "The literal SubBytes PRD freshness claim is too broad, but ref/source integration exposes the real FORCE_MASKS defect: the default top-level still enables forced constant masks.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:23-25 declares SecAllowForcingMasks as an SCA-only parameter with default-security intent, but /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:175-181 instantiates aes_core with .SecAllowForcingMasks(1), ignoring the top-level parameter. /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:90-103 then sets StrictLockupProtection(!SecAllowForcingMasks) and allows SecAllowForcingMasks & force_masks_i to hold the PRNG in a constant-mask state.",
+    "trigger_condition": "Build the top-level AES with the default top parameter SecAllowForcingMasks=0, then software writes CTRL_AUX_SHADOWED.FORCE_MASKS=1; because aes_core is hardwired with SecAllowForcingMasks=1, the masking PRNG accepts force_masks_i.",
+    "security_impact": "Software can force constant masks despite the default parameter intending to forbid this SCA-only mode, weakening or disabling first-order masking protection.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims a masking-freshness failure around SubBytes PRD freshness. The local cipher core does contain freshness/update structure: PRD is buffered on state_we at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:329-339, key-expand PRD write sync is at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:489-504, and freshness assertions/allowed FORCE_MASKS exceptions are at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:840-877. The literal stale-PRD claim is therefore imprecise.\nRef analysis: aes.hjson_036 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:82-89 documents SecAllowForcingMasks default 0 and says forcing masks is useful for SCA measurements only; /home/smy/opentitan/hw/ip/aes/data/aes.hjson:795-803 documents FORCE_MASKS as applicable only if both Masking and SecAllowForcingMasks are one. The RTL violates that parameter binding by hardwiring the core parameter to one.\nVerdict integration: Although the literal stale-PRD path is not shown as an ordinary-control failure, the ref explicitly makes FORCE_MASKS conditional on SecAllowForcingMasks. Since the top hardwires that parameter to one, software can enter the constant-mask exception path despite the default-security parameter, so this finding is confirmed as a ref-driven extra defect.",
+    "additional_findings": [
+      "Actual defect is the top-level SecAllowForcingMasks hardwire, not a missing local PRD update in normal non-forcing operation."
+    ]
+  },
+  {
+    "finding_id": "F-0040",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.8,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "data_in_mask is derived from registered masking PRD; a generic no-X assertion on upstream PRD is not a missing AES RTL function.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:329-347 registers prd_sub_bytes_q and packs it into prd_sub_bytes; /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:370-377 derives data_in_mask/data_in_mask_o from that registered PRD.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says data_in_mask simply propagates X from upstream. Source does derive it combinationally from prd_sub_bytes_q at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:344-377, but prd_sub_bytes_q is a reset/register stage updated on state_we at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:329-339. X-free external entropy/PRNG proof is outside this local mux.\nRef analysis: aes_testplan.hjson_010 is unrelated KEY/IV/DATA ordering. aes.hjson_039 STATUS fatal-fault text is about detected FSM/sparse/counter faults, not a mandatory no-X data_in_mask comparator.\nVerdict integration: The finding-side no-X checker requirement is not a documented or implemented RTL countermeasure, and the relevant source path includes registered PRD buffering.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0041",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012"
+    ],
+    "summary": "prd_clearing width is explicitly parameterized and checked: the signal is [WidthPRDClearing-1:0] and the PRNG asserts Width == 64.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:176 declares prd_clearing [WidthPRDClearing-1:0] [NumSharesKey], /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:13-16 parameterizes the PRNG Width, and /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:144-145 asserts Width == 64.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says width is not explicit. It is explicit in the declaration at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:176 and in the PRNG parameter connection at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:191-205, with an initial assertion at /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_clearing.sv:144-145.\nRef analysis: theory_of_operation.md_012 and aes_testplan.hjson_004 are PRD clearing refs; this width binding satisfies the relevant source-level requirement for the named prd_clearing bus.\nVerdict integration: The width-mismatch premise is refuted by declarations and assertions; refs expose no violation.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0042",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "aes.hjson_036",
+    "matched_ref_ids": [
+      "aes.hjson_036"
+    ],
+    "summary": "The literal SubBytes next-cycle mask refresh claim is too broad, but ref/source integration exposes the real FORCE_MASKS defect: the default top-level still enables forced constant masks.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:23-25 declares SecAllowForcingMasks as an SCA-only parameter with default-security intent, but /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:175-181 instantiates aes_core with .SecAllowForcingMasks(1), ignoring the top-level parameter. /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:90-103 then sets StrictLockupProtection(!SecAllowForcingMasks) and allows SecAllowForcingMasks & force_masks_i to hold the PRNG in a constant-mask state.",
+    "trigger_condition": "Build the top-level AES with the default top parameter SecAllowForcingMasks=0, then software writes CTRL_AUX_SHADOWED.FORCE_MASKS=1; because aes_core is hardwired with SecAllowForcingMasks=1, the masking PRNG accepts force_masks_i.",
+    "security_impact": "Software can force constant masks despite the default parameter intending to forbid this SCA-only mode, weakening or disabling first-order masking protection.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims a masking-freshness failure around SubBytes next-cycle mask refresh. The local cipher core does contain freshness/update structure: PRD is buffered on state_we at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:329-339, key-expand PRD write sync is at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:489-504, and freshness assertions/allowed FORCE_MASKS exceptions are at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:840-877. The literal stale-PRD claim is therefore imprecise.\nRef analysis: aes.hjson_036 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:82-89 documents SecAllowForcingMasks default 0 and says forcing masks is useful for SCA measurements only; /home/smy/opentitan/hw/ip/aes/data/aes.hjson:795-803 documents FORCE_MASKS as applicable only if both Masking and SecAllowForcingMasks are one. The RTL violates that parameter binding by hardwiring the core parameter to one.\nVerdict integration: Although the literal stale-PRD path is not shown as an ordinary-control failure, the ref explicitly makes FORCE_MASKS conditional on SecAllowForcingMasks. Since the top hardwires that parameter to one, software can enter the constant-mask exception path despite the default-security parameter, so this finding is confirmed as a ref-driven extra defect.",
+    "additional_findings": [
+      "Actual defect is the top-level SecAllowForcingMasks hardwire, not a missing local PRD update in normal non-forcing operation."
+    ]
+  },
+  {
+    "finding_id": "F-0043",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "SP2V_HIGH is a fixed nonzero 3-bit sparse enum with the same type as key_dec_we.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:426-432 defines Sp2VWidth=Mux2SelWidth and SP2V_HIGH=MUX2_SEL_0=3'b011; key_dec_we is sp2v_e at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:190-193 and compared at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:467-471.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says SP2V_HIGH may be width-mismatched or zero. The package definition at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:426-432 makes it the same enum type used for key_dec_we and value 3'b011, not zero.\nRef analysis: KEY.SEC_WIPE and KEY.SW_UNREADABLE refs are adjacent key-register security properties, not SP2V constant definitions. The constant is source-defined and checked by sparse selectors elsewhere.\nVerdict integration: The constant/value premise is directly contradicted by aes_pkg.sv, so no RTL bug exists for this claim.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0044",
+    "verdict": "CONFIRMED",
+    "confidence": 0.95,
+    "is_extra_finding": true,
+    "extra_finding_from_ref": "aes.hjson_036",
+    "matched_ref_ids": [
+      "aes.hjson_036"
+    ],
+    "summary": "The literal state-share mask variability claim is too broad, but ref/source integration exposes the real FORCE_MASKS defect: the default top-level still enables forced constant masks.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes.sv:23-25 declares SecAllowForcingMasks as an SCA-only parameter with default-security intent, but /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:175-181 instantiates aes_core with .SecAllowForcingMasks(1), ignoring the top-level parameter. /home/smy/opentitan/hw/ip/aes/rtl/aes_prng_masking.sv:90-103 then sets StrictLockupProtection(!SecAllowForcingMasks) and allows SecAllowForcingMasks & force_masks_i to hold the PRNG in a constant-mask state.",
+    "trigger_condition": "Build the top-level AES with the default top parameter SecAllowForcingMasks=0, then software writes CTRL_AUX_SHADOWED.FORCE_MASKS=1; because aes_core is hardwired with SecAllowForcingMasks=1, the masking PRNG accepts force_masks_i.",
+    "security_impact": "Software can force constant masks despite the default parameter intending to forbid this SCA-only mode, weakening or disabling first-order masking protection.",
+    "software_visible": true,
+    "reasoning": "Finding analysis: The finding claims a masking-freshness failure around state-share mask variability. The local cipher core does contain freshness/update structure: PRD is buffered on state_we at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:329-339, key-expand PRD write sync is at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:489-504, and freshness assertions/allowed FORCE_MASKS exceptions are at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:840-877. The literal stale-PRD claim is therefore imprecise.\nRef analysis: aes.hjson_036 / /home/smy/opentitan/hw/ip/aes/data/aes.hjson:82-89 documents SecAllowForcingMasks default 0 and says forcing masks is useful for SCA measurements only; /home/smy/opentitan/hw/ip/aes/data/aes.hjson:795-803 documents FORCE_MASKS as applicable only if both Masking and SecAllowForcingMasks are one. The RTL violates that parameter binding by hardwiring the core parameter to one.\nVerdict integration: Although the literal stale-PRD path is not shown as an ordinary-control failure, the ref explicitly makes FORCE_MASKS conditional on SecAllowForcingMasks. Since the top hardwires that parameter to one, software can enter the constant-mask exception path despite the default-security parameter, so this finding is confirmed as a ref-driven extra defect.",
+    "additional_findings": [
+      "Actual defect is the top-level SecAllowForcingMasks hardwire, not a missing local PRD update in normal non-forcing operation."
+    ]
+  },
+  {
+    "finding_id": "F-0045",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "NumShares cannot exceed two, so the two-share unmasking logic cannot ignore higher shares in any legal elaboration.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:21 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:105 derive NumShares as SecMasking ? 2 : 1; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:514-539 only uses two-share unmasking in the SecMasking branch.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a legal NumShares > 2 configuration. NumShares is not user-configurable; it is locally derived from a bit parameter and therefore cannot exceed 2.\nRef analysis: MAIN.FSM.SPARSE and CIPHER.FSM.SPARSE refs are unrelated FSM fatal-alert properties. They are separately implemented by sparse FSM flops and alert/default paths at /home/smy/opentitan/hw/ip/aes/rtl/aes.sv:254-295 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv:429-447.\nVerdict integration: The higher-share loss condition is unreachable, and the FSM refs are unrelated/satisfied.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0046",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012",
+      "aes_sec_cm_testplan.hjson_006",
+      "aes.hjson_012"
+    ],
+    "summary": "prd_clearing is dimensioned by NumSharesKey and all required key-share clearing words are generated.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:176 declares prd_clearing [NumSharesKey], /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:13-15 fixes NumSharesKey=2, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:228-231 iterates s < NumSharesKey to drive prd_clearing_key_init for both key shares.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding claims prd_clearing array dimensions may not match NumSharesKey. The declaration itself uses NumSharesKey at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:176 and the key-init clear generate loop uses the same bound at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:228-231.\nRef analysis: theory_of_operation.md_012 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:340-344 and aes.hjson_012 require PRD clearing; for the named prd_clearing/NumSharesKey bus, the RTL satisfies the share-dimension requirement. aes_sec_cm_testplan.hjson_006 is also satisfied for initial key-share PRD generation.\nVerdict integration: The array-size mismatch is refuted by the declaration and generate bounds, so this finding is false.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0047",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012"
+    ],
+    "summary": "prd_clearing_128 is fully driven; package constants make NumChunksPRDClearing128 * WidthPRDClearing = 2 * 64 = 128.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25 defines WidthPRDClearing=64 and chunk counts from 128/256; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:181-186 declares the PRD clear vectors and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-236 drives every chunk.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes a mismatched chunk product can leave high bits undriven. With the source constants at /home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25, the generate loops at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-236 exactly cover the declared 128-bit and 256-bit vectors.\nRef analysis: theory_of_operation.md_012 / /home/smy/opentitan/hw/ip/aes/doc/theory_of_operation.md:340-344 requires PRD clearing of major key/data/state registers. This specific width invariant is satisfied by the declarations/generates; aes_testplan.hjson_004 is clearing stress coverage and does not contradict that.\nVerdict integration: The finding-side undriven-high-bit condition is not reachable in this source configuration.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0048",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [],
+    "summary": "WidthPRDRow cannot be zero in this source because WidthPRDSBox is fixed at 8.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:28-33 defines WidthPRDSBox=8 and /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:370 defines WidthPRDRow=4*WidthPRDSBox before the part-select at /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:371-373.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding conditions on WidthPRDSBox=0. That parameter is fixed to 8 in aes_pkg.sv, so the part-select width in /home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv:371-373 is 32, not zero.\nRef analysis: theory_of_operation.md_012 is adjacent PRD-clearing documentation and does not make WidthPRDSBox configurable to zero.\nVerdict integration: The zero-width part-select condition is unreachable from the actual source constants.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0049",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "aes_sec_cm_testplan.hjson_004",
+      "aes.hjson_010"
+    ],
+    "summary": "NumRegsKey is fixed at 8, so the hw2reg key_share assignment loop always executes for the generated key registers.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_reg_pkg.sv:9-11 defines NumRegsKey=8, and /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:880-884 assigns hw2reg.key_share0/1 d fields for i < NumRegsKey.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding assumes NumRegsKey=0. The generated register package fixes NumRegsKey to 8, so the key_reg_put loop at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:880-884 is not empty.\nRef analysis: KEY.SW_UNREADABLE refs are same key-register asset but not this width issue; the registers are write-only in the hjson at /home/smy/opentitan/hw/ip/aes/data/aes.hjson:451-457 and /home/smy/opentitan/hw/ip/aes/data/aes.hjson:479-483. aes_testplan.hjson_010 is ordering coverage and aes.hjson_010 is readability; neither exposes an undriven output with NumRegsKey fixed.\nVerdict integration: The finding-side zero-register configuration is impossible in this generated IP.",
+    "additional_findings": []
+  },
+  {
+    "finding_id": "F-0050",
+    "verdict": "FALSE_ALARM",
+    "confidence": 0.9,
+    "is_extra_finding": false,
+    "extra_finding_from_ref": null,
+    "matched_ref_ids": [
+      "theory_of_operation.md_012"
+    ],
+    "summary": "WidthPRDClearing is a chunk width intentionally replicated to cover 128-bit and 256-bit clear words; it is not supposed to equal the total clear width.",
+    "root_cause": "/home/smy/opentitan/hw/ip/aes/rtl/aes_pkg.sv:22-25 sets WidthPRDClearing=64 and chunk counts 128/64 and 256/64; /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-231 replicates prd_clearing chunks to cover prd_clearing_128, prd_clearing_256, and prd_clearing_key_init.",
+    "trigger_condition": "",
+    "security_impact": "",
+    "software_visible": false,
+    "reasoning": "Finding analysis: The finding says WidthPRDClearing being smaller than the total width leaves uncovered bits. The generate loops at /home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv:216-231 are exactly the replication mechanism that covers all chunks of the larger clear words.\nRef analysis: theory_of_operation.md_012 and aes_testplan.hjson_004 require/cover PRD clearing. The chunked replication satisfies the width coverage for this source configuration.\nVerdict integration: The alleged truncation is based on misunderstanding a chunk-width parameter; the total clear buses are fully covered.",
+    "additional_findings": []
+  }
+]

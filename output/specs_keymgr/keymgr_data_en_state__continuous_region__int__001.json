@@ -2,13 +2,12 @@
   "chunk_id": "keymgr_data_en_state__continuous_region__int__001",
   "header": {
     "module": "keymgr_data_en_state",
-    "block_kind": "mixed",
+    "block_kind": "declaration",
     "driven": [
       "state_q"
     ],
     "used": [
       "state_d",
-      "StCtrlDataIdle",
       "state_e"
     ],
     "modes": [
@@ -21,91 +20,212 @@
     ],
     "tags": [
       "sparse_fsm",
-      "state_machine",
-      "key",
-      "security"
+      "integrity",
+      "fault"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "reg_update",
-      "claim": "state_q is the registered version of state_d, resetting synchronously to StCtrlDataIdle.",
-      "cond": "Every clock edge (and async/sync reset if implemented inside the macro).",
+      "type": "instance",
+      "claim": "state_q is driven by the PRIM_FLOP_SPARSE_FSM instance u_state_regs, which connects state_d, state_e, and resets to StCtrlDataIdle.",
+      "cond": "always",
       "signals": [
+        "state_q",
         "state_d",
-        "state_q"
+        "state_e",
+        "StCtrlDataIdle"
       ],
       "refs": [
         "keymgr_data_en_state.sv:69"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "error_detection",
-      "claim": "The PRIM_FLOP_SPARSE_FSM macro enforces that state_q never holds an illegal 10-bit encoding outside the six defined state_e members; on detection of an invalid encoding it forces state_q to StCtrlDataIdle.",
-      "cond": "If state_d or state_q ever becomes a value not in {StCtrlDataIdle, StCtrlDataHwEn, StCtrlDataSwEn, StCtrlDataDis, StCtrlDataWait, StCtrlDataInvalid}.",
-      "signals": [
-        "state_q",
-        "state_e"
       ],
-      "refs": [
-        "keymgr_data_en_state.sv:68-69"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "state_q == state_d",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "resets",
+        "signals": [
+          "state_q",
+          "state_d",
+          "state_e",
+          "StCtrlDataIdle"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "always",
+        "consequent": "state_q == state_d",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "During normal operation, the combinational logic driving state_d produces only one of the six valid state_e encodings.",
-      "cond": "Always when the key manager is not in error recovery.",
-      "risk": "If an invalid value is driven onto state_d, the PRIM_FLOP_SPARSE_FSM will detect it and force state_q to StCtrlDataIdle, potentially disrupting the data‑enable state machine and causing loss of key‑management control.",
+      "type": "security_precondition",
+      "claim": "The PRIM_FLOP_SPARSE_FSM macro must implement state register with sparse encoding, detecting invalid states and recovering to StCtrlDataIdle.",
+      "cond": "always",
+      "risk": "Without proper sparse error detection/recovery, a fault could corrupt state_q and bypass data enable controls, leading to security violation.",
       "signals": [
-        "state_d"
+        "state_q",
+        "state_d",
+        "state_e"
       ],
       "refs": [
-        "keymgr_data_en_state.sv:66",
         "keymgr_data_en_state.sv:69"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "state_d",
+          "state_e"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "The PRIM_FLOP_SPARSE_FSM macro must implement state register with sparse encoding, detecting invalid states and recovering to StCtrlDataIdle",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "state_d must always be assigned a valid state_e value.",
+      "cond": "always",
+      "risk": "If state_d receives an invalid encoding, the macro may not sanitize it correctly, leading to unpredictable FSM behavior and potential security gap.",
+      "signals": [
+        "state_d",
+        "state_e"
+      ],
+      "refs": [
+        "keymgr_data_en_state.sv:66"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "state_d inside {10'b1000010000, 10'b0001100100, 10'b1110101110, 10'b0010011111, 10'b0111110011, 10'b1111001001}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_d",
+          "state_e"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "state_d inside {10'b1000010000, 10'b0001100100, 10'b1110101110, 10'b0010011111, 10'b0111110011, 10'b1111001001}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "The exact error‑reporting mechanism (alert, fatal flag, etc.) inside PRIM_FLOP_SPARSE_FSM is not visible from this chunk; an illegal state encoding may be silently forced to Idle without notifying the system.",
-      "cond": "Whenever state_d or state_q becomes corrupted.",
-      "risk": "A temporary or permanent FSM corruption could go undetected, leading to unauthorized key‑manager operations or deadlock.",
+      "claim": "The encoding distances among state constants may not satisfy the SEC_CM sparse FSM requirement; minimum Hamming distance is not specified.",
+      "cond": "always",
+      "risk": "If the encoding is not sparse enough, single-bit faults could cause undetected transitions to another valid state, undermining fault containment.",
       "signals": [
-        "state_q",
-        "unconnected alert from macro (if any)"
+        "StCtrlDataIdle",
+        "StCtrlDataHwEn",
+        "StCtrlDataSwEn",
+        "StCtrlDataDis",
+        "StCtrlDataWait",
+        "StCtrlDataInvalid"
       ],
       "refs": [
-        "keymgr_data_en_state.sv:68-69"
-      ]
+        "keymgr_data_en_state.sv:58-63"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "min_hamming_distance(state_e_constants) >= REQUIRED",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "StCtrlDataIdle",
+          "StCtrlDataHwEn",
+          "StCtrlDataSwEn",
+          "StCtrlDataDis",
+          "StCtrlDataWait",
+          "StCtrlDataInvalid"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "min_hamming_distance(state_e_constants) >= REQUIRED",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_fault_containment_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "If the macro resets state_q to StCtrlDataIdle after detecting an invalid encoding, there is no visible sideband signal (e.g., error status, interrupt) propagated outside this module to inform higher‑level key manager logic.",
-      "cond": "After a fault injection or SEU flips state bits.",
-      "risk": "The data‑enable state machine may silently restart from Idle, possibly leaving data paths in an inconsistent security state or causing glitches in key access control.",
+      "claim": "The exact error detection and recovery behavior of PRIM_FLOP_SPARSE_FSM is unknown from this chunk; requires verification of the macro implementation.",
+      "cond": "when state_q holds an invalid encoding",
+      "risk": "If the macro does not properly force a safe state, an invalid state could persist and propagate, potentially enabling unintended data output.",
       "signals": [
-        "state_q"
+        "state_q",
+        "u_state_regs"
       ],
       "refs": [
-        "keymgr_data_en_state.sv:68-69"
-      ]
+        "keymgr_data_en_state.sv:69"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_data_en_state",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "u_state_regs"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "when state_q holds an invalid encoding",
+        "consequent": "The exact error detection and recovery behavior of PRIM_FLOP_SPARSE_FSM is unknown from this chunk; requires verification of the macro implementation",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "Data enable state machine with sparse encoding (SEC_CM: DATA.FSM.SPARSE). If fault detection or state assignment assumptions fail, FSM corruption could alter data enable decisions and expose secret key material or bypass access controls.",
   "evidence_refs": [
     "keymgr_data_en_state.sv:56-69"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_data_en_state.sv",
   "line_start": 56,
-  "line_end": 69,
-  "security_implications": ""
+  "line_end": 69
 }

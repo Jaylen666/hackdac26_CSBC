@@ -5,9 +5,9 @@
     "block_kind": "always_comb",
     "driven": [
       "key_o.valid",
-      "key_o.key",
       "cdi_sel_o",
-      "invalid_stage_sel_o"
+      "invalid_stage_sel_o",
+      "key_o.key"
     ],
     "used": [
       "op_req",
@@ -17,35 +17,30 @@
       "stage_sel_o",
       "state_q",
       "key_state_q",
-      "entropy_i",
+      "entropy_i"
+    ],
+    "modes": [
+      "Shares",
+      "EntropyRounds",
       "Creator",
       "OwnerInt",
       "Owner",
-      "StCtrlInvalid",
-      "Shares",
-      "EntropyRounds"
-    ],
-    "modes": [
-      "stage_sel_o inside {Creator, OwnerInt, Owner}",
-      "state_q == StCtrlInvalid",
-      "advance_sel",
-      "op_req"
+      "StCtrlInvalid"
     ],
     "tags": [
       "secret",
       "key",
-      "mask",
       "entropy",
+      "mask",
       "error",
-      "fault",
-      "sparse_fsm"
+      "security"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "key_o.valid is continuously assigned to op_req.",
+      "claim": "key_o.valid is always equal to op_req.",
       "cond": "always",
       "signals": [
         "key_o.valid",
@@ -53,12 +48,34 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:279"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "key_o.valid == op_req",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_o.valid",
+          "op_req"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_o.valid == op_req",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "cdi_sel_o is assigned to cdi_cnt when advance_sel is true, else to op_cdi_sel_i.",
+      "claim": "cdi_sel_o is cdi_cnt when advance_sel is high, otherwise op_cdi_sel_i.",
       "cond": "always",
       "signals": [
         "cdi_sel_o",
@@ -68,12 +85,36 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:282"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cdi_sel_o == (advance_sel ? cdi_cnt : op_cdi_sel_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cdi_sel_o",
+          "advance_sel",
+          "cdi_cnt",
+          "op_cdi_sel_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cdi_sel_o == (advance_sel ? cdi_cnt : op_cdi_sel_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "assignment",
-      "claim": "invalid_stage_sel_o is 1 when stage_sel_o is not inside {Creator, OwnerInt, Owner}, else 0.",
+      "type": "error_detection",
+      "claim": "invalid_stage_sel_o is asserted when stage_sel_o is not equal to Creator, OwnerInt, or Owner.",
       "cond": "always",
       "signals": [
         "invalid_stage_sel_o",
@@ -81,56 +122,220 @@
       ],
       "refs": [
         "keymgr_ctrl.sv:285"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "invalid_stage_sel_o == !(stage_sel_o == Creator || stage_sel_o == OwnerInt || stage_sel_o == Owner)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "stage_sel_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "invalid_stage_sel_o == !(stage_sel_o == Creator || stage_sel_o == OwnerInt || stage_sel_o == Owner)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
-      "type": "assignment",
-      "claim": "For each share i, key_o.key[i] is driven: (1) if invalid_stage_sel_o and state_q == StCtrlInvalid, then key_state_q[cdi_sel_o][i] (unmasked). (2) else if invalid_stage_sel_o, then {EntropyRounds{entropy_i[i]}} (masked with entropy). (3) otherwise, key_state_q[cdi_sel_o][i].",
-      "cond": "always",
+      "type": "default_fallback",
+      "claim": "When invalid_stage_sel_o is true and state_q equals StCtrlInvalid, key_o.key is directly driven from key_state_q[cdi_sel_o] without entropy masking.",
+      "cond": "invalid_stage_sel_o && (state_q == StCtrlInvalid)",
       "signals": [
-        "key_o.key",
         "invalid_stage_sel_o",
         "state_q",
+        "key_o.key",
         "key_state_q",
-        "cdi_sel_o",
+        "cdi_sel_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:291-292"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b1 && state_q == StCtrlInvalid",
+        "consequent": "key_o.key == key_state_q[cdi_sel_o]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "state_q",
+          "key_o.key",
+          "key_state_q",
+          "cdi_sel_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b1 && state_q == StCtrlInvalid",
+        "consequent": "key_o.key == key_state_q[cdi_sel_o]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "default_fallback",
+      "claim": "When invalid_stage_sel_o is true and state_q is not StCtrlInvalid, key_o.key[i] is filled with {EntropyRounds{entropy_i[i]}} for each share i.",
+      "cond": "invalid_stage_sel_o && (state_q != StCtrlInvalid)",
+      "signals": [
+        "invalid_stage_sel_o",
+        "state_q",
+        "key_o.key",
         "entropy_i"
       ],
       "refs": [
-        "keymgr_ctrl.sv:291-296"
-      ]
+        "keymgr_ctrl.sv:293-295"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b1 && state_q != StCtrlInvalid",
+        "consequent": "forall i in [0:Shares-1] : key_o.key[i] == {EntropyRounds{entropy_i[i]}}",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "state_q",
+          "key_o.key",
+          "entropy_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b1 && state_q != StCtrlInvalid",
+        "consequent": "forall i in [0:Shares-1] : key_o.key[i] == {EntropyRounds{entropy_i[i]}}",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "default_fallback",
+      "claim": "When invalid_stage_sel_o is false (valid stage selection), key_o.key is driven from key_state_q[cdi_sel_o].",
+      "cond": "!invalid_stage_sel_o",
+      "signals": [
+        "invalid_stage_sel_o",
+        "key_o.key",
+        "key_state_q",
+        "cdi_sel_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:295-296"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b0",
+        "consequent": "key_o.key == key_state_q[cdi_sel_o]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "key_o.key",
+          "key_state_q",
+          "cdi_sel_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b0",
+        "consequent": "key_o.key == key_state_q[cdi_sel_o]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "Downstream consumer must only sample key_o.key when key_o.valid is asserted, because key_o.key may carry sensitive unmasked key material even when valid is low.",
-      "cond": "when key_o.valid is 0 but key output logic drives key_state_q directly (especially in StCtrlInvalid state).",
-      "risk": "Sampling key_o.key without valid could capture raw key material during invalid state, causing sensitive data leakage.",
+      "type": "value_domain",
+      "claim": "cdi_sel_o must be within the index range of key_state_q to avoid out-of-bounds array access.",
+      "cond": "always during key_state_q[cdi_sel_o] reads",
+      "risk": "Out-of-bounds read could expose adjacent state or cause X-propagation.",
       "signals": [
-        "key_o.valid",
-        "key_o.key"
+        "cdi_sel_o",
+        "key_state_q"
       ],
       "refs": [
-        "keymgr_ctrl.sv:279,291-296"
-      ]
+        "keymgr_ctrl.sv:292,296"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "cdi_sel_o < PARAM_KEY_STATE_DEPTH",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cdi_sel_o",
+          "key_state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always during key_state_q[cdi_sel_o] reads",
+        "consequent": "cdi_sel_o < PARAM_KEY_STATE_DEPTH",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "mode_config",
-      "claim": "The system must avoid the simultaneous condition where state_q == StCtrlInvalid and stage_sel_o is invalid (invalid_stage_sel_o == 1) while key output is intended to be masked, because the RTL bypasses entropy masking in that case and exposes raw key material.",
-      "cond": "when state_q == StCtrlInvalid and stage_sel_o outside {Creator, OwnerInt, Owner}.",
-      "risk": "Otherwise, key_o.key carries raw key_state_q[cdi_sel_o] without entropy XOR, directly exposing sensitive key material.",
+      "type": "security_precondition",
+      "claim": "The FSM must ensure that the condition (invalid_stage_sel_o && state_q == StCtrlInvalid) is never true to prevent unmasked key exposure.",
+      "cond": "secure key output mode",
+      "risk": "Secret key material is output without entropy masking.",
       "signals": [
-        "state_q",
-        "stage_sel_o",
         "invalid_stage_sel_o",
-        "key_o.key"
+        "state_q"
       ],
       "refs": [
         "keymgr_ctrl.sv:291-292"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "!(invalid_stage_sel_o && state_q == StCtrlInvalid)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "state_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "secure key output mode",
+        "consequent": "!(invalid_stage_sel_o && state_q == StCtrlInvalid)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -138,43 +343,88 @@
       "id": "U1",
       "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The RTL implements a path where key_o.key outputs key_state_q[cdi_sel_o] without entropy masking when invalid_stage_sel_o && state_q == StCtrlInvalid. The comment labels this a 'subtle bug', but it is unclear if this is an intentional backdoor or an implementation flaw.",
-      "cond": "when invalid_stage_sel_o is true and state_q == StCtrlInvalid.",
-      "risk": "If this is unintended, it constitutes a critical key leakage vulnerability during invalid states.",
+      "claim": "The RTL bypasses entropy masking when invalid_stage_sel_o and state_q == StCtrlInvalid, directly exposing key_state_q[cdi_sel_o] despite a comment describing 'enhanced key output handling with state-aware masking'. This contradicts the expected secure masking behavior.",
+      "cond": "invalid_stage_sel_o && state_q == StCtrlInvalid",
+      "risk": "Unmasked secret key material may be exposed to attackers if this state combination is reachable.",
       "signals": [
         "invalid_stage_sel_o",
         "state_q",
         "key_o.key",
         "key_state_q",
-        "entropy_i"
+        "cdi_sel_o"
       ],
       "refs": [
         "keymgr_ctrl.sv:289-292"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b1 && state_q == StCtrlInvalid",
+        "consequent": "key_o.key == key_state_q[cdi_sel_o]",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "state_q",
+          "key_o.key",
+          "key_state_q",
+          "cdi_sel_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "invalid_stage_sel_o == 1'b1 && state_q == StCtrlInvalid",
+        "consequent": "key_o.key == key_state_q[cdi_sel_o]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_fault_containment_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "When the controller enters StCtrlInvalid state and stage_sel_o is invalid, key material is exposed unmasked on the output. There is no containment mechanism (e.g., output zeroization, error notification, or blocking valid) to prevent propagation of the raw key.",
-      "cond": "state_q == StCtrlInvalid and invalid_stage_sel_o == 1.",
-      "risk": "Sensitive key material reaches output ports without any masking or blocking, potentially reaching untrusted destinations.",
+      "claim": "It is unknown whether the state combination (invalid_stage_sel_o && state_q == StCtrlInvalid) is reachable from the surrounding FSM. If reachable, the exposure described in U1 becomes a real vulnerability.",
+      "cond": "unknown, depends on keymgr FSM implementation",
+      "risk": "Key leakage if this corner case is ever entered during operation.",
       "signals": [
-        "state_q",
         "invalid_stage_sel_o",
-        "key_o.key",
-        "key_o.valid"
+        "state_q",
+        "stage_sel_o"
       ],
       "refs": [
-        "keymgr_ctrl.sv:279,288-298"
-      ]
+        "keymgr_ctrl.sv:285,291"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "invalid_stage_sel_o",
+          "state_q",
+          "stage_sel_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown, depends on keymgr FSM implementation",
+        "consequent": "It is unknown whether the state combination (invalid_stage_sel_o && state_q == StCtrlInvalid) is reachable from the surrounding FSM. If reachable, the exposure described in U1 becomes a real vulnerability",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk controls key output, directly handling secret key material. The condition (invalid_stage_sel_o && state_q == StCtrlInvalid) drives key_o.key from key_state_q without any entropy masking, potentially exposing plaintext secret keys. If this state combination can occur (whether through normal operation, fault injection, or glitch), the key manager's confidentiality is compromised, leading to unauthorized key disclosure.",
   "evidence_refs": [
     "keymgr_ctrl.sv:277-299"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 277,
-  "line_end": 299,
-  "security_implications": ""
+  "line_end": 299
 }

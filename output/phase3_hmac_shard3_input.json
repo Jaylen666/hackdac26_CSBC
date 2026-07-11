@@ -1,0 +1,2579 @@
+[
+  {
+    "finding_id": "F-0101",
+    "title": "无法验证状态机编码是否具备抗位翻转（如稀疏编码）的保护，可能导致故障注入安全漏洞。",
+    "severity": "MEDIUM",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.293,
+    "contradiction": "无法验证状态机编码是否具备抗位翻转（如稀疏编码）的保护，可能导致故障注入安全漏洞。",
+    "involved_signals": [
+      "st_q"
+    ],
+    "involved_specs": [
+      "hmac_core__always_ff__state_ff__001",
+      "hmac_core__always_comb__next_state__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac_core__always_ff__state_ff__001",
+        "field": "assumption",
+        "excerpt": "The encoding of StIdle and other states is not shown here; sparse or non-contiguous encoding may protect against fault injection, but we cannot verify if st_q is hardened against bit flips."
+      },
+      {
+        "spec": "hmac_core__always_comb__next_state__001",
+        "field": "guarantee",
+        "excerpt": "When st_q is StIdle and neither start nor continue condition is true, st_d remains StIdle (with other signals at their default values)."
+      },
+      {
+        "spec": "hmac_core__always_comb__next_state__001",
+        "field": "guarantee",
+        "excerpt": "For any state not explicitly listed in the unique case (the default branch), st_d is forced to StIdle."
+      },
+      {
+        "spec": "hmac_core__always_comb__next_state__001",
+        "field": "guarantee",
+        "excerpt": "In StPushToMsgFifo, when the condition for G16 is not met, st_d stays StPushToMsgFifo."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "",
+      "reset": "",
+      "bind_module": "hmac_core",
+      "bind_signals": [
+        "st_q"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0102",
+    "title": "The case item `hash_start_sha_disabled` appears twice; the second copy is unreachable dead code.",
+    "severity": "MEDIUM",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.289,
+    "contradiction": "假设指出 case 项 hash_start_sha_disabled 重复，第二个分支为死代码，这可能隐藏了设计者本意区分不同错误条件的意图（例如分别对应 hash_start 和 hash_continue）。然而，相关的 guarantee 仅定义了 hash_start_sha_disabled 为 (reg_hash_start | reg_hash_continue) & ~sha_en 的简单逻辑，未要求对不同触发源进行区分。因此无法判断该重复是冗余无害还是功能缺失。缺乏规范信息，无法确定是否满足有效的安全/功能假设，故判为 UNCERTAIN。",
+    "involved_signals": [
+      "hash_start_sha_disabled"
+    ],
+    "involved_specs": [
+      "hmac__always_comb__line_846__001",
+      "hmac__continuous_region__declarations_or_instances__010"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac__always_comb__line_846__001",
+        "field": "assumption",
+        "excerpt": "The case item `hash_start_sha_disabled` appears twice; the second copy is unreachable dead code."
+      },
+      {
+        "spec": "hmac__continuous_region__declarations_or_instances__010",
+        "field": "guarantee",
+        "excerpt": "hash_start_sha_disabled is 1 when either reg_hash_start or reg_hash_continue is high and sha_en is low; otherwise 0."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.85,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "hmac",
+      "bind_signals": [
+        "hash_start_sha_disabled"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "hmac_testplan.hjson_001",
+        "ref_content": "This error case runs sequences that will cause interrupt bit hmac_err to set. This sequence includes:\n- Write msg_fifo or set hash_start when sha is disabled\n- Update secret key when hash is in process\n- Set hash_start when hash is active\n- Write msg before hash_start is set",
+        "ref_kind": "specific",
+        "keywords": [
+          "hmac_err",
+          "msg_fifo",
+          "hash_start",
+          "sha",
+          "secret key"
+        ],
+        "layer": "specific",
+        "score": 0.764,
+        "cosine": 0.662,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_007",
+        "ref_content": "CMD register: HMAC command register. Field hash_start: If 1 is written, SHA-2 or HMAC begins operation; CPU must configure relative information first such as digest size, secret key, key length. Field hash_process: If 1 is written, SHA-2 or HMAC calculates the digest or signing based on currently received message. Field hash_stop: When 1 is written, SHA-2 or HMAC will afterwards set the hmac_done interrupt as soon as the current block has been hashed; the hash can then be read from DIGEST_0 to DIGEST_15; together with MSG_LENGTH_LOWER and MSG_LENGTH_UPPER, this forms the information for context saving. Field hash_continue: When 1 is written, SHA-2 or HMAC will continue hashing based on current hash in digest registers and message length, which both have to be restored to switch context.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CMD",
+          "hash_start",
+          "hash_process",
+          "hash_stop",
+          "hash_continue",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER",
+          "hmac_done"
+        ],
+        "layer": "specific",
+        "score": 0.691,
+        "cosine": 0.559,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0103",
+    "title": "The edge detection logic for fifo_empty and fifo_full relies on the delayed flops being updated in the same clock domain",
+    "severity": "MEDIUM",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.271,
+    "contradiction": "(1) 该假设指出设计隐含要求 fifo_empty/fifo_full 与采样时钟同步，否则亚稳态可能导致虚假边沿检测。然而，此假设本质是一个验证提示，未明确断言信号当前的同步状态。(2) 相关的 guarantee 显示这些状态信号被直接采样到延迟寄存器，没有同步器电路。这说明设计没有提供额外的跨时钟域同步。(3) 由于缺少 fifo_empty/fifo_full 信号来源的跨时钟域信息，无法确定它们是否已在同一时钟域内，也无法判断假设中的前提是否满足。因此，无法确定保证是否满足假设。",
+    "involved_signals": [
+      "fifo_empty"
+    ],
+    "involved_specs": [
+      "hmac__continuous_region__declarations_or_instances__007",
+      "hmac__always_ff__line_485__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac__continuous_region__declarations_or_instances__007",
+        "field": "assumption",
+        "excerpt": "The edge detection logic for fifo_empty and fifo_full relies on the delayed flops being updated in the same clock domain. If there is any clock-domain crossing or metastability, glitches may cause spu"
+      },
+      {
+        "spec": "hmac__always_ff__line_485__001",
+        "field": "guarantee",
+        "excerpt": "On each positive clock edge when rst_ni is high, fifo_empty_q, fifo_full_q, and fifo_full_seen_q are updated to the values of fifo_empty, fifo_full, and fifo_full_seen_d respectively."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "hmac",
+      "bind_signals": [],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_002",
+        "ref_content": "Interrupt fifo_empty: The message FIFO is empty. This interrupt is raised only if the message FIFO is actually writable by software, i.e., if all of the following conditions are met: i) The HMAC block is not running in HMAC mode and performing the second round of computing the final hash of the outer key as well as the result of the first round using the inner key. ii) Software has not yet written the Process or Stop command to finish the hashing operation. For the interrupt to be raised, the message FIFO must also have been full previously. Otherwise, the hardware empties the FIFO faster than software can fill it and there is no point in interrupting the software to inform it about the message FIFO being empty.",
+        "ref_kind": "specific",
+        "keywords": [
+          "fifo_empty",
+          "MSG_FIFO",
+          "Process",
+          "Stop"
+        ],
+        "layer": "specific",
+        "score": 0.708,
+        "cosine": 0.583,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_013",
+        "ref_content": "The software can push up to 16 (or 32 for SHA-2 384/512) entries to the FIFO for the next hash computation while the current block is being processed. Once the FIFO gets full, the software cannot push more data until the current block is completed.",
+        "ref_kind": "specific",
+        "keywords": [
+          "FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.644,
+        "cosine": 0.492,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0104",
+    "title": "The width of fifo_wdata_sel_o must be large enough to avoid overflow during normal operation. Overflow would cause the s",
+    "severity": "MEDIUM",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.26,
+    "contradiction": "Assumption 要求 fifo_wdata_sel_o 的位宽足以防止正常操作期间的溢出（回绕到零）。提供的 guarantee 描述了该选择器在不同 digest_size 下如何影响输出数据的选择，但它们仅覆盖了选择器合法值的使用方式，并未说明选择器的产生逻辑或对溢出的防护。无法从这些 guarantee 推断位宽是否确实足够、是否存在递增导致溢出的路径，因此无法判定 assumption 是被满足、被无视还是处于防御性设计。",
+    "involved_signals": [
+      "fifo_wdata_sel_o"
+    ],
+    "involved_specs": [
+      "hmac_core__always_ff__line_296__001",
+      "hmac__always_comb__select_fifo_wdata__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac_core__always_ff__line_296__001",
+        "field": "assumption",
+        "excerpt": "The width of fifo_wdata_sel_o must be large enough to avoid overflow during normal operation. Overflow would cause the selector to wrap to zero, potentially selecting an unintended data source and cau"
+      },
+      {
+        "spec": "hmac__always_comb__select_fifo_wdata__001",
+        "field": "guarantee",
+        "excerpt": "When hmac_fifo_wsel is true and digest_size is SHA2_256, fifo_wdata gets the lower 32 bits of digest word selected by hmac_fifo_wdata_sel[2:0] with mask all ones, and index remains 0."
+      },
+      {
+        "spec": "hmac__always_comb__select_fifo_wdata__001",
+        "field": "guarantee",
+        "excerpt": "When hmac_fifo_wsel is true and digest_size is not SHA2_256, SHA2_384, or SHA2_512, fifo_wdata is zero (all bits 0) and index is 0."
+      },
+      {
+        "spec": "hmac__always_comb__select_fifo_wdata__001",
+        "field": "guarantee",
+        "excerpt": "When hmac_fifo_wsel is true and digest_size is SHA2_384 or SHA2_512, index equals the inversion of hmac_fifo_wdata_sel[0], and fifo_wdata receives the selected 32-bit slice from the digest word indexe"
+      },
+      {
+        "spec": "hmac__always_comb__select_fifo_wdata__001",
+        "field": "guarantee",
+        "excerpt": "When hmac_fifo_wsel is false, fifo_wdata is reg_fifo_wentry and index is 0."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.85,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "hmac_core",
+      "bind_signals": [
+        "fifo_wdata_sel_o"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_013",
+        "ref_content": "The software can push up to 16 (or 32 for SHA-2 384/512) entries to the FIFO for the next hash computation while the current block is being processed. Once the FIFO gets full, the software cannot push more data until the current block is completed.",
+        "ref_kind": "specific",
+        "keywords": [
+          "FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.691,
+        "cosine": 0.559,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_002",
+        "ref_content": "Interrupt fifo_empty: The message FIFO is empty. This interrupt is raised only if the message FIFO is actually writable by software, i.e., if all of the following conditions are met: i) The HMAC block is not running in HMAC mode and performing the second round of computing the final hash of the outer key as well as the result of the first round using the inner key. ii) Software has not yet written the Process or Stop command to finish the hashing operation. For the interrupt to be raised, the message FIFO must also have been full previously. Otherwise, the hardware empties the FIFO faster than software can fill it and there is no point in interrupting the software to inform it about the message FIFO being empty.",
+        "ref_kind": "specific",
+        "keywords": [
+          "fifo_empty",
+          "MSG_FIFO",
+          "Process",
+          "Stop"
+        ],
+        "layer": "specific",
+        "score": 0.406,
+        "cosine": 0.579,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0105",
+    "title": "The HMAC_DIGEST_* registers are typed hmac_reg2hw_digest_mreg_t with both q and qe, implying software-writable through t",
+    "severity": "MEDIUM",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.255,
+    "contradiction": "Assumption质疑摘要寄存器可写的合理性，但未提供顶层规范要求只读。硬件实现与自身reg2hw类型定义一致，guarantee描述了正常的寄存器写行为，assumption和guarantee之间无直接矛盾。是否违反设计规范需进一步审查。",
+    "involved_signals": [
+      "hmac_reg2hw_digest_mreg_t.q",
+      "digest_i_we"
+    ],
+    "involved_specs": [
+      "hmac_reg_pkg__continuous_region__hmac_reg_pkg__001",
+      "hmac_reg_top__continuous_region__declarations_or_instances__009"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac_reg_pkg__continuous_region__hmac_reg_pkg__001",
+        "field": "assumption",
+        "excerpt": "The HMAC_DIGEST_* registers are typed hmac_reg2hw_digest_mreg_t with both q and qe, implying software-writable through the reg2hw interface. This contradicts the typical read-only nature of a digest r"
+      },
+      {
+        "spec": "hmac_reg_top__continuous_region__declarations_or_instances__009",
+        "field": "guarantee",
+        "excerpt": "For each digest subregister i (0-15) and for msg_length_lower/upper, when the corresponding we is active, the qe output is asserted in the same cycle."
+      },
+      {
+        "spec": "hmac_reg_top__continuous_region__declarations_or_instances__009",
+        "field": "guarantee",
+        "excerpt": "For each digest subregister (0-15) and msg_length_lower/upper, after a write enable pulse, the register output .q is updated to the input .d value in the next cycle."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "",
+      "reset": "",
+      "bind_module": "hmac_reg_top",
+      "bind_signals": [
+        "digest_i_we"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.743,
+        "cosine": 0.633,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.734,
+        "cosine": 0.62,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_003",
+        "ref_content": "Interrupt hmac_err: HMAC error has occurred. ERR_CODE register shows which error occurred.",
+        "ref_kind": "general",
+        "keywords": [
+          "hmac_err",
+          "ERR_CODE"
+        ],
+        "layer": "general",
+        "score": 0.417,
+        "cosine": 0.595,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0106",
+    "title": "tlul_socket_1n parameter ExplicitErrs is set to 0, which may suppress error reporting from the socket itself; combined w",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.24,
+    "contradiction": "Assumption 指出 ExplicitErrs=0 可能抑制 socket 内部错误，且 intg_err_o 仅通过 OR 聚合可能遗漏错误。Guarantees 只描述了 intg_err 来自命令完整性检查 (u_chk) 及基于其值的 reg_steer 行为，未涉及 socket 级错误产生逻辑或 ExplicitErrs 参数的影响。无法确定 ExplicitErrs=0 是否为合法设计选择，也无法确认实际是否存在其他 socket 错误源会被抑制。因此该潜在问题目前缺乏足够证据判定为协议矛盾或覆盖缺口。",
+    "involved_signals": [
+      "tl_i",
+      "intg_err"
+    ],
+    "involved_specs": [
+      "hmac_reg_top__continuous_region__declarations_or_instances__001",
+      "hmac_reg_top__continuous_region__hmac_reg_top__001",
+      "hmac_reg_top__always_comb__line_129__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac_reg_top__continuous_region__declarations_or_instances__001",
+        "field": "assumption",
+        "excerpt": "tlul_socket_1n parameter ExplicitErrs is set to 0, which may suppress error reporting from the socket itself; combined with the OR-based error aggregation (intg_err_o), internal socket errors might go"
+      },
+      {
+        "spec": "hmac_reg_top__continuous_region__hmac_reg_top__001",
+        "field": "guarantee",
+        "excerpt": "intg_err is driven by instance u_chk (tlul_cmd_intg_chk), whose err_o output indicates that tl_i failed the TL-UL command integrity check."
+      },
+      {
+        "spec": "hmac_reg_top__always_comb__line_129__001",
+        "field": "guarantee",
+        "excerpt": "When intg_err is 0 and tl_i.a_address is inside [4096:8191], reg_steer is driven to 0."
+      },
+      {
+        "spec": "hmac_reg_top__always_comb__line_129__001",
+        "field": "guarantee",
+        "excerpt": "In all other cases (intg_err == 1 or tl_i.a_address outside [4096:8191]), reg_steer is driven to 1."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "",
+      "reset": "",
+      "bind_module": "hmac_reg_top",
+      "bind_signals": [
+        "tl_i",
+        "intg_err"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0107",
+    "title": "Illegal done_state_q values are handled by a silent default (no state change, no error signal). There is no recovery ind",
+    "severity": "LOW",
+    "verdict": "DEFENSIVE",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.229,
+    "contradiction": "The assumption describes a defensive response to illegal (unintended) state encodings: the next‐state logic keeps the current state and raises no error. This is a safe fallback for states that should never occur in normal operation, not a functional requirement. The guarantees define the register update and reset behavior for legal operation; they do not need to cover the defensive handling of illegal states, and the assumption does not contradict them.",
+    "involved_signals": [
+      "done_state_d"
+    ],
+    "involved_specs": [
+      "hmac__always_comb__line_149__001",
+      "hmac__always_ff__line_197__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac__always_comb__line_149__001",
+        "field": "assumption",
+        "excerpt": "Illegal done_state_q values are handled by a silent default (no state change, no error signal). There is no recovery indication."
+      },
+      {
+        "spec": "hmac__always_ff__line_197__001",
+        "field": "guarantee",
+        "excerpt": "When not in reset, done_state_q updates to the value of done_state_d at every positive clock edge."
+      },
+      {
+        "spec": "hmac__always_ff__line_197__001",
+        "field": "guarantee",
+        "excerpt": "When rst_ni is low, done_state_q is immediately forced to DoneAwaitCmd, independent of clk_i."
+      }
+    ],
+    "formal_verdict": "DIRECT",
+    "formal_confidence": 1.0,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "",
+      "reset": "",
+      "bind_module": "",
+      "bind_signals": [],
+      "formalizability": "",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0108",
+    "title": "The sequencing of hash_start_or_continue and packer_flush_done is driven by other modules. It is uncertain whether the e",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.227,
+    "contradiction": "The assumption expresses a concern about the external sequencing of hash_start_or_continue relative to packer_flush_done, but does not clearly define whether such concurrent assertion is legal or illegal from the system's perspective. The guarantee describes the internal response to hash_start_or_continue alone and does not constrain or cover the interaction with packer_flush_done. Without additional information on the intended legal input sequences (whether a flush must be completed before a ne",
+    "involved_signals": [
+      "hash_start_or_continue",
+      "packer_flush_done",
+      "cfg_block",
+      "msg_allowed"
+    ],
+    "involved_specs": [
+      "hmac__always_ff__line_414__001",
+      "hmac__always_ff__line_365__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac__always_ff__line_414__001",
+        "field": "assumption",
+        "excerpt": "The sequencing of hash_start_or_continue and packer_flush_done is driven by other modules. It is uncertain whether the external FSM can assert hash_start_or_continue while a flush is in progress or be"
+      },
+      {
+        "spec": "hmac__always_ff__line_365__001",
+        "field": "guarantee",
+        "excerpt": "When hash_start_or_continue is asserted and reset is inactive, cfg_block is set to 1 at the next clock edge (overrides done/stop)."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "hmac",
+      "bind_signals": [
+        "hash_start_or_continue",
+        "packer_flush_done",
+        "cfg_block",
+        "msg_allowed",
+        "rst_ni"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.52,
+        "cosine": 0.517,
+        "kw_hit": 0.525
+      },
+      {
+        "ref_id": "hmac.hjson_007",
+        "ref_content": "CMD register: HMAC command register. Field hash_start: If 1 is written, SHA-2 or HMAC begins operation; CPU must configure relative information first such as digest size, secret key, key length. Field hash_process: If 1 is written, SHA-2 or HMAC calculates the digest or signing based on currently received message. Field hash_stop: When 1 is written, SHA-2 or HMAC will afterwards set the hmac_done interrupt as soon as the current block has been hashed; the hash can then be read from DIGEST_0 to DIGEST_15; together with MSG_LENGTH_LOWER and MSG_LENGTH_UPPER, this forms the information for context saving. Field hash_continue: When 1 is written, SHA-2 or HMAC will continue hashing based on current hash in digest registers and message length, which both have to be restored to switch context.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CMD",
+          "hash_start",
+          "hash_process",
+          "hash_stop",
+          "hash_continue",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER",
+          "hmac_done"
+        ],
+        "layer": "specific",
+        "score": 0.514,
+        "cosine": 0.575,
+        "kw_hit": 0.373
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0109",
+    "title": "[U-UP] CFG key_length is a 6-bit field (max 63), but the key register array has only NumKeyWords=32 entries. A legal key_length setting >32 could cause out-o",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "CFG key_length is a 6-bit field (max 63), but the key register array has only NumKeyWords=32 entries. A legal key_length setting >32 could cause out-of-bounds word indexing in the SHA engine.",
+    "involved_signals": [
+      "hmac_reg2hw_cfg_reg_t.key_length",
+      "NumKeyWords",
+      "hmac_reg2hw_t.key[31:0]"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_018",
+        "ref_content": "HMAC supports a secret key of length 128, 256, 384, 512, 1024 bits as long as the key length does not exceed the block size of the configured digest. For an arbitrary key length, software should configure the next largest supported key length, hash the key if needed, and concatenate zeros to reach the programmed key size. The position of these zeros depends on CFG.key_swap endianness.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG.key_swap",
+          "key"
+        ],
+        "layer": "specific",
+        "score": 0.706,
+        "cosine": 0.703,
+        "kw_hit": 0.711
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.669,
+        "cosine": 0.651,
+        "kw_hit": 0.711
+      },
+      {
+        "ref_id": "theory_of_operation.md_008",
+        "ref_content": "For SHA-2 256, the SHA-2 engine receives 16 32-bit words from the message FIFO or HMAC core, which get padded into 16 64-bit words (upper 32 bits are all-zero padded), and then begins 64 rounds of hash computation (compression).",
+        "ref_kind": "specific",
+        "keywords": [
+          "message FIFO",
+          "HMAC core"
+        ],
+        "layer": "specific",
+        "score": 0.42,
+        "cosine": 0.6,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_009",
+        "ref_content": "For SHA-2 384/512, the SHA-2 engine receives 32 32-bit words from the message FIFO, which get packed into 16 64-bit words, and then begins 80 compression rounds.",
+        "ref_kind": "specific",
+        "keywords": [
+          "message FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.411,
+        "cosine": 0.587,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0110",
+    "title": "[U-UP] The assertion only flags a violation in simulation/formal; no hardware mechanism (e.g., error gating, alert) is present to prevent a misaligned write ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "The assertion only flags a violation in simulation/formal; no hardware mechanism (e.g., error gating, alert) is present to prevent a misaligned write mask from reaching the FIFO or message buffer.",
+    "involved_signals": [
+      "msg_fifo_wmask",
+      "gen_assert_wmask_bytealign"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_003",
+        "ref_content": "Any write access to the memory-mapped window MSG_FIFO updates the message FIFO. If the FIFO is full, the HMAC block will block any writes leading to back-pressure on the interconnect. Software can read STATUS.fifo_full to avoid writing when the FIFO is full.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO",
+          "STATUS.fifo_full"
+        ],
+        "layer": "specific",
+        "score": 0.551,
+        "cosine": 0.637,
+        "kw_hit": 0.35
+      },
+      {
+        "ref_id": "hmac.hjson_015",
+        "ref_content": "MSG_FIFO window: Any write to this window will be appended to the FIFO. Only the lower [1:0] bits of the address matter to writes within the window (for correctly dealing with non 32-bit writes).",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.539,
+        "cosine": 0.621,
+        "kw_hit": 0.35
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0111",
+    "title": "[U-UP] The exact definition of property wmask_bytealign_p (e.g., per-byte all‑0 or all‑1) is in a separate file and not visible here, so the strength and cor",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "The exact definition of property wmask_bytealign_p (e.g., per-byte all‑0 or all‑1) is in a separate file and not visible here, so the strength and correctness of the check cannot be evaluated.",
+    "involved_signals": [
+      "wmask_bytealign_p",
+      "msg_fifo_wmask"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_015",
+        "ref_content": "MSG_FIFO window: Any write to this window will be appended to the FIFO. Only the lower [1:0] bits of the address matter to writes within the window (for correctly dealing with non 32-bit writes).",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.504,
+        "cosine": 0.527,
+        "kw_hit": 0.452
+      },
+      {
+        "ref_id": "theory_of_operation.md_003",
+        "ref_content": "Any write access to the memory-mapped window MSG_FIFO updates the message FIFO. If the FIFO is full, the HMAC block will block any writes leading to back-pressure on the interconnect. Software can read STATUS.fifo_full to avoid writing when the FIFO is full.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO",
+          "STATUS.fifo_full"
+        ],
+        "layer": "specific",
+        "score": 0.498,
+        "cosine": 0.518,
+        "kw_hit": 0.452
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0112",
+    "title": "[U-UP] cfg_key_length_wd is a 6‑bit value (reg_wdata[14:9]) but no check ensures it does not exceed the maximum supported key depth (32). An illegal value co",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "cfg_key_length_wd is a 6‑bit value (reg_wdata[14:9]) but no check ensures it does not exceed the maximum supported key depth (32). An illegal value could be propagated to the HMAC core.",
+    "involved_signals": [
+      "cfg_key_length_wd",
+      "cfg_key_length_dec"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_018",
+        "ref_content": "HMAC supports a secret key of length 128, 256, 384, 512, 1024 bits as long as the key length does not exceed the block size of the configured digest. For an arbitrary key length, software should configure the next largest supported key length, hash the key if needed, and concatenate zeros to reach the programmed key size. The position of these zeros depends on CFG.key_swap endianness.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG.key_swap",
+          "key"
+        ],
+        "layer": "specific",
+        "score": 0.779,
+        "cosine": 0.684,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_011",
+        "ref_content": "KEY registers (multireg): The registers are allowed to be updated only when the engine is in Idle state. If the engine computes the hash, it discards any attempts to update the secret keys and report an error. The key length determines how many of these registers are relevant for the HMAC operation; order: key[1023:0] = {KEY0, KEY1, ... , KEY31}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KEY",
+          "key_length"
+        ],
+        "layer": "specific",
+        "score": 0.718,
+        "cosine": 0.598,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_019",
+        "ref_content": "The byte order of the key registers is big-endian by default and can be swapped to little-endian by setting CFG.key_swap to 1.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG.key_swap"
+        ],
+        "layer": "specific",
+        "score": 0.672,
+        "cosine": 0.532,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_004",
+        "ref_content": "The logic assumes the input message is little-endian. It converts the byte order of the word right before writing to SHA-2 storage as SHA-2 treats the incoming message as big-endian. If SW wants to convert the message byte order, SW should set CFG.endian_swap to 1.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG.endian_swap"
+        ],
+        "layer": "specific",
+        "score": 0.665,
+        "cosine": 0.522,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0113",
+    "title": "[U-UP] Certain bits of reg_fifo_wmask (non-byte-enable bits) are XORed together into an unused signal; this suggests those bits are intentionally unused, but",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "Certain bits of reg_fifo_wmask (non-byte-enable bits) are XORed together into an unused signal; this suggests those bits are intentionally unused, but could mask a bug if a future extension unexpectedly drives them.",
+    "involved_signals": [
+      "reg_fifo_wmask"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_013",
+        "ref_content": "The software can push up to 16 (or 32 for SHA-2 384/512) entries to the FIFO for the next hash computation while the current block is being processed. Once the FIFO gets full, the software cannot push more data until the current block is completed.",
+        "ref_kind": "specific",
+        "keywords": [
+          "FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.652,
+        "cosine": 0.503,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0114",
+    "title": "[U-UP] The original key_2_wd assignment (line 2138) was commented out and overridden on line 2140. The commented line is left in the code, which may indicate",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.213,
+    "contradiction": "The original key_2_wd assignment (line 2138) was commented out and overridden on line 2140. The commented line is left in the code, which may indicate a tool-flow artifact but is functionally harmless.",
+    "involved_signals": [
+      "key_2_wd"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_011",
+        "ref_content": "KEY registers (multireg): The registers are allowed to be updated only when the engine is in Idle state. If the engine computes the hash, it discards any attempts to update the secret keys and report an error. The key length determines how many of these registers are relevant for the HMAC operation; order: key[1023:0] = {KEY0, KEY1, ... , KEY31}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KEY",
+          "key_length"
+        ],
+        "layer": "specific",
+        "score": 0.628,
+        "cosine": 0.469,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_016",
+        "ref_content": "The outer padded key is created similarly using 0x5c. For SHA-256 with 256-bit key: outer_pad_key = {key[255:0], 256'h0} ^ {64{8'h5c}}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "outer_pad_key",
+          "key"
+        ],
+        "layer": "specific",
+        "score": 0.621,
+        "cosine": 0.458,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0115",
+    "title": "The reset value uses 'default: '0' for all fields not explicitly listed. If cfg_reg contains security-critical fields no",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.204,
+    "contradiction": "假设指出 cfg_reg 中可能存在未显式列举的安全关键字段，这些字段在复位时被置为 0 可能导致不安全状态（需要“已定义的安全值”）。保证仅描述 cfg_block（很可能就是 cfg_reg）在复位时整体清零。当前没有任何规范或结构事实能够确认 (1) 这些未列举字段是否真实存在，(2) 它们应具有的安全复位值是否为非零。因此无法判定保证是否违背了安全需求，也无法断言存在协议矛盾或覆盖缺口。",
+    "involved_signals": [
+      "cfg_reg"
+    ],
+    "involved_specs": [
+      "hmac__always_ff__line_375__001",
+      "hmac__always_ff__line_365__001"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac__always_ff__line_375__001",
+        "field": "assumption",
+        "excerpt": "The reset value uses 'default: '0' for all fields not explicitly listed. If cfg_reg contains security-critical fields not enumerated here (e.g., additional enable or mask bits), they would incorrectly"
+      },
+      {
+        "spec": "hmac__always_ff__line_365__001",
+        "field": "guarantee",
+        "excerpt": "When reset (rst_ni=0) is active (asynchronous), cfg_block is immediately cleared to 0."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "hmac",
+      "bind_signals": [
+        "cfg_reg"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.706,
+        "cosine": 0.58,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.687,
+        "cosine": 0.554,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_019",
+        "ref_content": "The byte order of the key registers is big-endian by default and can be swapped to little-endian by setting CFG.key_swap to 1.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG.key_swap"
+        ],
+        "layer": "specific",
+        "score": 0.66,
+        "cosine": 0.515,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_005",
+        "ref_content": "The byte order of the digest registers, from DIGEST_0 to DIGEST_15, can be configured with CFG.digest_swap.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST_0",
+          "DIGEST_15",
+          "CFG.digest_swap"
+        ],
+        "layer": "specific",
+        "score": 0.64,
+        "cosine": 0.486,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0116",
+    "title": "reg_we_check[6] and reg_we_check[7] are hardwired to 0, leaving two register slots permanently write-disabled. It is unc",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "B-AG"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": false,
+    "score": 0.203,
+    "contradiction": "assumption 指出 reg_we_check[6] 和 [7] 被硬连线为 0，可能是故意预留或遗漏映射。相关 guarantee 只描述了错误检测机制和其他写使能信号的生成，但没有说明这两个位应当对应什么寄存器行为，也没有定义合法/非法的预期。因此无法判断是合法的防御性预留还是覆盖缺口。",
+    "involved_signals": [
+      "reg_we_check",
+      "reg_we_check[6]",
+      "reg_we_check[7]"
+    ],
+    "involved_specs": [
+      "hmac_reg_top__always_comb__line_2302__001",
+      "hmac_reg_top__continuous_region__hmac_reg_top__001",
+      "hmac_reg_top__continuous_region__declarations_or_instances__016"
+    ],
+    "evidence": [
+      {
+        "spec": "hmac_reg_top__always_comb__line_2302__001",
+        "field": "assumption",
+        "excerpt": "reg_we_check[6] and reg_we_check[7] are hardwired to 0, leaving two register slots permanently write-disabled. It is unclear whether this is intentional (e.g., reserved slots) or if they should be map"
+      },
+      {
+        "spec": "hmac_reg_top__continuous_region__hmac_reg_top__001",
+        "field": "guarantee",
+        "excerpt": "reg_we_err is driven by instance u_prim_reg_we_check, which registers a non-one-hot condition on reg_we_check when reg_we && !addrmiss."
+      },
+      {
+        "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+        "field": "guarantee",
+        "excerpt": "alert_test_we is asserted exactly when addr_hit[3] is 1, reg_we is 1, and reg_error is 0."
+      },
+      {
+        "spec": "hmac_reg_top__continuous_region__declarations_or_instances__016",
+        "field": "guarantee",
+        "excerpt": "intr_test_we is asserted exactly when addr_hit[2] is 1, reg_we is 1, and reg_error is 0."
+      }
+    ],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.8,
+    "formal": {
+      "sva": "",
+      "sva_source": "channel_b",
+      "clock": "clk_i",
+      "reset": "rst_ni",
+      "bind_module": "hmac_reg_top",
+      "bind_signals": [
+        "reg_we_check[6]",
+        "reg_we_check[7]"
+      ],
+      "formalizability": "none",
+      "unknown_signals": [],
+      "status": "NO_PROPERTY"
+    },
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.426,
+        "cosine": 0.608,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "hmac.hjson_011",
+        "ref_content": "KEY registers (multireg): The registers are allowed to be updated only when the engine is in Idle state. If the engine computes the hash, it discards any attempts to update the secret keys and report an error. The key length determines how many of these registers are relevant for the HMAC operation; order: key[1023:0] = {KEY0, KEY1, ... , KEY31}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KEY",
+          "key_length"
+        ],
+        "layer": "specific",
+        "score": 0.409,
+        "cosine": 0.585,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0117",
+    "title": "[U-UP] This chunk does not gate writes to key registers (11-31) against HMAC operating state. The external HMAC logic must ensure that key_i_we is only asser",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.203,
+    "contradiction": "This chunk does not gate writes to key registers (11-31) against HMAC operating state. The external HMAC logic must ensure that key_i_we is only asserted in IDLE or after reset to prevent key corruption during operation.",
+    "involved_signals": [
+      "key_i_we",
+      "hmac_state"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_011",
+        "ref_content": "KEY registers (multireg): The registers are allowed to be updated only when the engine is in Idle state. If the engine computes the hash, it discards any attempts to update the secret keys and report an error. The key length determines how many of these registers are relevant for the HMAC operation; order: key[1023:0] = {KEY0, KEY1, ... , KEY31}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KEY",
+          "key_length"
+        ],
+        "layer": "specific",
+        "score": 0.625,
+        "cosine": 0.703,
+        "kw_hit": 0.444
+      },
+      {
+        "ref_id": "hmac.hjson_005",
+        "ref_content": "Feature HMAC.SECURE_WIPE: Wipe of internal state and secret key with constant value provided by software.",
+        "ref_kind": "specific",
+        "keywords": [
+          "HMAC.SECURE_WIPE",
+          "WIPE_SECRET"
+        ],
+        "layer": "specific",
+        "score": 0.59,
+        "cosine": 0.604,
+        "kw_hit": 0.556
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0118",
+    "title": "[U-UP] Key registers (key_0 to key_31) have write enables controlled only by addr_hit, reg_we and !reg_error without any linkage to a key‑loading state machi",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.201,
+    "contradiction": "Key registers (key_0 to key_31) have write enables controlled only by addr_hit, reg_we and !reg_error without any linkage to a key‑loading state machine or a key‑length limit. Any bus write can directly modify arbitrary key words.",
+    "involved_signals": [
+      "key_0_we",
+      "...",
+      "key_31_we",
+      "cfg_key_length_wd"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_011",
+        "ref_content": "KEY registers (multireg): The registers are allowed to be updated only when the engine is in Idle state. If the engine computes the hash, it discards any attempts to update the secret keys and report an error. The key length determines how many of these registers are relevant for the HMAC operation; order: key[1023:0] = {KEY0, KEY1, ... , KEY31}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "KEY",
+          "key_length"
+        ],
+        "layer": "specific",
+        "score": 0.747,
+        "cosine": 0.674,
+        "kw_hit": 0.919
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.655,
+        "cosine": 0.541,
+        "kw_hit": 0.919
+      },
+      {
+        "ref_id": "hmac_testplan.hjson_003",
+        "ref_content": "Change config registers and secret keys during msg write, make sure access is blocked.",
+        "ref_kind": "specific",
+        "keywords": [
+          "config registers",
+          "secret keys",
+          "msg write"
+        ],
+        "layer": "specific",
+        "score": 0.433,
+        "cosine": 0.618,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0119",
+    "title": "[U-UP] The property wmask_bytealign_p is defined but no assertion or assumption binding is visible in this chunk. It may be instantiated elsewhere or not enf",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.188,
+    "contradiction": "The property wmask_bytealign_p is defined but no assertion or assumption binding is visible in this chunk. It may be instantiated elsewhere or not enforced.",
+    "involved_signals": [
+      "wmask_bytealign_p",
+      "msg_fifo_req",
+      "msg_fifo_we",
+      "wmask_byte"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_015",
+        "ref_content": "MSG_FIFO window: Any write to this window will be appended to the FIFO. Only the lower [1:0] bits of the address matter to writes within the window (for correctly dealing with non 32-bit writes).",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.511,
+        "cosine": 0.532,
+        "kw_hit": 0.46
+      },
+      {
+        "ref_id": "theory_of_operation.md_003",
+        "ref_content": "Any write access to the memory-mapped window MSG_FIFO updates the message FIFO. If the FIFO is full, the HMAC block will block any writes leading to back-pressure on the interconnect. Software can read STATUS.fifo_full to avoid writing when the FIFO is full.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO",
+          "STATUS.fifo_full"
+        ],
+        "layer": "specific",
+        "score": 0.501,
+        "cosine": 0.519,
+        "kw_hit": 0.46
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0120",
+    "title": "[U-UP] err_valid is combinatorially derived from error conditions and the negated hmac_err interrupt pending bit. If an error condition becomes true while hm",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.183,
+    "contradiction": "err_valid is combinatorially derived from error conditions and the negated hmac_err interrupt pending bit. If an error condition becomes true while hmac_err.q is still 0, err_valid may assert for a brief window before hmac_err.q is set to 1 by the interrupt handler, leading to a potential second error pulse or a missed edge.",
+    "involved_signals": [
+      "err_valid",
+      "reg2hw.intr_state.hmac_err.q",
+      "hash_start_sha_disabled",
+      "update_seckey_inprocess",
+      "hash_start_active",
+      "msg_push_not_allowed",
+      "invalid_config_atstart"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac_testplan.hjson_001",
+        "ref_content": "This error case runs sequences that will cause interrupt bit hmac_err to set. This sequence includes:\n- Write msg_fifo or set hash_start when sha is disabled\n- Update secret key when hash is in process\n- Set hash_start when hash is active\n- Write msg before hash_start is set",
+        "ref_kind": "specific",
+        "keywords": [
+          "hmac_err",
+          "msg_fifo",
+          "hash_start",
+          "sha",
+          "secret key"
+        ],
+        "layer": "specific",
+        "score": 0.6,
+        "cosine": 0.655,
+        "kw_hit": 0.471
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.489,
+        "cosine": 0.506,
+        "kw_hit": 0.45
+      },
+      {
+        "ref_id": "hmac.hjson_009",
+        "ref_content": "ERR_CODE register: If an error interrupt occurs, this register contains information of error cause (see prim_sha2_pkg.sv err_code_e enum).",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE",
+          "hmac_err"
+        ],
+        "layer": "specific",
+        "score": 0.483,
+        "cosine": 0.611,
+        "kw_hit": 0.186
+      },
+      {
+        "ref_id": "hmac.hjson_003",
+        "ref_content": "Interrupt hmac_err: HMAC error has occurred. ERR_CODE register shows which error occurred.",
+        "ref_kind": "general",
+        "keywords": [
+          "hmac_err",
+          "ERR_CODE"
+        ],
+        "layer": "general",
+        "score": 0.482,
+        "cosine": 0.609,
+        "kw_hit": 0.186
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0121",
+    "title": "[U-UP] Digest and msg_length registers allow software read (via .re) without any hardware lock. If a read occurs while the digest is being updated, software ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.178,
+    "contradiction": "Digest and msg_length registers allow software read (via .re) without any hardware lock. If a read occurs while the digest is being updated, software may read a partially updated value, leading to incorrect verification or information leakage.",
+    "involved_signals": [
+      "digest_i_re",
+      "digest_i_qs",
+      "hw2reg.digest[i].d"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.794,
+        "cosine": 0.706,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.765,
+        "cosine": 0.664,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_007",
+        "ref_content": "CMD register: HMAC command register. Field hash_start: If 1 is written, SHA-2 or HMAC begins operation; CPU must configure relative information first such as digest size, secret key, key length. Field hash_process: If 1 is written, SHA-2 or HMAC calculates the digest or signing based on currently received message. Field hash_stop: When 1 is written, SHA-2 or HMAC will afterwards set the hmac_done interrupt as soon as the current block has been hashed; the hash can then be read from DIGEST_0 to DIGEST_15; together with MSG_LENGTH_LOWER and MSG_LENGTH_UPPER, this forms the information for context saving. Field hash_continue: When 1 is written, SHA-2 or HMAC will continue hashing based on current hash in digest registers and message length, which both have to be restored to switch context.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CMD",
+          "hash_start",
+          "hash_process",
+          "hash_stop",
+          "hash_continue",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER",
+          "hmac_done"
+        ],
+        "layer": "specific",
+        "score": 0.748,
+        "cosine": 0.641,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_008",
+        "ref_content": "STATUS register: HMAC Status register. Field hmac_idle: indicates HMAC idle; when IDLE, the DIGEST and the MSG_LENGTH_LOWER/MSG_LENGTH_UPPER can be written to from SW which enables restoring context (support context switching). Field fifo_full: FIFO full; data written to the FIFO whilst it is full will cause back-pressure on the interconnect.",
+        "ref_kind": "specific",
+        "keywords": [
+          "STATUS",
+          "hmac_idle",
+          "fifo_full",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER"
+        ],
+        "layer": "specific",
+        "score": 0.745,
+        "cosine": 0.635,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac_testplan.hjson_004",
+        "ref_content": "Verify save & restore, which allows SW to switch between different parallel message streams. - This feature is randomly exercised during most of the tests. - When triggered it could go into 3 different scenarios: - Stop and Continue without Saving and Restoring - Save and Restore with same context - Save and Restore with different contexts",
+        "ref_kind": "general",
+        "keywords": [
+          "save",
+          "restore"
+        ],
+        "layer": "general",
+        "score": 0.413,
+        "cosine": 0.59,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0122",
+    "title": "[U-UP] alert_test is driven by register fields; it may allow test‑mode injection of alerts. Could this be used to suppress real integrity errors or to genera",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.178,
+    "contradiction": "alert_test is driven by register fields; it may allow test‑mode injection of alerts. Could this be used to suppress real integrity errors or to generate false alerts during security‑critical phases?",
+    "involved_signals": [
+      "alert_test",
+      "reg2hw.alert_test.q",
+      "reg2hw.alert_test.qe"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_009",
+        "ref_content": "ERR_CODE register: If an error interrupt occurs, this register contains information of error cause (see prim_sha2_pkg.sv err_code_e enum).",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE",
+          "hmac_err"
+        ],
+        "layer": "specific",
+        "score": 0.425,
+        "cosine": 0.607,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0123",
+    "title": "[U-UP] Casting cfg_reg.digest_size.q to digest_mode_e may produce X if the register holds a value not matching the enum; this X could propagate into security",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.178,
+    "contradiction": "Casting cfg_reg.digest_size.q to digest_mode_e may produce X if the register holds a value not matching the enum; this X could propagate into security-sensitive digest control paths.",
+    "involved_signals": [
+      "cfg_reg.digest_size.q",
+      "digest_size_supplied"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.728,
+        "cosine": 0.612,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.693,
+        "cosine": 0.562,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0124",
+    "title": "[U-UP] Unconnected alert_ack_o and alert_state_o ports – it is unclear whether the alert sender requires these signals for correct operation or if they are p",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.178,
+    "contradiction": "Unconnected alert_ack_o and alert_state_o ports – it is unclear whether the alert sender requires these signals for correct operation or if they are purely informational.",
+    "involved_signals": [
+      "alert_ack_o",
+      "alert_state_o"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0125",
+    "title": "[U-UP] Digest registers are both readable and writable (digest_j_we and digest_j_re). Writing to digest registers could allow an attacker to overwrite the ca",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.171,
+    "contradiction": "Digest registers are both readable and writable (digest_j_we and digest_j_re). Writing to digest registers could allow an attacker to overwrite the calculated HMAC digest, breaking integrity.",
+    "involved_signals": [
+      "digest_0_we",
+      "digest_1_we",
+      "...",
+      "digest_15_we"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.782,
+        "cosine": 0.723,
+        "kw_hit": 0.919
+      },
+      {
+        "ref_id": "hmac.hjson_007",
+        "ref_content": "CMD register: HMAC command register. Field hash_start: If 1 is written, SHA-2 or HMAC begins operation; CPU must configure relative information first such as digest size, secret key, key length. Field hash_process: If 1 is written, SHA-2 or HMAC calculates the digest or signing based on currently received message. Field hash_stop: When 1 is written, SHA-2 or HMAC will afterwards set the hmac_done interrupt as soon as the current block has been hashed; the hash can then be read from DIGEST_0 to DIGEST_15; together with MSG_LENGTH_LOWER and MSG_LENGTH_UPPER, this forms the information for context saving. Field hash_continue: When 1 is written, SHA-2 or HMAC will continue hashing based on current hash in digest registers and message length, which both have to be restored to switch context.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CMD",
+          "hash_start",
+          "hash_process",
+          "hash_stop",
+          "hash_continue",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER",
+          "hmac_done"
+        ],
+        "layer": "specific",
+        "score": 0.735,
+        "cosine": 0.656,
+        "kw_hit": 0.919
+      },
+      {
+        "ref_id": "hmac.hjson_008",
+        "ref_content": "STATUS register: HMAC Status register. Field hmac_idle: indicates HMAC idle; when IDLE, the DIGEST and the MSG_LENGTH_LOWER/MSG_LENGTH_UPPER can be written to from SW which enables restoring context (support context switching). Field fifo_full: FIFO full; data written to the FIFO whilst it is full will cause back-pressure on the interconnect.",
+        "ref_kind": "specific",
+        "keywords": [
+          "STATUS",
+          "hmac_idle",
+          "fifo_full",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER"
+        ],
+        "layer": "specific",
+        "score": 0.719,
+        "cosine": 0.634,
+        "kw_hit": 0.919
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0126",
+    "title": "[U-UP] When hash_start_or_continue and packer_flush_done are both asserted in the same cycle, msg_allowed is set to 1, overriding the flush clear. The spec m",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.159,
+    "contradiction": "When hash_start_or_continue and packer_flush_done are both asserted in the same cycle, msg_allowed is set to 1, overriding the flush clear. The spec may require msg_allowed to remain 0 during a flush operation. This could cause the HMAC to accept new message data while the packer is still flushing, leading to a corrupted hash computation.",
+    "involved_signals": [
+      "hash_start_or_continue",
+      "packer_flush_done",
+      "msg_allowed"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_007",
+        "ref_content": "CMD register: HMAC command register. Field hash_start: If 1 is written, SHA-2 or HMAC begins operation; CPU must configure relative information first such as digest size, secret key, key length. Field hash_process: If 1 is written, SHA-2 or HMAC calculates the digest or signing based on currently received message. Field hash_stop: When 1 is written, SHA-2 or HMAC will afterwards set the hmac_done interrupt as soon as the current block has been hashed; the hash can then be read from DIGEST_0 to DIGEST_15; together with MSG_LENGTH_LOWER and MSG_LENGTH_UPPER, this forms the information for context saving. Field hash_continue: When 1 is written, SHA-2 or HMAC will continue hashing based on current hash in digest registers and message length, which both have to be restored to switch context.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CMD",
+          "hash_start",
+          "hash_process",
+          "hash_stop",
+          "hash_continue",
+          "DIGEST",
+          "MSG_LENGTH_LOWER",
+          "MSG_LENGTH_UPPER",
+          "hmac_done"
+        ],
+        "layer": "specific",
+        "score": 0.602,
+        "cosine": 0.671,
+        "kw_hit": 0.44
+      },
+      {
+        "ref_id": "hmac_testplan.hjson_001",
+        "ref_content": "This error case runs sequences that will cause interrupt bit hmac_err to set. This sequence includes:\n- Write msg_fifo or set hash_start when sha is disabled\n- Update secret key when hash is in process\n- Set hash_start when hash is active\n- Write msg before hash_start is set",
+        "ref_kind": "specific",
+        "keywords": [
+          "hmac_err",
+          "msg_fifo",
+          "hash_start",
+          "sha",
+          "secret key"
+        ],
+        "layer": "specific",
+        "score": 0.584,
+        "cosine": 0.645,
+        "kw_hit": 0.44
+      },
+      {
+        "ref_id": "hmac.hjson_001",
+        "ref_content": "Interrupt hmac_done: HMAC/SHA-2 has completed.",
+        "ref_kind": "general",
+        "keywords": [
+          "hmac_done"
+        ],
+        "layer": "general",
+        "score": 0.404,
+        "cosine": 0.577,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0127",
+    "title": "[U-UP] The hmac_sha_rvalid signal controls reading from the pad/data source, but the exact handshake protocol (ready/valid) between this signal and the data ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.159,
+    "contradiction": "The hmac_sha_rvalid signal controls reading from the pad/data source, but the exact handshake protocol (ready/valid) between this signal and the data source is not fully specified in this chunk. The timing assumption behind rvalid in StIPad/StOPad may need further clarification.",
+    "involved_signals": [
+      "hmac_sha_rvalid",
+      "sel_rdata",
+      "txcnt_eq_blksz"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_005",
+        "ref_content": "Feature HMAC.SECURE_WIPE: Wipe of internal state and secret key with constant value provided by software.",
+        "ref_kind": "specific",
+        "keywords": [
+          "HMAC.SECURE_WIPE",
+          "WIPE_SECRET"
+        ],
+        "layer": "specific",
+        "score": 0.453,
+        "cosine": 0.478,
+        "kw_hit": 0.395
+      },
+      {
+        "ref_id": "hmac_testplan.hjson_001",
+        "ref_content": "This error case runs sequences that will cause interrupt bit hmac_err to set. This sequence includes:\n- Write msg_fifo or set hash_start when sha is disabled\n- Update secret key when hash is in process\n- Set hash_start when hash is active\n- Write msg before hash_start is set",
+        "ref_kind": "specific",
+        "keywords": [
+          "hmac_err",
+          "msg_fifo",
+          "hash_start",
+          "sha",
+          "secret key"
+        ],
+        "layer": "specific",
+        "score": 0.442,
+        "cosine": 0.462,
+        "kw_hit": 0.395
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0128",
+    "title": "[U-UP] The update condition uses hmac_en.qe as the sole write-enable, causing the entire reg2hw.cfg struct to be loaded. It is unclear whether all fields are",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.159,
+    "contradiction": "The update condition uses hmac_en.qe as the sole write-enable, causing the entire reg2hw.cfg struct to be loaded. It is unclear whether all fields are intended to be updated atomically or if individual field-level qe signals exist but are ignored.",
+    "involved_signals": [
+      "reg2hw.cfg.hmac_en.qe",
+      "reg2hw.cfg",
+      "cfg_reg"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_006",
+        "ref_content": "CFG register: HMAC Configuration register. The register is updated when the engine is in Idle. If the software updates the register while the engine computes the hash, the updated value is discarded. Field hmac_en: If 1, HMAC operates when hash_start toggles. Field sha_en: If 0, the SHA engine will not initiate compression; when the SHA-2 engine is disabled the digest is cleared. Field endian_swap: If 0, each value will be added to the message in little-endian byte order; if 1, then each individual multi-byte value written to MSG_FIFO will be added in big-endian byte order; a message written one byte at a time is unaffected; byte swaps are performed on a TL-UL word granularity. Field digest_swap: If 1, the value in each digest output register is converted to big-endian byte order; this does not affect the order of DIGEST_0 etc. Field key_swap: If 1, the endianness of each KEY_* register is swapped; default value (0) is big endian representation. Field digest_size: 4-bit one-hot; invalid/unsupported values (including all-zero) are mapped to SHA2_None; with SHA2_None, when HMAC/SHA-2 is triggered to start (via hash_start or hash_continue), it will be blocked from starting and an error is signalled to SW. Field key_length: 6-bit one-hot; for HMAC mode (hmac_en==1), when HMAC is triggered to start while KEY_LENGTH holds Key_None or KEY_LENGTH holds Key_1024 for DIGEST_SIZE=SHA2_256, starting is blocked and an error is signalled to SW; for arbitrary key lengths software should pad zeros to next supported key length according to endianness; note key length cannot exceed block size (1024-bit for SHA-2 384/512, 512-bit for SHA-2 256), and the register value is irrelevant when only SHA-2 (not HMAC) is configured.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG",
+          "hmac_en",
+          "sha_en",
+          "endian_swap",
+          "digest_swap",
+          "key_swap",
+          "digest_size",
+          "key_length",
+          "MSG_FIFO",
+          "hash_start",
+          "hash_continue",
+          "KEY",
+          "DIGEST"
+        ],
+        "layer": "specific",
+        "score": 0.654,
+        "cosine": 0.589,
+        "kw_hit": 0.806
+      },
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.632,
+        "cosine": 0.558,
+        "kw_hit": 0.806
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0129",
+    "title": "[U-UP] The generate loop connects alert_req_i of every instance to alerts[0] instead of alerts[i]; this likely is a typo that causes all alerts to fire on th",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.158,
+    "contradiction": "The generate loop connects alert_req_i of every instance to alerts[0] instead of alerts[i]; this likely is a typo that causes all alerts to fire on the same request.",
+    "involved_signals": [
+      "alerts[0]",
+      "alert_req_i",
+      "i"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0130",
+    "title": "[U-UP] cool_down_ct_d is not assigned in all branches: missing assignments in state DoneAwaitHashComplete when cool_down_ct_q >= 127 (the else branch), and c",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.156,
+    "contradiction": "cool_down_ct_d is not assigned in all branches: missing assignments in state DoneAwaitHashComplete when cool_down_ct_q >= 127 (the else branch), and completely absent in states DoneAwaitHashDone and DoneAwaitMessageComplete. This infers a latch that can hold stale values.",
+    "involved_signals": [
+      "cool_down_ct_d",
+      "done_state_q",
+      "cool_down_ct_q",
+      "hash_running"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_012",
+        "ref_content": "After compression at the last round is finished, the resulting hash values are added into the digest registers; the digest is used as initial hash values for the next block compression.",
+        "ref_kind": "specific",
+        "keywords": [
+          "digest registers",
+          "hash"
+        ],
+        "layer": "specific",
+        "score": 0.42,
+        "cosine": 0.449,
+        "kw_hit": 0.353
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0131",
+    "title": "[U-UP] msg_fifo_rdata and msg_fifo_rerror are hardwired to all-ones; it is unclear from the local code whether this is a permanent design decision (e.g., a c",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "msg_fifo_rdata and msg_fifo_rerror are hardwired to all-ones; it is unclear from the local code whether this is a permanent design decision (e.g., a constant empty FIFO) or a placeholder before a full message FIFO implementation.",
+    "involved_signals": [
+      "msg_fifo_rdata",
+      "msg_fifo_rerror"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_003",
+        "ref_content": "Any write access to the memory-mapped window MSG_FIFO updates the message FIFO. If the FIFO is full, the HMAC block will block any writes leading to back-pressure on the interconnect. Software can read STATUS.fifo_full to avoid writing when the FIFO is full.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO",
+          "STATUS.fifo_full"
+        ],
+        "layer": "specific",
+        "score": 0.737,
+        "cosine": 0.624,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_015",
+        "ref_content": "MSG_FIFO window: Any write to this window will be appended to the FIFO. Only the lower [1:0] bits of the address matter to writes within the window (for correctly dealing with non 32-bit writes).",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.725,
+        "cosine": 0.607,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_002",
+        "ref_content": "Interrupt fifo_empty: The message FIFO is empty. This interrupt is raised only if the message FIFO is actually writable by software, i.e., if all of the following conditions are met: i) The HMAC block is not running in HMAC mode and performing the second round of computing the final hash of the outer key as well as the result of the first round using the inner key. ii) Software has not yet written the Process or Stop command to finish the hashing operation. For the interrupt to be raised, the message FIFO must also have been full previously. Otherwise, the hardware empties the FIFO faster than software can fill it and there is no point in interrupting the software to inform it about the message FIFO being empty.",
+        "ref_kind": "specific",
+        "keywords": [
+          "fifo_empty",
+          "MSG_FIFO",
+          "Process",
+          "Stop"
+        ],
+        "layer": "specific",
+        "score": 0.705,
+        "cosine": 0.578,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_006",
+        "ref_content": "Small writes to MSG_FIFO are coalesced into 32-bit words by the prim_packer logic. While passing writes to the packer logic, the block also counts the number of bytes that are being passed to compute the received message length.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO",
+          "prim_packer"
+        ],
+        "layer": "specific",
+        "score": 0.679,
+        "cosine": 0.541,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0132",
+    "title": "[U-UP] The reset value Inner may not be a legal state for the round_q FSM; its validity is not enforced locally.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The reset value Inner may not be a legal state for the round_q FSM; its validity is not enforced locally.",
+    "involved_signals": [
+      "round_q",
+      "Inner"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_015",
+        "ref_content": "The message length used in the SHA-2 module for the first HMAC round is calculated by adding the block size to the original message length (to account for the length of inner_pad_key).",
+        "ref_kind": "specific",
+        "keywords": [
+          "message length",
+          "inner_pad_key"
+        ],
+        "layer": "specific",
+        "score": 0.443,
+        "cosine": 0.419,
+        "kw_hit": 0.5
+      },
+      {
+        "ref_id": "theory_of_operation.md_014",
+        "ref_content": "In HMAC, the inner padded key is created with the secret key (zero-padded to block size) XORed with 64{8'h36}. For SHA-256 with 256-bit key: inner_pad_key = {key[255:0], 256'h0} ^ {64{8'h36}}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "inner_pad_key",
+          "key"
+        ],
+        "layer": "specific",
+        "score": 0.425,
+        "cosine": 0.392,
+        "kw_hit": 0.5
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0133",
+    "title": "[U-UP] The destination and security role of reg_steer (0 vs 1) is unknown; it likely selects between a memory/FIFO window (address range 4096-8191) and a reg",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The destination and security role of reg_steer (0 vs 1) is unknown; it likely selects between a memory/FIFO window (address range 4096-8191) and a register interface, but without downstream context the exact security impact of the integrity-error override cannot be confirmed.",
+    "involved_signals": [
+      "reg_steer"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.421,
+        "cosine": 0.601,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "hmac.hjson_015",
+        "ref_content": "MSG_FIFO window: Any write to this window will be appended to the FIFO. Only the lower [1:0] bits of the address matter to writes within the window (for correctly dealing with non 32-bit writes).",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_FIFO"
+        ],
+        "layer": "specific",
+        "score": 0.407,
+        "cosine": 0.582,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0134",
+    "title": "[U-UP] err_q is sticky and never cleared by this block except on reset. It is unclear whether a software-clear or auto-clear mechanism exists elsewhere; if a",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "err_q is sticky and never cleared by this block except on reset. It is unclear whether a software-clear or auto-clear mechanism exists elsewhere; if absent, a single error latches err_q permanently until system reset.",
+    "involved_signals": [
+      "err_q"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_009",
+        "ref_content": "ERR_CODE register: If an error interrupt occurs, this register contains information of error cause (see prim_sha2_pkg.sv err_code_e enum).",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE",
+          "hmac_err"
+        ],
+        "layer": "specific",
+        "score": 0.677,
+        "cosine": 0.539,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac_testplan.hjson_001",
+        "ref_content": "This error case runs sequences that will cause interrupt bit hmac_err to set. This sequence includes:\n- Write msg_fifo or set hash_start when sha is disabled\n- Update secret key when hash is in process\n- Set hash_start when hash is active\n- Write msg before hash_start is set",
+        "ref_kind": "specific",
+        "keywords": [
+          "hmac_err",
+          "msg_fifo",
+          "hash_start",
+          "sha",
+          "secret key"
+        ],
+        "layer": "specific",
+        "score": 0.662,
+        "cosine": 0.517,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_003",
+        "ref_content": "Interrupt hmac_err: HMAC error has occurred. ERR_CODE register shows which error occurred.",
+        "ref_kind": "general",
+        "keywords": [
+          "hmac_err",
+          "ERR_CODE"
+        ],
+        "layer": "general",
+        "score": 0.642,
+        "cosine": 0.489,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0135",
+    "title": "[U-UP] Signal unused_cfg_qe is assigned but not consumed in this region; if it is not read elsewhere in the module, it may be dead code, and the XOR reductio",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "Signal unused_cfg_qe is assigned but not consumed in this region; if it is not read elsewhere in the module, it may be dead code, and the XOR reduction of qe bits may be optimized away.",
+    "involved_signals": [
+      "unused_cfg_qe"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "theory_of_operation.md_004",
+        "ref_content": "The logic assumes the input message is little-endian. It converts the byte order of the word right before writing to SHA-2 storage as SHA-2 treats the incoming message as big-endian. If SW wants to convert the message byte order, SW should set CFG.endian_swap to 1.",
+        "ref_kind": "specific",
+        "keywords": [
+          "CFG.endian_swap"
+        ],
+        "layer": "specific",
+        "score": 0.66,
+        "cosine": 0.515,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "hmac.hjson_012",
+        "ref_content": "DIGEST registers (multireg): The digest gets cleared when CFG.sha_en transitions from 1 to 0. When STATUS.hmac_idle is 1, these registers may be written to by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2 256, digest[255:0] = {DIGEST0..DIGEST7} and DIGEST8..DIGEST15 are irrelevant. For SHA-2 384, DIGEST12..DIGEST15 are truncated and irrelevant.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST",
+          "CFG.sha_en",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.652,
+        "cosine": 0.504,
+        "kw_hit": 1.0
+      },
+      {
+        "ref_id": "theory_of_operation.md_005",
+        "ref_content": "The byte order of the digest registers, from DIGEST_0 to DIGEST_15, can be configured with CFG.digest_swap.",
+        "ref_kind": "specific",
+        "keywords": [
+          "DIGEST_0",
+          "DIGEST_15",
+          "CFG.digest_swap"
+        ],
+        "layer": "specific",
+        "score": 0.642,
+        "cosine": 0.489,
+        "kw_hit": 1.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0136",
+    "title": "[U-UP] packer_ready from u_packer is not connected to any logic visible in this chunk. If it is truly unused, the packer may not receive back‑pressure from u",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "packer_ready from u_packer is not connected to any logic visible in this chunk. If it is truly unused, the packer may not receive back‑pressure from upstream, risking overflow.",
+    "involved_signals": [
+      "packer_ready"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0137",
+    "title": "[U-UP] The design asserts wePulse property requiring reg_we is a single-cycle pulse. This property is not enforced locally and must be guaranteed by the TL-U",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The design asserts wePulse property requiring reg_we is a single-cycle pulse. This property is not enforced locally and must be guaranteed by the TL-UL adapter module.",
+    "involved_signals": [
+      "reg_we"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0138",
+    "title": "[U-UP] The OneHotWidth parameter is hardcoded to 59; if the number of writable registers changes, this width may become mismatched, breaking the one-hot chec",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The OneHotWidth parameter is hardcoded to 59; if the number of writable registers changes, this width may become mismatched, breaking the one-hot check.",
+    "involved_signals": [
+      "reg_we_check"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_014",
+        "ref_content": "MSG_LENGTH_UPPER register: Received Message Length calculated by the HMAC in bits [63:32]. When STATUS.hmac_idle is 1, this register may be written by software. Outside of this window, writes can cause unpredictable behavior. For SHA-2-256 computations, message length is 64-bit {MSG_LENGTH_UPPER, MSG_LENGTH_LOWER}. For SHA-2 384/512 message length is extended to 128-bit in line with NIST FIPS 180-4 where the upper 64 bits get zero-padded: {32'b0, 32'b0, MSG_LENGTH_UPPER, MSG_LENGTH_LOWER}.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_LENGTH_UPPER",
+          "STATUS.hmac_idle",
+          "MSG_LENGTH_LOWER"
+        ],
+        "layer": "specific",
+        "score": 0.433,
+        "cosine": 0.618,
+        "kw_hit": 0.0
+      },
+      {
+        "ref_id": "hmac.hjson_013",
+        "ref_content": "MSG_LENGTH_LOWER register: Received Message Length calculated by the HMAC in bits [31:0]. Message is byte granularity; lower 3 bits [2:0] are ignored. When STATUS.hmac_idle is 1, this register may be written by software. Outside of this window, writes can cause unpredictable behavior.",
+        "ref_kind": "specific",
+        "keywords": [
+          "MSG_LENGTH_LOWER",
+          "STATUS.hmac_idle"
+        ],
+        "layer": "specific",
+        "score": 0.426,
+        "cosine": 0.608,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0139",
+    "title": "[U-UP] The design asserts rePulse property requiring reg_re is a single-cycle pulse. This property must be ensured externally.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "The design asserts rePulse property requiring reg_re is a single-cycle pulse. This property must be ensured externally.",
+    "involved_signals": [
+      "reg_re"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0140",
+    "title": "[U-UP] reg_we_check is declared but not assigned in this chunk; its correctness and one-hot property depend on other logic.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.13,
+    "contradiction": "reg_we_check is declared but not assigned in this chunk; its correctness and one-hot property depend on other logic.",
+    "involved_signals": [
+      "reg_we_check"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0141",
+    "title": "[U-UP] The assertion reAfterRv expects that after a request (reg_re or reg_we) rises, tl_o_pre.d_valid is asserted in the next cycle.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.118,
+    "contradiction": "The assertion reAfterRv expects that after a request (reg_re or reg_we) rises, tl_o_pre.d_valid is asserted in the next cycle.",
+    "involved_signals": [
+      "reg_re",
+      "reg_we",
+      "tl_o_pre.d_valid"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0142",
+    "title": "[U-UP] The mapping between reg_we_check indices and the *_we signals is defined only by this always_comb block. A mistake (e.g., a swapped index assignment) ",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.113,
+    "contradiction": "The mapping between reg_we_check indices and the *_we signals is defined only by this always_comb block. A mistake (e.g., a swapped index assignment) would go undetected locally and could enable writes to the wrong security-critical register (key, digest, etc.). Verification with the register address map definition is needed.",
+    "involved_signals": [
+      "reg_we_check",
+      "all *_we signals"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_009",
+        "ref_content": "ERR_CODE register: If an error interrupt occurs, this register contains information of error cause (see prim_sha2_pkg.sv err_code_e enum).",
+        "ref_kind": "specific",
+        "keywords": [
+          "ERR_CODE",
+          "hmac_err"
+        ],
+        "layer": "specific",
+        "score": 0.416,
+        "cosine": 0.595,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0143",
+    "title": "[U-UP] The tlul_adapter_reg instance has its intg_error_o output left unconnected, meaning any integrity error detected by the adapter is silently dropped.",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.108,
+    "contradiction": "The tlul_adapter_reg instance has its intg_error_o output left unconnected, meaning any integrity error detected by the adapter is silently dropped.",
+    "involved_signals": [
+      "intg_error_o"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": [
+      {
+        "ref_id": "hmac.hjson_004",
+        "ref_content": "Alert fatal_fault: This fatal alert is triggered when a fatal TL-UL bus integrity fault is detected.",
+        "ref_kind": "specific",
+        "keywords": [
+          "fatal_fault"
+        ],
+        "layer": "specific",
+        "score": 0.429,
+        "cosine": 0.613,
+        "kw_hit": 0.0
+      }
+    ]
+  },
+  {
+    "finding_id": "F-0144",
+    "title": "[U-UP] EnableDataIntgGen is 0, disabling hardware integrity generation. It is unclear whether the system integration layer provides equivalent protection for",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.08,
+    "contradiction": "EnableDataIntgGen is 0, disabling hardware integrity generation. It is unclear whether the system integration layer provides equivalent protection for this security IP.",
+    "involved_signals": [],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0145",
+    "title": "[U-UP] The TL-UL adapter address output (addr_o) is left unconnected. The comment says address is ignored except for sub-word writes, but it is unclear if th",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.073,
+    "contradiction": "The TL-UL adapter address output (addr_o) is left unconnected. The comment says address is ignored except for sub-word writes, but it is unclear if this is safe in all configurations.",
+    "involved_signals": [
+      "u_tlul_adapter.addr_o"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  },
+  {
+    "finding_id": "F-0146",
+    "title": "[U-UP] Signal 'b1' is listed in the chunk dependencies but does not appear in the code. It may be a stale reference, an unreachable constant, or an unused le",
+    "severity": "LOW",
+    "verdict": "UNCERTAIN",
+    "channels": [
+      "U-UP"
+    ],
+    "cross_channel_hits": 1,
+    "is_self_ref": true,
+    "score": 0.073,
+    "contradiction": "Signal 'b1' is listed in the chunk dependencies but does not appear in the code. It may be a stale reference, an unreachable constant, or an unused leftover.",
+    "involved_signals": [
+      "b1"
+    ],
+    "involved_specs": [],
+    "evidence": [],
+    "formal_verdict": "NONE",
+    "formal_confidence": 0.0,
+    "ref_clues": []
+  }
+]

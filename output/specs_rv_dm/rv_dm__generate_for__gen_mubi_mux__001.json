@@ -1,37 +1,194 @@
 {
   "chunk_id": "rv_dm__generate_for__gen_mubi_mux__001",
-  "summary": "按位 MUBI 严格测试选择调试使能源",
-  "behavior": "该 generate 块为多比特信号 lc_hw_debug_en_gated_raw 的每一位生成一个组合 MUX。对于每个位 k，当 OTP 熔丝 otp_dis_rv_dm_late_debug[k] 被 MUBI8 严格测试为真（表示 late debug 被禁用）或 late_debug_enable[k] 被 MUBI32 严格测试为真（表示 late debug 使能）时，输出 lc_hw_debug_en_gated_raw[k] 取 lc_hw_debug_en_raw[k]；否则取 lc_dft_en_raw[k]。若任一 MUBI 测试输入为无效编码，测试函数返回假，相应条件不成立，输出回退到 lc_dft_en_raw。无额外时序。",
+  "header": {
+    "module": "rv_dm",
+    "block_kind": "generate",
+    "driven": [
+      "lc_hw_debug_en_gated_raw"
+    ],
+    "used": [
+      "otp_dis_rv_dm_late_debug",
+      "late_debug_enable",
+      "lc_hw_debug_en_raw",
+      "lc_dft_en_raw",
+      "lc_ctrl_pkg::TxWidth",
+      "mubi8_test_true_strict",
+      "mubi32_test_true_strict"
+    ],
+    "modes": [],
+    "tags": [
+      "lifecycle",
+      "debug",
+      "access_control",
+      "mux",
+      "parameterization"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对于任意有效位 k，如果 otp_dis_rv_dm_late_debug[k] 为 MUBI8 True 或 late_debug_enable[k] 为 MUBI32 True，则 lc_hw_debug_en_gated_raw[k] 等于 lc_hw_debug_en_raw[k]；否则等于 lc_dft_en_raw[k]。",
-      "output_signals": [
-        "lc_hw_debug_en_gated_raw"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Each slice lc_hw_debug_en_gated_raw[k] is a mux that selects lc_hw_debug_en_raw[k] when mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k]) || mubi32_test_true_strict(late_debug_enable[k]) is true, otherwise selects lc_dft_en_raw[k].",
+      "cond": "always",
+      "signals": [
+        "lc_hw_debug_en_gated_raw",
+        "otp_dis_rv_dm_late_debug",
+        "late_debug_enable",
+        "lc_hw_debug_en_raw",
+        "lc_dft_en_raw"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:255-258"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_hw_debug_en_gated_raw[k] == ((mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k]) || mubi32_test_true_strict(late_debug_enable[k])) ? lc_hw_debug_en_raw[k] : lc_dft_en_raw[k])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_gated_raw",
+          "otp_dis_rv_dm_late_debug",
+          "late_debug_enable",
+          "lc_hw_debug_en_raw",
+          "lc_dft_en_raw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "lc_hw_debug_en_gated_raw[k] == ((mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k]) || mubi32_test_true_strict(late_debug_enable[k])) ? lc_hw_debug_en_raw[k] : lc_dft_en_raw[k])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "该逻辑使用两路 MUBI 严格测试来选通硬件调试使能信号，防止因 OTP 或配置信号单比特翻转而意外启用敏感的调试功能。若 MUBI 信号出现无效编码，逻辑自动退回到 DFT 使能，提供安全回退。直接关系到芯片生命周期调试访问控制的安全强度。",
   "assumptions": [
     {
-      "constraint": "输入信号 otp_dis_rv_dm_late_debug 的每个元素必须是有效的 8-bit MUBI8 编码，late_debug_enable 的每个元素必须是有效的 32-bit MUBI32 编码。",
-      "bug_relevance": "若任一信号出现无效编码，对应的 MUBI 测试返回假，将导致逻辑错误地选择 lc_dft_en_raw 而非期望的 hw_debug_en_raw，可能破坏调试使能的正确性，并引发安全风险。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "otp_dis_rv_dm_late_debug[k], late_debug_enable[k], lc_hw_debug_en_raw[k], and lc_dft_en_raw[k] contain valid mubi encodings for all k < TxWidth, and the buses have at least TxWidth elements.",
+      "cond": "always",
+      "risk": "Invalid or misaligned mubi values may cause the strict‑true checks to return false even when a debug or disable condition is intended, leading to wrong gated enable selection (e.g., granting DFT access instead of debug, or vice versa).",
+      "signals": [
+        "otp_dis_rv_dm_late_debug",
+        "late_debug_enable",
+        "lc_hw_debug_en_raw",
+        "lc_dft_en_raw"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:255-258"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "otp_dis_rv_dm_late_debug",
+          "late_debug_enable",
+          "lc_hw_debug_en_raw",
+          "lc_dft_en_raw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "otp_dis_rv_dm_late_debug[k], late_debug_enable[k], lc_hw_debug_en_raw[k], and lc_dft_en_raw[k] contain valid mubi encodings for all k < TxWidth, and the buses have at least TxWidth elements",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "The condition (mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k]) || mubi32_test_true_strict(late_debug_enable[k])) appears to OR the OTP late-debug disable with the late‑debug enable. If otp_dis_rv_dm_late_debug is truly a ‘disable’ signal, a true value would incorrectly pass lc_hw_debug_en_raw[k] instead of forcing a disabled value, thereby ignoring the OTP lock and possibly granting debug access.",
+      "cond": "otp_dis_rv_dm_late_debug[k] is strict TRUE",
+      "risk": "Debug access may be granted even when OTP intends to permanently disable late debug, violating secure boot and debug locking requirements.",
+      "signals": [
+        "otp_dis_rv_dm_late_debug",
+        "late_debug_enable",
+        "lc_hw_debug_en_raw",
+        "lc_hw_debug_en_gated_raw"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:255-258"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k])",
+        "consequent": "lc_hw_debug_en_gated_raw[k] == lc_hw_debug_en_raw[k]",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "otp_dis_rv_dm_late_debug",
+          "late_debug_enable",
+          "lc_hw_debug_en_raw",
+          "lc_hw_debug_en_gated_raw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "mubi8_test_true_strict(otp_dis_rv_dm_late_debug[k])",
+        "consequent": "lc_hw_debug_en_gated_raw[k] == lc_hw_debug_en_raw[k]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Two different mubi widths (8‑bit for otp_dis_rv_dm_late_debug, 32‑bit for late_debug_enable) are used in the same OR condition. It must be verified that the signal widths match the corresponding test functions and that no misconnection exists that would silently misinterpret a multi‑bit value.",
+      "cond": "always",
+      "risk": "A width mismatch could cause a portion of a wider signal to be ignored or mistaken, breaking the debug gating logic.",
+      "signals": [
         "otp_dis_rv_dm_late_debug",
         "late_debug_enable"
       ],
-      "source_refs": [
+      "refs": [
         "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:255-256"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "otp_dis_rv_dm_late_debug",
+          "late_debug_enable"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "Two different mubi widths (8‑bit for otp_dis_rv_dm_late_debug, 32‑bit for late_debug_enable) are used in the same OR condition. It must be verified that the signal widths match the corresponding test functions and that no misconnection exis",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk gates the RV_DM hardware debug enable, a primary access‑control signal. The OR condition that includes otp_dis_rv_dm_late_debug (OTP late debug disable) may be logically inverted: a true OTP disable would select the raw debug enable instead of forcing a disabled value, potentially granting debug access in contradiction to OTP configuration. This would undermine secure boot and debug locking. Additionally, invalid mubi inputs could cause unintended DFT or debug enable paths.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:254-259"
-  ],
-  "uncertain_points": [
-    "当 otp_dis_rv_dm_late_debug 和 late_debug_enable 均不为 True 时，回退到 lc_dft_en_raw 的设计意图未在片段中说明，需参考上下文确认 lc_dft_en_raw 的作用与安全属性。"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
   "line_start": 254,

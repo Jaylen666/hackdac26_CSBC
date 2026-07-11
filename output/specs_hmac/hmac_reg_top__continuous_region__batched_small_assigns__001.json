@@ -13,14 +13,15 @@
     ],
     "modes": [],
     "tags": [
-      "csr"
+      "error",
+      "access_control"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "addrmiss is asserted when either reg_re or reg_we is high and every bit of addr_hit is zero; otherwise addrmiss is low.",
+      "claim": "addrmiss is combinational: when reg_re or reg_we is high, addrmiss equals the NOR-reduction of addr_hit; otherwise addrmiss is 0.",
       "cond": "always",
       "signals": [
         "addrmiss",
@@ -29,48 +30,78 @@
         "addr_hit"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "addr_hit must be stable and represent a valid decode result whenever reg_re or reg_we is asserted.",
-      "cond": "(reg_re || reg_we) == 1'b1",
-      "risk": "If addr_hit is invalid or toggling while a read or write strobe is active, addrmiss may falsely indicate a miss or a hit, leading to incorrect register access or erroneous error reporting.",
-      "signals": [
-        "addr_hit",
-        "reg_re",
-        "reg_we"
+        "hmac_reg_top.sv:2007"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "addrmiss == ((reg_re || reg_we) ? !(|addr_hit) : 1'b0)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "addrmiss",
+          "reg_re",
+          "reg_we",
+          "addr_hit"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "addrmiss == ((reg_re || reg_we) ? !(|addr_hit) : 1'b0)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "low",
-      "claim": "addrmiss is forced to 0 when no access is active (reg_re == 0 and reg_we == 0). It is unknown whether downstream logic, such as error latches or interrupt generation, expects addrmiss to remain asserted from a previous access or whether clearing it during idle cycles is safe.",
-      "cond": "when reg_re == 0 and reg_we == 0",
-      "risk": "If a miss occurs in one cycle and the downstream consumer does not capture it before addrmiss is cleared, the miss event could be lost, masking a potential address decode failure.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "If multiple bits of addr_hit are set simultaneously (multi-hit), this chunk treats the access as a hit and deasserts addrmiss; it is unclear whether the design intends to tolerate multi-hit.",
+      "cond": "(reg_re || reg_we) && $countones(addr_hit) > 1",
+      "risk": "A multi-hit decode error could be silently masked, potentially allowing an access to be interpreted as valid when it should be flagged as illegal.",
       "signals": [
+        "addr_hit",
         "addrmiss"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007"
-      ]
+        "hmac_reg_top.sv:2007"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(reg_re || reg_we) && $countones(addr_hit) > 1",
+        "consequent": "addrmiss == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "addr_hit",
+          "addrmiss"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(reg_re || reg_we) && $countones(addr_hit) > 1",
+        "consequent": "addrmiss == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The addrmiss signal indicates that a register read or write request did not match any valid address. Downstream handling of this signal may suppress the bus response or trigger an error alert. If addrmiss is mishandled (e.g., ignored, or not propagated to a security monitor), a secret stored in a register could be leaked through an unmapped address read, or a critical control register could be silently written without detection. Chunk itself is purely combinational; the security risk depends on integration and error-response logic.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:2007"
+    "hmac_reg_top.sv:2006-2007"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
   "line_start": 2006,
-  "line_end": 2006,
-  "security_implications": ""
+  "line_end": 2006
 }

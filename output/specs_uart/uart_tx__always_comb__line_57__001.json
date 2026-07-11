@@ -10,20 +10,28 @@
     ],
     "used": [
       "tx_enable",
-      "bit_cnt_q",
-      "sreg_q",
-      "tx_q",
       "wr",
       "parity_enable",
       "wr_parity",
       "wr_data",
-      "tick_baud_q"
+      "tick_baud_q",
+      "bit_cnt_q",
+      "sreg_q",
+      "tx_q",
+      "b1",
+      "h0",
+      "h7ff",
+      "b0",
+      "d11",
+      "d10"
     ],
     "modes": [
-      "parity_enable"
+      "idle_reset(tx_enable=0)",
+      "load(tx_enable=1,wr=1)",
+      "shift(tx_enable=1,tick_baud_q=1,bit_cnt_q!=0)",
+      "hold(tx_enable=1,no load/shift)"
     ],
     "tags": [
-      "serial",
       "counter",
       "handshake",
       "parameterization"
@@ -33,7 +41,7 @@
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "When tx_enable is low, bit_cnt_d is forced to 0, sreg_d to 11'h7ff, and tx_d to 1, overriding any other condition.",
+      "claim": "When tx_enable is low, bit_cnt_d is forced to 0, sreg_d to the idle state (11'h7ff), and tx_d to 1'b1.",
       "cond": "!tx_enable",
       "signals": [
         "tx_enable",
@@ -43,12 +51,123 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:58-61"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!tx_enable",
+        "consequent": "bit_cnt_d == 4'h0 && sreg_d == 11'h7ff && tx_d == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "bit_cnt_d",
+          "sreg_d",
+          "tx_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!tx_enable",
+        "consequent": "bit_cnt_d == 4'h0 && sreg_d == 11'h7ff && tx_d == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "reg_update",
-      "claim": "When tx_enable is high and wr is asserted, sreg_d is loaded with {1'b1, (parity_enable ? wr_parity : 1'b1), wr_data, 1'b0} and bit_cnt_d is set to 11 (if parity_enable) or 10 (otherwise); tx_d retains its previous value (tx_q).",
+      "type": "assignment",
+      "claim": "When tx_enable is high, tx_d retains its previous value tx_q unless a shift is in progress (tick_baud_q and bit_cnt_q != 0).",
+      "cond": "tx_enable && ( !(tick_baud_q && bit_cnt_q != 0) )",
+      "signals": [
+        "tx_enable",
+        "tick_baud_q",
+        "bit_cnt_q",
+        "tx_d",
+        "tx_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:65,70-73"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && !(tick_baud_q && bit_cnt_q != 4'h0)",
+        "consequent": "tx_d == tx_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "tick_baud_q",
+          "bit_cnt_q",
+          "tx_d",
+          "tx_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && !(tick_baud_q && bit_cnt_q != 4'h0)",
+        "consequent": "tx_d == tx_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "When tx_enable is high and no load or shift condition occurs, sreg_d and bit_cnt_d hold their previous values.",
+      "cond": "tx_enable && !wr && !(tick_baud_q && bit_cnt_q != 0)",
+      "signals": [
+        "tx_enable",
+        "wr",
+        "tick_baud_q",
+        "bit_cnt_q",
+        "sreg_d",
+        "sreg_q",
+        "bit_cnt_d",
+        "bit_cnt_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:63-65"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && !wr && !(tick_baud_q && bit_cnt_q != 4'h0)",
+        "consequent": "bit_cnt_d == bit_cnt_q && sreg_d == sreg_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "wr",
+          "tick_baud_q",
+          "bit_cnt_q",
+          "sreg_d",
+          "sreg_q",
+          "bit_cnt_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && !wr && !(tick_baud_q && bit_cnt_q != 4'h0)",
+        "consequent": "bit_cnt_d == bit_cnt_q && sreg_d == sreg_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "When tx_enable is high and wr is asserted, sreg_d is loaded with the new frame {1'b1, (parity_enable? wr_parity : 1'b1), wr_data, 1'b0} and bit_cnt_d is set to 11 (with parity) or 10 (without parity); tx_d remains unchanged from tx_q.",
       "cond": "tx_enable && wr",
       "signals": [
         "tx_enable",
@@ -61,14 +180,42 @@
         "tx_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:62-68"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:66-68"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && wr",
+        "consequent": "sreg_d == {1'b1, (parity_enable ? wr_parity : 1'b1), wr_data, 1'b0} && bit_cnt_d == (parity_enable ? 4'd11 : 4'd10) && tx_d == tx_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "wr",
+          "parity_enable",
+          "wr_parity",
+          "wr_data",
+          "sreg_d",
+          "bit_cnt_d",
+          "tx_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && wr",
+        "consequent": "sreg_d == {1'b1, (parity_enable ? wr_parity : 1'b1), wr_data, 1'b0} && bit_cnt_d == (parity_enable ? 4'd11 : 4'd10) && tx_d == tx_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G3",
-      "type": "state_transition",
-      "claim": "When tx_enable is high, wr is low, tick_baud_q is high, and bit_cnt_q is non-zero, sreg_d is shifted right with a 1 inserted at the MSB ({1'b1, sreg_q[10:1]}), tx_d outputs the LSB sreg_q[0], and bit_cnt_d is decremented by 1.",
-      "cond": "tx_enable && !wr && tick_baud_q && (bit_cnt_q != 4'h0)",
+      "id": "G5",
+      "type": "assignment",
+      "claim": "When tx_enable is high, no write is pending, tick_baud_q is high, and bit_cnt_q is non-zero, sreg_d is shifted right by one bit (inserting a 1 at the MSB), tx_d receives the LSB of sreg_q, and bit_cnt_d is decremented by 1.",
+      "cond": "tx_enable && !wr && tick_baud_q && (bit_cnt_q != 0)",
       "signals": [
         "tx_enable",
         "wr",
@@ -80,111 +227,157 @@
         "bit_cnt_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:62-73"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "default_fallback",
-      "claim": "When tx_enable is high but neither wr nor the shift condition (tick_baud_q && bit_cnt_q != 0) is true, all driven signals hold their previous flopped values (bit_cnt_d = bit_cnt_q, sreg_d = sreg_q, tx_d = tx_q).",
-      "cond": "tx_enable && !wr && !(tick_baud_q && bit_cnt_q != 4'h0)",
-      "signals": [
-        "bit_cnt_d",
-        "sreg_d",
-        "tx_d",
-        "bit_cnt_q",
-        "sreg_q",
-        "tx_q"
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:69-73"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:63-65,73"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && !wr && tick_baud_q && bit_cnt_q != 4'h0",
+        "consequent": "sreg_d == {1'b1, sreg_q[10:1]} && tx_d == sreg_q[0] && bit_cnt_d == bit_cnt_q - 4'h1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "wr",
+          "tick_baud_q",
+          "bit_cnt_q",
+          "sreg_d",
+          "sreg_q",
+          "tx_d",
+          "bit_cnt_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && !wr && tick_baud_q && bit_cnt_q != 4'h0",
+        "consequent": "sreg_d == {1'b1, sreg_q[10:1]} && tx_d == sreg_q[0] && bit_cnt_d == bit_cnt_q - 4'h1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "wr_data must be exactly 8 bits wide; the frame construction {1, parity, wr_data, 0} assumes 8 data bits to fit the 11-bit sreg.",
-      "cond": "always (structural width requirement)",
-      "risk": "Width mismatch causes misalignment of the serial frame, leading to frame corruption or protocol errors.",
+      "type": "handshake",
+      "claim": "wr must be low when a transmission is in progress (bit_cnt_q != 0). The design assumes the driver will not assert wr while the shift state is active.",
+      "cond": "tx_enable && bit_cnt_q != 0",
+      "risk": "If wr is asserted while bit_cnt_q != 0, sreg_d and bit_cnt_d are overwritten, corrupting the ongoing frame and causing a framing error or dropped data.",
       "signals": [
-        "wr_data",
-        "sreg_d"
+        "wr",
+        "bit_cnt_q",
+        "tx_enable"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:67"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:66-68"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && bit_cnt_q != 4'h0",
+        "consequent": "wr == 1'b0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wr",
+          "bit_cnt_q",
+          "tx_enable"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && bit_cnt_q != 4'h0",
+        "consequent": "wr == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
       "type": "handshake",
-      "claim": "tick_baud_q is a single-cycle strobe asserted exactly at the baud rate; it must not remain high for multiple cycles.",
-      "cond": "during active transmission (tx_enable && !wr && bit_cnt_q != 0)",
-      "risk": "A multi-cycle tick would cause multiple shifts in the same clock cycle or on consecutive edges, resulting in baud rate deviation, lost bits, or double-shifting.",
+      "claim": "tick_baud_q must be a single-cycle pulse per baud period, not multi-cycle high.",
+      "cond": "always during operation",
+      "risk": "Multiple shifts per baud period occur, producing incorrect bit timing and corrupted output.",
       "signals": [
         "tick_baud_q"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:69"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "lifecycle",
-      "claim": "When tx_enable transitions from 0 to 1, the flopped state registers (bit_cnt_q, sreg_q, tx_q) must already be in the idle state produced during disable (0, all-ones, 1) so that a spurious transmission does not begin.",
-      "cond": "rising edge of tx_enable",
-      "risk": "Arbitrary data may be shifted out on the TX line, causing protocol violations, line contention in multi-drop setups, or exposure of residual secrets.",
-      "signals": [
-        "tx_enable",
-        "bit_cnt_q",
-        "sreg_q",
-        "tx_q"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:58-65"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "property about pulse width (non-consecutive high when bit_cnt_q != 0)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tick_baud_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always during operation",
+        "consequent": "property about pulse width (non-consecutive high when bit_cnt_q != 0)",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_fault_containment_gap",
       "priority": "medium",
-      "claim": "If wr is asserted while tick_baud_q is also active and bit_cnt_q != 0, the load takes priority over the shift, aborting the current frame mid-transmission and discarding the remaining bits. The specification does not indicate whether this abort behavior is intentional or if wr should be blocked during active transmission.",
-      "cond": "wr && tick_baud_q && (bit_cnt_q != 4'h0)",
-      "risk": "Corrupted frame on the line; unexpected behavior in higher-level protocol (e.g., framing error, lost synchronization, deadlock if hardware flow control relies on frame completion).",
+      "claim": "The block does not contain any hardware safeguard to prevent wr from being accepted while a transmission is active (bit_cnt_q != 0). A buggy driver could prematurely reload the shift register.",
+      "cond": "bit_cnt_q != 4'h0 and wr == 1'b1",
+      "risk": "Ongoing transmission is aborted and replaced with new data, leading to framing errors or loss of bytes.",
       "signals": [
         "wr",
-        "tick_baud_q",
-        "bit_cnt_q"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:66-73"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "low",
-      "claim": "When tx_enable is deasserted, sreg_d immediately becomes all-ones, but sreg_q (the actual register) retains the previous transmitted data until the next clock edge. If any downstream logic reads sreg_q during that window, residual secret or sensitive data could be exposed.",
-      "cond": "falling edge of tx_enable (combinational propagation delay)",
-      "risk": "Possibility of a one-cycle leakage of sensitive data on internal buses if the shift register is read before the disable state takes effect; no explicit zeroization or mask is enforced.",
-      "signals": [
+        "bit_cnt_q",
         "sreg_d",
-        "sreg_q",
-        "tx_enable"
+        "bit_cnt_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:58-61"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:66-68"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && bit_cnt_q != 4'h0",
+        "consequent": "wr == 1'b0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_tx",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wr",
+          "bit_cnt_q",
+          "sreg_d",
+          "bit_cnt_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "tx_enable && bit_cnt_q != 4'h0",
+        "consequent": "wr == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv:57-75"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_tx.sv",
   "line_start": 57,
-  "line_end": 75,
-  "security_implications": ""
+  "line_end": 75
 }

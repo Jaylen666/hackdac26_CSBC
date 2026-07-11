@@ -12,101 +12,184 @@
       "prng_reseed_done_d",
       "rnd_ctr_d",
       "num_rounds_d",
-      "rst_ni",
-      "clk_i"
+      "clk_i",
+      "rst_ni"
     ],
-    "modes": [
-      "reset",
-      "normal"
-    ],
+    "modes": [],
     "tags": [
       "reset",
-      "counter",
-      "lifecycle",
-      "entropy"
+      "cipher_control",
+      "prng"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low (asynchronous reset), prng_reseed_done_q is set to 1'b0, rnd_ctr_q is cleared to all zeros ('0), and num_rounds_q is cleared to all zeros ('0).",
-      "cond": "rst_ni = 0",
+      "claim": "When rst_ni is low, all three registers (prng_reseed_done_q, rnd_ctr_q, num_rounds_q) are cleared to zero at the next posedge of clk_i.",
+      "cond": "rst_ni == 1'b0",
       "signals": [
         "prng_reseed_done_q",
         "rnd_ctr_q",
-        "num_rounds_q"
+        "num_rounds_q",
+        "rst_ni",
+        "clk_i"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:456-458"
-      ]
+        "aes_cipher_control_fsm.sv:455-458"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "prng_reseed_done_q == 1'b0 && rnd_ctr_q == '0 && num_rounds_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "prng_reseed_done_q",
+          "rnd_ctr_q",
+          "num_rounds_q",
+          "rst_ni",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "prng_reseed_done_q == 1'b0 && rnd_ctr_q == '0 && num_rounds_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On every posedge clk_i when rst_ni is high, prng_reseed_done_q is updated with prng_reseed_done_d, rnd_ctr_q with rnd_ctr_d, and num_rounds_q with num_rounds_d.",
-      "cond": "rst_ni high and posedge clk_i",
+      "claim": "When rst_ni is high, each register updates to its corresponding D input (prng_reseed_done_d, rnd_ctr_d, num_rounds_d) at the next posedge of clk_i.",
+      "cond": "rst_ni == 1'b1",
       "signals": [
         "prng_reseed_done_q",
-        "prng_reseed_done_d",
         "rnd_ctr_q",
-        "rnd_ctr_d",
         "num_rounds_q",
-        "num_rounds_d"
+        "prng_reseed_done_d",
+        "rnd_ctr_d",
+        "num_rounds_d",
+        "clk_i"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:460-462"
-      ]
+        "aes_cipher_control_fsm.sv:460-462"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "prng_reseed_done_q == prng_reseed_done_d && rnd_ctr_q == rnd_ctr_d && num_rounds_q == num_rounds_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "prng_reseed_done_q",
+          "rnd_ctr_q",
+          "num_rounds_q",
+          "prng_reseed_done_d",
+          "rnd_ctr_d",
+          "num_rounds_d",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "prng_reseed_done_q == prng_reseed_done_d && rnd_ctr_q == rnd_ctr_d && num_rounds_q == num_rounds_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "num_rounds_d must be a valid AES round count (e.g., 10, 12, or 14) because the stored value will be used by downstream FSM logic to determine the number of encryption rounds.",
-      "cond": "when rst_ni is high and a clock edge occurs",
-      "risk": "An invalid round count could cause encryption with wrong number of rounds, leading to incorrect ciphertext/plaintext and possibly breaking AES security guarantees.",
+      "claim": "prng_reseed_done_d, rnd_ctr_d, num_rounds_d are driven to valid (non-X) logic values every cycle when rst_ni is high.",
+      "cond": "rst_ni == 1'b1",
+      "risk": "X-propagation or invalid states into the registered outputs can corrupt AES control (round count, PRNG seed status), leading to cryptographic malfunction or security weakness.",
       "signals": [
-        "num_rounds_d"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:462"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "rnd_ctr_d must remain within the proper range (typically 0 to num_rounds−1) to avoid overflow or illegal state progression; the register does not check bounds.",
-      "cond": "when rst_ni is high and a clock edge occurs",
-      "risk": "If rnd_ctr_d exceeds num_rounds_d, the round counter may overrun, causing the FSM to loop indefinitely or access an undefined state, potentially stalling the cipher or exposing intermediate values.",
-      "signals": [
+        "prng_reseed_done_d",
         "rnd_ctr_d",
         "num_rounds_d"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:461-462"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "security_precondition",
-      "claim": "prng_reseed_done_d must be asserted only after the PRNG reseed operation has truly completed and the entropy source is stable; the register latches the value without qualification.",
-      "cond": "when the design exits reset and begins operation",
-      "risk": "A glitch or premature assertion could set prng_reseed_done_q high, allowing the cipher to start before sufficient entropy is available, compromising the security of key derivation or masking.",
-      "signals": [
-        "prng_reseed_done_d"
+        "aes_cipher_control_fsm.sv:460-462"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_control_fsm.sv:460"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni",
+        "consequent": "!$isunknown(prng_reseed_done_d) && !$isunknown(rnd_ctr_d) && !$isunknown(num_rounds_d)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "prng_reseed_done_d",
+          "rnd_ctr_d",
+          "num_rounds_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "rst_ni",
+        "consequent": "!$isunknown(prng_reseed_done_d) && !$isunknown(rnd_ctr_d) && !$isunknown(num_rounds_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [],
-  "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_control_fsm.sv:454-464"
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The reset value of num_rounds_q is 0. Is 0 a legal and safe number of AES rounds in the cipher control FSM? If the FSM starts using num_rounds_q before loading a valid round count, this could lead to zero-round encryption, bypassing cipher security.",
+      "cond": "after reset deassertion, num_rounds_q == 0",
+      "risk": "Potential security vulnerability: zero-round operation may expose plaintext or use uninitialized key schedule, breaking confidentiality/integrity.",
+      "signals": [
+        "num_rounds_q"
+      ],
+      "refs": [
+        "aes_cipher_control_fsm.sv:458"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_control_fsm",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "num_rounds_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "after reset deassertion, num_rounds_q == 0",
+        "consequent": "The reset value of num_rounds_q is 0. Is 0 a legal and safe number of AES rounds in the cipher control FSM? If the FSM starts using num_rounds_q before loading a valid round count, this could lead to zero-round encryption, bypassing cipher",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_control_fsm.sv",
+  "security_implications": "The chunk resets prng_reseed_done_q, rnd_ctr_q, and num_rounds_q. A stale or zeroed num_rounds_q could cause the AES cipher to operate with zero rounds, effectively no encryption, exposing plaintext or weak key expansion. A zeroed prng_reseed_done_q may cause missing PRNG reseeds, weakening key/IV randomness. Both lead to integrity and confidentiality failures.",
+  "evidence_refs": [
+    "aes_cipher_control_fsm.sv:454-464"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_control_fsm.sv",
   "line_start": 454,
-  "line_end": 464,
-  "security_implications": ""
+  "line_end": 464
 }

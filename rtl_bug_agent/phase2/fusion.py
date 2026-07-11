@@ -46,6 +46,7 @@ class Finding:
     # Computed
     signal_criticality: float = 0.0
     contradiction_strength: float = 0.0
+    embedding_similarity: float = 0.0  # BGE-M3 semantic pairing score (0.66-0.95)
     cross_channel_hits: int = 0
     is_self_ref: bool = False
     score: float = 0.0
@@ -132,18 +133,44 @@ def fuse(
         merged = all_findings
 
     # Compute final scores
+    #
+    # Rationale (改动①: 给 score 注入区分度 + 打破并列):
+    # The previous formula was 0.60*criticality + 0.25*contradiction + 0.15*xchan.
+    # Under cluster=False every finding is its own entry so cross_channel_hits is
+    # always 1 → the last term collapses to a constant 0.075 and provides zero
+    # discrimination.  Combined with a coarse signal_criticality, this drove huge
+    # tie bands (e.g. kmac: 119 findings all at score 0.6), so the phase3 top-N
+    # cutoff fell *inside* a tie band and was decided by array position, not
+    # quality.  HIGH-severity, directly-formalizable findings (KMAC-036 rank 65,
+    # N-005 rank 96) were dropped purely because of that.
+    #
+    # 改动③: 引入 embedding_similarity 作为域无关的质量指标。
+    # BGE-M3 语义配对分数（0.66-0.95）衡量 assumption 和 guarantee 的语义贴合度，
+    # 高分 = 两个 spec 真的在讨论同一行为 = contradiction 更可能是真实不一致。
+    # 新权重：0.30*embedding + 0.30*verdict + 0.20*criticality + 0.15*formal + 0.05*xchan
+    # 不依赖"哪些信号容易有bug"的假设，适用于 CTF 场景。
     for f in merged:
+        xchan = min(max(f.cross_channel_hits - 1, 0) / 1.0, 1.0)
+        # Normalize embedding_similarity from [0.66, 0.95] to [0, 1]
+        # (0.66 is typical min_score threshold, 0.95 is near-perfect match)
+        emb_norm = max(0.0, min((f.embedding_similarity - 0.66) / 0.29, 1.0))
         f.score = (
-            0.60 * f.signal_criticality
-            + 0.25 * f.contradiction_strength
-            + 0.15 * min(f.cross_channel_hits / 2.0, 1.0)
+            0.30 * emb_norm
+            + 0.30 * f.contradiction_strength
+            + 0.20 * f.signal_criticality
+            + 0.15 * _has_formal_sva(f)
+            + 0.05 * xchan
         )
         # Self-referential findings get a penalty
         if f.is_self_ref:
             f.score *= 0.7
         f.severity = _score_to_severity(f.score)
 
-    merged.sort(key=lambda f: f.score, reverse=True)
+    # Deterministic ordering: sort by score, then by a quality tie-break so two
+    # findings with equal score never depend on their original array position.
+    # Tie-break priority: stronger verdict → carries an SVA → more security
+    # signals → longer (more specific) contradiction text.
+    merged.sort(key=_rank_key, reverse=True)
 
     for idx, f in enumerate(merged):
         f.finding_id = f"F-{idx + 1:04d}"
@@ -191,6 +218,20 @@ def _normalise(
             else:
                 signals.append(str(s))
     signals = list(dict.fromkeys(signals))
+
+    # Backfill from formal.bind_signals (channel B writes bind_signals but not
+    # involved_signals, so the anchor signal is often the only entry above).
+    # Clock/reset names are excluded — they appear in every SVA but carry no
+    # bug-localization value. Signals already flagged as unknown (hallucinated
+    # by the LLM) are also excluded.
+    _CLOCK_RESET = {"clk_i", "clk", "rst_ni", "rst_n", "rst", "reset", "clock"}
+    _fp_formal = raw.get("formal", {})
+    if isinstance(_fp_formal, dict):
+        _unknown = set(_fp_formal.get("unknown_signals", []) or [])
+        for _s in _fp_formal.get("bind_signals", []):
+            _s = str(_s).strip()
+            if _s and _s not in _CLOCK_RESET and _s not in _unknown and _s not in signals:
+                signals.append(_s)
 
     # ── Specs ────────────────────────────────────────────────────────
     specs: list[str] = []
@@ -302,7 +343,10 @@ def _normalise(
     if not isinstance(formal, dict):
         formal = {}
 
-    return Finding(
+    # Extract embedding similarity from semantic AG pairing (if present)
+    embedding_sim = float(raw.get("_embedding_similarity", 0.0))
+
+    f = Finding(
         finding_id=finding_id,
         title=title[:200],
         severity="MEDIUM",
@@ -318,6 +362,8 @@ def _normalise(
         formal_result=formal_result,
         formal=formal,
     )
+    f.embedding_similarity = embedding_sim
+    return f
 
 
 # ---------------------------------------------------------------------------
@@ -325,30 +371,87 @@ def _normalise(
 # ---------------------------------------------------------------------------
 
 
+_CRIT_TIER1 = (  # direct secret material → 1.0
+    "key", "secret", "seed", "share", "mask", "entropy",
+)
+_CRIT_TIER2 = (  # security output / wipe / fatal → 0.75
+    "digest", "hash", "hmac", "sha", "wipe", "zeroize", "clear",
+    "alert", "fatal",
+)
+_CRIT_TIER3 = (  # access-control / FSM / ECC → 0.5
+    "lc_", "lifecycle", "sparse_fsm", "integrity", "ecc",
+)
+
+
 def _signal_criticality(
     signals: list[str], security_signals: set[str]
 ) -> float:
     """How security-relevant are the involved signals?  0-1.
 
-    Also checks for crypto-related keywords in signal names as a fallback
-    when signals aren't in the structured security set.
+    改动②: security_signals 在 crypto 模块（kmac/keymgr）几乎包含所有信号（314个），
+    flat 1.0 导致91%的findings criticality饱和，失去区分度。
+    现在按关键词分4档：Tier1(key/secret)=1.0, Tier2(digest/alert)=0.75,
+    Tier3(lc_/ecc)=0.5, security_signals成员=0.4, 普通加密相关=0.25, 其他=0.0。
     """
     if not signals:
         return 0.05
 
-    crypto_kw = [
-        "key", "secret", "wipe", "digest", "hash", "hmac", "sha",
-        "alert", "error", "fatal", "pad", "msg", "fifo",
-    ]
-    sec_count = 0
+    per_signal: list[float] = []
     for s in signals:
         slow = s.lower()
-        if s in security_signals:
-            sec_count += 1
-        elif any(kw in slow for kw in crypto_kw):
-            sec_count += 0.5  # partial credit for keyword match
+        if any(kw in slow for kw in _CRIT_TIER1):
+            per_signal.append(1.0)
+        elif any(kw in slow for kw in _CRIT_TIER2):
+            per_signal.append(0.75)
+        elif any(kw in slow for kw in _CRIT_TIER3):
+            per_signal.append(0.5)
+        elif s in security_signals:
+            per_signal.append(0.4)   # 原来是 1.0，现在降为通用安全信号的底线
+        elif any(kw in slow for kw in ("error", "msg", "fifo", "pad", "state")):
+            per_signal.append(0.25)
+        else:
+            per_signal.append(0.0)
 
-    return min(sec_count / max(len(signals), 1), 1.0)
+    mean = sum(per_signal) / len(per_signal)
+    best = max(per_signal)
+    return min(0.6 * mean + 0.4 * best, 1.0)
+
+
+def _has_formal_sva(f: "Finding") -> float:
+    """1.0 if the finding carries a concrete (non-empty) SVA, else 0.0.
+
+    A finding that already has a formalizable assertion is the cheapest to
+    verify downstream, so it earns a ranking bonus.  We look in the Channel B/F
+    ``formal`` state (``sva``) and the older ``formal_draft`` (``assertion`` /
+    ``sva``).  Note: carrying an SVA signals *verifiability*, not mechanism
+    correctness — an SVA can encode the wrong property.  This only helps the
+    finding reach phase3; correctness is judged there.
+    """
+    formal = f.formal if isinstance(f.formal, dict) else {}
+    sva = str(formal.get("sva", "") or "").strip()
+    if sva:
+        return 1.0
+    draft = f.formal_draft if isinstance(f.formal_draft, dict) else {}
+    draft_sva = str(draft.get("assertion", draft.get("sva", "")) or "").strip()
+    return 1.0 if draft_sva else 0.0
+
+
+def _rank_key(f: "Finding") -> tuple:
+    """Deterministic sort key: score first, then quality tie-breakers.
+
+    Without an explicit tie-break, two findings with equal score keep their
+    original array position — which is exactly how HIGH-severity findings fell
+    just below the phase3 top-N cutoff inside a large tie band.  Tie-break
+    priority after score: stronger verdict → carries an SVA → more involved
+    security-relevant signals → longer (more specific) contradiction text.
+    """
+    return (
+        round(f.score, 6),
+        _verdict_strength(f.verdict),
+        _has_formal_sva(f),
+        len(f.involved_signals),
+        len(f.contradiction or ""),
+    )
 
 
 def _verdict_strength(verdict: str) -> float:

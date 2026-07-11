@@ -10,21 +10,21 @@
       "process_i",
       "process_o",
       "done_i",
-      "rst_ni"
+      "rst_ni",
+      "clk_i"
     ],
     "modes": [],
     "tags": [
       "handshake",
       "reset",
-      "fault",
-      "mubi4"
+      "fault"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, process_latched is cleared to 0.",
+      "claim": "process_latched is asynchronously cleared to 0 while rst_ni is low.",
       "cond": "!rst_ni",
       "signals": [
         "process_latched",
@@ -32,13 +32,35 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:276-277"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "process_latched == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "process_latched",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "process_latched == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When not in reset, if process_i is high and process_o is low, process_latched is set to 1.",
-      "cond": "!rst_ni && process_i && !process_o",
+      "claim": "process_latched is set to 1 on the next clock edge when process_i is high and process_o is low (and rst_ni is high).",
+      "cond": "process_i && !process_o (with priority over the clear condition)",
       "signals": [
         "process_latched",
         "process_i",
@@ -46,104 +68,191 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:278-279"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "process_i && !process_o",
+        "consequent": "process_latched == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "process_latched",
+          "process_i",
+          "process_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "process_i && !process_o",
+        "consequent": "process_latched == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "reg_update",
-      "claim": "When not in reset, if process_o is high or the strict true test on done_i (a mubi4 signal) passes, process_latched is cleared to 0.",
-      "cond": "!rst_ni && (process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i))",
+      "claim": "process_latched is cleared to 0 on the next clock edge when (process_o is high or done_i indicates True) and the set condition (process_i && !process_o) is false, and rst_ni is high.",
+      "cond": "!(process_i && !process_o) && (process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i))",
       "signals": [
         "process_latched",
         "process_o",
-        "done_i"
+        "done_i",
+        "process_i"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-282"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "reg_update",
-      "claim": "When none of the above conditions are true (i.e., not reset, process_i=0 or process_o=1, and neither process_o nor done_i true asserted as per G3 condition), process_latched retains its previous value.",
-      "cond": "!rst_ni && !(process_i && !process_o) && !(process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i))",
-      "signals": [
-        "process_latched"
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-283"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275-284"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "(process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i)) && !(process_i && !process_o)",
+        "consequent": "process_latched == 0",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "process_latched",
+          "process_o",
+          "done_i",
+          "process_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "(process_o || prim_mubi_pkg::mubi4_test_true_strict(done_i)) && !(process_i && !process_o)",
+        "consequent": "process_latched == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "Inputs process_i, process_o, and done_i are synchronous to clk_i and stable at the sampling edge.",
-      "cond": "Every posedge clk_i",
-      "risk": "Metastability or setup/hold violations could cause incorrect sampling, leading to spurious process_latched changes.",
-      "signals": [
-        "process_i",
-        "process_o",
-        "done_i",
-        "clk_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275"
-      ]
-    },
-    {
-      "id": "A2",
       "type": "value_domain",
-      "claim": "done_i is a valid mubi4 encoded signal, and prim_mubi_pkg::mubi4_test_true_strict correctly returns true only for the 'true' encoding, false otherwise.",
-      "cond": "Whenever done_i is evaluated",
-      "risk": "If done_i is driven with an invalid encoding, mubi4_test_true_strict may return false even when a done condition should be signaled, preventing process_latched from clearing and potentially stalling the core.",
+      "claim": "done_i always carries a legal mubi4_t codeword (either True or False) so that the mubi4_test_true_strict function can reliably detect the done condition.",
+      "cond": "always",
+      "risk": "If done_i holds an illegal encoding, mubi4_test_true_strict returns false, the clear path for process_latched never activates, and the KMAC core may hang indefinitely, leading to a Denial of Service or extended processing window exploitable for power/EM leakage.",
       "signals": [
         "done_i"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:281"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1",
+        "consequent": "done_i == prim_mubi_pkg::MuBi4True || done_i == prim_mubi_pkg::MuBi4False",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1",
+        "consequent": "done_i == prim_mubi_pkg::MuBi4True || done_i == prim_mubi_pkg::MuBi4False",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
+      "type": "U_temporal_window",
       "priority": "high",
-      "claim": "If done_i becomes corrupted (invalid mubi4 encoding or stuck at false), process_latched may never be cleared, causing a permanent stall.",
-      "cond": "done_i is invalid or stuck",
-      "risk": "Core hangs, potentially denying service or blocking secure wipe/shutdown sequences.",
+      "claim": "When done_i is True and a new process request (process_i && !process_o) arrives in the same cycle, the set condition takes priority, leaving process_latched high. Downstream logic may expect process_latched to drop on done, causing an overlapping operation window.",
+      "cond": "process_i && !process_o && prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+      "risk": "New processing starts before the previous operation fully concludes, possibly mixing data, corrupting digest computation, or violating protocol assumptions that open a security attack surface.",
       "signals": [
-        "done_i",
-        "process_latched"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:281"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The simultaneous use of process_o and done_i to clear process_latched (OR) may represent an intended early termination, but the exact protocol (whether process_o reflects active processing and done_i indicates normal completion) needs clarification.",
-      "cond": "When process_o is low but done_i becomes true",
-      "risk": "If done_i is not intended as an early-termination signal, its assertion while process_o is low might incorrectly terminate a request that has not yet started.",
-      "signals": [
+        "process_i",
         "process_o",
         "done_i",
         "process_latched"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-281"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:278-282"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "process_i && !process_o && prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+        "consequent": "process_latched == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "process_i",
+          "process_o",
+          "done_i",
+          "process_latched"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "process_i && !process_o && prim_mubi_pkg::mubi4_test_true_strict(done_i)",
+        "consequent": "process_latched == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "An illegal mubi4 encoding on done_i prevents the done-based clear of process_latched. If process_o is also not asserted (as it may be a short pulse), process_latched remains high indefinitely, stalling the core.",
+      "cond": "done_i has invalid encoding, process_o is low, and set condition is false",
+      "risk": "The core hangs without error reporting, which could be used by an attacker to induce a persistent busy state and possibly leak information through side channels or freeze the keystream.",
+      "signals": [
+        "done_i",
+        "process_latched",
+        "process_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:280-282"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!prim_mubi_pkg::mubi4_test_true_strict(done_i) && !prim_mubi_pkg::mubi4_test_false_strict(done_i) && !process_o && !(process_i && !process_o)",
+        "consequent": "process_latched == 1",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_i",
+          "process_latched",
+          "process_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!prim_mubi_pkg::mubi4_test_true_strict(done_i) && !prim_mubi_pkg::mubi4_test_false_strict(done_i) && !process_o && !(process_i && !process_o)",
+        "consequent": "process_latched == 1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk manages a process latch (process_latched) that gates the operation of the KMAC cryptographic core. A corrupted mubi4 done_i encoding (A1, U2) can freeze the latch in the active state, causing infinite stall and potential denial-of-service or prolonged side-channel leakage. The priority logic (U1) permits overlapping done and new request, which could lead to concurrent processing of old and new data, threatening the integrity of the digest and enabling malicious data injection. These behaviors directly impact the core's availability and cryptographic correctness.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:275-284"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 275,
-  "line_end": 284,
-  "security_implications": ""
+  "line_end": 284
 }

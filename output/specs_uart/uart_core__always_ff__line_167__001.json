@@ -11,97 +11,296 @@
       "rst_ni",
       "tx_enable",
       "rx_enable",
-      "nco_sum_q",
+      "reg2hw.ctrl.nco.q",
       "NcoWidth",
-      "reg2hw.ctrl.nco.q"
+      "nco_sum_q (previous value)"
     ],
     "modes": [
-      "NcoWidth"
+      "NcoWidth parameter",
+      "tx_enable",
+      "rx_enable"
     ],
     "tags": [
       "counter",
-      "reset"
+      "reset",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "On asynchronous reset (rst_ni low), nco_sum_q is cleared to 17'h0.",
-      "cond": "!rst_ni",
+      "claim": "On active-low reset (rst_ni == 0), nco_sum_q is synchronously cleared to 0.",
+      "cond": "posedge clk_i, rst_ni == 0",
       "signals": [
-        "nco_sum_q",
-        "rst_ni"
+        "rst_ni",
+        "nco_sum_q"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:168-169"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "nco_sum_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "nco_sum_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_ni",
+        "consequent": "nco_sum_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When tx_enable or rx_enable is active, nco_sum_q updates to the 17‑bit zero‑extended sum of nco_sum_q[NcoWidth‑1:0] and reg2hw.ctrl.nco.q[NcoWidth‑1:0].",
-      "cond": "tx_enable || rx_enable",
+      "claim": "When not in reset and (tx_enable || rx_enable) is true, nco_sum_q is updated to the zero-extended sum of its previous value (lower NcoWidth bits) and the NCO divisor from reg2hw (lower NcoWidth bits), with implicit 17-bit truncation.",
+      "cond": "posedge clk_i, rst_ni && (tx_enable || rx_enable)",
       "signals": [
+        "rst_ni",
+        "tx_enable",
+        "rx_enable",
         "nco_sum_q",
         "reg2hw.ctrl.nco.q",
         "NcoWidth"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:170-171"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (tx_enable || rx_enable)",
+        "consequent": "nco_sum_q == ({1'b0, $past(nco_sum_q)[NcoWidth-1:0]} + {1'b0, reg2hw.ctrl.nco.q[NcoWidth-1:0]})",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "tx_enable",
+          "rx_enable",
+          "nco_sum_q",
+          "reg2hw.ctrl.nco.q",
+          "NcoWidth"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (tx_enable || rx_enable)",
+        "consequent": "nco_sum_q == ({1'b0, $past(nco_sum_q)[NcoWidth-1:0]} + {1'b0, reg2hw.ctrl.nco.q[NcoWidth-1:0]})",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "default_fallback",
-      "claim": "When both tx_enable and rx_enable are low, nco_sum_q retains its previous value.",
-      "cond": "!(tx_enable || rx_enable)",
+      "claim": "When not in reset and neither tx_enable nor rx_enable is asserted, nco_sum_q retains its previous value (implicit hold).",
+      "cond": "posedge clk_i, rst_ni && !(tx_enable || rx_enable)",
       "signals": [
+        "rst_ni",
+        "tx_enable",
+        "rx_enable",
         "nco_sum_q"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:167-173"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(tx_enable || rx_enable)",
+        "consequent": "$stable(nco_sum_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "tx_enable",
+          "rx_enable",
+          "nco_sum_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(tx_enable || rx_enable)",
+        "consequent": "$stable(nco_sum_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "NcoWidth must be ≤ 16 so that the 17‑bit nco_sum_q register can hold the NCO accumulator result without truncation.",
-      "cond": "always",
-      "risk": "If NcoWidth > 16, the assignment truncates the sum to 17 bits, losing the most significant overflow bit and corrupting the NCO phase.",
+      "claim": "Parameter NcoWidth must be <= 17 to prevent out-of-range bit slicing of nco_sum_q and reg2hw.ctrl.nco.q.",
+      "cond": "always (static parameter constraint)",
+      "risk": "Synthesis/elaboration error or X propagation if NcoWidth > 17.",
       "signals": [
         "NcoWidth",
-        "nco_sum_q"
+        "nco_sum_q",
+        "reg2hw.ctrl.nco.q"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:169,171"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "NcoWidth <= 17",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NcoWidth",
+          "nco_sum_q",
+          "reg2hw.ctrl.nco.q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always (static parameter constraint)",
+        "consequent": "NcoWidth <= 17",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The NCO overflow (carry) bit resides at nco_sum_q[NcoWidth], which is not bit 16 when NcoWidth < 16. If downstream baud‑tick logic expects the overflow at a fixed bit position (e.g., nco_sum_q[16]), the tick may be missed or falsely triggered.",
-      "cond": "NcoWidth < 16 and overflow is consumed elsewhere.",
-      "risk": "Incorrect baud‑rate generation, leading to UART timing errors or communication failure.",
+      "type": "U_width_param_hazard",
+      "priority": "medium",
+      "claim": "If NcoWidth can be configured above 17, the bit-select operations [NcoWidth-1:0] on nco_sum_q and reg2hw.ctrl.nco.q become illegal, causing elaboration/simulation errors.",
+      "cond": "NcoWidth > 17",
+      "risk": "Build failure or X in simulation, directly affecting baud-rate generation.",
       "signals": [
+        "NcoWidth",
         "nco_sum_q",
-        "NcoWidth"
+        "reg2hw.ctrl.nco.q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:169,171"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "NcoWidth > 17",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "NcoWidth",
+          "nco_sum_q",
+          "reg2hw.ctrl.nco.q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "NcoWidth > 17",
+        "consequent": "the bit-select operations [NcoWidth-1:0] on nco_sum_q and reg2hw.ctrl.nco.q become illegal, causing elaboration/simulation errors",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The NCO accumulator uses a common enable (tx_enable || rx_enable). If both TX and RX are active simultaneously, the accumulator updates at the combined rate, which may cause unintended baud-rate doubling. The design intent for simultaneous operation is unclear.",
+      "cond": "tx_enable && rx_enable",
+      "risk": "Incorrect baud rate or UART misbehavior when both directions are enabled concurrently.",
+      "signals": [
+        "tx_enable",
+        "rx_enable",
+        "nco_sum_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:170-171"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && tx_enable && rx_enable",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "tx_enable",
+          "rx_enable",
+          "nco_sum_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && tx_enable && rx_enable",
+        "consequent": "The NCO accumulator uses a common enable (tx_enable || rx_enable). If both TX and RX are active simultaneously, the accumulator updates at the combined rate, which may cause unintended baud-rate doubling. The design intent for simultaneous",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The 17-bit addition result is truncated to 17 bits when assigned to nco_sum_q, behaving as a modular accumulator. It is not documented whether this wrap-around is the intended behavior or if an overflow flag should be generated.",
+      "cond": "adder carry out beyond bit 16",
+      "risk": "Silent loss of carry may not affect NCO operation, but if an overflow interrupt is expected, it is missing.",
+      "signals": [
+        "nco_sum_q"
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:171"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (tx_enable || rx_enable) && (({1'b0, nco_sum_q[NcoWidth-1:0]} + {1'b0, reg2hw.ctrl.nco.q[NcoWidth-1:0]}) >= 18'h20000)",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "nco_sum_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (tx_enable || rx_enable) && (({1'b0, nco_sum_q[NcoWidth-1:0]} + {1'b0, reg2hw.ctrl.nco.q[NcoWidth-1:0]}) >= 18'h20000)",
+        "consequent": "The 17-bit addition result is truncated to 17 bits when assigned to nco_sum_q, behaving as a modular accumulator. It is not documented whether this wrap-around is the intended behavior or if an overflow flag should be generated",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:167-173"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 167,
-  "line_end": 173,
-  "security_implications": ""
+  "line_end": 173
 }

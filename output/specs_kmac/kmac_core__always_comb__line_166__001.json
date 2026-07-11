@@ -22,59 +22,373 @@
       "process_i",
       "process_latched",
       "done_i",
-      "lc_escalate_en_i"
+      "lc_escalate_en_i",
+      "prim_mubi_pkg::mubi4_test_true_strict",
+      "lc_ctrl_pkg::lc_tx_test_true_loose"
     ],
     "modes": [
       "StKmacIdle",
       "StKey",
       "StKmacMsg",
       "StKmacFlush",
-      "StTerminalError",
-      "default"
+      "StTerminalError"
     ],
     "tags": [
-      "fsm",
-      "handshake",
+      "key",
+      "digest",
       "sparse_fsm",
       "alert",
-      "lifecycle",
       "error",
-      "secret",
-      "key",
-      "counter"
+      "lifecycle",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "default_fallback",
-      "claim": "st_d is initially assigned to current state st; it holds st unless a later transition condition explicitly changes it.",
-      "cond": "always",
+      "type": "state_transition",
+      "claim": "When lc_escalate_en_i is active (loose test true), st_d is forced to StTerminalError, overriding all case logic.",
+      "cond": "lc_ctrl_pkg::lc_tx_test_true_loose(lc_escalate_en_i) == 1",
       "signals": [
-        "st_d",
-        "st"
+        "lc_escalate_en_i",
+        "st_d"
       ],
       "refs": [
-        "kmac_core.sv:167"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:248-249"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_tx_test_true_loose(lc_escalate_en_i)",
+        "consequent": "st_d == StTerminalError",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i",
+          "st_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_tx_test_true_loose(lc_escalate_en_i)",
+        "consequent": "st_d == StTerminalError",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "default_fallback",
-      "claim": "st_err_ct_d initially holds its previous value st_err_ct.",
-      "cond": "always",
+      "type": "state_transition",
+      "claim": "In StKmacIdle, st_d moves to StKey when kmac_en_i and start_i are both true; otherwise remains StKmacIdle.",
+      "cond": "!lc_escalate && st == StKmacIdle",
       "signals": [
-        "st_err_ct_d",
-        "st_err_ct"
+        "st",
+        "kmac_en_i",
+        "start_i",
+        "st_d"
       ],
       "refs": [
-        "kmac_core.sv:168"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:183-187"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKmacIdle",
+        "consequent": "(kmac_en_i && start_i) ? (st_d == StKey) : (st_d == StKmacIdle)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "kmac_en_i",
+          "start_i",
+          "st_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKmacIdle",
+        "consequent": "(kmac_en_i && start_i) ? (st_d == StKey) : (st_d == StKmacIdle)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
+      "type": "assignment",
+      "claim": "In StKey, en_kmac_datapath and en_key_write are driven to 1.",
+      "cond": "st == StKey and not overridden by lc escalation (the enables are not cleared by escalation in this block)",
+      "signals": [
+        "st",
+        "en_kmac_datapath",
+        "en_key_write"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:193-194"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "st == StKey",
+        "consequent": "en_kmac_datapath == 1 && en_key_write == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "en_kmac_datapath",
+          "en_key_write"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "st == StKey",
+        "consequent": "en_kmac_datapath == 1 && en_key_write == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "state_transition",
+      "claim": "In StKey, if sent_blocksize is true, st_d goes to StKmacMsg, clr_keyidx is set to 1, and kmac_valid is 0; otherwise st_d stays in StKey and kmac_valid is 1.",
+      "cond": "st == StKey and lc_escalate not active",
+      "signals": [
+        "st",
+        "sent_blocksize",
+        "st_d",
+        "clr_keyidx",
+        "kmac_valid"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:196-205"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKey",
+        "consequent": "sent_blocksize ? (st_d == StKmacMsg && clr_keyidx == 1 && kmac_valid == 0) : (st_d == StKey && kmac_valid == 1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "sent_blocksize",
+          "st_d",
+          "clr_keyidx",
+          "kmac_valid"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKey",
+        "consequent": "sent_blocksize ? (st_d == StKmacMsg && clr_keyidx == 1 && kmac_valid == 0) : (st_d == StKey && kmac_valid == 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In StKmacMsg, if process_i or process_latched is true, st_d goes to StKmacFlush and kmac_process is asserted; otherwise st_d remains in StKmacMsg.",
+      "cond": "st == StKmacMsg and lc_escalate not active",
+      "signals": [
+        "st",
+        "process_i",
+        "process_latched",
+        "st_d",
+        "kmac_process"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:210-216"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKmacMsg",
+        "consequent": "(process_i || process_latched) ? (st_d == StKmacFlush && kmac_process == 1) : (st_d == StKmacMsg)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "process_i",
+          "process_latched",
+          "st_d",
+          "kmac_process"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKmacMsg",
+        "consequent": "(process_i || process_latched) ? (st_d == StKmacFlush && kmac_process == 1) : (st_d == StKmacMsg)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "state_transition",
+      "claim": "In StKmacFlush, if done_i passes mubi4_test_true_strict, st_d goes to StKmacIdle; otherwise st_d stays in StKmacFlush.",
+      "cond": "st == StKmacFlush and lc_escalate not active",
+      "signals": [
+        "st",
+        "done_i",
+        "st_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:220-224"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKmacFlush",
+        "consequent": "mubi4_test_true_strict(done_i) ? (st_d == StKmacIdle) : (st_d == StKmacFlush)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "done_i",
+          "st_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st == StKmacFlush",
+        "consequent": "mubi4_test_true_strict(done_i) ? (st_d == StKmacIdle) : (st_d == StKmacFlush)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "state_transition",
+      "claim": "In StTerminalError, st_d stays in the same state. If st_err_ct < 100, st_err_ct_d is incremented by 1 and sparse_fsm_error_o is 0; otherwise sparse_fsm_error_o is set to 1.",
+      "cond": "st == StTerminalError and lc_escalate not overriding st_d (but st_d stays TerminalError anyway)",
+      "signals": [
+        "st",
+        "st_err_ct",
+        "st_err_ct_d",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:229-235"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "st == StTerminalError",
+        "consequent": "st_d == StTerminalError && ((st_err_ct < 100) ? (st_err_ct_d == st_err_ct + 1 && sparse_fsm_error_o == 0) : (sparse_fsm_error_o == 1))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "st_err_ct",
+          "st_err_ct_d",
+          "sparse_fsm_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "st == StTerminalError",
+        "consequent": "st_d == StTerminalError && ((st_err_ct < 100) ? (st_err_ct_d == st_err_ct + 1 && sparse_fsm_error_o == 0) : (sparse_fsm_error_o == 1))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G8",
+      "type": "error_detection",
+      "claim": "For any state value not matching the enumerated states (default), st_d is driven to StTerminalError and sparse_fsm_error_o is asserted.",
+      "cond": "st does not match StKmacIdle, StKey, StKmacMsg, StKmacFlush, or StTerminalError; lc_escalate may also trigger but this guarantee holds regardless.",
+      "signals": [
+        "st",
+        "st_d",
+        "sparse_fsm_error_o"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:239-241"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st not in {StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError}",
+        "consequent": "st_d == StTerminalError && sparse_fsm_error_o == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "st_d",
+          "sparse_fsm_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!lc_escalate && st not in {StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError}",
+        "consequent": "st_d == StTerminalError && sparse_fsm_error_o == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G9",
+      "type": "reg_update",
+      "claim": "In StKmacIdle, st_err_ct_d is cleared to 0.",
+      "cond": "st == StKmacIdle (case branch has priority over lc_escalate for st_err_ct_d)",
+      "signals": [
+        "st",
+        "st_err_ct_d"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:182"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "st == StKmacIdle",
+        "consequent": "st_err_ct_d == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "st",
+          "st_err_ct_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "st == StKmacIdle",
+        "consequent": "st_err_ct_d == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G10",
       "type": "default_fallback",
-      "claim": "en_kmac_datapath, en_key_write, clr_keyidx, kmac_valid, kmac_process, sparse_fsm_error_o are all driven low before any state-specific assignments.",
+      "claim": "All outputs en_kmac_datapath, en_key_write, clr_keyidx, kmac_valid, kmac_process, and sparse_fsm_error_o default to 0 unless explicitly set in the case.",
       "cond": "always",
       "signals": [
         "en_kmac_datapath",
@@ -85,285 +399,319 @@
         "sparse_fsm_error_o"
       ],
       "refs": [
-        "kmac_core.sv:170-178"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "reg_update",
-      "claim": "When the FSM is in StKmacIdle, the error counter next value st_err_ct_d is forced to zero.",
-      "cond": "st == StKmacIdle",
-      "signals": [
-        "st_err_ct_d"
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:170-178"
       ],
-      "refs": [
-        "kmac_core.sv:182"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "state_transition",
-      "claim": "In StKmacIdle, if kmac_en_i and start_i are both high, the next state st_d becomes StKey; otherwise it remains StKmacIdle.",
-      "cond": "st == StKmacIdle",
-      "signals": [
-        "st_d",
-        "kmac_en_i",
-        "start_i"
-      ],
-      "refs": [
-        "kmac_core.sv:183-187"
-      ]
-    },
-    {
-      "id": "G6",
-      "type": "assignment",
-      "claim": "While in StKey, en_kmac_datapath and en_key_write are unconditionally driven high.",
-      "cond": "st == StKey",
-      "signals": [
-        "en_kmac_datapath",
-        "en_key_write"
-      ],
-      "refs": [
-        "kmac_core.sv:193-194"
-      ]
-    },
-    {
-      "id": "G7",
-      "type": "state_transition",
-      "claim": "In StKey, if sent_blocksize is true, the FSM advances to StKmacMsg with kmac_valid low and clr_keyidx high; otherwise it stays in StKey with kmac_valid high.",
-      "cond": "st == StKey",
-      "signals": [
-        "st_d",
-        "sent_blocksize",
-        "kmac_valid",
-        "clr_keyidx"
-      ],
-      "refs": [
-        "kmac_core.sv:196-205"
-      ]
-    },
-    {
-      "id": "G8",
-      "type": "state_transition",
-      "claim": "In StKmacMsg, if process_i or process_latched is true, st_d becomes StKmacFlush and kmac_process is driven high; otherwise the state stays StKmacMsg.",
-      "cond": "st == StKmacMsg",
-      "signals": [
-        "st_d",
-        "process_i",
-        "process_latched",
-        "kmac_process"
-      ],
-      "refs": [
-        "kmac_core.sv:210-216"
-      ]
-    },
-    {
-      "id": "G9",
-      "type": "state_transition",
-      "claim": "In StKmacFlush, if done_i passes the mubi4 true strict test, st_d returns to StKmacIdle; otherwise it remains StKmacFlush.",
-      "cond": "st == StKmacFlush",
-      "signals": [
-        "st_d",
-        "done_i"
-      ],
-      "refs": [
-        "kmac_core.sv:220-224"
-      ]
-    },
-    {
-      "id": "G10",
-      "type": "state_transition",
-      "claim": "StTerminalError is terminal: st_d is kept at the current state. Additionally, if st_err_ct is less than 100, st_err_ct_d increments by 1 and sparse_fsm_error_o is driven low; otherwise sparse_fsm_error_o is driven high.",
-      "cond": "st == StTerminalError",
-      "signals": [
-        "st_d",
-        "st_err_ct",
-        "st_err_ct_d",
-        "sparse_fsm_error_o"
-      ],
-      "refs": [
-        "kmac_core.sv:229-235"
-      ]
-    },
-    {
-      "id": "G11",
-      "type": "error_detection",
-      "claim": "If the state is an unknown or illegal value (default branch), st_d is immediately forced to StTerminalError and sparse_fsm_error_o is driven high.",
-      "cond": "st not mapped to any enumerated state",
-      "signals": [
-        "st_d",
-        "sparse_fsm_error_o"
-      ],
-      "refs": [
-        "kmac_core.sv:238-242"
-      ]
-    },
-    {
-      "id": "G12",
-      "type": "assignment",
-      "claim": "After the main case, if lc_escalate_en_i is true according to the lifecycle loose test, st_d is unconditionally overridden to StTerminalError.",
-      "cond": "lc_escalate_en_i true",
-      "signals": [
-        "st_d",
-        "lc_escalate_en_i"
-      ],
-      "refs": [
-        "kmac_core.sv:248-249"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "(en_kmac_datapath == 0) default, but no single invariant; enforced by block reset behavior before case",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "en_kmac_datapath",
+          "en_key_write",
+          "clr_keyidx",
+          "kmac_valid",
+          "kmac_process",
+          "sparse_fsm_error_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "(en_kmac_datapath == 0) default, but no single invariant; enforced by block reset behavior before case",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "mode_config",
-      "claim": "The state register st must only hold one of the enumerated states (StKmacIdle, StKey, StKmacMsg, StKmacFlush, StTerminalError).",
-      "cond": "always",
-      "risk": "A stray or uninitialized state value triggers the default branch, immediately asserting sparse_fsm_error_o and transitioning to StTerminalError, possibly causing a false alert.",
+      "type": "handshake",
+      "claim": "In StKey, the signal sent_blocksize must eventually become true; otherwise the state machine deadlocks and kmac_valid remains 1, potentially streaming data indefinitely.",
+      "cond": "st == StKey and not already sent_blocksize",
+      "risk": "Deadlock in key-load phase; continuous assertion of kmac_valid may flood the downstream SHA3 datapath.",
       "signals": [
-        "st"
+        "sent_blocksize",
+        "st",
+        "kmac_valid"
       ],
       "refs": [
-        "kmac_core.sv:180-242"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:196-205"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "st == StKey",
+        "consequent": "##[*] sent_blocksize",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sent_blocksize",
+          "st",
+          "kmac_valid"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "st == StKey",
+        "consequent": "##[*] sent_blocksize",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "sent_blocksize must accurately indicate that a complete key block has been transmitted before it is asserted.",
-      "cond": "in StKey",
-      "risk": "Premature assertion advances the state to StKmacMsg before the full key is loaded, leading to an incomplete key in the SHA3 engine.",
+      "type": "handshake",
+      "claim": "In StKmacFlush, done_i must eventually assert (mubi4_test_true_strict true) to return to idle; otherwise the state machine deadlocks.",
+      "cond": "st == StKmacFlush",
+      "risk": "Deadlock in flush phase; KMAC operation never completes.",
       "signals": [
-        "sent_blocksize"
+        "done_i",
+        "st"
       ],
       "refs": [
-        "kmac_core.sv:196-197"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:220-224"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "st == StKmacFlush",
+        "consequent": "##[*] mubi4_test_true_strict(done_i)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "done_i",
+          "st"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "st == StKmacFlush",
+        "consequent": "##[*] mubi4_test_true_strict(done_i)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
-      "type": "producer_contract",
-      "claim": "process_i and process_latched must be valid indicators for the end of a message block and must not be spuriously asserted.",
-      "cond": "in StKmacMsg",
-      "risk": "An incorrect process trigger could cause a premature or missed transition to StKmacFlush, resulting in a corrupted or incomplete message digest.",
+      "type": "handshake",
+      "claim": "In StKmacMsg, process_i or process_latched must eventually assert to move to the flush state.",
+      "cond": "st == StKmacMsg",
+      "risk": "Deadlock in message phase.",
       "signals": [
         "process_i",
-        "process_latched"
+        "process_latched",
+        "st"
       ],
       "refs": [
-        "kmac_core.sv:210-211"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "value_domain",
-      "claim": "done_i must be a proper mubi4 signal; the mubi4_test_true_strict function requires a strictly correct true encoding.",
-      "cond": "in StKmacFlush",
-      "risk": "If done_i never presents a valid true mubi4 value, the state machine will remain stuck in StKmacFlush, halting further processing.",
-      "signals": [
-        "done_i"
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:210-216"
       ],
-      "refs": [
-        "kmac_core.sv:220"
-      ]
-    },
-    {
-      "id": "A5",
-      "type": "lifecycle",
-      "claim": "lc_escalate_en_i from the life cycle controller must correctly reflect an escalation condition using the loose multi-bit test.",
-      "cond": "always",
-      "risk": "A false escalation forces the FSM to StTerminalError, terminating operation; a missed true escalation allows operation to continue in a compromised life cycle state.",
-      "signals": [
-        "lc_escalate_en_i"
-      ],
-      "refs": [
-        "kmac_core.sv:248-249"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "st == StKmacMsg",
+        "consequent": "##[*] (process_i || process_latched)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "process_i",
+          "process_latched",
+          "st"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "st == StKmacMsg",
+        "consequent": "##[*] (process_i || process_latched)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "kmac_valid is asserted only in StKey (and only when sent_blocksize is false). It is never driven high in StKmacMsg, although its name suggests a generic data-valid role.",
-      "cond": "when state is StKmacMsg",
-      "risk": "If downstream logic expects kmac_valid to validate message data words, data in StKmacMsg could be silently ignored, leading to functional failure.",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "When lc_escalate_en_i triggers, the block forces st_d to StTerminalError but does not clear en_key_write, kmac_valid, or kmac_process. If the current state is StKey and sent_blocksize is false, en_key_write=1 and kmac_valid=1 remain asserted for the current combinational cycle, potentially causing an unwanted key write or valid data stream while already entering the terminal error state.",
+      "cond": "lc_escalate_en_i active and st == StKey && !sent_blocksize",
+      "risk": "Key material or sensitive data may be written to the SHA3 engine or output after a fatal life‑cycle escalation, violating security isolation.",
       "signals": [
-        "kmac_valid"
+        "lc_escalate_en_i",
+        "en_key_write",
+        "kmac_valid",
+        "st",
+        "st_d"
       ],
       "refs": [
-        "kmac_core.sv:175",
-        "kmac_core.sv:199",
-        "kmac_core.sv:204",
-        "kmac_core.sv:208-216"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:248-249",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:193-194",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:204"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate && st == StKey && !sent_blocksize",
+        "consequent": "en_key_write == 1 && kmac_valid == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i",
+          "en_key_write",
+          "kmac_valid",
+          "st",
+          "st_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate && st == StKey && !sent_blocksize",
+        "consequent": "en_key_write == 1 && kmac_valid == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "In StTerminalError, sparse_fsm_error_o is kept low for up to 100 cycles (while st_err_ct < 100) before being asserted.",
-      "cond": "st == StTerminalError and st_err_ct < 100",
-      "risk": "During this 100-cycle window, the FSM is in terminal error state but the external error indication is not raised, potentially allowing secret/key material to be processed or exposed before containment takes effect.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The lc_escalate_en_i branch does not update st_err_ct_d. If the current state is StKmacIdle, st_err_ct_d is forced to 0 by the case logic. This means after an escalation the error counter may start from 0 instead of preserving its previous value or being set to a safe value. The design intent for the error counter during escalation is unclear.",
+      "cond": "lc_escalate active and st == StKmacIdle",
+      "risk": "Inconsistent error counting may mask how long the system has been in the error state, possibly missing spurious transitions or delaying sparse_fsm_error_o assertion.",
       "signals": [
-        "sparse_fsm_error_o",
+        "lc_escalate_en_i",
+        "st_err_ct_d",
+        "st",
         "st_err_ct"
       ],
       "refs": [
-        "kmac_core.sv:230-234"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:248-249",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:182"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate && st == StKmacIdle",
+        "consequent": "st_err_ct_d == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i",
+          "st_err_ct_d",
+          "st",
+          "st_err_ct"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate && st == StKmacIdle",
+        "consequent": "st_err_ct_d == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_spec_gap",
+      "type": "U_temporal_window",
       "priority": "medium",
-      "claim": "Default branch (illegal state) immediately asserts sparse_fsm_error_o, while the legitimate StTerminalError entry delays the assertion by up to 100 cycles.",
-      "cond": "unknown state vs. known error state",
-      "risk": "The inconsistency may indicate an unintended specification: immediate alert on illegal states but a delayed response on known error conditions might confuse fault handling or hide a design rule requiring immediate detection.",
+      "claim": "In StTerminalError, sparse_fsm_error_o is held low while st_err_ct < 100. If the system enters this state through a transient fault (or via lc_escalate) and is reset before the counter reaches 100, the error alert is never raised.",
+      "cond": "st == StTerminalError and st_err_ct < 100",
+      "risk": "A fatal error may be cleared without any alert, losing forensic information and violating safety requirements.",
       "signals": [
-        "sparse_fsm_error_o"
+        "sparse_fsm_error_o",
+        "st_err_ct",
+        "st"
       ],
       "refs": [
-        "kmac_core.sv:238-241",
-        "kmac_core.sv:230-234"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:232-234"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "st == StTerminalError && st_err_ct < 100",
+        "consequent": "sparse_fsm_error_o == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "sparse_fsm_error_o",
+          "st_err_ct",
+          "st"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "st == StTerminalError && st_err_ct < 100",
+        "consequent": "sparse_fsm_error_o == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U4",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "clr_keyidx is asserted only when transitioning from StKey to StKmacMsg. It is not seen being reset elsewhere in this block.",
-      "cond": "key loading phase complete",
-      "risk": "If key index is not cleared on reset or after error, a residual key index value could be read by later operations, potentially leaking secret metadata.",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "lc_escalate_en_i is a critical security event but does not immediately assert sparse_fsm_error_o. If the current state is not StTerminalError or st_err_ct is below 100, the alert remains deasserted for at least one cycle (or more if st_err_ct starts from zero).",
+      "cond": "lc_escalate active and !(st == StTerminalError && st_err_ct >= 100)",
+      "risk": "Security alert is delayed or missed entirely during life‑cycle escalation, undermining system integrity responses.",
       "signals": [
-        "clr_keyidx"
+        "lc_escalate_en_i",
+        "sparse_fsm_error_o",
+        "st",
+        "st_err_ct"
       ],
       "refs": [
-        "kmac_core.sv:173",
-        "kmac_core.sv:200"
-      ]
-    },
-    {
-      "id": "U5",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "en_kmac_datapath is only driven high in StKey. It is not asserted during StKmacMsg, StKmacFlush, or error states.",
-      "cond": "message processing states",
-      "risk": "If the datapath requires this enable to pass message data, the message phase would be silently inactive, causing a hang or data loss.",
-      "signals": [
-        "en_kmac_datapath"
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:248-249",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:232-234",
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:239-241"
       ],
-      "refs": [
-        "kmac_core.sv:170",
-        "kmac_core.sv:193"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate && !(st == StTerminalError && st_err_ct >= 100)",
+        "consequent": "sparse_fsm_error_o == 0",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en_i",
+          "sparse_fsm_error_o",
+          "st",
+          "st_err_ct"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_escalate && !(st == StTerminalError && st_err_ct >= 100)",
+        "consequent": "sparse_fsm_error_o == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This block controls key writes (en_key_write, clr_keyidx) and valid signaling (kmac_valid) to the SHA3 engine, directly touching secret material. The lc_escalate_en_i override does not clear en_key_write or kmac_valid when forcing st_d to StTerminalError, so a concurrent StKey state can propagate a key write and data valid in the same cycle as the escalation, potentially leaking key material. The sparse_fsm_error_o alert is not raised immediately on escalation unless the error counter is already saturated, delaying or suppressing the security alert. The terminal error state itself suppresses the alert for the first 99 cycles, creating a window where a transient error or reset can hide the fault.",
   "evidence_refs": [
-    "kmac_core.sv:166-251"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:166-251"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 166,
-  "line_end": 251,
-  "security_implications": ""
+  "line_end": 251
 }

@@ -12,9 +12,11 @@
       "CDIs",
       "Shares",
       "EccWords",
-      "prim_secded_pkg::prim_secded_inv_72_64_enc",
+      "TotalEccWords",
       "prim_secded_pkg::SecdedInv7264ZeroEcc",
-      "TotalEccWords"
+      "prim_secded_pkg::prim_secded_inv_72_64_enc",
+      "rst_ni",
+      "clk_i"
     ],
     "modes": [
       "CDIs",
@@ -25,6 +27,8 @@
     "tags": [
       "secret",
       "key",
+      "integrity",
+      "ecc",
       "reset",
       "parameterization"
     ]
@@ -33,73 +37,235 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On reset, key_state_q is cleared to 0 and key_state_ecc_q is cleared to TotalEccWords repetitions of SecdedInv7264ZeroEcc (all-zero ECC pattern).",
-      "cond": "rst_ni == 0 (reset active)",
+      "claim": "On asynchronous reset (rst_ni low), key_state_q is cleared to 0 and all words of key_state_ecc_q are set to the ECC check bits for all-zero data (SecdedInv7264ZeroEcc).",
+      "cond": "rst_ni is low",
       "signals": [
+        "rst_ni",
         "key_state_q",
-        "key_state_ecc_q",
-        "TotalEccWords",
-        "SecdedInv7264ZeroEcc"
+        "key_state_ecc_q"
       ],
       "refs": [
-        "file:305-307"
-      ]
+        "keymgr_ctrl.sv:305-307"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "key_state_q == 0 && key_state_ecc_q == {TotalEccWords{prim_secded_pkg::SecdedInv7264ZeroEcc}}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "key_state_q",
+          "key_state_ecc_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "key_state_q == 0 && key_state_ecc_q == {TotalEccWords{prim_secded_pkg::SecdedInv7264ZeroEcc}}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "When not in reset, on every positive clock edge key_state_ecc_q is updated by applying prim_secded_inv_72_64_enc to key_state_ecc_words_d for all CDIs, Shares, and EccWords indices. key_state_q is not updated.",
-      "cond": "rst_ni == 1 (not reset) and posedge clk_i",
+      "claim": "When not in reset (rst_ni high), all CDIs*Shares*EccWords entries of key_state_ecc_q are updated every cycle with the encoded output of the corresponding entry from key_state_ecc_words_d using prim_secded_inv_72_64_enc.",
+      "cond": "rst_ni is high",
       "signals": [
+        "rst_ni",
         "key_state_ecc_q",
-        "key_state_ecc_words_d",
-        "CDIs",
-        "Shares",
-        "EccWords",
-        "prim_secded_inv_72_64_enc"
+        "key_state_ecc_words_d"
       ],
       "refs": [
-        "file:308-316"
-      ]
+        "keymgr_ctrl.sv:309-316"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "forall (i<CDIs, j<Shares, k<EccWords) key_state_ecc_q[i][j][k] == prim_secded_inv_72_64_enc(key_state_ecc_words_d[i][j][k])",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "key_state_ecc_q",
+          "key_state_ecc_words_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "forall (i<CDIs, j<Shares, k<EccWords) key_state_ecc_q[i][j][k] == prim_secded_inv_72_64_enc(key_state_ecc_words_d[i][j][k])",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "key_state_q is assigned only during reset; when rst_ni is high, this block never updates key_state_q, so it retains the reset value (0) unless driven by another process.",
+      "cond": "rst_ni is high after reset deassertion",
+      "signals": [
+        "key_state_q",
+        "rst_ni"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:305-306,308-317"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "$stable(key_state_q)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "key_state_q",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "$stable(key_state_q)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "key_state_ecc_words_d must be driven with valid (non-x) data every cycle.",
-      "cond": "rst_ni == 1 (normal operation)",
-      "risk": "Corrupted or unknown ECC values may be stored in key_state_ecc_q, potentially bypassing later integrity checks and leading to use of a corrupted key.",
+      "type": "value_domain",
+      "claim": "TotalEccWords must equal the product CDIs * Shares * EccWords to ensure the reset replication covers all and only the words that will be updated later; otherwise, a subset of words may be left uninitialized or the array may be overfilled.",
+      "cond": "compile time",
+      "risk": "After reset, some ECC words retain unpredictable values if TotalEccWords < CDIs*Shares*EccWords, violating data integrity assumption of the key state storage. If TotalEccWords is larger, the reset value may exceed the declared dimensions, causing a parameter mismatch or simulation/synthesis error.",
       "signals": [
-        "key_state_ecc_words_d"
+        "TotalEccWords",
+        "CDIs",
+        "Shares",
+        "EccWords",
+        "key_state_ecc_q"
       ],
       "refs": [
-        "file:309-316"
-      ]
+        "keymgr_ctrl.sv:307",
+        "keymgr_ctrl.sv:309-311"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "TotalEccWords == CDIs * Shares * EccWords",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "TotalEccWords",
+          "CDIs",
+          "Shares",
+          "EccWords",
+          "key_state_ecc_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "compile time",
+        "consequent": "TotalEccWords == CDIs * Shares * EccWords",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "producer_contract",
+      "claim": "The function prim_secded_inv_72_64_enc returns a packed vector of a width compatible with the slice key_state_ecc_q[i][j][k] (i.e., the assignment {key_state_ecc_q[i][j][k]} <= ... is legal and not subject to truncation or width mismatch).",
+      "cond": "always",
+      "risk": "A width mismatch could cause silent truncation or loss of ECC check bits, compromising error detection/correction integrity.",
+      "signals": [
+        "key_state_ecc_q",
+        "prim_secded_inv_72_64_enc"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:312-313"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_state_ecc_q",
+          "prim_secded_inv_72_64_enc"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The function prim_secded_inv_72_64_enc returns a packed vector of a width compatible with the slice key_state_ecc_q[i][j][k] (i.e., the assignment {key_state_ecc_q[i][j][k]} <= ... is legal and not subject to truncation or width mismatch)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
+      "type": "U_spec_gap",
       "priority": "high",
-      "claim": "key_state_q is reset to zero but never updated after reset; it remains constant zero. This may be a dead signal or omitted assignment.",
-      "cond": "always after reset",
-      "risk": "If key_state_q is intended to hold valid key material, it will be stuck at zero, causing incorrect key usage and potential security compromise.",
+      "claim": "key_state_q is forced to 0 on reset and never updated afterwards in this always_ff block, while the key_state_ecc_q array is continuously written. It is unclear if key_state_q should be a plaintext duplicate of the ECC-protected state, or if its constant zero after reset is intentional (e.g., waiting to be explicitly loaded from a separate state or signaling an idle condition).",
+      "cond": "After reset, rst_ni high",
+      "risk": "If key_state_q is expected to hold the current key state for use by other logic, it would remain zero after reset, effectively zeroizing all key material, which could be a severe security defect (keys never loaded) or a functional error. Alternatively, if it is a debug/status register, its constant zero may be acceptable but its purpose must be clarified.",
       "signals": [
         "key_state_q"
       ],
       "refs": [
-        "file:305-306",
-        "file:308-316"
-      ]
+        "keymgr_ctrl.sv:306",
+        "keymgr_ctrl.sv:308-317"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "key_state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "rst_ni",
+        "consequent": "key_state_q is forced to 0 on reset and never updated afterwards in this always_ff block, while the key_state_ecc_q array is continuously written. It is unclear if key_state_q should be a plaintext duplicate of the ECC-protected state, or i",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk manages key state with ECC integrity protection. key_state_q is a plaintext key state register that is zeroed at reset and never written again (G3), potentially leaving the key state stuck at zero if it is the sole source of the current key value. If key_state_ecc_q holds the actual ECC-encoded key material, its continuous update from key_state_ecc_words_d is security-critical: any width mismatch in reset replication (A1) or encoding function (A2) could compromise ECC integrity, leading to undetected corruption of key data. The forced zero on key_state_q may be either an intentional zeroization or an oversight; in either case, the behavior of key_state_q after reset directly impacts key availability and confidentiality.",
   "evidence_refs": [
-    "file:304-318"
+    "keymgr_ctrl.sv:305-307",
+    "keymgr_ctrl.sv:309-316"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 304,
-  "line_end": 318,
-  "security_implications": ""
+  "line_end": 318
 }

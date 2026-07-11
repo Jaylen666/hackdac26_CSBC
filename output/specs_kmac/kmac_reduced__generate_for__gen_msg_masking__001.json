@@ -9,118 +9,212 @@
     "used": [
       "msg",
       "msg_mask_en_i",
-      "msg_mask_permuted",
-      "sha3_pkg::MsgWidth"
+      "msg_mask_permuted"
     ],
-    "modes": [
-      "i",
-      "NumShares",
-      "sha3_pkg::MsgWidth",
-      "msg_mask_en_i"
-    ],
+    "modes": [],
     "tags": [
       "secret",
       "mask",
-      "parameterization"
+      "share",
+      "sha3"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For each share index i in [0, NumShares-1], msg_masked[i] is the bitwise XOR of msg[i] and the signal ({sha3_pkg::MsgWidth{msg_mask_en_i}} & msg_mask_permuted). Thus, when msg_mask_en_i is 1, msg_masked[i] = msg[i] ^ msg_mask_permuted; when 0, msg_masked[i] = msg[i].",
-      "cond": "always (combinational logic)",
+      "claim": "When msg_mask_en_i is 1, msg_masked[i] is assigned msg[i] XOR msg_mask_permuted.",
+      "cond": "msg_mask_en_i == 1'b1",
       "signals": [
-        "msg_masked",
-        "msg",
         "msg_mask_en_i",
-        "msg_mask_permuted"
-      ],
-      "refs": [
-        "kmac_reduced.sv:162-163"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "Arrays msg and msg_masked are sized exactly NumShares elements deep, each element has width equal to sha3_pkg::MsgWidth, and NumShares is at least 1.",
-      "cond": "always",
-      "risk": "Out-of-bounds indexing or width mismatch would produce corrupt data or synthesis errors.",
-      "signals": [
         "msg",
-        "msg_masked",
-        "NumShares",
-        "sha3_pkg::MsgWidth"
+        "msg_mask_permuted",
+        "msg_masked"
       ],
       "refs": [
-        "kmac_reduced.sv:161-162"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:162-163"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "msg_mask_en_i == 1'b1",
+        "consequent": "msg_masked[i] == msg[i] ^ msg_mask_permuted",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_en_i",
+          "msg",
+          "msg_mask_permuted",
+          "msg_masked"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "msg_mask_en_i == 1'b1",
+        "consequent": "msg_masked[i] == msg[i] ^ msg_mask_permuted",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "A2",
-      "type": "security_precondition",
-      "claim": "msg_mask_permuted is an independent, high-entropy masking value (e.g., from a cryptographic PRNG or permutation) that is uncorrelated with msg inputs.",
-      "cond": "when msg_mask_en_i is asserted",
-      "risk": "Predictable or correlated mask would allow side-channel leakage of message shares.",
+      "id": "G2",
+      "type": "assignment",
+      "claim": "When msg_mask_en_i is 0, msg_masked[i] equals msg[i] (no mask).",
+      "cond": "msg_mask_en_i == 1'b0",
       "signals": [
-        "msg_mask_permuted"
+        "msg_mask_en_i",
+        "msg",
+        "msg_masked"
       ],
       "refs": [
-        "kmac_reduced.sv:162-163"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "mode_config",
-      "claim": "msg_mask_en_i is a stable control signal that correctly reflects the security policy for masking; its assertion/deassertion is managed by external logic.",
-      "cond": "always",
-      "risk": "Incorrect assertion may leave critical data unmasked in a security-sensitive context, exposing secrets.",
-      "signals": [
-        "msg_mask_en_i"
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:162-163"
       ],
-      "refs": [
-        "kmac_reduced.sv:162-163"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "msg_mask_en_i == 1'b0",
+        "consequent": "msg_masked[i] == msg[i]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_en_i",
+          "msg",
+          "msg_masked"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "msg_mask_en_i == 1'b0",
+        "consequent": "msg_masked[i] == msg[i]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_security_intent_gap",
       "priority": "high",
-      "claim": "The source and entropy quality of msg_mask_permuted are not visible in this chunk; if the generator is weak or predictable, masking effectiveness is compromised.",
-      "cond": "when msg_mask_en_i = 1",
-      "risk": "Insufficient entropy leads to side-channel leakage of the message share through power or timing analysis.",
+      "claim": "All shares (i = 0..NumShares-1) use the same msg_mask_permuted signal without per-share indexing, which may violate threshold implementation rules requiring independent random masks per share.",
+      "cond": "msg_mask_en_i asserted",
+      "risk": "Side-channel leakage not effectively prevented; the masking scheme could be broken if masks correlate across shares.",
       "signals": [
-        "msg_mask_permuted"
+        "msg_mask_permuted",
+        "i",
+        "NumShares"
       ],
       "refs": [
-        "kmac_reduced.sv:162-163"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:161-163"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted",
+          "i",
+          "NumShares"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "msg_mask_en_i asserted",
+        "consequent": "All shares (i = 0..NumShares-1) use the same msg_mask_permuted signal without per-share indexing, which may violate threshold implementation rules requiring independent random masks per share",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "Transitions on msg_mask_en_i relative to msg changes may cause a brief unmasked window if the control signal glitches or is not synchronized to data stability.",
-      "cond": "during transitions of msg_mask_en_i while msg is valid",
-      "risk": "Temporary exposure of unmasked msg data could occur before masking is re-established.",
+      "priority": "high",
+      "claim": "msg_mask_en_i is a combinational enable; glitches or transitions while msg is valid may generate unmasked or partially masked transient values on msg_masked, potentially leaking side-channel information.",
+      "cond": "msg valid and msg_mask_en_i toggles",
+      "risk": "Transient secret-dependent leakage via power/EM side-channels.",
       "signals": [
         "msg_mask_en_i",
-        "msg"
+        "msg",
+        "msg_masked"
       ],
       "refs": [
-        "kmac_reduced.sv:162-163"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:162-163"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_en_i",
+          "msg",
+          "msg_masked"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "msg valid and msg_mask_en_i toggles",
+        "consequent": "msg_mask_en_i is a combinational enable; glitches or transitions while msg is valid may generate unmasked or partially masked transient values on msg_masked, potentially leaking side-channel information",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "msg_mask_permuted source must be verified to be a true random or cryptographically fresh mask, independent of msg and unpredictable; otherwise the masking provides no security.",
+      "cond": "masking enabled",
+      "risk": "Deterministic or predictable mask allows an attacker to remove masking.",
+      "signals": [
+        "msg_mask_permuted"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:163"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_mask_permuted"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "masking enabled",
+        "consequent": "msg_mask_permuted source must be verified to be a true random or cryptographically fresh mask, independent of msg and unpredictable; otherwise the masking provides no security",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk implements message masking for side-channel resistance in SHA-3 processing. msg_mask_permuted acts as a secret masking value shared across all shares, a probable violation of independent mask requirements. Transient glitches on msg_mask_en_i may unmask secret data, leaking critical key/material. The source and quality of msg_mask_permuted directly determine the effectiveness of the countermeasure.",
   "evidence_refs": [
-    "kmac_reduced.sv:161-164"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv:161-164"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 161,
-  "line_end": 164,
-  "security_implications": ""
+  "line_end": 164
 }

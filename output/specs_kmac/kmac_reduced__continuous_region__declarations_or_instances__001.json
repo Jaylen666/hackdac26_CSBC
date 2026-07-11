@@ -13,27 +13,27 @@
     ],
     "modes": [],
     "tags": [
-      "handshake",
-      "mask"
+      "mask",
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "msg_ready_o is the bitwise AND reduction of msg_ready_shares",
+      "claim": "msg_ready_o is the logical AND reduction of all bits in msg_ready_shares.",
       "cond": "always",
       "signals": [
         "msg_ready_o",
         "msg_ready_shares"
       ],
       "refs": [
-        "141:141"
+        "kmac_reduced.sv:141"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "msg_ready_o == (&msg_ready_shares)",
+        "consequent": "msg_ready_o == &msg_ready_shares",
         "formalizability": "direct"
       },
       "risk": "",
@@ -47,7 +47,7 @@
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "msg_ready_o == (&msg_ready_shares)",
+        "consequent": "msg_ready_o == &msg_ready_shares",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
@@ -56,19 +56,19 @@
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "msg_valid is the bitwise AND reduction of msg_valid_shares",
+      "claim": "msg_valid is the logical AND reduction of all bits in msg_valid_shares.",
       "cond": "always",
       "signals": [
         "msg_valid",
         "msg_valid_shares"
       ],
       "refs": [
-        "142:142"
+        "kmac_reduced.sv:142"
       ],
       "formal": {
         "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "msg_valid == (&msg_valid_shares)",
+        "consequent": "msg_valid == &msg_valid_shares",
         "formalizability": "direct"
       },
       "risk": "",
@@ -82,22 +82,56 @@
         ],
         "temporal_shape": "comb",
         "antecedent": "always",
-        "consequent": "msg_valid == (&msg_valid_shares)",
+        "consequent": "msg_valid == &msg_valid_shares",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "security_precondition",
+      "claim": "Each bit of msg_ready_shares is independently driven to 1 only when the corresponding masked share is valid and ready, and no individual share can be externally forced to 0 by an attacker.",
+      "cond": "When msg_ready_o is used to gate the transfer of masked secret data.",
+      "risk": "A stuck‑low share prevents msg_ready_o from asserting, stalling the pipeline; an attacker could exploit this for denial‑of‑service or timing side‑channel leakage of secret‑key operations.",
+      "signals": [
+        "msg_ready_shares"
+      ],
+      "refs": [
+        "kmac_reduced.sv:141"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "assume property (msg_ready_shares bits are independent and reliable)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_reduced",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_ready_shares"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "When msg_ready_o is used to gate the transfer of masked secret data",
+        "consequent": "assume property (msg_ready_shares bits are independent and reliable)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    }
+  ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "Message masking signals msg_mask_en, msg_mask, msg_mask_permuted, and msg_masked are declared but not assigned in this chunk; their connectivity and usage cannot be verified here.",
+      "priority": "low",
+      "claim": "The actual message re‑masking logic using msg_mask_en, msg_mask, msg_mask_permuted, and msg_masked is declared but not implemented in this chunk; its correctness must be verified in other regions to ensure DPA countermeasure integrity.",
       "cond": "unknown",
-      "risk": "If these signals are never properly driven, the masking operation may be ineffective, potentially exposing secret message data.",
+      "risk": "Missing or incorrect masking logic could expose secret data or compromise the DPA resistance of the KMAC core.",
       "signals": [
         "msg_mask_en",
         "msg_mask",
@@ -105,7 +139,7 @@
         "msg_masked"
       ],
       "refs": [
-        "147:149"
+        "kmac_reduced.sv:144-149"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -125,18 +159,18 @@
         ],
         "temporal_shape": "comb",
         "antecedent": "unknown",
-        "consequent": "Message masking signals msg_mask_en, msg_mask, msg_mask_permuted, and msg_masked are declared but not assigned in this chunk; their connectivity and usage cannot be verified here",
+        "consequent": "The actual message re‑masking logic using msg_mask_en, msg_mask, msg_mask_permuted, and msg_masked is declared but not implemented in this chunk; its correctness must be verified in other regions to ensure DPA countermeasure integrity",
         "formalizability": "none",
-        "confidence": 0.85,
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The msg_ready_o signal, formed by AND‑reduction of share bits, enforces that all masked shares are ready before secret data is processed. If a share is forced low (e.g., by fault or attack), the pipeline stalls, which may create a denial‑of‑service condition or leak timing information about secret‑key operations. The declared signals msg_mask_en, msg_mask, msg_mask_permuted, and msg_masked indicate that this chunk is connected to message re‑masking, meaning it interfaces with secret‑dependent masks. Incomplete or insecure handling of these signals could expose key material or weaken the DPA countermeasure.",
   "evidence_refs": [
     "kmac_reduced.sv:141-149"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_reduced.sv",
   "line_start": 141,
-  "line_end": 149,
-  "security_implications": ""
+  "line_end": 149
 }

@@ -11,22 +11,20 @@
       "reg_fifo_wvalid",
       "fifo_rvalid",
       "hmac_core_idle",
-      "sha_core_idle",
-      "idle",
-      "prim_mubi_pkg::mubi4_bool_to_mubi"
+      "sha_core_idle"
     ],
     "modes": [],
     "tags": [
-      "fault",
-      "integrity",
-      "handshake"
+      "idle",
+      "handshake",
+      "mubi"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "idle is asserted when reg_fifo_wvalid=0, fifo_rvalid=0, hmac_core_idle=1, and sha_core_idle=1; otherwise idle is deasserted.",
+      "claim": "idle is asserted when reg_fifo_wvalid and fifo_rvalid are both low and hmac_core_idle and sha_core_idle are both high; otherwise idle is deasserted.",
       "cond": "always",
       "signals": [
         "idle",
@@ -36,112 +34,112 @@
         "sha_core_idle"
       ],
       "refs": [
-        "hmac.sv:891-892"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:891-892"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "idle == (!reg_fifo_wvalid && !fifo_rvalid && hmac_core_idle && sha_core_idle)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "idle",
+          "reg_fifo_wvalid",
+          "fifo_rvalid",
+          "hmac_core_idle",
+          "sha_core_idle"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "idle == (!reg_fifo_wvalid && !fifo_rvalid && hmac_core_idle && sha_core_idle)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "idle_d is assigned the multi-bit (mubi4) encoding of the boolean idle using prim_mubi_pkg::mubi4_bool_to_mubi.",
+      "claim": "idle_d is driven with the mubi4-encoded value corresponding to the idle boolean signal.",
       "cond": "always",
-      "signals": [
-        "idle_d",
-        "idle",
-        "prim_mubi_pkg::mubi4_bool_to_mubi"
-      ],
-      "refs": [
-        "hmac.sv:895"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "security_precondition",
-      "claim": "Downstream logic must validate idle_d using a mubi4 checking primitive (e.g., mubi4_test_true_strict) before using it as a control signal; a single-bit fault in idle or idle_d could otherwise go undetected.",
-      "cond": "whenever idle_d is used to gate or enable any operation",
-      "risk": "Undetected corruption of the idle status may allow the HMAC to start processing while not truly idle, potentially corrupting cryptographic data or leaking internal state.",
       "signals": [
         "idle_d",
         "idle"
       ],
       "refs": [
-        "hmac.sv:895"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "handshake",
-      "claim": "The combinational idle signal is valid only when its inputs (reg_fifo_wvalid, fifo_rvalid, hmac_core_idle, sha_core_idle) are stable; consumers must sample idle synchronously to avoid glitch‑induced errors.",
-      "cond": "when any input changes asynchronously or non‑synchronously",
-      "risk": "Glitches on idle could cause spurious enable/disable of downstream circuits, leading to functional failure.",
-      "signals": [
-        "idle",
-        "reg_fifo_wvalid",
-        "fifo_rvalid",
-        "hmac_core_idle",
-        "sha_core_idle"
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:895"
       ],
-      "refs": [
-        "hmac.sv:891-892"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "idle_d == prim_mubi_pkg::mubi4_bool_to_mubi(idle)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "idle_d",
+          "idle"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "idle_d == prim_mubi_pkg::mubi4_bool_to_mubi(idle)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_dead_or_unused_signal",
-      "priority": "low",
-      "claim": "idle_q is declared but not driven in this chunk; verify that it is assigned (likely from idle_d) in another chunk to form the registered, fault‑resilient idle status.",
-      "cond": "unknown – may be intended as a flip‑flop output",
-      "risk": "If idle_q remains undriven, the registered mubi4 idle status will be invalid and the fault‑tolerant scheme will be ineffective.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "Signal idle_q (declared as mubi4_t) is not driven in this chunk; it is likely assigned in another always block (e.g., a register clocked by idle_d). Its actual driver and mubi integrity must be confirmed.",
+      "cond": "always",
+      "risk": "If idle_q is not consistently updated from idle_d or suffers from mubi encoding mismatch, the multi-bit safety scheme could silently fail, leading to undetected idle-state corruption.",
       "signals": [
         "idle_q"
       ],
       "refs": [
-        "hmac.sv:894"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The correctness of prim_mubi_pkg::mubi4_bool_to_mubi is not verified in this chunk; the function must return a valid mubi4 codeword for both true and false.",
-      "cond": "always, whenever idle is computed",
-      "risk": "If the function returns an invalid codeword, idle_d may not be fault‑resilient, and a single‑bit fault could go undetected.",
-      "signals": [
-        "idle_d",
-        "prim_mubi_pkg::mubi4_bool_to_mubi"
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:894"
       ],
-      "refs": [
-        "hmac.sv:895"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_temporal_window",
-      "priority": "low",
-      "claim": "The combinational generation of idle may exhibit glitches if any of its inputs reg_fifo_wvalid, fifo_rvalid, hmac_core_idle, or sha_core_idle are not synchronous or are unstable.",
-      "cond": "when an input transitions and creates a temporary combinatorial mismatch",
-      "risk": "A glitch on idle could drive idle_d to an incorrect mubi4 value, potentially causing a false idle detection in downstream logic that latches idle_d before it stabilizes.",
-      "signals": [
-        "idle",
-        "idle_d",
-        "reg_fifo_wvalid",
-        "fifo_rvalid",
-        "hmac_core_idle",
-        "sha_core_idle"
-      ],
-      "refs": [
-        "hmac.sv:891-895"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clocked",
+        "reset": "",
+        "signals": [
+          "idle_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "Signal idle_q (declared as mubi4_t) is not driven in this chunk; it is likely assigned in another always block (e.g., a register clocked by idle_d). Its actual driver and mubi integrity must be confirmed",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The idle signal is converted via mubi4_bool_to_mubi to a multi-bit representation (idle_d) and (likely) registered into idle_q. This pattern is used to harden a critical state indicator (HMAC/SHA idle) against single-event upsets. A fault in idle_q or mismatch with idle could cause the core to proceed while a block is still active, potentially leaking or corrupting digest data. Verification must ensure correct mubi encoding, safe crossing (idle_d -> idle_q), and that idle_q is compared/used consistently in all downstream control.",
   "evidence_refs": [
-    "hmac.sv:891-895"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:891-895"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 891,
-  "line_end": 895,
-  "security_implications": ""
+  "line_end": 895
 }

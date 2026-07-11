@@ -1,47 +1,422 @@
 {
   "chunk_id": "rv_dm__continuous_region__declarations_or_instances__001",
-  "summary": "该连续区域实例化生命周期同步器、生成经生命周期门控的 NDM 复位输出，并同步跨时钟域的 LC 复位检测信号。",
-  "behavior": "实例化 prim_lc_sync（AsyncOn=0，因输入已同步），将 lc_hw_debug_en_gated_raw 直接复制给 lc_hw_debug_en_gated，不引入额外同步延迟。assign reset_req_en = lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnResetReq])，使用生命周期门控信号中对应复位请求的副本经严格真值测试生成使能；ndmreset_req_o = ndmreset_req_qual & reset_req_en，确保只有调试生命周期允许且 dm 内部请求时才会向系统发出 NDM 复位。为检测 LC 复位，用 prim_flop_2sync 构建两级同步器：第一级（u_prim_flop_2sync_lc_rst_assert）复位值 1、输入端接 0，并以 rst_lc_ni（LC 复位域，不复位 RV_DM）作为复位脚，在复位有效时直接异步置 1（但注释指出该级在复位断言时可能输出亚稳态），复位释放后经两级同步延迟约 2 个周期输出 0，产生 lc_rst_asserted_async。第二级（u_prim_flop_2sync_lc_rst_sync）以 rst_ni 为复位，将 lc_rst_asserted_async 进一步同步，最终输出稳定的 lc_rst_asserted，其变化相对于实际复位有效存在多周期延迟（先经历第一级约 2 拍延迟变为 0，再经第二级约 2 拍延迟更新）。此外声明了 dmi_req/rsp 接口信号、dmi_rst_n 以及 ndmreset_pending_q/lc_rst_pending_q 寄存器，但本区域未对其驱动。",
+  "header": {
+    "module": "rv_dm",
+    "block_kind": "mixed",
+    "driven": [
+      "lc_hw_debug_en_gated",
+      "reset_req_en",
+      "ndmreset_req_o",
+      "lc_rst_asserted_async",
+      "lc_rst_asserted"
+    ],
+    "used": [
+      "lc_hw_debug_en_gated_raw",
+      "LcEnResetReq",
+      "ndmreset_req_qual",
+      "lc_hw_debug_en_gated",
+      "rst_lc_ni",
+      "clk_i",
+      "rst_ni"
+    ],
+    "modes": [
+      "LcEnResetReq",
+      "LcEnLastPos"
+    ],
+    "tags": [
+      "lifecycle",
+      "access_control",
+      "reset",
+      "clock_domain",
+      "security_cm"
+    ]
+  },
   "guarantees": [
     {
-      "property": "ndmreset_req_o 仅在 ndmreset_req_qual 有效且 reset_req_en 为 1 时有效；reset_req_en 由生命周期门控信号确定，从而保证 NDM 复位请求受硬件调试生命周期严格控制。",
-      "output_signals": [
-        "ndmreset_req_o"
+      "id": "G1",
+      "type": "instance",
+      "claim": "lc_hw_debug_en_gated is combinatorially driven equal to lc_hw_debug_en_gated_raw (via prim_lc_sync with AsyncOn=0).",
+      "cond": "always",
+      "signals": [
+        "lc_hw_debug_en_gated",
+        "lc_hw_debug_en_gated_raw"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:290-291"
-      ]
+      "refs": [
+        "rv_dm.sv:265-274"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_hw_debug_en_gated == lc_hw_debug_en_gated_raw",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_gated",
+          "lc_hw_debug_en_gated_raw"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "lc_hw_debug_en_gated == lc_hw_debug_en_gated_raw",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "property": "lc_rst_asserted 是 LC 复位状态的稳定同步指示，高有效，且已与 clk_i 域同步，亚稳态风险大幅降低。",
-      "output_signals": [
-        "lc_rst_asserted"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "reset_req_en is driven by the strict-true test applied to the LcEnResetReq bit of the gated debug enable vector.",
+      "cond": "always",
+      "signals": [
+        "reset_req_en",
+        "lc_hw_debug_en_gated",
+        "LcEnResetReq"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:293-315"
-      ]
+      "refs": [
+        "rv_dm.sv:290"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "reset_req_en == lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnResetReq])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "reset_req_en",
+        "signals": [
+          "reset_req_en",
+          "lc_hw_debug_en_gated",
+          "LcEnResetReq"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "reset_req_en == lc_tx_test_true_strict(lc_hw_debug_en_gated[LcEnResetReq])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "ndmreset_req_o is the logical AND of ndmreset_req_qual and reset_req_en; it is forced to 0 when reset_req_en is 0, gating the NDM reset request.",
+      "cond": "always",
+      "signals": [
+        "ndmreset_req_o",
+        "ndmreset_req_qual",
+        "reset_req_en"
+      ],
+      "refs": [
+        "rv_dm.sv:291"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "ndmreset_req_o == (ndmreset_req_qual && reset_req_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_req_o",
+        "signals": [
+          "ndmreset_req_o",
+          "ndmreset_req_qual",
+          "reset_req_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "ndmreset_req_o == (ndmreset_req_qual && reset_req_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "instance",
+      "claim": "lc_rst_asserted_async is driven by a 2-stage synchronizer with reset value 1 and data input 0; thus it asserts (1) while LC reset (rst_lc_ni) is asserted and deasserts (0) after the reset is released.",
+      "cond": "always",
+      "signals": [
+        "lc_rst_asserted_async",
+        "rst_lc_ni",
+        "clk_i"
+      ],
+      "refs": [
+        "rv_dm.sv:294-303"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_lc_ni",
+        "consequent": "##1 lc_rst_asserted_async == 1",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "lc_rst_asserted_async",
+        "signals": [
+          "lc_rst_asserted_async",
+          "rst_lc_ni",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "!rst_lc_ni",
+        "consequent": "##1 lc_rst_asserted_async == 1",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "instance",
+      "claim": "lc_rst_asserted is a synchronized version of lc_rst_asserted_async, produced by a second 2-stage synchronizer to reduce metastability.",
+      "cond": "always",
+      "signals": [
+        "lc_rst_asserted",
+        "lc_rst_asserted_async",
+        "clk_i",
+        "rst_ni"
+      ],
+      "refs": [
+        "rv_dm.sv:307-315"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_rst_asserted_async == 1",
+        "consequent": "##2 lc_rst_asserted == 1",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "lc_rst_asserted",
+        "signals": [
+          "lc_rst_asserted",
+          "lc_rst_asserted_async",
+          "clk_i",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_rst_asserted_async == 1",
+        "consequent": "##2 lc_rst_asserted == 1",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "lc_hw_debug_en_gated 及派生信号 reset_req_en 对 ndmreset_req_o 进行门控，结合 SEC_CM: DM_EN.CTRL.LC_GATED 注释，表明该逻辑确保只有在生命周期控制器允许调试时才能向处理器发出 NDM 复位，防止未授权调试访问。",
   "assumptions": [
     {
-      "constraint": "lc_hw_debug_en_gated_raw 与 clk_i 同步（注释说明 AsyncOn=0，故要求输入已同步）。",
-      "bug_relevance": "若输入异步，可能导致多个副本采样不一致或亚稳态，进而使 lc_hw_debug_en_gated 和 reset_req_en 出错。",
-      "related_signals": [
+      "id": "A1",
+      "type": "producer_contract",
+      "claim": "Input lc_hw_debug_en_gated_raw is already synchronous to clk_i and free of glitches, as assumed by prim_lc_sync with AsyncOn=0.",
+      "cond": "when the design relies on lc_hw_debug_en_gated for security gating",
+      "risk": "If lc_hw_debug_en_gated_raw arrives asynchronously or with glitches, lc_hw_debug_en_gated may become metastable or glitch, potentially falsely enabling reset_req_en or ndmreset_req_o and circumventing the lifecycle debug access control.",
+      "signals": [
         "lc_hw_debug_en_gated_raw",
         "lc_hw_debug_en_gated"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:266-274"
-      ]
+      "refs": [
+        "rv_dm.sv:266-269"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_hw_debug_en_gated_raw is synchronous and stable",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_gated_raw",
+          "lc_hw_debug_en_gated"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when the design relies on lc_hw_debug_en_gated for security gating",
+        "consequent": "lc_hw_debug_en_gated_raw is synchronous and stable",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "The asynchronous reset rst_lc_ni must meet recovery/removal timing relative to clk_i when deasserting, otherwise the first synchronizer may become metastable and produce a corrupted lc_rst_asserted_async.",
+      "cond": "during LC reset deassertion",
+      "risk": "Metastability on lc_rst_asserted_async could propagate through the second synchronizer and cause lc_rst_asserted to be sampled incorrectly, leading to a false NDM reset acknowledgment or missing a true reset event.",
+      "signals": [
+        "rst_lc_ni",
+        "clk_i",
+        "lc_rst_asserted_async",
+        "lc_rst_asserted"
+      ],
+      "refs": [
+        "rv_dm.sv:299-300",
+        "rv_dm.sv:305-306"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$fell(rst_lc_ni)",
+        "consequent": "recovery/removal timing is met for prim_flop_2sync",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "clk_i",
+        "reset": "rst_lc_ni",
+        "signals": [
+          "rst_lc_ni",
+          "clk_i",
+          "lc_rst_asserted_async",
+          "lc_rst_asserted"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$fell(rst_lc_ni)",
+        "consequent": "recovery/removal timing is met for prim_flop_2sync",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv:265-320"
-  ],
   "uncertain_points": [
-    "第二级同步器 u_prim_flop_2sync_lc_rst_sync 未指定 ResetValue，其默认值（可能为 0）可能在系统上电且 rst_ni 有效时清零 lc_rst_asserted，导致漏报 lc 复位状态，需确认该行为是否符合预期。",
-    "lc_tx_test_true_strict 函数的确切行为（是否为多副本一致性检查或简单真值判定）影响 reset_req_en 的生成条件，当前仅从名称推断为严格真值测试。"
+    {
+      "id": "U1",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "lc_rst_asserted may glitch or take a non-deterministic value due to metastability during LC reset assertion/deassertion, as the first synchronizer output is directly exposed and the comment explicitly warns about metastability.",
+      "cond": "transition of rst_lc_ni relative to clk_i",
+      "risk": "A glitch on lc_rst_asserted could cause the internal FSM (e.g., ndmreset_pending_q, lc_rst_pending_q) to transition incorrectly, possibly clearing pending NDM reset acknowledgments or triggering false ones, affecting system debug reset integrity.",
+      "signals": [
+        "rst_lc_ni",
+        "lc_rst_asserted_async",
+        "lc_rst_asserted",
+        "ndmreset_pending_q",
+        "lc_rst_pending_q"
+      ],
+      "refs": [
+        "rv_dm.sv:294-315",
+        "rv_dm.sv:305-306"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "$changed(rst_lc_ni)",
+        "consequent": "$stable(lc_rst_asserted) is not guaranteed",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "rst_lc_ni",
+        "signals": [
+          "rst_lc_ni",
+          "lc_rst_asserted_async",
+          "lc_rst_asserted",
+          "ndmreset_pending_q",
+          "lc_rst_pending_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "$changed(rst_lc_ni)",
+        "consequent": "$stable(lc_rst_asserted) is not guaranteed",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "reset_req_en is a combinational function of lc_hw_debug_en_gated; any glitch on the selected bit (e.g., due to an LC state change, power noise, or logic glitch) may produce a narrow pulse on ndmreset_req_o, falsely initiating an NDM reset.",
+      "cond": "when lc_hw_debug_en_gated transitions",
+      "risk": "An unintended glitch on ndmreset_req_o could reset the debug subsystem, potentially erasing pending debug operations or enabling debug access under incorrect lifecycle conditions.",
+      "signals": [
+        "lc_hw_debug_en_gated",
+        "reset_req_en",
+        "ndmreset_req_o"
+      ],
+      "refs": [
+        "rv_dm.sv:290-291"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "lc_hw_debug_en_gated changes",
+        "consequent": "ndmreset_req_o may pulse",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "reset_req_en",
+        "signals": [
+          "lc_hw_debug_en_gated",
+          "reset_req_en",
+          "ndmreset_req_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "lc_hw_debug_en_gated changes",
+        "consequent": "ndmreset_req_o may pulse",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "ndmreset_req_qual is generated outside this chunk; its timing and glitch behavior are unknown, and it may cause a false ndmreset_req_o pulse when combined with reset_req_en.",
+      "cond": "when ndmreset_req_qual and reset_req_en are not monotonically related",
+      "risk": "A glitch on ndmreset_req_qual coinciding with reset_req_en high could produce an unintended reset request, leading to an undefined debug state.",
+      "signals": [
+        "ndmreset_req_qual",
+        "ndmreset_req_o"
+      ],
+      "refs": [
+        "rv_dm.sv:291"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "ndmreset_req_qual must be stable when reset_req_en is asserted",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm",
+        "clock": "",
+        "reset": "ndmreset_req_qual",
+        "signals": [
+          "ndmreset_req_qual",
+          "ndmreset_req_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when ndmreset_req_qual and reset_req_en are not monotonically related",
+        "consequent": "ndmreset_req_qual must be stable when reset_req_en is asserted",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "The chunk implements lifecycle-gated NDM reset control (SEC_CM: DM_EN.CTRL.LC_GATED). If lc_hw_debug_en_gated is corrupted or glitched, reset_req_en could be incorrectly asserted, bypassing lifecycle debug access control and permitting unauthorized NDM reset requests. The LC reset detection path (lc_rst_asserted) has a documented metastability window that could corrupt the internal pending-reset state, potentially allowing an attacker to clear or force a reset acknowledgment, undermining secure debug isolation.",
+  "evidence_refs": [
+    "rv_dm.sv:265-320"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm.sv",
   "line_start": 265,

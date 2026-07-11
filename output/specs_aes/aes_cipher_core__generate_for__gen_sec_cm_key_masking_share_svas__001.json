@@ -9,25 +9,25 @@
       "crypt_i",
       "crypt_o",
       "state_q",
-      "force_masks_i",
-      "dec_key_gen_o",
       "out_valid_o",
       "state_o",
-      "NumCyclesPerRound",
-      "SecAllowForcingMasks"
+      "SecAllowForcingMasks",
+      "force_masks_i",
+      "dec_key_gen_o",
+      "SP2V_HIGH",
+      "SP2V_LOW",
+      "NumCyclesPerRound"
     ],
     "modes": [
-      "encryption",
-      "decryption",
-      "key_expansion",
-      "force_masks"
+      "crypt_i",
+      "crypt_o",
+      "state_we",
+      "dec_key_gen_o"
     ],
     "tags": [
-      "secret",
-      "mask",
       "key",
-      "integrity",
-      "assertion"
+      "mask",
+      "integrity"
     ]
   },
   "guarantees": [],
@@ -35,70 +35,96 @@
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The assertion AesSecCmKeyMaskingStateShare allows bypass of the state share diversity check when SecAllowForcingMasks && force_masks_i is true.",
-      "cond": "SecAllowForcingMasks enabled and force_masks_i asserted.",
-      "risk": "An attacker with control of force_masks_i could freeze mask values, revealing secret key shares through side-channel leakage.",
+      "type": "U_temporal_window",
+      "priority": "medium",
+      "claim": "The SVA assertion AesSecCmKeyMaskingStateShare requires state_q[s] to change within a round window (NumCyclesPerRound), but a simple toggling between two values could satisfy the inequality while still leaking key‑dependent static bias.",
+      "cond": "state_we == SP2V_HIGH && (crypt_i == SP2V_HIGH || crypt_o == SP2V_HIGH)",
+      "risk": "A key share that alternates between a fixed pair of values may evade the assertion yet still leave exploitable side‑channel leakage.",
       "signals": [
-        "SecAllowForcingMasks",
-        "force_masks_i",
+        "state_we",
+        "crypt_i",
+        "crypt_o",
         "state_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:873-877"
-      ]
+        "aes_cipher_core.sv:873-877"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_we == SP2V_HIGH && (crypt_i == SP2V_HIGH || crypt_o == SP2V_HIGH)",
+        "consequent": "state_q[s] != $past(state_q[s], NumCyclesPerRound) || $past(state_q[s], NumCyclesPerRound) != $past(state_q[s], 2*NumCyclesPerRound) || (SecAllowForcingMasks && force_masks_i) || dec_key_gen_o == SP2V_HIGH",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_we",
+          "crypt_i",
+          "crypt_o",
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_we == SP2V_HIGH && (crypt_i == SP2V_HIGH || crypt_o == SP2V_HIGH)",
+        "consequent": "state_q[s] != $past(state_q[s], NumCyclesPerRound) || $past(state_q[s], NumCyclesPerRound) != $past(state_q[s], 2*NumCyclesPerRound) || (SecAllowForcingMasks && force_masks_i) || dec_key_gen_o == SP2V_HIGH",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
       "type": "U_security_intent_gap",
-      "priority": "medium",
-      "claim": "The assertion AesSecCmKeyMaskingStateShare also bypasses the check when dec_key_gen_o == SP2V_HIGH, relaxing state share diversity during key expansion.",
-      "cond": "dec_key_gen_o high.",
-      "risk": "Inadequate masking during key expansion could leak expanded round key material.",
+      "priority": "high",
+      "claim": "The assertion waives the state‑change requirement when SecAllowForcingMasks && force_masks_i is true, but it does not check that force_masks_i actually causes a fresh mask to be applied. This could allow a silent bypass where the design claims forced masking without updating the share.",
+      "cond": "state_we == SP2V_HIGH && (crypt_i == SP2V_HIGH || crypt_o == SP2V_HIGH) && SecAllowForcingMasks && force_masks_i && dec_key_gen_o != SP2V_HIGH",
+      "risk": "Key material may remain static when the hardware incorrectly asserts force_masks_i, leading to unmasked side‑channel leakage.",
       "signals": [
+        "state_we",
+        "crypt_i",
+        "crypt_o",
+        "SecAllowForcingMasks",
+        "force_masks_i",
         "dec_key_gen_o",
         "state_q"
       ],
       "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:873-877"
-      ]
-    },
-    {
-      "id": "U3",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The assertion allows the state share check to pass even when state_q is constant for one round if a difference existed between past(state_q, NumCyclesPerRound) and past(state_q, 2*NumCyclesPerRound). It is unclear whether this is sufficient for masking security.",
-      "cond": "state_q unchanged over the last round but changed one round earlier.",
-      "risk": "Potential insufficient entropy refresh, weakening side-channel resistance.",
-      "signals": [
-        "state_q"
+        "aes_cipher_core.sv:873-877"
       ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:875-876"
-      ]
-    },
-    {
-      "id": "U4",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "The assertion AesSecCmKeyMaskingOutputShare uses $past(state_o[s]) on the cycle after out_valid_o rises. If state_o is updated in the same cycle as out_valid_o, the captured value may be the old output share, not the intended new one.",
-      "cond": "rising edge of out_valid_o when crypt_o high.",
-      "risk": "The assertion may verify freshness against an incorrect share value, leading to false positives or undetected failures.",
-      "signals": [
-        "out_valid_o",
-        "state_o"
-      ],
-      "refs": [
-        "output/aes_mini_rtl/aes_cipher_core.sv:879-881"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_we == SP2V_HIGH && (crypt_i == SP2V_HIGH || crypt_o == SP2V_HIGH) && SecAllowForcingMasks && force_masks_i && dec_key_gen_o != SP2V_HIGH",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_cipher_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_we",
+          "crypt_i",
+          "crypt_o",
+          "SecAllowForcingMasks",
+          "force_masks_i",
+          "dec_key_gen_o",
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_we == SP2V_HIGH && (crypt_i == SP2V_HIGH || crypt_o == SP2V_HIGH) && SecAllowForcingMasks && force_masks_i && dec_key_gen_o != SP2V_HIGH",
+        "consequent": "The assertion waives the state‑change requirement when SecAllowForcingMasks && force_masks_i is true, but it does not check that force_masks_i actually causes a fresh mask to be applied. This could allow a silent bypass where the design cla",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The assertions AesSecCmKeyMaskingStateShare and AesSecCmKeyMaskingOutputShare verify that key state shares (state_q) and output shares (state_o) are refreshed every round during encryption/decryption. The waiver for forced masking creates a potential bypass if force_masks_i is asserted without actual masking. Any violation of the refresh requirement indicates a static key share, which is a serious side‑channel vulnerability.",
   "evidence_refs": [
-    "output/aes_mini_rtl/aes_cipher_core.sv:872-884"
+    "aes_cipher_core.sv:872-884"
   ],
-  "source_file": "output/aes_mini_rtl/aes_cipher_core.sv",
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_cipher_core.sv",
   "line_start": 872,
-  "line_end": 884,
-  "security_implications": ""
+  "line_end": 884
 }

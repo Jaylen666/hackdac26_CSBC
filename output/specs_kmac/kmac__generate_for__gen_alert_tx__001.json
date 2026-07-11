@@ -2,113 +2,174 @@
   "chunk_id": "kmac__generate_for__gen_alert_tx__001",
   "header": {
     "module": "kmac",
-    "block_kind": "generate",
+    "block_kind": "instance",
     "driven": [
-      "alert_tx_o"
+      "alert_tx_o[i]"
     ],
     "used": [
+      "alert_test[i]",
+      "alerts[i]",
+      "alert_rx_i[i]",
       "clk_i",
-      "rst_ni",
-      "alert_test",
-      "alerts",
-      "alert_rx_i"
+      "rst_ni"
     ],
     "modes": [
-      "NumAlerts",
-      "AlertAsyncOn"
+      "AlertAsyncOn[i]",
+      "i (genvar)"
     ],
     "tags": [
       "alert",
+      "fatal",
+      "error",
       "fault",
-      "parameterization"
+      "integrity",
+      "security"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "generate_param",
-      "claim": "For each alert index i from 0 to NumAlerts-1, a prim_alert_sender is instantiated with parameter IsFatal=i and AsyncOn=AlertAsyncOn[i], connecting .clk_i and .rst_ni directly, .alert_test_i to alert_test[i], .alert_req_i to alerts[i], .alert_rx_i to alert_rx_i[i], and .alert_tx_o to alert_tx_o[i]; .alert_ack_o and .alert_state_o are left unconnected.",
-      "cond": "always (generate-loop)",
+      "type": "instance_connection",
+      "claim": "`alert_tx_o[i]` is directly wired to the `alert_tx_o` output port of the `prim_alert_sender` instance `gen_alert_tx[i].u_prim_alert_sender`, propagating the serialized alert output from that instance.",
+      "cond": "Always (structural connection)",
       "signals": [
-        "clk_i",
-        "rst_ni",
-        "alert_test",
-        "alerts",
-        "alert_rx_i",
-        "alert_tx_o"
+        "alert_tx_o[i]"
       ],
       "refs": [
-        "kmac.sv:1466-1480"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "handshake",
-      "claim": "alert_rx_i[i] must be driven by the alert handler with a valid acknowledge signal meeting the prim_alert_sender's interface timing, relative to the request (alerts[i]).",
-      "cond": "when an alert is requested",
-      "risk": "If alert_rx_i is not properly asserted, the alert sender may not complete its handshake, potentially leaving the alert stuck or causing a mismatch in alert state.",
-      "signals": [
-        "alert_rx_i",
-        "alerts"
+        "kmac.sv:1478"
       ],
-      "refs": [
-        "kmac.sv:1477"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "alert_tx_o[i] == gen_alert_tx[i].u_prim_alert_sender.alert_tx_o",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "port",
+        "signals": [
+          "alert_tx_o[i]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "Always (structural connection)",
+        "consequent": "alert_tx_o[i] == gen_alert_tx[i].u_prim_alert_sender.alert_tx_o",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "A2",
-      "type": "mode_config",
-      "claim": "AlertAsyncOn array must have exactly NumAlerts elements, each a valid parameter for asynchronous alert handling.",
-      "cond": "always",
-      "risk": "Mismatched array length could cause elaboration errors or unintended asynchronous behavior, breaking alert propagation.",
-      "signals": [
-        "AlertAsyncOn"
-      ],
+      "id": "G2",
+      "type": "parameter_assignment",
+      "claim": "The `IsFatal` parameter of each `prim_alert_sender` instance is set to the genvar index `i`. When `IsFatal` is a 1‑bit parameter (as in the prim_alert_sender implementation), the integer `i` is truncated to its LSB, resulting in fatal configuration for odd `i` and non‑fatal for even `i`.",
+      "cond": "Compile‑time constant, active for all instances",
+      "signals": [],
       "refs": [
-        "kmac.sv:1468"
-      ]
+        "kmac.sv:1469"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [],
+        "temporal_shape": "always",
+        "antecedent": "Compile‑time constant, active for all instances",
+        "consequent": "The `IsFatal` parameter of each `prim_alert_sender` instance is set to the genvar index `i`. When `IsFatal` is a 1‑bit parameter (as in the prim_alert_sender implementation), the integer `i` is truncated to its LSB, resulting in fatal confi",
+        "formalizability": "none",
+        "confidence": 0.6,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_width_param_hazard",
       "priority": "high",
-      "claim": "The IsFatal parameter is set to the loop index i, classifying only alert 0 as non-fatal (IsFatal=0) and all others as fatal. It is unclear if this matches the intended severity assignment.",
-      "cond": "for all i",
-      "risk": "A non-fatal classification for a safety-critical alert could lead to missed fault escalation; an unintended fatal classification could cause unnecessary system resets or panic.",
+      "claim": "The assignment `IsFatal(i)` deviates from typical intent. If the design meant to map alert severity by index (e.g., only alert[0] non‑fatal), the LSB truncation of the genvar integer `i` inadvertently makes every even‑numbered alert non‑fatal and every odd‑numbered alert fatal, regardless of actual criticality.",
+      "cond": "For all `i` where `IsFatal` is expected to differ from `i[0]`",
+      "risk": "A security‑ or safety‑critical even‑indexed alert (e.g., data integrity failure, escalation request) would be treated as non‑fatal, preventing hardware escalation or CPU interrupt. Conversely, a less critical odd‑indexed alert could be escalated unnecessarily.",
       "signals": [
-        "IsFatal",
-        "i"
+        "IsFatal parameter",
+        "i (genvar)"
       ],
       "refs": [
         "kmac.sv:1469"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "genvar i % 2 == 0",
+        "consequent": "IsFatal == 0",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "IsFatal parameter",
+          "i (genvar)"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "genvar i % 2 == 0",
+        "consequent": "IsFatal == 0",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "The prim_alert_sender outputs alert_ack_o and alert_state_o are left open. It is unknown whether the alert source (alerts[i]) properly deasserts without feedback or if the ack is handled elsewhere in the design.",
-      "cond": "when an alert is requested",
-      "risk": "Alerts could remain asserted, causing repeated transmissions, or fail to re-arm, breaking the alert handshake and potentially masking subsequent faults.",
+      "claim": "Both `alert_ack_o` and `alert_state_o` of each `prim_alert_sender` instance are left unconnected. The alert sender protocol likely requires an acknowledgment to complete the handshake; if `alert_ack_o` is unused, the internal state may never be cleared, causing stuck transmission or failure to propagate future alerts.",
+      "cond": "Applicable to all alert instances",
+      "risk": "An alert request may remain asserted indefinitely, preventing detection or escalation of subsequent alerts. This creates a persistent denial‑of‑service on the alert mechanism.",
       "signals": [
         "alert_ack_o",
-        "alert_state_o",
-        "alerts"
+        "alert_state_o"
       ],
       "refs": [
         "kmac.sv:1475-1476"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_ack_o",
+          "alert_state_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "Applicable to all alert instances",
+        "consequent": "Both `alert_ack_o` and `alert_state_o` of each `prim_alert_sender` instance are left unconnected. The alert sender protocol likely requires an acknowledgment to complete the handshake; if `alert_ack_o` is unused, the internal state may neve",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk instantiates alert sender modules that propagate security‑ and safety‑critical alert events. The suspicious `IsFatal` parameter mapping (truncation of genvar index to 1 bit) risks misclassifying fatal alerts as non‑fatal, allowing a critical attack or integrity violation to go unescalated. Additionally, the unconnected `alert_ack_o` and `alert_state_o` signals can cause alert handshake deadlock, silently suppressing future alerts and breaking fault containment. Both issues undermine the alerting subsystem and could allow a persistent security breach to go undetected.",
   "evidence_refs": [
     "kmac.sv:1466-1480"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1466,
-  "line_end": 1480,
-  "security_implications": ""
+  "line_end": 1480
 }

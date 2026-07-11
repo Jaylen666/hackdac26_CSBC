@@ -2,20 +2,22 @@
   "chunk_id": "kmac__generate_for__gen_or_alert_lc_sync__001",
   "header": {
     "module": "kmac",
-    "block_kind": "generate",
+    "block_kind": "assign",
     "driven": [
-      "lc_escalate_en[i] for i in 0..NumLcSyncCopies-1"
+      "lc_escalate_en"
     ],
     "used": [
       "alert_to_lc_tx",
-      "lc_escalate_en_sync[i]"
+      "lc_escalate_en_sync"
     ],
     "modes": [
-      "parameter NumLcSyncCopies"
+      "NumLcSyncCopies"
     ],
     "tags": [
       "alert",
+      "error",
       "lifecycle",
+      "access_control",
       "parameterization"
     ]
   },
@@ -23,110 +25,156 @@
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "Each lc_escalate_en[i] (i from 0 to NumLcSyncCopies-1) is driven by the combinational result of lc_ctrl_pkg::lc_tx_or_hi(alert_to_lc_tx, lc_escalate_en_sync[i]).",
-      "cond": "always, during simulation/synthesis",
+      "claim": "For each instance i from 0 to NumLcSyncCopies-1, lc_escalate_en[i] is assigned the value of lc_ctrl_pkg::lc_tx_or_hi(alert_to_lc_tx, lc_escalate_en_sync[i]).",
+      "cond": "always",
       "signals": [
-        "lc_escalate_en",
+        "lc_escalate_en[i]",
         "alert_to_lc_tx",
-        "lc_escalate_en_sync"
+        "lc_escalate_en_sync[i]"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1515"
-      ]
+        "1514"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_escalate_en[i] == lc_ctrl_pkg::lc_tx_or_hi(alert_to_lc_tx, lc_escalate_en_sync[i])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en[i]",
+          "alert_to_lc_tx",
+          "lc_escalate_en_sync[i]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "lc_escalate_en[i] == lc_ctrl_pkg::lc_tx_or_hi(alert_to_lc_tx, lc_escalate_en_sync[i])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "The declared width of vector lc_escalate_en must be at least NumLcSyncCopies bits.",
-      "cond": "for all legal parameterizations of NumLcSyncCopies",
-      "risk": "If NumLcSyncCopies is larger, out-of-range assignments occur, causing simulation X-propagation or synthesis errors.",
-      "signals": [
-        "lc_escalate_en"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1514"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "The array lc_escalate_en_sync must have at least NumLcSyncCopies elements, and each element must be of a type compatible with the second argument of lc_tx_or_hi.",
-      "cond": "for all i in the generate loop",
-      "risk": "Access to unexisting array elements or type mismatch can cause elaboration/runtime errors and unpredictable escalation logic.",
-      "signals": [
-        "lc_escalate_en_sync"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1514"
-      ]
-    },
-    {
-      "id": "A3",
       "type": "producer_contract",
-      "claim": "alert_to_lc_tx must be driven by a stable, valid value compatible with lc_tx_or_hi's first argument.",
-      "cond": "during normal operation",
-      "risk": "Glitches or X on alert_to_lc_tx could cause false or missed escalation responses, compromising system security.",
+      "claim": "alert_to_lc_tx must be synchronous to the local clock domain (or already synchronized) so that its value is stable when sampled by the combinational lc_tx_or_hi function, preventing metastability on lc_escalate_en.",
+      "cond": "always when lc_escalate_en is used downstream",
+      "risk": "An asynchronous alert_to_lc_tx could cause glitches or metastable values on lc_escalate_en, possibly triggering spurious life‑cycle escalation enable assertions.",
       "signals": [
         "alert_to_lc_tx"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1514"
-      ]
+        "1514"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "alert_to_lc_tx is stable relative to the local clock",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "alert_to_lc_tx"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always when lc_escalate_en is used downstream",
+        "consequent": "alert_to_lc_tx is stable relative to the local clock",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The semantics of lc_ctrl_pkg::lc_tx_or_hi is unclear: it may be a simple OR or a combiner that escalates to the higher-priority state (e.g., LC_TX_HI).",
-      "cond": "When either alert_to_lc_tx or lc_escalate_en_sync[i] asserts an alarm state",
-      "risk": "If not a true escalation OR, a lower-priority warning may mask a higher-priority fatal error, or vice versa, leading to insufficient security response.",
+      "claim": "The exact logic of lc_ctrl_pkg::lc_tx_or_hi is unknown; it may contain masking, priority encoding or gating that affects how alert_to_lc_tx and lc_escalate_en_sync[i] combine to produce lc_escalate_en[i].",
+      "cond": "alert_to_lc_tx or lc_escalate_en_sync[i] change",
+      "risk": "An incorrect or overly permissive combination could prevent the escalation from being asserted or de‑asserted when a real alert is present, weakening security.",
       "signals": [
-        "lc_tx_or_hi function",
         "alert_to_lc_tx",
-        "lc_escalate_en_sync"
+        "lc_escalate_en_sync[i]",
+        "lc_escalate_en[i]"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1514"
-      ]
+        "1514"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alert_to_lc_tx",
+          "lc_escalate_en_sync[i]",
+          "lc_escalate_en[i]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "alert_to_lc_tx or lc_escalate_en_sync[i] change",
+        "consequent": "The exact logic of lc_ctrl_pkg::lc_tx_or_hi is unknown; it may contain masking, priority encoding or gating that affects how alert_to_lc_tx and lc_escalate_en_sync[i] combine to produce lc_escalate_en[i]",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "lc_escalate_en_sync signals are expected to be synchronized copies; without visibility into the generation of these signals, metastability on asynchronous alert sources could propagate.",
-      "cond": "if lc_escalate_en_sync originates from a different clock domain without proper double-synchronization",
-      "risk": "Metastability could cause glitches on lc_escalate_en, leading to spurious or missed lifecycle escalation, potentially erasing secrets or locking the chip incorrectly.",
-      "signals": [
-        "lc_escalate_en_sync"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1514"
-      ]
-    },
-    {
-      "id": "U3",
       "type": "U_width_param_hazard",
       "priority": "high",
-      "claim": "If NumLcSyncCopies is parameterized larger than the declared width of lc_escalate_en, the generate loop produces illegal out-of-bounds assignments.",
-      "cond": "when NumLcSyncCopies > width(lc_escalate_en)",
-      "risk": "Simulation X-out, synthesis error, or silent wire truncation could disable parts of the escalation vector, compromising alert distribution.",
+      "claim": "The parameter NumLcSyncCopies must match the declared width of lc_escalate_en and lc_escalate_en_sync; a mismatch could leave bits undriven or cause a multi‑driver conflict.",
+      "cond": "NumLcSyncCopies set incorrectly relative to array width",
+      "risk": "Undriven lc_escalate_en bits may float or retain old values, leading to partial or missing escalation enables and a possible security bypass.",
       "signals": [
         "lc_escalate_en"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1514"
-      ]
+        "1513",
+        "1514"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_escalate_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "NumLcSyncCopies set incorrectly relative to array width",
+        "consequent": "The parameter NumLcSyncCopies must match the declared width of lc_escalate_en and lc_escalate_en_sync; a mismatch could leave bits undriven or cause a multi‑driver conflict",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The lc_escalate_en output is a life‑cycle escalation enable signal, likely gating a path that can permanently escalate or restrict device debug. It is derived from alert_to_lc_tx and a synchronized enable through an opaque combinational function. Any glitch, incorrect combination, or parameter mismatch could falsely assert escalation when no real alert exists, or mask a legitimate alert, directly compromising life‑cycle security and access control.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1513-1515"
+    "1513-1515"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1513,
-  "line_end": 1515,
-  "security_implications": ""
+  "line_end": 1515
 }

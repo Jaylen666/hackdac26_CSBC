@@ -15,89 +15,286 @@
       "state_e",
       "StCtrlReset"
     ],
-    "modes": [
-      "StCtrlReset"
-    ],
+    "modes": [],
     "tags": [
       "secret",
-      "key",
       "entropy",
+      "wipe",
       "sparse_fsm",
-      "reset",
-      "fault"
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "prng_en_o is driven as the logical OR of random_req, wipe_req, and prng_en_dis_inv_q[0] (the LSB of prng_en_dis_inv_q).",
-      "cond": "always (combinational)",
+      "claim": "prng_en_o is driven combinationally as the logical OR of random_req, wipe_req, and prng_en_dis_inv_q[0].",
+      "cond": "always",
       "signals": [
         "prng_en_o",
         "random_req",
         "wipe_req",
-        "prng_en_dis_inv_q"
+        "prng_en_dis_inv_q[0]"
       ],
       "refs": [
         "keymgr_ctrl.sv:255"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "prng_en_o == (random_req | wipe_req | prng_en_dis_inv_q[0])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_en_o",
+          "random_req",
+          "wipe_req",
+          "prng_en_dis_inv_q[0]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "prng_en_o == (random_req | wipe_req | prng_en_dis_inv_q[0])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "instance",
-      "claim": "Instantiates a sparse FSM flop u_state_regs that captures state_d on the active edge of state_e and asynchronously resets to StCtrlReset.",
-      "cond": "always",
+      "type": "reg_update",
+      "claim": "On the active clock edge when state_e is high, state_q is updated to the value of state_d.",
+      "cond": "posedge clk and state_e == 1",
       "signals": [
-        "state_d",
         "state_q",
-        "state_e",
+        "state_d",
+        "state_e"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:261"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_e",
+        "consequent": "state_q == state_d",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "state_d",
+          "state_e"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "state_e",
+        "consequent": "state_q == state_d",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "reg_update",
+      "claim": "When StCtrlReset is asserted, state_q is reset to the sparse-FSM reset state value StCtrlReset.",
+      "cond": "StCtrlReset active",
+      "signals": [
+        "state_q",
         "StCtrlReset"
       ],
       "refs": [
         "keymgr_ctrl.sv:261"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "StCtrlReset",
+        "consequent": "state_q == StCtrlReset",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "StCtrlReset",
+        "signals": [
+          "state_q",
+          "StCtrlReset"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "StCtrlReset",
+        "consequent": "state_q == StCtrlReset",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "security_precondition",
-      "claim": "The inputs state_d, state_e, and StCtrlReset must be driven with the correct encoding and timing for the sparse FSM; StCtrlReset must be asserted to achieve a defined reset state.",
-      "cond": "always",
-      "risk": "Incorrect or glitchy signals may cause the sparse FSM to enter an unrecoverable illegal state, potentially disabling key manager control or violating security invariants.",
+      "type": "mode_config",
+      "claim": "StCtrlReset must be a legal sparse encoding for the FSM, otherwise the sparse-FSM macro may fail checks or hang.",
+      "cond": "FSM initialization or reset",
+      "risk": "FSM enters an illegal state and security protection is bypassed.",
       "signals": [
+        "StCtrlReset",
+        "state_q"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:261"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1",
+        "consequent": "legal_encoding(StCtrlReset) == 1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "StCtrlReset",
+        "signals": [
+          "StCtrlReset",
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1",
+        "consequent": "legal_encoding(StCtrlReset) == 1",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "high",
+      "claim": "The exact behavior of PRIM_FLOP_SPARSE_FSM must be verified to ensure sparse encoding checks, glitch filtering, and secure reset are correctly implemented.",
+      "cond": "during operation",
+      "risk": "A weak implementation could undermine the SEC_CM: CTRL.FSM.SPARSE security countermeasure.",
+      "signals": [
+        "state_q",
         "state_d",
         "state_e",
         "StCtrlReset"
       ],
       "refs": [
         "keymgr_ctrl.sv:261"
-      ]
-    }
-  ],
-  "uncertain_points": [
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "StCtrlReset",
+        "signals": [
+          "state_q",
+          "state_d",
+          "state_e",
+          "StCtrlReset"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "during operation",
+        "consequent": "The exact behavior of PRIM_FLOP_SPARSE_FSM must be verified to ensure sparse encoding checks, glitch filtering, and secure reset are correctly implemented",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
     {
-      "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "prng_en_dis_inv_q is a multi-bit signal, but only its LSB is used to enable the PRNG; the design intent may require masking with all bits or a specific combination, risking PRNG enable when it should be suppressed.",
-      "cond": "when any higher bit of prng_en_dis_inv_q indicates a disable condition",
-      "risk": "Unintended PRNG activation may leak entropy or secret key material, breaking side-channel protections.",
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The purpose and origin of prng_en_dis_inv_q[0] are unclear; its unintended activation could force PRNG enablement and weaken security.",
+      "cond": "prng_en_dis_inv_q[0] == 1",
+      "risk": "PRNG may be permanently enabled, leaking entropy or preventing safe wipe.",
       "signals": [
-        "prng_en_dis_inv_q",
+        "prng_en_dis_inv_q[0]",
         "prng_en_o"
       ],
       "refs": [
         "keymgr_ctrl.sv:255"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_en_dis_inv_q[0]",
+          "prng_en_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "prng_en_dis_inv_q[0] == 1",
+        "consequent": "The purpose and origin of prng_en_dis_inv_q[0] are unclear; its unintended activation could force PRNG enablement and weaken security",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "Combinational path from random_req/wipe_req to prng_en_o may glitch; downstream PRNG logic should be insensitive to such glitches.",
+      "cond": "when random_req or wipe_req changes",
+      "risk": "Spurious PRNG activation could consume entropy or leak internal state.",
+      "signals": [
+        "random_req",
+        "wipe_req",
+        "prng_en_o"
+      ],
+      "refs": [
+        "keymgr_ctrl.sv:255"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "$changed(random_req) || $changed(wipe_req)",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "random_req",
+          "wipe_req",
+          "prng_en_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "$changed(random_req) || $changed(wipe_req)",
+        "consequent": "Combinational path from random_req/wipe_req to prng_en_o may glitch; downstream PRNG logic should be insensitive to such glitches",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk directly drives prng_en_o which controls the PRNG used for key/seed generation; incorrect or stuck enable could leak secrets or block wipe operations. The sparse FSM macro (SEC_CM: CTRL.FSM.SPARSE) provides state integrity and protection against soft errors affecting the control flow. Both paths are essential for key manager security.",
   "evidence_refs": [
     "keymgr_ctrl.sv:255-261"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 255,
-  "line_end": 261,
-  "security_implications": ""
+  "line_end": 261
 }

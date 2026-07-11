@@ -7,13 +7,14 @@
       "prng_en_dis_inv_q"
     ],
     "used": [
-      "prng_en_dis_inv_d",
       "clk_i",
-      "rst_ni"
+      "rst_ni",
+      "prng_en_dis_inv_d"
     ],
     "modes": [],
     "tags": [
       "entropy",
+      "key",
       "reset"
     ]
   },
@@ -21,87 +22,122 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "When rst_ni is low, prng_en_dis_inv_q is asynchronously set to '0; otherwise, on each rising edge of clk_i, prng_en_dis_inv_q updates to prng_en_dis_inv_d.",
-      "cond": "always",
-      "signals": [
-        "prng_en_dis_inv_q",
-        "prng_en_dis_inv_d",
-        "clk_i",
-        "rst_ni"
-      ],
-      "refs": [
-        "keymgr_ctrl.sv:247-253"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "lifecycle",
-      "claim": "rst_ni must be asserted (low) for at least one clock cycle before deassertion to guarantee prng_en_dis_inv_q is initialized to '0.",
-      "cond": "during startup or any external reset event",
-      "risk": "If reset is not properly applied, the initial value of prng_en_dis_inv_q is unknown, potentially leading to unintended PRNG enable/invert state and weakening of side-channel or fault countermeasures.",
+      "claim": "When rst_ni is low, prng_en_dis_inv_q is forced to all-zero immediately.",
+      "cond": "rst_ni == 0",
       "signals": [
         "rst_ni",
         "prng_en_dis_inv_q"
       ],
       "refs": [
-        "keymgr_ctrl.sv:248-249"
-      ]
+        "247-253"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "prng_en_dis_inv_q == '0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "prng_en_dis_inv_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!rst_ni",
+        "consequent": "prng_en_dis_inv_q == '0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "A2",
-      "type": "producer_contract",
-      "claim": "prng_en_dis_inv_d must be a valid (non‑X, non‑Z) signal when sampled at the clock edge with rst_ni deasserted.",
-      "cond": "when rst_ni is high at posedge clk_i",
-      "risk": "Metastability or corrupt values could be stored in prng_en_dis_inv_q, causing unpredictable PRNG configuration.",
+      "id": "G2",
+      "type": "reg_update",
+      "claim": "On every rising edge of clk_i when rst_ni is high, prng_en_dis_inv_q samples the value of prng_en_dis_inv_d.",
+      "cond": "posedge clk_i and rst_ni high",
       "signals": [
-        "prng_en_dis_inv_d",
+        "clk_i",
+        "rst_ni",
         "prng_en_dis_inv_q",
-        "clk_i"
+        "prng_en_dis_inv_d"
       ],
       "refs": [
-        "keymgr_ctrl.sv:251"
-      ]
+        "247-253"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "prng_en_dis_inv_q == prng_en_dis_inv_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "prng_en_dis_inv_q",
+          "prng_en_dis_inv_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "prng_en_dis_inv_q == prng_en_dis_inv_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "Resetting prng_en_dis_inv_q to all zeros may temporarily disable a PRNG‑based masking or random‑invert feature, leaving key manager operations unprotected until a new value is loaded.",
-      "cond": "after reset deassertion until prng_en_dis_inv_d is updated to a secure value",
-      "risk": "Sensitive data processed in this window could be exposed via side‑channel or logical analysis, compromising key material or intermediate states.",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The signal name 'prng_en_dis_inv' suggests an inverted enable/disable control for the PRNG, but the local code provides no documentation. Without external specification, the intended active level and safety requirements are unclear.",
+      "cond": "unknown",
+      "risk": "Misinterpretation of the signal's active level could lead to unintended PRNG enable/disable states, potentially reducing entropy quality for key generation.",
       "signals": [
         "prng_en_dis_inv_q",
-        "prng_en_dis_inv_d",
-        "rst_ni"
+        "prng_en_dis_inv_d"
       ],
       "refs": [
-        "keymgr_ctrl.sv:249"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "The width of prng_en_dis_inv_q is not visible in this chunk; if it is a multi‑bit vector, the reset value of all zeros may simultaneously disable several independent mask/invert controls.",
-      "cond": "if unused bits or multiple enable bits exist",
-      "risk": "Loss of entropy diversity at startup could increase the success rate of profiling or fault attacks.",
-      "signals": [
-        "prng_en_dis_inv_q"
+        "247-253"
       ],
-      "refs": [
-        "keymgr_ctrl.sv:249"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "prng_en_dis_inv_q",
+          "prng_en_dis_inv_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "The signal name 'prng_en_dis_inv' suggests an inverted enable/disable control for the PRNG, but the local code provides no documentation. Without external specification, the intended active level and safety requirements are unclear",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "prng_en_dis_inv_q: This register likely controls activation/deactivation of a PRNG used for key or entropy generation. An incorrect state (e.g., inadvertent disable) could stop fresh entropy, leading to weak or predictable cryptographic keys.",
   "evidence_refs": [
-    "keymgr_ctrl.sv:247-253"
+    "247-253"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_ctrl.sv",
   "line_start": 247,
-  "line_end": 253,
-  "security_implications": ""
+  "line_end": 253
 }

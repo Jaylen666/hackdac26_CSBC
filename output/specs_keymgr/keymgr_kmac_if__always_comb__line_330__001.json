@@ -8,9 +8,6 @@
     ],
     "used": [
       "decoy_data",
-      "cmd_error_o",
-      "inputs_invalid_o",
-      "fsm_error_o",
       "valid",
       "adv_en_i",
       "adv_data",
@@ -20,15 +17,18 @@
       "id_sel",
       "gen_en_i",
       "gen_data",
-      "gen_sel"
+      "gen_sel",
+      "cmd_error_o",
+      "inputs_invalid_o",
+      "fsm_error_o"
     ],
     "modes": [
-      "error_override",
-      "valid_priority_mux"
+      "error_via_cmd_error_o_nonzero|inputs_invalid_o|fsm_error_o"
     ],
     "tags": [
+      "secret",
+      "key",
       "error",
-      "fault",
       "data_path",
       "mux"
     ]
@@ -36,9 +36,9 @@
   "guarantees": [
     {
       "id": "G1",
-      "type": "mux_case",
-      "claim": "When any of cmd_error_o, inputs_invalid_o, or fsm_error_o is asserted (non-zero), kmac_data_o.data is forced to decoy_data, overriding all other conditions.",
-      "cond": "|cmd_error_o || inputs_invalid_o || fsm_error_o",
+      "type": "default_fallback",
+      "claim": "On any error condition (|cmd_error_o or inputs_invalid_o or fsm_error_o) kmac_data_o.data is forced to decoy_data, overriding any data selection.",
+      "cond": "(|cmd_error_o) || inputs_invalid_o || fsm_error_o",
       "signals": [
         "kmac_data_o.data",
         "decoy_data",
@@ -48,64 +48,167 @@
       ],
       "refs": [
         "keymgr_kmac_if.sv:332-333"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "(|cmd_error_o) || inputs_invalid_o || fsm_error_o",
+        "consequent": "kmac_data_o.data == decoy_data",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_o.data",
+          "decoy_data",
+          "cmd_error_o",
+          "inputs_invalid_o",
+          "fsm_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "(|cmd_error_o) || inputs_invalid_o || fsm_error_o",
+        "consequent": "kmac_data_o.data == decoy_data",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "mux_case",
-      "claim": "If no error condition is true, and valid and adv_en_i are true, kmac_data_o.data is assigned adv_data[adv_sel].",
-      "cond": "~error & valid & adv_en_i",
+      "claim": "When no error exists and valid is high and adv_en_i is high, kmac_data_o.data is driven by adv_data[adv_sel].",
+      "cond": "no error && valid && adv_en_i",
       "signals": [
         "kmac_data_o.data",
-        "valid",
-        "adv_en_i",
         "adv_data",
-        "adv_sel"
+        "adv_sel",
+        "valid",
+        "adv_en_i"
       ],
       "refs": [
         "keymgr_kmac_if.sv:334-335"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && valid && adv_en_i",
+        "consequent": "kmac_data_o.data == adv_data[adv_sel]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_o.data",
+          "adv_data",
+          "adv_sel",
+          "valid",
+          "adv_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && valid && adv_en_i",
+        "consequent": "kmac_data_o.data == adv_data[adv_sel]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
       "type": "mux_case",
-      "claim": "If no error condition is true, valid is true, adv_en_i is false, and id_en_i is true, kmac_data_o.data is assigned id_data[id_sel].",
-      "cond": "~error & valid & ~adv_en_i & id_en_i",
+      "claim": "When no error exists and valid is high and id_en_i is high and adv_en_i is low, kmac_data_o.data is driven by id_data[id_sel].",
+      "cond": "no error && valid && id_en_i && !adv_en_i",
       "signals": [
         "kmac_data_o.data",
-        "valid",
-        "adv_en_i",
-        "id_en_i",
         "id_data",
-        "id_sel"
+        "id_sel",
+        "valid",
+        "id_en_i",
+        "adv_en_i"
       ],
       "refs": [
         "keymgr_kmac_if.sv:336-337"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && valid && id_en_i && !adv_en_i",
+        "consequent": "kmac_data_o.data == id_data[id_sel]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_o.data",
+          "id_data",
+          "id_sel",
+          "valid",
+          "id_en_i",
+          "adv_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && valid && id_en_i && !adv_en_i",
+        "consequent": "kmac_data_o.data == id_data[id_sel]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "mux_case",
-      "claim": "If no error condition is true, valid is true, both adv_en_i and id_en_i are false, and gen_en_i is true, kmac_data_o.data is assigned gen_data[gen_sel].",
-      "cond": "~error & valid & ~adv_en_i & ~id_en_i & gen_en_i",
+      "claim": "When no error exists and valid is high and gen_en_i is high and both adv_en_i and id_en_i are low, kmac_data_o.data is driven by gen_data[gen_sel].",
+      "cond": "no error && valid && gen_en_i && !adv_en_i && !id_en_i",
       "signals": [
         "kmac_data_o.data",
-        "valid",
-        "adv_en_i",
-        "id_en_i",
-        "gen_en_i",
         "gen_data",
-        "gen_sel"
+        "gen_sel",
+        "valid",
+        "gen_en_i",
+        "adv_en_i",
+        "id_en_i"
       ],
       "refs": [
         "keymgr_kmac_if.sv:338-339"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && valid && gen_en_i && !adv_en_i && !id_en_i",
+        "consequent": "kmac_data_o.data == gen_data[gen_sel]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_o.data",
+          "gen_data",
+          "gen_sel",
+          "valid",
+          "gen_en_i",
+          "adv_en_i",
+          "id_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && valid && gen_en_i && !adv_en_i && !id_en_i",
+        "consequent": "kmac_data_o.data == gen_data[gen_sel]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
       "type": "default_fallback",
-      "claim": "In the absence of any active error, valid, and enable condition, kmac_data_o.data remains as decoy_data (the default assignment).",
-      "cond": "~error & ~(valid & (adv_en_i | id_en_i | gen_en_i))",
+      "claim": "When no error exists and (valid is low or none of the enables are active) kmac_data_o.data remains decoy_data.",
+      "cond": "no error && ( !valid || (valid && !adv_en_i && !id_en_i && !gen_en_i) )",
       "signals": [
         "kmac_data_o.data",
         "decoy_data",
@@ -115,38 +218,113 @@
         "gen_en_i"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:331",
-        "keymgr_kmac_if.sv:340"
-      ]
+        "keymgr_kmac_if.sv:331,334,336,338"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && ( !valid || (valid && !adv_en_i && !id_en_i && !gen_en_i) )",
+        "consequent": "kmac_data_o.data == decoy_data",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_o.data",
+          "decoy_data",
+          "valid",
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "!((|cmd_error_o) || inputs_invalid_o || fsm_error_o) && ( !valid || (valid && !adv_en_i && !id_en_i && !gen_en_i) )",
+        "consequent": "kmac_data_o.data == decoy_data",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "The index signals adv_sel, id_sel, gen_sel must be within the valid index range of the corresponding arrays adv_data, id_data, gen_data.",
-      "cond": "When the respective enable (adv_en_i, id_en_i, gen_en_i) is active and valid is true",
-      "risk": "Out-of-bounds index can cause simulation X‑propagation or undefined hardware behavior.",
+      "type": "security_precondition",
+      "claim": "decoy_data must be a non-sensitive, constant or random value that does not reveal any secret key material or internal state, even during error masking.",
+      "cond": "always when error condition is true",
+      "risk": "If decoy_data is derived from or correlates with secret state, asserting error may still leak sensitive information through kmac_data_o.",
       "signals": [
-        "adv_sel",
-        "id_sel",
-        "gen_sel",
-        "adv_data",
-        "id_data",
-        "gen_data"
+        "decoy_data"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:335",
-        "keymgr_kmac_if.sv:337",
-        "keymgr_kmac_if.sv:339"
-      ]
+        "keymgr_kmac_if.sv:331,333"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "decoy_data contains no secret correlation",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "decoy_data"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always when error condition is true",
+        "consequent": "decoy_data contains no secret correlation",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
+      "type": "value_domain",
+      "claim": "Index selectors adv_sel, id_sel, gen_sel must be within the declared dimensions of adv_data, id_data, gen_data respectively.",
+      "cond": "when the corresponding select path is active",
+      "risk": "Out-of-bounds indexing may cause simulation X propagation or synthesis to unintended memory, potentially exposing other key material or causing undefined behaviour.",
+      "signals": [
+        "adv_sel",
+        "id_sel",
+        "gen_sel"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:335,337,339"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid && adv_en_i && !error",
+        "consequent": "adv_sel < size(adv_data)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_sel",
+          "id_sel",
+          "gen_sel"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid && adv_en_i && !error",
+        "consequent": "adv_sel < size(adv_data)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
       "type": "producer_contract",
-      "claim": "When valid is asserted, at most one of adv_en_i, id_en_i, gen_en_i is asserted, or the fixed priority order (adv > id > gen) is acceptable to the design intent.",
-      "cond": "valid == 1'b1",
-      "risk": "If multiple enables are asserted unintentionally, lower-priority sources are silently ignored, possibly causing a functional bug (e.g., missed ID or GEN data).",
+      "claim": "Only one of adv_en_i, id_en_i, gen_en_i is expected to be asserted when valid is high; multiple simultaneous enables may circumvent intended data source priority.",
+      "cond": "when valid is high and no error",
+      "risk": "If two enables are high, lower-priority sources (id or gen) are silently overridden, which may select unintended data if the system expects a different ordering or concurrency.",
       "signals": [
         "valid",
         "adv_en_i",
@@ -155,52 +333,74 @@
       ],
       "refs": [
         "keymgr_kmac_if.sv:334-339"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "security_precondition",
-      "claim": "decoy_data must be a safe value (e.g., constant, zeroized, or random) that does not expose sensitive state when error conditions force it onto the output.",
-      "cond": "|cmd_error_o || inputs_invalid_o || fsm_error_o",
-      "risk": "If decoy_data contains secret intermediate bits, the error path may leak sensitive information on kmac_data_o.",
-      "signals": [
-        "decoy_data",
-        "kmac_data_o.data",
-        "cmd_error_o",
-        "inputs_invalid_o",
-        "fsm_error_o"
       ],
-      "refs": [
-        "keymgr_kmac_if.sv:331-333"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid && !error",
+        "consequent": "~(adv_en_i & id_en_i) && ~(adv_en_i & gen_en_i) && ~(id_en_i & gen_en_i)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "valid",
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid && !error",
+        "consequent": "~(adv_en_i & id_en_i) && ~(adv_en_i & gen_en_i) && ~(id_en_i & gen_en_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "It is unclear if decoy_data is securely sourced (cleared, constant, or truly random) so that error conditions do not leak secret state via kmac_data_o.",
-      "cond": "When any of cmd_error_o, inputs_invalid_o, or fsm_error_o is active",
-      "risk": "An unsafe decoy_data could expose key material or intermediate values on the KMAC data output during error handling.",
+      "claim": "The origin and generation logic of `decoy_data` must be reviewed to ensure it is truly non-secret and has no residual key material; current chunk blindly trusts it.",
+      "cond": "always during error condition",
+      "risk": "A flaw in decoy_data generation (e.g., using a key-valued register as default) would cause secret leakage under error masking.",
       "signals": [
-        "decoy_data",
-        "kmac_data_o.data",
-        "cmd_error_o",
-        "inputs_invalid_o",
-        "fsm_error_o"
+        "decoy_data"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:331-333"
-      ]
+        "keymgr_kmac_if.sv:331"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "decoy_data derivation does not leak secret",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "decoy_data"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always during error condition",
+        "consequent": "decoy_data derivation does not leak secret",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The select indices adv_sel, id_sel, gen_sel are used to index arrays without local range protection; upstream logic must guarantee they remain within bounds.",
-      "cond": "When corresponding enable and valid are true",
-      "risk": "An out-of-bound index could cause simulation mismatches or hardware misread, potentially corrupting data selection.",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "If the widths of `adv_sel`, `id_sel`, `gen_sel` exceed the corresponding array dimensions due to parameterization, an out-of-bounds read can occur, potentially leaking adjacent key material.",
+      "cond": "when the mis-sized select is used",
+      "risk": "Access to out-of-bounds index may retrieve unintended secret data, breaking key isolation.",
       "signals": [
         "adv_sel",
         "id_sel",
@@ -210,17 +410,120 @@
         "gen_data"
       ],
       "refs": [
-        "keymgr_kmac_if.sv:335",
-        "keymgr_kmac_if.sv:337",
-        "keymgr_kmac_if.sv:339"
-      ]
+        "keymgr_kmac_if.sv:335,337,339"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid && adv_en_i",
+        "consequent": "adv_sel < $size(adv_data)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_sel",
+          "id_sel",
+          "gen_sel",
+          "adv_data",
+          "id_data",
+          "gen_data"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid && adv_en_i",
+        "consequent": "adv_sel < $size(adv_data)",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_temporal_window",
+      "priority": "high",
+      "claim": "Error signals (`cmd_error_o`, `inputs_invalid_o`, `fsm_error_o`) may be asserted in the same cycle as `valid` but after the data path has already selected a secret source, causing a glitch or a full-cycle leak before decoy_data takes effect.",
+      "cond": "when error and valid become true simultaneously or error lags valid",
+      "risk": "A single-cycle exposure of secret data on kmac_data_o.data could be captured externally.",
+      "signals": [
+        "cmd_error_o",
+        "inputs_invalid_o",
+        "fsm_error_o",
+        "valid",
+        "kmac_data_o.data"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:332-339"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid && !prev_error && error",
+        "consequent": "kmac_data_o.data retains secret for one cycle",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_error_o",
+          "inputs_invalid_o",
+          "fsm_error_o",
+          "valid",
+          "kmac_data_o.data"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid && !prev_error && error",
+        "consequent": "kmac_data_o.data retains secret for one cycle",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The explicit priority ordering (adv > id > gen) may not match the system's intended mutual exclusion; a comment or spec reference is missing.",
+      "cond": "when multiple enables are high",
+      "risk": "Misaligned priority could lead to incorrect key derivation sequences without detection.",
+      "signals": [
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:334-339"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "valid && !error",
+        "consequent": "one-hot of {adv_en_i, id_en_i, gen_en_i}",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "valid && !error",
+        "consequent": "one-hot of {adv_en_i, id_en_i, gen_en_i}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk directly drives kmac_data_o.data, which is likely a key/secret data bus to the KMAC engine. (1) Keys/secrets: The data selection among adv_data, id_data, gen_data with an error-induced decoy_data mask is intended to prevent secret leakage during faults. However, the security of this masking depends entirely on the non-secrecy of decoy_data and on error signals being asserted before secret selection. If decoy_data is tainted or error detection lags, secret could be output. (2) Wipe/clear: The block does not perform an explicit clear, but forces decoy_data on error, acting as a logical wipe of the output. The completeness of the error condition coverage must be verified externally. (3) Boundary/overflow: Index selectors (adv_sel, etc.) may be out-of-bounds if not constrained by the driving logic, leading to exposure of adjacent sensitive state. This is a high-concern area for key isolation.",
   "evidence_refs": [
     "keymgr_kmac_if.sv:330-341"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 330,
-  "line_end": 341,
-  "security_implications": ""
+  "line_end": 341
 }

@@ -16,37 +16,83 @@
       "SHA2_512"
     ],
     "tags": [
-      "csr"
+      "digest",
+      "configuration",
+      "error"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "digest_size equals digest_size_supplied when it is SHA2_256, SHA2_384, or SHA2_512; otherwise digest_size is SHA2_None.",
+      "claim": "digest_size is assigned based on digest_size_supplied: SHA2_256 maps to SHA2_256, SHA2_384 to SHA2_384, SHA2_512 to SHA2_512; any other value maps to SHA2_None.",
       "cond": "always",
       "signals": [
         "digest_size",
         "digest_size_supplied"
       ],
       "refs": [
-        "file:297-308"
-      ]
+        "hmac.sv:297-308"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "digest_size == ((digest_size_supplied == SHA2_256) ? SHA2_256 : (digest_size_supplied == SHA2_384) ? SHA2_384 : (digest_size_supplied == SHA2_512) ? SHA2_512 : SHA2_None)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "digest_size",
+          "digest_size_supplied"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "digest_size == ((digest_size_supplied == SHA2_256) ? SHA2_256 : (digest_size_supplied == SHA2_384) ? SHA2_384 : (digest_size_supplied == SHA2_512) ? SHA2_512 : SHA2_None)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "digest_size_supplied must be a valid 2‑state value (no X or Z) for the case mapping to be deterministic.",
-      "cond": "when the block is evaluated",
-      "risk": "X/Z on digest_size_supplied may cause digest_size to become unknown, risking security‑critical state machine misbehaviour or error masking.",
+      "type": "security_precondition",
+      "claim": "The consumer of digest_size must interpret SHA2_None as an invalid/unsupported digest size and block HMAC/SHA-2 operation start while raising an error to software.",
+      "cond": "when SHA-2 or HMAC start is requested",
+      "risk": "If the consumer (FSM) ignores SHA2_None, the engine may start with an undefined or unsupported digest size, leading to incorrect hash computation, potential leakage, or functional corruption.",
       "signals": [
-        "digest_size_supplied"
+        "digest_size",
+        "hmac_start"
       ],
       "refs": [
-        "file:297-308"
-      ]
+        "hmac.sv:304-306"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "hmac_start == 1'b1",
+        "consequent": "digest_size != SHA2_None",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "unsupported",
+        "signals": [
+          "digest_size",
+          "hmac_start"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "hmac_start == 1'b1",
+        "consequent": "digest_size != SHA2_None",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -54,22 +100,44 @@
       "id": "U1",
       "type": "U_cross_chunk_dependency",
       "priority": "high",
-      "claim": "The comment states that an unsupported digest size blocks HMAC/SHA‑2 start and signals an error to software. This logic is not present in this chunk; a different module must detect digest_size == SHA2_None and enforce the error/block behaviour.",
-      "cond": "when digest_size_supplied is an unsupported value",
-      "risk": "If downstream logic does not detect SHA2_None and block the engine, an attacker could force the HMAC to operate with an unsupported digest size, potentially causing incorrect digest computation or bypassing security checks.",
+      "claim": "The HMAC FSM (or control path) must include logic that checks digest_size == SHA2_None on start and prevents operation while signaling an error. Without verification, the mapping of unsupported sizes to SHA2_None may not actually prevent unsafe operation.",
+      "cond": "when hmac_start is asserted",
+      "risk": "Missing or defective start gating could allow the HMAC engine to run with an unsupported digest size, potentially producing wrong digests, corrupting state, or exposing secret-dependent behavior.",
       "signals": [
-        "digest_size"
+        "digest_size",
+        "hmac_start"
       ],
       "refs": [
-        "file:304-307"
-      ]
+        "hmac.sv:304-306"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "hmac_start == 1'b1",
+        "consequent": "digest_size != SHA2_None",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "unsupported",
+        "signals": [
+          "digest_size",
+          "hmac_start"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "hmac_start == 1'b1",
+        "consequent": "digest_size != SHA2_None",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The digest_size output can be SHA2_None if digest_size_supplied is an unsupported value. If the HMAC engine proceeds with SHA2_None, it may enter an unsafe operational state, produce invalid digests (breaking integrity), or leak secret information via non-standard processing. The error-handling path from digest_size to start-block/error-irq must be robustly verified to prevent usage of SHA2_None.",
   "evidence_refs": [
-    "file:297-309"
+    "hmac.sv:297-309"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 297,
-  "line_end": 309,
-  "security_implications": ""
+  "line_end": 309
 }

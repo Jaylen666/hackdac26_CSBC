@@ -11,143 +11,353 @@
     "used": [
       "kmac_valid",
       "msg_ready_i",
-      "clr_keyidx"
+      "clr_keyidx",
+      "clk_i",
+      "rst_ni",
+      "sha3_pkg::KeccakMsgAddrW"
     ],
     "modes": [],
     "tags": [
-      "counter",
       "key",
-      "security",
-      "hardened",
-      "error"
+      "counter",
+      "fault",
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "inc_keyidx is asserted only when both kmac_valid and msg_ready_i are high.",
+      "claim": "inc_keyidx is asserted when kmac_valid and msg_ready_i are both high; otherwise deasserted.",
       "cond": "always",
       "signals": [
+        "inc_keyidx",
         "kmac_valid",
-        "msg_ready_i",
-        "inc_keyidx"
+        "msg_ready_i"
       ],
       "refs": [
-        "kmac_core.sv:407"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:407"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "inc_keyidx == (kmac_valid && msg_ready_i)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "inc_keyidx",
+          "kmac_valid",
+          "msg_ready_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "inc_keyidx == (kmac_valid && msg_ready_i)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "reg_update",
-      "claim": "key_index is driven by a hardened counter (prim_count) that increments by 1 each cycle inc_keyidx is high, and is cleared when clr_keyidx is asserted.",
-      "cond": "on each clock edge",
+      "type": "instance",
+      "claim": "u_key_index_count is a prim_count instance with incr_en_i=inc_keyidx and clr_i=clr_keyidx; it drives key_index as a hardened counter that increments by 1 when inc_keyidx=1 and clr_keyidx=0, and clears to 0 when clr_keyidx=1.",
+      "cond": "always",
       "signals": [
+        "key_index",
         "inc_keyidx",
-        "clr_keyidx",
-        "key_index"
+        "clr_keyidx"
       ],
       "refs": [
-        "kmac_core.sv:410-426"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:411-426"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index",
+          "inc_keyidx",
+          "clr_keyidx"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "always",
+        "consequent": "u_key_index_count is a prim_count instance with incr_en_i=inc_keyidx and clr_i=clr_keyidx; it drives key_index as a hardened counter that increments by 1 when inc_keyidx=1 and clr_keyidx=0, and clears to 0 when clr_keyidx=1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "error_detection",
-      "claim": "key_index_error_o is driven by the prim_count internal error detection, indicating a redundancy mismatch in the hardened counter.",
-      "cond": "when a redundancy error is detected",
+      "type": "instance",
+      "claim": "key_index_error_o is connected to the err_o output of the hardened counter, indicating a redundancy error.",
+      "cond": "always",
       "signals": [
         "key_index_error_o"
       ],
       "refs": [
-        "kmac_core.sv:425"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:425"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "key_index_error_o is connected to the err_o output of the hardened counter, indicating a redundancy error",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "lifecycle",
-      "claim": "clr_keyidx must be asserted at the start of each key-indexing operation to reset the counter to a known state.",
-      "cond": "at initialization or after a transaction",
-      "risk": "key_index may start from an arbitrary or overflowed value, causing access to wrong key material.",
+      "type": "value_domain",
+      "claim": "clr_keyidx and inc_keyidx are never asserted simultaneously.",
+      "cond": "always",
+      "risk": "Simultaneous assertion may cause undefined counter behavior, corrupting key_index and leading to key misuse.",
       "signals": [
         "clr_keyidx",
-        "key_index"
-      ],
-      "refs": [
-        "kmac_core.sv:416"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "the total number of accepted message words (each triggering inc_keyidx) must not exceed 2**KeccakMsgAddrW - 1.",
-      "cond": "when messages are processed",
-      "risk": "key_index overflow will wrap the counter, potentially aliasing lower addresses and causing out-of-bounds or replay-like key access.",
-      "signals": [
-        "key_index",
-        "inc_keyidx",
-        "KeccakMsgAddrW"
-      ],
-      "refs": [
-        "kmac_core.sv:407,411-412"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "handshake",
-      "claim": "kmac_valid and msg_ready_i must be glitch‑free and synchronous to the clock to prevent spurious high pulses on inc_keyidx.",
-      "cond": "while the counter is enabled",
-      "risk": "extra, unintended increments leading to a wrong key_index value.",
-      "signals": [
-        "kmac_valid",
-        "msg_ready_i",
         "inc_keyidx"
       ],
       "refs": [
-        "kmac_core.sv:407"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:416,419"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "!(clr_keyidx && inc_keyidx)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "clr_keyidx",
+          "inc_keyidx"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "!(clr_keyidx && inc_keyidx)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "security_precondition",
+      "claim": "When inc_keyidx is asserted, key_index is not at its maximum value (2^KeccakMsgAddrW - 1), preventing overflow wrap-around.",
+      "cond": "inc_keyidx == 1",
+      "risk": "Wrap-around would incorrectly reset key_index to 0, potentially reusing a key that should no longer be active.",
+      "signals": [
+        "key_index",
+        "inc_keyidx",
+        "sha3_pkg::KeccakMsgAddrW"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:419,423"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "inc_keyidx",
+        "consequent": "key_index != (2**sha3_pkg::KeccakMsgAddrW - 1)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index",
+          "inc_keyidx",
+          "sha3_pkg::KeccakMsgAddrW"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "inc_keyidx",
+        "consequent": "key_index != (2**sha3_pkg::KeccakMsgAddrW - 1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The hardened counter’s commit output cnt_after_commit_o is left unconnected. If the redundancy scheme requires external comparison between the committed value and cnt_o, this missing connection could bypass a critical duplication check.",
-      "cond": "always (during normal operation)",
-      "risk": "A fault that corrupts the counter may go undetected if only the internal error flag is trusted, potentially leading to key_index misuse.",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "cnt_after_commit_o output of prim_count is unconnected and unused.",
+      "cond": "always",
+      "risk": "No direct risk; the signal may be intentionally unused, but its absence could hide a need for a committed value elsewhere.",
       "signals": [
-        "cnt_after_commit_o",
-        "key_index",
-        "key_index_error_o"
+        "cnt_after_commit_o"
       ],
       "refs": [
-        "kmac_core.sv:424"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:424"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_after_commit_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "cnt_after_commit_o output of prim_count is unconnected and unused",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The counter only supports increment and clear; it cannot be loaded with a specific key index (set_i=0, set_cnt_i=0). This may be intentional sequential access but limits error recovery.",
+      "cond": "always",
+      "risk": "Inability to set a specific index could prevent full context restoration or bypass certain key schedules.",
+      "signals": [
+        "set_i",
+        "set_cnt_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:417-418"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "supports",
+        "signals": [
+          "set_i",
+          "set_cnt_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The counter only supports increment and clear; it cannot be loaded with a specific key index (set_i=0, set_cnt_i=0). This may be intentional sequential access but limits error recovery",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
       "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "The counter width (KeccakMsgAddrW) must match the actual depth of the key/index memory. If the memory is smaller, an overflow could alias existing addresses; if larger, the counter may not cover the full space.",
-      "cond": "when the message length approaches or exceeds the counter range",
-      "risk": "Address aliasing could cause unexpected key material to be used, violating access control.",
+      "claim": "inc_keyidx is asserted on every kmac_valid & msg_ready_i transaction, which may increment key_index more often than intended if multiple valid messages arrive without a key switch.",
+      "cond": "kmac_valid && msg_ready_i == 1",
+      "risk": "Key index could advance unintentionally, selecting an incorrect key for subsequent operations.",
       "signals": [
-        "KeccakMsgAddrW",
+        "inc_keyidx",
+        "kmac_valid",
+        "msg_ready_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:407"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "inc_keyidx",
+          "kmac_valid",
+          "msg_ready_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "kmac_valid && msg_ready_i == 1",
+        "consequent": "inc_keyidx is asserted on every kmac_valid & msg_ready_i transaction, which may increment key_index more often than intended if multiple valid messages arrive without a key switch",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U4",
+      "type": "U_fault_containment_gap",
+      "priority": "high",
+      "claim": "If a counter redundancy error occurs, key_index_error_o is asserted but its handling (alert generation, lockout) is not visible in this chunk; a corrupted key_index may be used.",
+      "cond": "key_index_error_o == 1",
+      "risk": "Undetected or unmitigated error could allow operation with a corrupted key index, leading to key misuse or data corruption.",
+      "signals": [
+        "key_index_error_o",
         "key_index"
       ],
       "refs": [
-        "kmac_core.sv:412"
-      ]
+        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:425"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "key_index_error_o",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "key_index_error_o",
+          "key_index"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "key_index_error_o",
+        "consequent": "key_index_error_o is asserted but its handling (alert generation, lockout) is not visible in this chunk; a corrupted key_index may be used",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The key_index counter selects encryption keys. Incorrect incrementation (e.g., due to simultaneous clr/inc, overflow wrap-around, or undetected redundancy error) could cause a wrong key to be used, potentially exposing plaintext or corrupting ciphertext. Inability to set a specific index limits error recovery, increasing the window for key misuse after a fault.",
   "evidence_refs": [
-    "kmac_core.sv:407-426"
+    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv:407-426"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac_core.sv",
   "line_start": 407,
-  "line_end": 426,
-  "security_implications": ""
+  "line_end": 426
 }

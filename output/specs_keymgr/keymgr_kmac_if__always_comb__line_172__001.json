@@ -20,6 +20,7 @@
       "cmd_chk"
     ],
     "used": [
+      "state_q",
       "start",
       "adv_en_i",
       "id_en_i",
@@ -27,17 +28,21 @@
       "kmac_data_i.ready",
       "kmac_data_i.done",
       "kmac_data_i.error",
-      "state_q",
       "cnt",
-      "cnt_err",
+      "CntWidth",
       "LastAdvRound",
       "LastIdRound",
       "LastGenRound",
       "IfBytes",
-      "CntWidth",
       "AdvByteMask",
       "IdByteMask",
-      "GenByteMask"
+      "GenByteMask",
+      "cnt_err",
+      "StIdle",
+      "StTx",
+      "StTxLast",
+      "StOpWait",
+      "StClean"
     ],
     "modes": [
       "StIdle",
@@ -45,180 +50,689 @@
       "StTxLast",
       "StOpWait",
       "StClean",
-      "StError"
+      "StError (via default)"
     ],
     "tags": [
-      "handshake",
       "secret",
       "key",
-      "state_machine",
-      "counter",
+      "digest",
       "error",
       "fault",
-      "lifecycle"
+      "handshake"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "default_fallback",
-      "claim": "All output signals (cnt_clr, cnt_set, cnt_en, valid, last, strb, done_o, state_d, rounds, clr_err, fsm_error_o, kmac_error_o, kmac_done_vld) are initialized to 0 or '0 at the start of the always_comb block, ensuring no implicit latches.",
+      "type": "assignment",
+      "claim": "When state is StIdle, cmd_chk is forced low.",
       "cond": "always",
       "signals": [
-        "cnt_clr",
-        "cnt_set",
-        "cnt_en",
-        "valid",
-        "last",
-        "strb",
-        "done_o",
-        "state_d",
-        "rounds",
-        "clr_err",
-        "fsm_error_o",
-        "kmac_error_o",
-        "kmac_done_vld"
+        "state_q",
+        "cmd_chk"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:173-187"
-      ]
+        "keymgr_kmac_if.sv:198"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle",
+        "consequent": "cmd_chk == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "cmd_chk"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle",
+        "consequent": "cmd_chk == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
-      "type": "assignment",
-      "claim": "cmd_chk defaults to 1 and is driven to 0 only in StIdle and StClean.",
-      "cond": "state_q ∈ {StIdle, StClean} → 0; else → 1",
+      "type": "state_transition",
+      "claim": "In StIdle, when start=1 and adv_en_i is active, rounds is set to LastAdvRound and cnt_set is asserted.",
+      "cond": "start && adv_en_i",
       "signals": [
-        "cmd_chk",
-        "state_q"
+        "state_q",
+        "start",
+        "adv_en_i",
+        "rounds",
+        "cnt_set"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:189,198,257"
-      ]
+        "keymgr_kmac_if.sv:199-202"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start && adv_en_i",
+        "consequent": "cnt_set == 1 && rounds == LastAdvRound",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "start",
+          "adv_en_i",
+          "rounds",
+          "cnt_set"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start && adv_en_i",
+        "consequent": "cnt_set == 1 && rounds == LastAdvRound",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "mux_case",
-      "claim": "In StIdle when start=1, rounds is set to LastAdvRound if adv_en_i is asserted, else to LastIdRound if id_en_i, else to LastGenRound if gen_en_i, else remains '0.",
-      "cond": "state_q == StIdle && start",
+      "type": "state_transition",
+      "claim": "In StIdle, when start=1 and id_en_i is active (and adv_en_i is low), rounds is set to LastIdRound and cnt_set is asserted.",
+      "cond": "start && !adv_en_i && id_en_i",
       "signals": [
-        "rounds",
+        "state_q",
+        "start",
         "adv_en_i",
         "id_en_i",
-        "gen_en_i",
-        "LastAdvRound",
-        "LastIdRound",
-        "LastGenRound"
+        "rounds",
+        "cnt_set"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:193-210"
-      ]
+        "keymgr_kmac_if.sv:203-204"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start && !adv_en_i && id_en_i",
+        "consequent": "cnt_set == 1 && rounds == LastIdRound",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "start",
+          "adv_en_i",
+          "id_en_i",
+          "rounds",
+          "cnt_set"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start && !adv_en_i && id_en_i",
+        "consequent": "cnt_set == 1 && rounds == LastIdRound",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "state_transition",
-      "claim": "In StIdle when start=1, next state (state_d) is StTxLast if the assigned rounds equals 0, otherwise StTx.",
-      "cond": "state_q == StIdle && start",
+      "claim": "In StIdle, when start=1 and gen_en_i is active (and both adv_en_i and id_en_i are low), rounds is set to LastGenRound and cnt_set is asserted.",
+      "cond": "start && !adv_en_i && !id_en_i && gen_en_i",
       "signals": [
-        "state_d",
-        "rounds",
-        "StTx",
-        "StTxLast"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:209"
-      ]
-    },
-    {
-      "id": "G5",
-      "type": "reg_update",
-      "claim": "In StTx, valid=1, strb={IfBytes{1'b1}}; when kmac_data_i.ready is asserted, cnt_en=1 and if cnt == CntWidth'(1) then state_d = StTxLast.",
-      "cond": "state_q == StTx",
-      "signals": [
-        "valid",
-        "strb",
-        "kmac_data_i.ready",
-        "cnt_en",
-        "cnt",
-        "state_d"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:213-225"
-      ]
-    },
-    {
-      "id": "G6",
-      "type": "mux_case",
-      "claim": "In StTxLast, valid=1, last=1, strb is assigned from adv_en_i ? AdvByteMask : id_en_i ? IdByteMask : gen_en_i ? GenByteMask : '0; when kmac_data_i.ready, cnt_clr=1 and state_d = StOpWait.",
-      "cond": "state_q == StTxLast",
-      "signals": [
-        "valid",
-        "last",
-        "strb",
+        "state_q",
+        "start",
         "adv_en_i",
         "id_en_i",
         "gen_en_i",
-        "AdvByteMask",
-        "IdByteMask",
-        "GenByteMask",
-        "kmac_data_i.ready",
-        "cnt_clr",
+        "rounds",
+        "cnt_set"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:205-206"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start && !adv_en_i && !id_en_i && gen_en_i",
+        "consequent": "cnt_set == 1 && rounds == LastGenRound",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "start",
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i",
+          "rounds",
+          "cnt_set"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start && !adv_en_i && !id_en_i && gen_en_i",
+        "consequent": "cnt_set == 1 && rounds == LastGenRound",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "state_transition",
+      "claim": "In StIdle after start and rounds assignment, next state is StTxLast if rounds==0, otherwise StTx.",
+      "cond": "start",
+      "signals": [
+        "state_q",
+        "start",
+        "rounds",
         "state_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:229-244"
-      ]
+        "keymgr_kmac_if.sv:209"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start",
+        "consequent": "state_d == ((rounds == 0) ? StTxLast : StTx)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "start",
+          "rounds",
+          "state_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle && start",
+        "consequent": "state_d == ((rounds == 0) ? StTxLast : StTx)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "assignment",
+      "claim": "In StTx, valid is driven high and strb is set to all-ones (IfBytes bits).",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "valid",
+        "strb",
+        "IfBytes"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:214-215"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTx",
+        "consequent": "valid == 1 && strb == {IfBytes{1'b1}}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "valid",
+          "strb",
+          "IfBytes"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTx",
+        "consequent": "valid == 1 && strb == {IfBytes{1'b1}}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G7",
       "type": "reg_update",
-      "claim": "In StOpWait, kmac_done_vld=1; on kmac_data_i.done, kmac_error_o = kmac_data_i.error, done_o=1, and state_d = StClean.",
-      "cond": "state_q == StOpWait",
+      "claim": "In StTx, when kmac_data_i.ready is asserted, cnt_en is set high to increment the counter.",
+      "cond": "kmac_data_i.ready",
       "signals": [
-        "kmac_done_vld",
-        "kmac_data_i.done",
-        "kmac_data_i.error",
-        "kmac_error_o",
-        "done_o",
-        "state_d"
+        "state_q",
+        "kmac_data_i.ready",
+        "cnt_en"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:247-254"
-      ]
+        "keymgr_kmac_if.sv:218-219"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTx && kmac_data_i.ready",
+        "consequent": "cnt_en == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "kmac_data_i.ready",
+          "cnt_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTx && kmac_data_i.ready",
+        "consequent": "cnt_en == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G8",
       "type": "state_transition",
-      "claim": "In StClean, cmd_chk=0, done_o=1; when start is deasserted, done_o=0, clr_err=1, and state_d = StIdle.",
-      "cond": "state_q == StClean",
+      "claim": "In StTx, if kmac_data_i.ready and cnt equals 1, next state is StTxLast.",
+      "cond": "kmac_data_i.ready && cnt == 1",
       "signals": [
-        "cmd_chk",
+        "state_q",
+        "kmac_data_i.ready",
+        "cnt",
+        "state_d"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:222-223"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTx && kmac_data_i.ready && cnt == CntWidth'(1'b1)",
+        "consequent": "state_d == StTxLast",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "kmac_data_i.ready",
+          "cnt",
+          "state_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTx && kmac_data_i.ready && cnt == CntWidth'(1'b1)",
+        "consequent": "state_d == StTxLast",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G9",
+      "type": "assignment",
+      "claim": "In StTxLast, valid and last are both set high.",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "valid",
+        "last"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:230-231"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "valid == 1 && last == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "valid",
+          "last"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "valid == 1 && last == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G10",
+      "type": "mux_case",
+      "claim": "In StTxLast, strb is set to AdvByteMask if adv_en_i is active, else IdByteMask if id_en_i, else GenByteMask if gen_en_i.",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "adv_en_i",
+        "id_en_i",
+        "gen_en_i",
+        "strb",
+        "AdvByteMask",
+        "IdByteMask",
+        "GenByteMask"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:233-239"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "(adv_en_i ? strb == AdvByteMask : (id_en_i ? strb == IdByteMask : (gen_en_i ? strb == GenByteMask : strb == '0)))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "adv_en_i",
+          "id_en_i",
+          "gen_en_i",
+          "strb",
+          "AdvByteMask",
+          "IdByteMask",
+          "GenByteMask"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "(adv_en_i ? strb == AdvByteMask : (id_en_i ? strb == IdByteMask : (gen_en_i ? strb == GenByteMask : strb == '0)))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G11",
+      "type": "assignment",
+      "claim": "In StTxLast, cnt_clr is set equal to kmac_data_i.ready.",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "cnt_clr",
+        "kmac_data_i.ready"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:242"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "cnt_clr == kmac_data_i.ready",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "cnt_clr",
+          "kmac_data_i.ready"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "cnt_clr == kmac_data_i.ready",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G12",
+      "type": "state_transition",
+      "claim": "In StTxLast, next state is StOpWait if kmac_data_i.ready is high, else remains StTxLast.",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "kmac_data_i.ready",
+        "state_d"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:243"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "state_d == (kmac_data_i.ready ? StOpWait : StTxLast)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "kmac_data_i.ready",
+          "state_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StTxLast",
+        "consequent": "state_d == (kmac_data_i.ready ? StOpWait : StTxLast)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G13",
+      "type": "assignment",
+      "claim": "In StOpWait, kmac_done_vld is driven high.",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "kmac_done_vld"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:248"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StOpWait",
+        "consequent": "kmac_done_vld == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "kmac_done_vld"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StOpWait",
+        "consequent": "kmac_done_vld == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G14",
+      "type": "error_detection",
+      "claim": "In StOpWait, when kmac_data_i.done is true, kmac_error_o captures kmac_data_i.error, done_o is asserted, and state moves to StClean.",
+      "cond": "kmac_data_i.done",
+      "signals": [
+        "state_q",
+        "kmac_data_i.done",
+        "kmac_error_o",
+        "kmac_data_i.error",
         "done_o",
+        "state_d"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:249-252"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StOpWait && kmac_data_i.done",
+        "consequent": "kmac_error_o == kmac_data_i.error && done_o == 1 && state_d == StClean",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "kmac_data_i.done",
+          "kmac_error_o",
+          "kmac_data_i.error",
+          "done_o",
+          "state_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StOpWait && kmac_data_i.done",
+        "consequent": "kmac_error_o == kmac_data_i.error && done_o == 1 && state_d == StClean",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G15",
+      "type": "assignment",
+      "claim": "In StClean, cmd_chk is forced low.",
+      "cond": "always",
+      "signals": [
+        "state_q",
+        "cmd_chk"
+      ],
+      "refs": [
+        "keymgr_kmac_if.sv:257"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean",
+        "consequent": "cmd_chk == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "cmd_chk"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean",
+        "consequent": "cmd_chk == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G16",
+      "type": "assignment",
+      "claim": "In StClean, done_o is high as long as start remains asserted; when start deasserts, done_o becomes low, clr_err is set high, and state returns to StIdle.",
+      "cond": "depends on start",
+      "signals": [
+        "state_q",
         "start",
+        "done_o",
         "clr_err",
         "state_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:256-265"
-      ]
+        "keymgr_kmac_if.sv:258-265"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean",
+        "consequent": "(start ? done_o == 1 && clr_err == 0 && state_d == StClean : done_o == 0 && clr_err == 1 && state_d == StIdle)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "start",
+          "done_o",
+          "clr_err",
+          "state_d"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean",
+        "consequent": "(start ? done_o == 1 && clr_err == 0 && state_d == StClean : done_o == 0 && clr_err == 1 && state_d == StIdle)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G9",
-      "type": "state_transition",
-      "claim": "In any state not explicitly listed in the case (default), done_o=1 and fsm_error_o=1, providing a terminal error state.",
-      "cond": "state_q ∉ {StIdle, StTx, StTxLast, StOpWait, StClean}",
+      "id": "G17",
+      "type": "default_fallback",
+      "claim": "Any state not explicitly listed (StIdle, StTx, StTxLast, StOpWait, StClean) enters a terminal error: done_o is asserted and fsm_error_o is high.",
+      "cond": "state_q outside allowed set",
       "signals": [
+        "state_q",
         "done_o",
         "fsm_error_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:269-273"
-      ]
+        "keymgr_kmac_if.sv:269-273"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!(state_q inside {StIdle, StTx, StTxLast, StOpWait, StClean})",
+        "consequent": "done_o == 1 && fsm_error_o == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q",
+          "done_o",
+          "fsm_error_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!(state_q inside {StIdle, StTx, StTxLast, StOpWait, StClean})",
+        "consequent": "done_o == 1 && fsm_error_o == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "id": "G10",
-      "type": "assignment",
-      "claim": "If cnt_err is asserted, state_d is forced to StError, fsm_error_o=1, and done_o=1, overriding any other assignments in the same cycle.",
+      "id": "G18",
+      "type": "error_detection",
+      "claim": "Unconditionally, when cnt_err is high, state_d is forced to StError, fsm_error_o is asserted, and done_o is asserted (overriding any case output).",
       "cond": "cnt_err == 1",
       "signals": [
         "cnt_err",
@@ -227,88 +741,176 @@
         "done_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:280-284"
-      ]
+        "keymgr_kmac_if.sv:280-284"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "cnt_err",
+        "consequent": "state_d == StError && fsm_error_o == 1 && done_o == 1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err",
+          "state_d",
+          "fsm_error_o",
+          "done_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "cnt_err",
+        "consequent": "state_d == StError && fsm_error_o == 1 && done_o == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "handshake",
-      "claim": "kmac_data_i.ready will eventually be asserted when valid is high, to prevent infinite stalling in StTx or StTxLast.",
-      "cond": "when state_q ∈ {StTx, StTxLast} and valid=1",
-      "risk": "FSM stuck in Tx state, no progress.",
+      "claim": "kmac_data_i.ready and kmac_data_i.done accurately reflect the KMAC unit's acceptance and completion, with no glitches or false pulses.",
+      "cond": "During StTx, StTxLast, StOpWait states",
+      "risk": "Deadlock, premature/missed last beat, or incorrect transaction completion.",
       "signals": [
         "kmac_data_i.ready",
-        "valid",
-        "state_q"
+        "kmac_data_i.done"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:218,242"
-      ]
+        "keymgr_kmac_if.sv:218-253"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q inside {StTx, StTxLast, StOpWait}",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_i.ready",
+          "kmac_data_i.done"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q inside {StTx, StTxLast, StOpWait}",
+        "consequent": "kmac_data_i.ready and kmac_data_i.done accurately reflect the KMAC unit's acceptance and completion, with no glitches or false pulses",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "handshake",
-      "claim": "kmac_data_i.done will eventually be asserted when kmac_done_vld is high, to allow transition from StOpWait to StClean.",
-      "cond": "state_q == StOpWait",
-      "risk": "FSM stuck in StOpWait, done_o never asserted.",
+      "type": "value_domain",
+      "claim": "The counter cnt correctly increments when cnt_en is high, resets to 0 when cnt_clr is asserted, and its value reflects the number of transmitted beats.",
+      "cond": "During StTx/StTxLast",
+      "risk": "Incorrect last-beat detection leads to truncation or extra beats, corrupting key/digest data.",
       "signals": [
-        "kmac_data_i.done",
-        "kmac_done_vld"
+        "cnt",
+        "cnt_en",
+        "cnt_clr"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:249"
-      ]
+        "keymgr_kmac_if.sv:222-224"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "cnt_en",
+        "consequent": "cnt_next == cnt + 1, etc.",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "resets",
+        "signals": [
+          "cnt",
+          "cnt_en",
+          "cnt_clr"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "cnt_en",
+        "consequent": "cnt_next == cnt + 1, etc",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A3",
-      "type": "lifecycle",
-      "claim": "After done_o is asserted, the control side will deassert start to acknowledge the operation and allow transition from StClean back to StIdle.",
-      "cond": "state_q == StClean",
-      "risk": "FSM remains in StClean with done_o=1, blocking new transactions.",
+      "type": "handshake",
+      "claim": "After done_o is asserted, the controlling FSM will eventually deassert start to allow StClean to return to StIdle.",
+      "cond": "StClean state when start remains high",
+      "risk": "Stuck indefinitely in StClean, preventing new transactions.",
       "signals": [
-        "done_o",
-        "start"
+        "start",
+        "done_o"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:260-265"
-      ]
+        "keymgr_kmac_if.sv:261-264"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean && start",
+        "consequent": "F(start == 0)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "start",
+          "done_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean && start",
+        "consequent": "F(start == 0)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A4",
       "type": "producer_contract",
-      "claim": "adv_en_i, id_en_i, gen_en_i remain stable from the time start is asserted until done_o is acknowledged, ensuring consistent mask and rounds selection across the transaction.",
-      "cond": "during transaction (from start to done_o)",
-      "risk": "Incorrect byte mask (strb) or unexpected rounds value could be used in StTxLast, leading to wrong data masking.",
+      "claim": "kmac_data_i.error is valid and stable when kmac_data_i.done is asserted.",
+      "cond": "StOpWait state when kmac_data_i.done = 1",
+      "risk": "False or stale error flag could cause unnecessary fault escalation or mask a real error.",
       "signals": [
-        "adv_en_i",
-        "id_en_i",
-        "gen_en_i",
-        "strb",
-        "rounds"
+        "kmac_data_i.done",
+        "kmac_data_i.error"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:201-207,233-239"
-      ]
-    },
-    {
-      "id": "A5",
-      "type": "value_domain",
-      "claim": "Parameters LastAdvRound, LastIdRound, LastGenRound are non-negative and within the counter width, and the external counter logic correctly initializes/updates cnt to match these values.",
-      "cond": "when start is asserted",
-      "risk": "FSM may mis-sequence if rounds value exceeds counter range, causing cnt comparison failures.",
-      "signals": [
-        "rounds",
-        "cnt",
-        "CntWidth",
-        "LastAdvRound",
-        "LastIdRound",
-        "LastGenRound"
+        "keymgr_kmac_if.sv:250"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:202-210,222"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StOpWait && kmac_data_i.done",
+        "consequent": "$stable(kmac_data_i.error)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "kmac_data_i.done",
+          "kmac_data_i.error"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StOpWait && kmac_data_i.done",
+        "consequent": "$stable(kmac_data_i.error)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
@@ -316,93 +918,118 @@
       "id": "U1",
       "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "If cnt_err occurs during StOpWait, kmac_error_o may not capture kmac_data_i.error because the unconditional cnt_err path (lines 280-284) does not set kmac_error_o, while the concurrent StOpWait assignment to kmac_error_o is conditional on kmac_data_i.done. The cnt_err path could override state before the error is latched.",
-      "cond": "cnt_err asserted while state_q == StOpWait and kmac_data_i.done not yet true",
-      "risk": "Loss of a KMAC error indication, leading to silent fault propagation.",
+      "claim": "When cnt_err is asserted, the block forces state_d to StError and asserts fsm_error_o/done_o, but does not override valid/strb outputs. If state_q is currently StTx or StTxLast, a transaction with potential corrupted data may still be committed during the same cycle.",
+      "cond": "cnt_err true while state_q ∈ {StTx, StTxLast}",
+      "risk": "Corrupted key advancement or digest data is sent to KMAC before error is latched, compromising integrity.",
       "signals": [
         "cnt_err",
-        "kmac_error_o",
-        "kmac_data_i.error",
-        "kmac_data_i.done",
-        "state_q"
+        "state_q",
+        "valid",
+        "strb"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:249-250,280-284"
-      ]
+        "keymgr_kmac_if.sv:280-284 vs 214-239"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "cnt_err && (state_q == StTx || state_q == StTxLast)",
+        "consequent": "valid == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cnt_err",
+          "state_q",
+          "valid",
+          "strb"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "cnt_err && (state_q == StTx || state_q == StTxLast)",
+        "consequent": "valid == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_spec_gap",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "cmd_chk is forced to 0 in StIdle and StClean, but comment says 'cross check for commands once transaction begins', implying it should be active during transactions. It is unclear if disabling cross-check in idle is intended or a documentation mismatch.",
-      "cond": "state_q ∈ {StIdle, StClean}",
-      "risk": "Potentially missing or unnecessary command verification during idle, depending on the cross-check mechanism.",
+      "claim": "cmd_chk is forced low during StIdle and StClean. The purpose and downstream use of cmd_chk are in another chunk. If it serves as a command-integrity check, disabling it during these phases could allow injection of illegal operations while the FSM appears idle or cleaning.",
+      "cond": "state_q == StIdle || StClean",
+      "risk": "Unauthorized command execution if cmd_chk gating is essential for security.",
       "signals": [
         "cmd_chk",
         "state_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:189,198,257"
-      ]
+        "keymgr_kmac_if.sv:198, 257"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "cmd_chk",
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StIdle || StClean",
+        "consequent": "cmd_chk is forced low during StIdle and StClean. The purpose and downstream use of cmd_chk are in another chunk. If it serves as a command-integrity check, disabling it during these phases could allow injection of illegal operations while t",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_temporal_window",
-      "priority": "medium",
-      "claim": "In StTxLast, strb is derived directly from adv_en_i/id_en_i/gen_en_i without latching; if these signals change after StTxLast is entered but before kmac_data_i.ready is asserted, the byte mask on the last beat could be incorrect.",
-      "cond": "state_q == StTxLast and kmac_data_i.ready == 0, and adv_en_i/id_en_i/gen_en_i toggle",
-      "risk": "Incorrect byte strobes may write partial key material.",
-      "signals": [
-        "strb",
-        "adv_en_i",
-        "id_en_i",
-        "gen_en_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:233-239,243"
-      ]
-    },
-    {
-      "id": "U4",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The correctness of the FSM's state progression from StTx to StTxLast depends on the external counter (cnt) exactly matching the expected sequence derived from rounds. Any width mismatch, initialization error, or counter behavior not shown here could cause premature or missed transitions.",
-      "cond": "when state_q == StTx and kmac_data_i.ready",
-      "risk": "FSM may skip bytes or stall, corrupting the data stream.",
-      "signals": [
-        "cnt",
-        "CntWidth",
-        "rounds",
-        "state_d"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:222-223"
-      ]
-    },
-    {
-      "id": "U5",
       "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The comment in StIdle states that adv_en has priority 'as the current key state will be destroyed', but this chunk does not directly enforce key destruction or clearing; it merely selects rounds and masks. Whether the priority-encoded selection plus downstream KMAC operations fully achieves secure key state transition is unclear without higher-level review.",
-      "cond": "state_q == StIdle && start && adv_en_i",
-      "risk": "Potential for incomplete key clearing or unintended key material exposure if the state machine does not guarantee destruction.",
+      "priority": "medium",
+      "claim": "The StClean state does not perform any explicit data wipe or zeroization of internal registers; it merely clears the error flag and returns to idle. Without a wipe, secret-related state may persist.",
+      "cond": "Transition StOpWait → StClean",
+      "risk": "Residual key/digest data could be accessible to subsequent operations if the same storage is reused without clearing.",
       "signals": [
-        "adv_en_i",
-        "id_en_i",
-        "gen_en_i",
-        "rounds",
-        "state_d"
+        "state_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:194-195,201-207"
-      ]
+        "keymgr_kmac_if.sv:256-265"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean",
+        "consequent": "!$onehot0(clearing_signals)",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_kmac_if",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "state_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "state_q == StClean",
+        "consequent": "!$onehot0(clearing_signals)",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk controls data flow to the KMAC engine for key manager operations (advance, identity, generate), handling byte masks, transaction beats, and error reporting. A fault containment gap (U1) allows dispatched transactions to continue even when cnt_err is asserted, risking corrupted data reaching KMAC and compromising key advance integrity or digest correctness. Additionally, cmd_chk being forced low during idle/clean states (U2) disables command cross-checking, potentially opening a window for unauthorized commands. The absence of explicit data wipe in StClean (U3) may leave key/digest residues.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv:172-285"
+    "keymgr_kmac_if.sv:172-285"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_kmac_if.sv",
   "line_start": 172,
-  "line_end": 285,
-  "security_implications": ""
+  "line_end": 285
 }

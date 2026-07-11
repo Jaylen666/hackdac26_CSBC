@@ -12,119 +12,100 @@
       "fault_err_req_d",
       "op_err_req_d"
     ],
-    "modes": [],
+    "modes": [
+      "reset"
+    ],
     "tags": [
       "error",
       "fault",
-      "reset",
-      "security"
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "assignment",
-      "claim": "On negedge rst_ni, fault_err_req_q and op_err_req_q are each synchronously cleared to zero ('0).",
-      "cond": "negedge rst_ni",
+      "type": "reg_update",
+      "claim": "When rst_ni is low (reset active), fault_err_req_q and op_err_req_q are asynchronously cleared to 0.",
+      "cond": "!rst_ni",
       "signals": [
         "rst_ni",
         "fault_err_req_q",
         "op_err_req_q"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:726-728"
-      ]
+        "keymgr.sv:726-728"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "fault_err_req_q == 0 && op_err_req_q == 0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "fault_err_req_q",
+          "op_err_req_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "fault_err_req_q == 0 && op_err_req_q == 0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On posedge clk_i when rst_ni is high, fault_err_req_q updates to fault_err_req_d and op_err_req_q updates to op_err_req_d.",
-      "cond": "posedge clk_i, rst_ni high",
+      "claim": "When not in reset, on each posedge clk_i, fault_err_req_q samples fault_err_req_d and op_err_req_q samples op_err_req_d from the previous cycle.",
+      "cond": "rst_ni active && posedge clk_i",
       "signals": [
-        "clk_i",
-        "rst_ni",
         "fault_err_req_q",
         "op_err_req_q",
         "fault_err_req_d",
         "op_err_req_d"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:730-731"
-      ]
+        "keymgr.sv:730-731"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "fault_err_req_q == $past(fault_err_req_d) && op_err_req_q == $past(op_err_req_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "posedge",
+        "reset": "reset",
+        "signals": [
+          "fault_err_req_q",
+          "op_err_req_q",
+          "fault_err_req_d",
+          "op_err_req_d"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "fault_err_req_q == $past(fault_err_req_d) && op_err_req_q == $past(op_err_req_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "fault_err_req_d and op_err_req_d must be valid logic levels (not X) and glitch-free at each posedge clk_i while rst_ni is high.",
-      "cond": "rst_ni high, at posedge clk_i",
-      "risk": "A glitch or X on either input can cause a false fault/error request to be latched into fault_err_req_q or op_err_req_q, potentially triggering erroneous fault handling or secret destruction in the Key Manager.",
-      "signals": [
-        "fault_err_req_d",
-        "op_err_req_d",
-        "rst_ni",
-        "clk_i"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:730-731"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "security_precondition",
-      "claim": "rst_ni must be asserted low for a complete clock cycle or more, and must not have glitches, to ensure fault_err_req_q and op_err_req_q are reliably cleared to zero before releasing reset.",
-      "cond": "During reset sequence",
-      "risk": "If reset is deasserted prematurely or glitches, the error registers may hold non-zero values, causing a spurious error request to be active immediately after reset release, which could disrupt secure boot or key derivation.",
-      "signals": [
-        "rst_ni",
-        "fault_err_req_q",
-        "op_err_req_q"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:726-728"
-      ]
-    }
-  ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The source modules that generate fault_err_req_d and op_err_req_d must be reviewed to confirm that these signals are asserted with an appropriate protocol (e.g., level-held-until-acknowledged vs. pulse). If they are pulsed, the simple register here may not hold the request long enough for the consumer, potentially causing loss of a critical fault error.",
-      "cond": "When an error condition occurs and the _d signal is pulsed",
-      "risk": "A transient fault error could be missed by the error handling FSM if it samples on a different clock or doesn't capture immediately, leading to undetected security violations.",
-      "signals": [
-        "fault_err_req_d",
-        "fault_err_req_q",
-        "op_err_req_d",
-        "op_err_req_q"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:730-731"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_temporal_window",
-      "priority": "high",
-      "claim": "The outputs fault_err_req_q and op_err_req_q are updated every clock cycle without any stalling or handshake. If the downstream logic samples these signals only on certain states or has a slower clock, a one-cycle-wide error pulse might be missed. Need to verify that the error capture mechanism aligns with this timing.",
-      "cond": "If the error source produces a pulse shorter than the downstream sampling window",
-      "risk": "A security-critical fault error could be missed, allowing a compromised state to persist without detection.",
-      "signals": [
-        "fault_err_req_q",
-        "op_err_req_q"
-      ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:730-731"
-      ]
-    }
-  ],
+  "assumptions": [],
+  "uncertain_points": [],
+  "security_implications": "The registers capture fault and operational error requests. If they fail to capture (due to clock/reset glitches or incorrect control) an error may be missed, potentially allowing a fault to propagate without detection or response. Corrupted clear of these registers could mask a real fault, violating security-critical error handling.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv:725-733"
+    "keymgr.sv:725-733"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 725,
-  "line_end": 733,
-  "security_implications": ""
+  "line_end": 733
 }

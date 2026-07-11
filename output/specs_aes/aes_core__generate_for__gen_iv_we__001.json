@@ -1,42 +1,186 @@
 {
   "chunk_id": "aes_core__generate_for__gen_iv_we__001",
-  "summary": "将安全检查信号 sp2v_sig_chk 的固定偏移位直接分配给 IV 写使能向量 iv_we，生成与计数器切片数量相同的驱动赋值。",
-  "behavior": "通过 generate for 循环产生 NumSlicesCtr 条组合赋值。每条赋值将 iv_we[i] 驱动为 sp2v_sig_chk[NumSharesKey * NumRegsKey + i]，其中 i 从 0 到 NumSlicesCtr-1。这表示 iv_we 的每个位完全由 sp2v_sig_chk 中相应偏移处的值决定，无时钟节拍延迟，任何 sp2v_sig_chk 的变化会立即传播到 iv_we。该映射将上层安全校验或控制信号直接转换为 IV 的写入使能。",
+  "header": {
+    "module": "aes_core",
+    "block_kind": "generate",
+    "driven": [
+      "iv_we"
+    ],
+    "used": [
+      "sp2v_sig_chk",
+      "NumSharesKey",
+      "NumRegsKey",
+      "NumSlicesCtr"
+    ],
+    "modes": [
+      "NumSlicesCtr",
+      "NumSharesKey",
+      "NumRegsKey"
+    ],
+    "tags": [
+      "parameterization",
+      "fifo"
+    ]
+  },
   "guarantees": [
     {
-      "property": "对于所有满足 0 ≤ i < NumSlicesCtr 的 i，iv_we[i] 信号电平始终等于 sp2v_sig_chk[NumSharesKey * NumRegsKey + i] 的电平。",
-      "output_signals": [
-        "iv_we"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "Each bit iv_we[i] for i from 0 to NumSlicesCtr-1 is continuously driven by sp2v_sig_chk[NumSharesKey*NumRegsKey + i].",
+      "cond": "always (combinationally)",
+      "signals": [
+        "iv_we",
+        "sp2v_sig_chk"
       ],
-      "source_refs": [
-        "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_core.sv:848"
-      ]
+      "refs": [
+        "aes_core.sv:847-849"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "iv_we[i] == sp2v_sig_chk[NumSharesKey * NumRegsKey + i]",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "aes_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "iv_we",
+          "sp2v_sig_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always (combinationally)",
+        "consequent": "iv_we[i] == sp2v_sig_chk[NumSharesKey * NumRegsKey + i]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "security_implications": "iv_we 控制 AES 计数器模式下 IV 的更新使能。sp2v_sig_chk 的名称暗示其携带完整性或有效性检查结果，因此该赋值将安全关键的控制信号直接传递至 IV 写使能，未做额外过滤。iv_we 的行为完全取决于 sp2v_sig_chk 的正确生成，如果 sp2v_sig_chk 中对应位出现非预期的活性，可能导致 IV 被意外修改，影响机密性或扰乱加密流程。",
   "assumptions": [
     {
-      "constraint": "sp2v_sig_chk 向量的索引范围必须至少达到 NumSharesKey * NumRegsKey + NumSlicesCtr - 1，否则会发生越界访问。",
-      "bug_relevance": "若该约束不满足，生成的读取索引超出 sp2v_sig_chk 声明的位宽，仿真时将产生 X 态或错误驱动，iv_we 输出无效，导致 IV 无法正确更新，功能完全错误。",
-      "related_signals": [
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "sp2v_sig_chk must have a bit width of at least NumSharesKey * NumRegsKey + NumSlicesCtr to avoid out-of-bounds reading.",
+      "cond": "when the generate loop is elaborated",
+      "risk": "If violated, iv_we bits may be assigned from undefined or garbage source bits, leading to unintended IV write enables and potential corruption of cipher state.",
+      "signals": [
         "sp2v_sig_chk",
         "NumSharesKey",
         "NumRegsKey",
         "NumSlicesCtr"
       ],
-      "source_refs": [
-        "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_core.sv:847-849"
-      ]
+      "refs": [
+        "aes_core.sv:848"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sp2v_sig_chk_bitwidth >= NumSharesKey * NumRegsKey + NumSlicesCtr",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "aes_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_chk",
+          "NumSharesKey",
+          "NumRegsKey",
+          "NumSlicesCtr"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when the generate loop is elaborated",
+        "consequent": "sp2v_sig_chk_bitwidth >= NumSharesKey * NumRegsKey + NumSlicesCtr",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "evidence_refs": [
-    "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_core.sv:847-849"
-  ],
   "uncertain_points": [
-    "sp2v_sig_chk 的完整位宽和具体语义需要上下文确认，以验证偏移表达式 NumSharesKey * NumRegsKey 的正确性。",
-    "iv_we 连接的终端 IV 寄存器同样需要模块上下文确定，以评估该组合通路对时序的影响。"
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The origin and semantics of sp2v_sig_chk are unclear; its generation may have security implications for iv_we assignment correctness.",
+      "cond": "unknown",
+      "risk": "If sp2v_sig_chk is not properly validated or synchronized, glitches or sparse-encoding errors could incorrectly assert iv_we, enabling unauthorized IV updates.",
+      "signals": [
+        "sp2v_sig_chk"
+      ],
+      "refs": [
+        "aes_core.sv:848"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "aes_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "The origin and semantics of sp2v_sig_chk are unclear; its generation may have security implications for iv_we assignment correctness",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_width_param_hazard",
+      "priority": "high",
+      "claim": "No elaboration-time check prevents NumSharesKey * NumRegsKey + NumSlicesCtr from exceeding sp2v_sig_chk width.",
+      "cond": "when parameters are chosen such that the index is out of range",
+      "risk": "Out-of-bounds access could silently assign unmapped bits to iv_we, causing unpredictable IV write behavior and potential cryptographic failure.",
+      "signals": [
+        "sp2v_sig_chk",
+        "NumSharesKey",
+        "NumRegsKey",
+        "NumSlicesCtr"
+      ],
+      "refs": [
+        "aes_core.sv:848"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "sp2v_sig_chk_bitwidth >= NumSharesKey * NumRegsKey + NumSlicesCtr",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "aes_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sp2v_sig_chk",
+          "NumSharesKey",
+          "NumRegsKey",
+          "NumSlicesCtr"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when parameters are chosen such that the index is out of range",
+        "consequent": "sp2v_sig_chk_bitwidth >= NumSharesKey * NumRegsKey + NumSlicesCtr",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
   ],
-  "source_file": "/home/smy/rtl_bug_agent/experiments/signal_only_ablation/aes_incremental_old_prompt/_aes_min_rtl/aes_core.sv",
+  "security_implications": "iv_we controls write enables for initialization vectors (IV). If sp2v_sig_chk is corrupted or mis-assigned (e.g., due to a sparse encoding error or parameter mismatch), iv_we could be asserted unintentionally, allowing unauthorized IV updates and potentially compromising the confidentiality or integrity of AES operations.",
+  "evidence_refs": [
+    "aes_core.sv:847-849"
+  ],
+  "source_file": "/home/smy/opentitan/hw/ip/aes/rtl/aes_core.sv",
   "line_start": 847,
   "line_end": 849
 }

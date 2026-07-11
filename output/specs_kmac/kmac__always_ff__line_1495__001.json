@@ -7,36 +7,59 @@
       "alerts_q[0]"
     ],
     "used": [
-      "clk_i",
+      "alerts[0]",
       "rst_ni",
-      "alerts[0]"
+      "clk_i"
     ],
     "modes": [],
     "tags": [
       "alert",
-      "reset",
-      "synchronization"
+      "error",
+      "fault",
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "reg_update",
-      "claim": "When rst_ni is low, alerts_q[0] is asynchronously set to 1'b0.",
-      "cond": "always while rst_ni is low",
+      "type": "async_reset",
+      "claim": "Asynchronously resets alerts_q[0] to 0 when rst_ni is low.",
+      "cond": "!rst_ni",
       "signals": [
         "alerts_q[0]",
         "rst_ni"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
-      ]
+        "kmac.sv:1497-1498"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "alerts_q[0] == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "alerts_q[0]",
+          "rst_ni"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "alerts_q[0] == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On rising edge of clk_i when rst_ni is high, alerts_q[0] samples alerts[0].",
-      "cond": "rst_ni is high and posedge clk_i",
+      "claim": "Latch alerts[0] on every rising clock edge when not in reset, producing a one-cycle delayed copy.",
+      "cond": "posedge clk_i && rst_ni",
       "signals": [
         "alerts_q[0]",
         "alerts[0]",
@@ -44,50 +67,149 @@
         "rst_ni"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "alerts[0] must meet setup and hold timing relative to clk_i to avoid metastability in alerts_q[0].",
-      "cond": "every posedge clk_i when rst_ni is high",
-      "risk": "Metastability could cause downstream logic to see an undefined value, potentially missing or falsely reporting the alert.",
-      "signals": [
-        "alerts[0]",
-        "clk_i",
-        "alerts_q[0]"
+        "kmac.sv:1501"
       ],
-      "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "alerts_q[0] == $past(alerts[0])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "alerts_q[0]",
+          "alerts[0]",
+          "clk_i",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni",
+        "consequent": "alerts_q[0] == $past(alerts[0])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_fault_containment_gap",
       "priority": "high",
-      "claim": "A single flop samples alerts[0], which may be asynchronous; a transition near clk_i edge can cause metastability in alerts_q[0] on the first clock cycle.",
-      "cond": "alerts[0] transition close to clk_i rising edge, with no further synchronization stages visible in this chunk",
-      "risk": "Metastable state could be interpreted as a valid high/low, leading to missed alert escalation or spurious security response.",
+      "claim": "If alerts[0] is a pulse, the register will capture a 1 and hold it indefinitely even after the alert source clears, creating a stuck alert.",
+      "cond": "alerts[0] pulse width < 1 clock cycle or latching before reset/deassertion",
+      "risk": "Permanent false alarm; loss of ability to distinguish recovered from active alert; potential denial of service or masking of subsequent alerts.",
       "signals": [
         "alerts[0]",
-        "alerts_q[0]",
-        "clk_i"
+        "alerts_q[0]"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
-      ]
+        "kmac.sv:1501"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "alerts[0] == 1 && $past(alerts[0]) == 0",
+        "consequent": "alerts_q[0] == 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts[0]",
+          "alerts_q[0]"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "alerts[0] == 1 && $past(alerts[0]) == 0",
+        "consequent": "alerts_q[0] == 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "Only alerts_q[0] is latched; other bits of alerts_q may be orphaned or handled elsewhere. Missing latching for other alert sources could lose alert events.",
+      "cond": "alerts_q has more than one bit",
+      "risk": "Unlatched alert bits may not propagate to escalation, losing error detection coverage.",
+      "signals": [
+        "alerts_q"
+      ],
+      "refs": [
+        "kmac.sv:1498",
+        "kmac.sv:1501"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "alerts_q has more than one bit",
+        "consequent": "Only alerts_q[0] is latched; other bits of alerts_q may be orphaned or handled elsewhere. Missing latching for other alert sources could lose alert events",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U3",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The comment mentions 'break up the combinatorial path for local escalation' but no further context; it is unclear exactly what loop is broken and whether the latch placement is sufficient.",
+      "cond": "unknown combinatorial loop between alerts[0] and its driver",
+      "risk": "Possible timing or glitch sensitivity if the loop is not fully broken.",
+      "signals": [
+        "alerts_q[0]",
+        "alerts[0]"
+      ],
+      "refs": [
+        "kmac.sv:1496"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "kmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "alerts_q[0]",
+          "alerts[0]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown combinatorial loop between alerts[0] and its driver",
+        "consequent": "The comment mentions 'break up the combinatorial path for local escalation' but no further context; it is unclear exactly what loop is broken and whether the latch placement is sufficient",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The chunk latches a recoverable alert bit (alerts_q[0] from alerts[0]). If the alert source is a pulse, the register will hold the alert indefinitely even after recovery, leading to a stuck alarm that could cause unnecessary escalation or mask subsequent events. This undermines the alert handling mechanism and can affect system integrity monitoring.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv:1495-1503"
+    "kmac.sv:1495-1503"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/kmac/rtl/kmac.sv",
   "line_start": 1495,
-  "line_end": 1503,
-  "security_implications": ""
+  "line_end": 1503
 }

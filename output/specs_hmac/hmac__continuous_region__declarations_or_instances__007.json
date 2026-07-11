@@ -23,22 +23,23 @@
       "msg_allowed"
     ],
     "modes": [
-      "hash_start",
-      "hash_continue",
-      "hash_process",
-      "hash_stop"
+      "reg_hash_start",
+      "reg_hash_continue",
+      "reg_hash_process",
+      "reg_hash_stop",
+      "msg_allowed"
     ],
     "tags": [
       "fifo",
       "interrupt",
-      "handshake"
+      "error"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "fifo_empty_negedge is asserted when fifo_empty_q is high and fifo_empty is low (falling edge detection).",
+      "claim": "fifo_empty_negedge is 1 exactly when fifo_empty_q is 1 and fifo_empty is 0, i.e., a falling edge on fifo_empty.",
       "cond": "always",
       "signals": [
         "fifo_empty_negedge",
@@ -47,12 +48,35 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:465"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "fifo_empty_negedge == (fifo_empty_q && !fifo_empty)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "fifo_empty_negedge",
+        "reset": "",
+        "signals": [
+          "fifo_empty_negedge",
+          "fifo_empty_q",
+          "fifo_empty"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "fifo_empty_negedge == (fifo_empty_q && !fifo_empty)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "fifo_full_posedge is asserted when fifo_full_q is low and fifo_full is high (rising edge detection).",
+      "claim": "fifo_full_posedge is 1 exactly when fifo_full_q is 0 and fifo_full is 1, i.e., a rising edge on fifo_full.",
       "cond": "always",
       "signals": [
         "fifo_full_posedge",
@@ -61,12 +85,35 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:466"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "fifo_full_posedge == (!fifo_full_q && fifo_full)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "fifo_full_posedge",
+        "reset": "",
+        "signals": [
+          "fifo_full_posedge",
+          "fifo_full_q",
+          "fifo_full"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "fifo_full_posedge == (!fifo_full_q && fifo_full)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G3",
-      "type": "mux_case",
-      "claim": "fifo_full_seen_d is cleared (0) if any of reg_hash_start, reg_hash_continue, reg_hash_process, reg_hash_stop is high; else cleared if fifo_empty_negedge is high; else set to 1 if fifo_full_posedge is high; otherwise holds fifo_full_seen_q.",
+      "type": "assignment",
+      "claim": "fifo_full_seen_d is cleared to 0 when any of reg_hash_start, reg_hash_continue, reg_hash_process or reg_hash_stop is active, or when a falling edge on fifo_empty is detected; it is set to 1 on a rising edge of fifo_full; otherwise it holds the current fifo_full_seen_q value.",
       "cond": "always",
       "signals": [
         "fifo_full_seen_d",
@@ -80,12 +127,40 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:473-477"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "fifo_full_seen_d == ( (reg_hash_start || reg_hash_continue || reg_hash_process || reg_hash_stop) ? 1'b0 : fifo_empty_negedge ? 1'b0 : fifo_full_posedge ? 1'b1 : fifo_full_seen_q )",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "fifo_empty_negedge",
+        "reset": "",
+        "signals": [
+          "fifo_full_seen_d",
+          "reg_hash_start",
+          "reg_hash_continue",
+          "reg_hash_process",
+          "reg_hash_stop",
+          "fifo_empty_negedge",
+          "fifo_full_posedge",
+          "fifo_full_seen_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "fifo_full_seen_d == ( (reg_hash_start || reg_hash_continue || reg_hash_process || reg_hash_stop) ? 1'b0 : fifo_empty_negedge ? 1'b0 : fifo_full_posedge ? 1'b1 : fifo_full_seen_q )",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G4",
       "type": "assignment",
-      "claim": "fifo_empty_gate is high (interrupt mask) when msg_allowed is low or fifo_full_seen_q is low; otherwise low (interrupt unmasked) when both are high.",
+      "claim": "fifo_empty_gate is high (masked) when msg_allowed is low or fifo_full_seen_q is low; it is low only when both are high.",
       "cond": "always",
       "signals": [
         "fifo_empty_gate",
@@ -94,12 +169,35 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:481"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "fifo_empty_gate == (!msg_allowed || !fifo_full_seen_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_empty_gate",
+          "msg_allowed",
+          "fifo_full_seen_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "fifo_empty_gate == (!msg_allowed || !fifo_full_seen_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
       "type": "assignment",
-      "claim": "status_fifo_empty outputs 0 when fifo_empty_gate is high; otherwise passes through fifo_empty.",
+      "claim": "status_fifo_empty is forced to 0 when fifo_empty_gate is high; otherwise it equals fifo_empty.",
       "cond": "always",
       "signals": [
         "status_fifo_empty",
@@ -108,86 +206,255 @@
       ],
       "refs": [
         "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:483"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "status_fifo_empty == (fifo_empty_gate ? 1'b0 : fifo_empty)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "status_fifo_empty",
+          "fifo_empty_gate",
+          "fifo_empty"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "status_fifo_empty == (fifo_empty_gate ? 1'b0 : fifo_empty)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "fifo_empty_q and fifo_full_q are synchronous, one-cycle delayed versions of fifo_empty and fifo_full, respectively.",
-      "cond": "always, for correct edge detection",
-      "risk": "If not properly registered, edge detection may miss transitions or produce glitches, breaking the full-seen tracking and interrupt gating.",
+      "type": "producer_contract",
+      "claim": "fifo_empty_q must be the value of fifo_empty from the previous cycle (a one-cycle-delayed version) to ensure correct falling-edge detection.",
+      "cond": "always",
+      "risk": "If fifo_empty_q is not a delayed copy of fifo_empty, the edge detection logic may produce false edges or miss real edges, causing incorrect clearing of the full-seen flag and potentially suppressing the empty interrupt incorrectly.",
       "signals": [
         "fifo_empty_q",
-        "fifo_full_q",
-        "fifo_empty",
-        "fifo_full"
+        "fifo_empty"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:461-466"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:465"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "fifo_empty_q == $past(fifo_empty)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_empty_q",
+          "fifo_empty"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "fifo_empty_q == $past(fifo_empty)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "msg_allowed is asserted only when software is permitted to write the message FIFO.",
-      "cond": "when msg_allowed is high",
-      "risk": "If msg_allowed is erroneously high when FIFO not writable, the interrupt could be unmasked prematurely; if erroneously low, the interrupt may be permanently gated even when software could react.",
+      "type": "producer_contract",
+      "claim": "fifo_full_q must be the value of fifo_full from the previous cycle to ensure correct rising-edge detection.",
+      "cond": "always",
+      "risk": "Without proper one-cycle delay, fifo_full_posedge may be asserted erroneously or missed, leading to incorrect full-seen flag updates and subsequent interrupt gating.",
       "signals": [
-        "msg_allowed",
-        "status_fifo_empty",
-        "fifo_empty_gate"
+        "fifo_full_q",
+        "fifo_full"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:481-483"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:466"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "fifo_full_q == $past(fifo_full)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "fifo_full_q",
+          "fifo_full"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "fifo_full_q == $past(fifo_full)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "lifecycle",
+      "claim": "fifo_full_seen_q (register driving this combinational input) must be properly reset to a known value (presumably 0) before operation, avoiding X propagation into the gating logic.",
+      "cond": "during reset or power-up",
+      "risk": "If fifo_full_seen_q is X, the combinational gate may be undefined, potentially forcing status_fifo_empty to X/kill or incorrectly masking interrupts, leading to undetected FIFO states.",
+      "signals": [
+        "fifo_full_seen_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:477"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "!$isunknown(fifo_full_seen_q)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "reset",
+        "signals": [
+          "fifo_full_seen_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during reset or power-up",
+        "consequent": "!$isunknown(fifo_full_seen_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "producer_contract",
+      "claim": "msg_allowed accurately reflects whether software is permitted to write the FIFO in the current system state. If software is not allowed but msg_allowed is incorrectly high, the gate fails to protect the interrupt.",
+      "cond": "always",
+      "risk": "Incorrect msg_allowed assertion (false high when writes are not allowed) could expose the empty interrupt when it should be masked, leading to spurious interrupts or invalid status reads; conversely, false low permanently masks the interrupt.",
+      "signals": [
+        "msg_allowed"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:481"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "msg_allowed == <intended_legal_write_condition>",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_allowed"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "msg_allowed == <intended_legal_write_condition>",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_temporal_window",
+      "type": "U_cross_chunk_dependency",
       "priority": "medium",
-      "claim": "When msg_allowed is low (interrupt masked), a fifo_empty_negedge still clears fifo_full_seen tracking. If later msg_allowed becomes high while FIFO is empty and no new full event occurs, the past full condition may be lost, potentially causing a missed interrupt.",
-      "cond": "msg_allowed low, then goes high; FIFO had become full earlier and then emptied",
-      "risk": "Software may not be notified of a previous FIFO-full situation that resolved, leading to stall or missed reaction.",
+      "claim": "If msg_allowed is deasserted due to a persistent condition (e.g., lifecycle lock, configuration write protect), the empty interrupt may be permanently masked, preventing firmware from detecting FIFO empty. This needs cross-chunk verification that msg_allowed cannot be stuck low when FIFO writes are expected.",
+      "cond": "when msg_allowed remains low for extended periods despite FIFO activity",
+      "risk": "Permanent masking of the empty interrupt could cause the system to miss a FIFO underflow, leading to data corruption, loss of synchronization, or denial of service in security contexts.",
       "signals": [
         "msg_allowed",
-        "fifo_empty_negedge",
-        "fifo_full_seen_q",
+        "fifo_empty_gate",
         "status_fifo_empty"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:473-477,481-483"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:481-483"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_allowed",
+          "fifo_empty_gate",
+          "status_fifo_empty"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when msg_allowed remains low for extended periods despite FIFO activity",
+        "consequent": "lifecycle lock, configuration write protect), the empty interrupt may be permanently masked, preventing firmware from detecting FIFO empty. This needs cross-chunk verification that msg_allowed cannot be stuck low when FIFO writes are expect",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_temporal_window",
       "priority": "low",
-      "claim": "The registered version of fifo_full_seen_q (not in this chunk) updates on a later cycle than the combinational fifo_full_seen_d. There may be a race if a hash command clears the tracking on the same cycle that a fifo_full_posedge occurs, depending on when the register samples.",
-      "cond": "hash command pulse and fifo_full_posedge in same clock cycle",
-      "risk": "A full event could be missed if the clearing overrides the set before the flop captures it, breaking the full-seen tracking for that window.",
+      "claim": "The edge detection logic for fifo_empty and fifo_full relies on the delayed flops being updated in the same clock domain. If there is any clock-domain crossing or metastability, glitches may cause spurious edge assertions; verify that fifo_empty_q/fifo_full_q are synchronized correctly.",
+      "cond": "if fifo_empty/fifo_full are asynchronous",
+      "risk": "False edge detection could clear/set the full-seen flag incorrectly, leading to interrupt gating errors.",
       "signals": [
-        "reg_hash_start",
-        "reg_hash_continue",
-        "reg_hash_process",
-        "reg_hash_stop",
-        "fifo_full_posedge",
-        "fifo_full_seen_d",
-        "fifo_full_seen_q"
+        "fifo_empty_q",
+        "fifo_empty",
+        "fifo_full_q",
+        "fifo_full"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:473-477"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:465-466"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "clock",
+        "reset": "",
+        "signals": [
+          "fifo_empty_q",
+          "fifo_empty",
+          "fifo_full_q",
+          "fifo_full"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "if fifo_empty/fifo_full are asynchronous",
+        "consequent": "The edge detection logic for fifo_empty and fifo_full relies on the delayed flops being updated in the same clock domain. If there is any clock-domain crossing or metastability, glitches may cause spurious edge assertions; verify that fifo_",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The empty interrupt status (status_fifo_empty) is gated by a condition that includes msg_allowed and a full-seen flag. If msg_allowed is permanently deasserted (e.g., due to a security lock or misconfiguration), the empty interrupt may never be observed, masking a FIFO empty event. This could prevent detection of a FIFO underflow or data loss, potentially violating integrity or causing a denial-of-service. Additionally, if the full-seen flag is not correctly reset, the gating may be erroneous, making the interrupt either always masked or always visible, compromising proper error reporting in a security-relevant data path.",
   "evidence_refs": [
     "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:461-483"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 461,
-  "line_end": 483,
-  "security_implications": ""
+  "line_end": 483
 }

@@ -4,97 +4,44 @@
     "module": "hmac",
     "block_kind": "mixed",
     "driven": [
-      "fifo_wready",
-      "fifo_depth",
-      "fifo_full",
-      "fifo_rvalid",
-      "fifo_rdata",
-      "msg_fifo_req",
-      "msg_fifo_we",
-      "msg_fifo_wdata",
-      "msg_fifo_wmask",
       "msg_write"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
       "fifo_wvalid",
       "sha_en",
+      "fifo_wready",
       "fifo_wdata",
+      "fifo_depth",
+      "fifo_full",
+      "fifo_rvalid",
       "fifo_rready",
-      "tl_win_h2d",
-      "tl_win_d2h",
+      "fifo_rdata",
+      "msg_fifo_req",
+      "msg_fifo_we",
+      "hmac_fifo_wsel",
+      "msg_allowed",
       "msg_fifo_gnt",
+      "msg_fifo_wdata",
+      "msg_fifo_wmask",
       "msg_fifo_rdata",
       "msg_fifo_rerror",
-      "hmac_fifo_wsel",
-      "msg_allowed"
+      "tl_win_h2d",
+      "tl_win_d2h",
+      "prim_mubi_pkg::MuBi4False"
     ],
-    "modes": [
-      "MsgFifoDepth=32",
-      "FIFO_Pass=1",
-      "FIFO_NeverClears=1",
-      "Adapter_ByteAccess=1",
-      "Adapter_ErrOnRead=1"
-    ],
+    "modes": [],
     "tags": [
       "fifo",
-      "csr",
-      "parameterization",
-      "mask",
-      "access_control",
-      "byte_access",
-      "reset"
+      "handshake",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "generate_param",
-      "claim": "The prim_fifo_sync instance (u_msg_fifo) is configured with NeverClears=1 and clr_i tied to 0, so the FIFO never clears its contents upon reset or clear assertion.",
-      "cond": "always",
-      "signals": [
-        "u_msg_fifo.NeverClears",
-        "clr_i"
-      ],
-      "refs": [
-        "hmac.sv:573-574",
-        "hmac.sv:577"
-      ]
-    },
-    {
-      "id": "G2",
       "type": "assignment",
-      "claim": "FIFO write valid (wvalid_i) is asserted only when both fifo_wvalid and sha_en are high.",
+      "claim": "msg_write is combinationaly assigned as the AND of msg_fifo_req, msg_fifo_we, negation of hmac_fifo_wsel, and msg_allowed.",
       "cond": "always",
-      "signals": [
-        "wvalid_i",
-        "fifo_wvalid",
-        "sha_en"
-      ],
-      "refs": [
-        "hmac.sv:579"
-      ]
-    },
-    {
-      "id": "G3",
-      "type": "generate_param",
-      "claim": "The TL-UL adapter's rvalid_i is tied low and parameter ErrOnRead=1, causing any read access to return an error.",
-      "cond": "always",
-      "signals": [
-        "rvalid_i",
-        "ErrOnRead"
-      ],
-      "refs": [
-        "hmac.sv:598",
-        "hmac.sv:616"
-      ]
-    },
-    {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "msg_write is asserted when msg_fifo_req, msg_fifo_we, ~hmac_fifo_wsel, and msg_allowed are all true.",
-      "cond": "combinational",
       "signals": [
         "msg_write",
         "msg_fifo_req",
@@ -103,204 +50,395 @@
         "msg_allowed"
       ],
       "refs": [
-        "hmac.sv:628"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:628"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "msg_write == (msg_fifo_req && msg_fifo_we && !hmac_fifo_wsel && msg_allowed)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_write",
+          "msg_fifo_req",
+          "msg_fifo_we",
+          "hmac_fifo_wsel",
+          "msg_allowed"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "msg_write == (msg_fifo_req && msg_fifo_we && !hmac_fifo_wsel && msg_allowed)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "The clear input of u_msg_fifo is tied to 1'b0, ensuring the FIFO is never cleared via clr_i regardless of the NeverClears parameter.",
+      "cond": "always",
+      "signals": [
+        "u_msg_fifo.clr_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:577"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_msg_fifo.clr_i == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_msg_fifo.clr_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_msg_fifo.clr_i == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "assignment",
+      "claim": "The write valid input to u_msg_fifo is gated by sha_en: wvalid_i = fifo_wvalid & sha_en.",
+      "cond": "always",
+      "signals": [
+        "u_msg_fifo.wvalid_i",
+        "fifo_wvalid",
+        "sha_en"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:579"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "u_msg_fifo.wvalid_i == (fifo_wvalid && sha_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_msg_fifo.wvalid_i",
+          "fifo_wvalid",
+          "sha_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "u_msg_fifo.wvalid_i == (fifo_wvalid && sha_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "default_fallback",
+      "claim": "The TL-UL adapter's read data valid input is tied to 1'b0, disabling its read data path.",
+      "cond": "always",
+      "signals": [
+        "u_tlul_adapter.rvalid_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:616"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_tlul_adapter.rvalid_i == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_tlul_adapter.rvalid_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_tlul_adapter.rvalid_i == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G5",
-      "type": "generate_param",
-      "claim": "The TL-UL adapter's ifetch and readback features are disabled by tying en_ifetch_i and readback_en_i to MuBi4False.",
+      "type": "default_fallback",
+      "claim": "The TL-UL adapter's instruction fetch enable and readback enable are tied to MuBi4False, ensuring instruction fetch and readback features are hard disabled.",
       "cond": "always",
       "signals": [
-        "en_ifetch_i",
-        "readback_en_i"
+        "u_tlul_adapter.en_ifetch_i",
+        "u_tlul_adapter.readback_en_i"
       ],
       "refs": [
-        "hmac.sv:604",
-        "hmac.sv:619"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:604",
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:619"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_tlul_adapter.en_ifetch_i == prim_mubi_pkg::MuBi4False && u_tlul_adapter.readback_en_i == prim_mubi_pkg::MuBi4False",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_tlul_adapter.en_ifetch_i",
+          "u_tlul_adapter.readback_en_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_tlul_adapter.en_ifetch_i == prim_mubi_pkg::MuBi4False && u_tlul_adapter.readback_en_i == prim_mubi_pkg::MuBi4False",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G6",
-      "type": "generate_param",
-      "claim": "The message FIFO is configured in pass-through mode (Pass=1), which may reduce buffering to a single register slice.",
+      "type": "default_fallback",
+      "claim": "Write collision and write pending inputs to the TL-UL adapter are tied to 1'b0.",
       "cond": "always",
       "signals": [
-        "u_msg_fifo.Pass"
+        "u_tlul_adapter.wr_collision_i",
+        "u_tlul_adapter.write_pending_i"
       ],
       "refs": [
-        "hmac.sv:571"
-      ]
-    },
-    {
-      "id": "G7",
-      "type": "assignment",
-      "claim": "The FIFO error output err_o is not connected to any logic, so any internal FIFO error is ignored.",
-      "cond": "always",
-      "signals": [
-        "err_o"
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:621-622"
       ],
-      "refs": [
-        "hmac.sv:589"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_tlul_adapter.wr_collision_i == 1'b0 && u_tlul_adapter.write_pending_i == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_tlul_adapter.wr_collision_i",
+          "u_tlul_adapter.write_pending_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "1'b1",
+        "consequent": "u_tlul_adapter.wr_collision_i == 1'b0 && u_tlul_adapter.write_pending_i == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "handshake",
-      "claim": "msg_fifo_gnt must be asserted by external logic when msg_fifo_req is active to grant the TL-UL adapter's write request.",
-      "cond": "when msg_fifo_req is high",
-      "risk": "Without gnt, the adapter will stall indefinitely, blocking further writes and possibly causing bus deadlock.",
-      "signals": [
-        "msg_fifo_req",
-        "msg_fifo_gnt"
-      ],
-      "refs": [
-        "hmac.sv:607"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "security_precondition",
-      "claim": "msg_allowed must be high only when message writes are authorized by the system state (e.g., HMAC is accepting messages).",
-      "cond": "during message write transactions",
-      "risk": "Unauthorized writes could inject crafted data into the HMAC, compromising integrity.",
-      "signals": [
-        "msg_allowed"
-      ],
-      "refs": [
-        "hmac.sv:628"
-      ]
-    },
-    {
-      "id": "A3",
-      "type": "value_domain",
-      "claim": "sha_en must be asserted whenever the SHA engine is ready to accept message data to avoid dropped writes.",
-      "cond": "when FIFO writes are desired",
-      "risk": "If sha_en is low when a producer writes, data will be lost without notification.",
+      "type": "producer_contract",
+      "claim": "During a write transaction to u_msg_fifo (when fifo_wvalid & fifo_wready is true), sha_en must remain stable to ensure a complete data word is accepted.",
+      "cond": "fifo_wvalid & fifo_wready",
+      "risk": "If sha_en drops during the write, the word may be partially accepted or dropped, corrupting the message FIFO content.",
       "signals": [
         "sha_en",
-        "fifo_wvalid"
+        "fifo_wvalid",
+        "fifo_wready"
       ],
       "refs": [
-        "hmac.sv:579"
-      ]
-    },
-    {
-      "id": "A4",
-      "type": "mode_config",
-      "claim": "hmac_fifo_wsel must correctly indicate word-wide write (high) versus byte/halfword write (low) for the msg_write logic.",
-      "cond": "during TL-UL writes",
-      "risk": "If misconfigured, msg_write may never assert, preventing any byte-addressable writes from populating the FIFO.",
-      "signals": [
-        "hmac_fifo_wsel"
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:579"
       ],
-      "refs": [
-        "hmac.sv:628"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "fifo_wvalid && fifo_wready",
+        "consequent": "$stable(sha_en)",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "sha_en",
+          "fifo_wvalid",
+          "fifo_wready"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "fifo_wvalid && fifo_wready",
+        "consequent": "$stable(sha_en)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "The message FIFO error output is unconnected, so any internal FIFO error (overflow, parity) is not reported.",
-      "cond": "if FIFO error occurs",
-      "risk": "Data corruption may occur silently, potentially leading to incorrect HMAC computation or security failure.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The signal msg_fifo_rerror drives u_tlul_adapter.rerror_i, but its source is not defined in this chunk. It may be unconnected or driven elsewhere.",
+      "cond": "unknown",
+      "risk": "If unconnected, rerror_i may float, causing spurious errors or masking real integrity issues from the FIFO.",
       "signals": [
-        "err_o"
+        "msg_fifo_rerror",
+        "u_tlul_adapter.rerror_i"
       ],
       "refs": [
-        "hmac.sv:589"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:617"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_fifo_rerror",
+          "u_tlul_adapter.rerror_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "The signal msg_fifo_rerror drives u_tlul_adapter.rerror_i, but its source is not defined in this chunk. It may be unconnected or driven elsewhere",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_width_param_hazard",
-      "priority": "medium",
-      "claim": "wmask_ones bit width is derived from $clog2(MsgFifoDepth+1)=5, but the wmask width for 32-bit data is only 4 bits, suggesting a potential misuse where the counted ones might exceed 4.",
-      "cond": "when wmask_ones is used",
-      "risk": "Could cause counting errors or overflow in logic that accumulates byte write counts.",
+      "type": "U_dead_or_unused_signal",
+      "priority": "low",
+      "claim": "The logic signal wmask_ones is declared but never assigned or used within this chunk.",
+      "cond": "always",
+      "risk": "May indicate incomplete design or dead code; no immediate functional risk.",
       "signals": [
-        "wmask_ones",
-        "MsgFifoDepth"
+        "wmask_ones"
       ],
       "refs": [
-        "hmac.sv:568",
-        "hmac.sv:630"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:630"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wmask_ones"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The logic signal wmask_ones is declared but never assigned or used within this chunk",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U3",
-      "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "The FIFO never clears (NeverClears=1, clr_i=0), so previous message data may persist after reset and be read in a new HMAC session, potentially leaking secrets.",
-      "cond": "after reset or re-initialization",
-      "risk": "Stale secret data could be mixed into new computations or exposed through side channels.",
+      "type": "U_spec_gap",
+      "priority": "medium",
+      "claim": "The signal msg_allowed gates msg_write. Its source and timing behavior are not defined in this chunk, leaving its correctness unclear.",
+      "cond": "whenever msg_write is to be asserted",
+      "risk": "If msg_allowed is misconfigured or glitchy, it could incorrectly block legitimate writes or enable writes when not permitted, affecting message integrity.",
       "signals": [
-        "u_msg_fifo.NeverClears",
-        "clr_i"
+        "msg_allowed",
+        "msg_write"
       ],
       "refs": [
-        "hmac.sv:573-574",
-        "hmac.sv:577"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:628"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_allowed",
+          "msg_write"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "whenever msg_write is to be asserted",
+        "consequent": "The signal msg_allowed gates msg_write. Its source and timing behavior are not defined in this chunk, leaving its correctness unclear",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "U4",
       "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "Reads from the message FIFO TL window always return an error; it is unclear if read capability is intended or should be blocked for security.",
-      "cond": "when a TL read occurs",
-      "risk": "If software expects to read back message data for debugging or status, it will fail.",
-      "signals": [
-        "rvalid_i",
-        "ErrOnRead"
-      ],
-      "refs": [
-        "hmac.sv:598",
-        "hmac.sv:616"
-      ]
-    },
-    {
-      "id": "U5",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "msg_write is not asserted for word-wide writes (hmac_fifo_wsel=1), suggesting that word writes are handled by a different path not visible in this chunk.",
-      "cond": "when a 32-bit write occurs",
-      "risk": "If the other path is missing or miswired, 32-bit message writes may be silently dropped.",
-      "signals": [
-        "msg_write",
-        "hmac_fifo_wsel"
-      ],
-      "refs": [
-        "hmac.sv:628"
-      ]
-    },
-    {
-      "id": "U6",
-      "type": "U_temporal_window",
       "priority": "low",
-      "claim": "The FIFO in pass-through mode (Pass=1) provides minimal buffering, increasing the risk of backpressure stalling the bus if the consumer cannot keep up.",
-      "cond": "when write rate exceeds read rate",
-      "risk": "May cause TL bus timeouts or performance degradation.",
+      "claim": "The TL-UL adapter address output (addr_o) is left unconnected. The comment says address is ignored except for sub-word writes, but it is unclear if this is safe in all configurations.",
+      "cond": "always",
+      "risk": "Potential bypass of address-based access checks; however, for a windowed single-address FIFO this is likely intentional and low risk.",
       "signals": [
-        "u_msg_fifo.Pass",
-        "fifo_wready",
-        "fifo_rready"
+        "u_tlul_adapter.addr_o"
       ],
       "refs": [
-        "hmac.sv:571"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:609"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "u_tlul_adapter.addr_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "The TL-UL adapter address output (addr_o) is left unconnected. The comment says address is ignored except for sub-word writes, but it is unclear if this is safe in all configurations",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "This chunk implements a message FIFO write interface and TL-UL adapter for the HMAC core. The msg_write gating uses hmac_fifo_wsel and msg_allowed to control writes to the message FIFO. Misconfiguration of these control signals could allow unauthorized writes or block authorized ones, potentially leading to HMAC message stream corruption or denial-of-service. The TL adapter's read data path is disabled by tying rvalid_i to 0, preventing direct readback of the FIFO through the adapter, which may limit information leakage. However, the rerror_i source (msg_fifo_rerror) is not defined here, and if unconnected or driven improperly, could mask integrity errors or inject false errors. The unconnected addr_o may bypass address-dependent access checks in a different context, but with a single-address window this is low risk.",
   "evidence_refs": [
-    "hmac.sv:568-630"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv:568-630"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 568,
-  "line_end": 630,
-  "security_implications": ""
+  "line_end": 630
 }

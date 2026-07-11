@@ -2,103 +2,137 @@
   "chunk_id": "keymgr_pkg__function_task__valid_data_chk__001",
   "header": {
     "module": "keymgr_pkg",
-    "block_kind": "function_task",
+    "block_kind": "declaration",
     "driven": [
-      "valid_data_chk"
+      "valid_data_chk (function return)"
     ],
     "used": [
       "value",
       "KeyWidth"
     ],
-    "modes": [
-      "KeyWidth"
-    ],
+    "modes": [],
     "tags": [
+      "parameterization",
       "secret",
       "key",
-      "integrity",
-      "error"
+      "entropy"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "function_return",
-      "claim": "Returns 1 if value is not all zeros and not all ones; returns 0 otherwise.",
-      "cond": "always when function called",
+      "type": "assignment",
+      "claim": "The function returns 1 if and only if the input vector contains at least one '1' and at least one '0', i.e. it is neither all zeros nor all ones.",
+      "cond": "always",
       "signals": [
         "value",
-        "KeyWidth"
+        "valid_data_chk"
       ],
       "refs": [
         "keymgr_pkg.sv:274-276"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "valid_data_chk(value) == ((|value) && !(&value))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr_pkg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "value",
+          "valid_data_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "valid_data_chk(value) == ((|value) && !(&value))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "parameter_constraint",
-      "claim": "KeyWidth must be greater than 1 for the function to ever return 1.",
-      "cond": "always, but critical when used to gate key usage",
-      "risk": "If KeyWidth is 1, the function always returns 0, potentially blocking all key operations or indicating invalidity when the value is actually a valid single-bit key.",
+      "type": "width_param",
+      "claim": "KeyWidth must be greater than 0 for the reduction operators to behave meaningfully.",
+      "cond": "always",
+      "risk": "If KeyWidth is 0, the reduction operators may produce undefined or non-synthesizable results, potentially causing simulation/synthesis mismatches or unexpected function behavior.",
       "signals": [
         "KeyWidth"
       ],
       "refs": [
         "keymgr_pkg.sv:274-276"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "Input value must be fully known (0 or 1) without any X or Z bits.",
-      "cond": "any call to valid_data_chk",
-      "risk": "X or Z bits will cause reduction operators to produce X, resulting in an unknown return value, which could lead to incorrect validity determination and potential security bypass.",
-      "signals": [
-        "value"
       ],
-      "refs": [
-        "keymgr_pkg.sv:274-276"
-      ]
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "KeyWidth >= 1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_pkg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "KeyWidth"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "KeyWidth >= 1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_width_param_hazard",
+      "type": "U_security_intent_gap",
       "priority": "medium",
-      "claim": "When KeyWidth is set to 1, the function always returns 0, regardless of the 1-bit value. Is this intended behavior, or should the function treat a single-bit non-zero value as valid?",
-      "cond": "KeyWidth == 1",
-      "risk": "A 1-bit key could be mistakenly considered always invalid, leading to denial of service or bypass of key-dependent operations.",
+      "claim": "The function only rejects all-zeros and all-ones; it does not check for other weak key patterns (e.g. alternating bits, low Hamming weight, known test vectors). If this function is the sole key validity check, it may allow cryptographically weak key material.",
+      "cond": "when used as a key validity filter",
+      "risk": "Weak keys could be accepted, potentially compromising encryption or authentication operations.",
       "signals": [
         "value",
-        "KeyWidth"
+        "valid_data_chk"
       ],
       "refs": [
         "keymgr_pkg.sv:274-276"
-      ]
-    },
-    {
-      "id": "U2",
-      "type": "U_fault_containment_gap",
-      "priority": "medium",
-      "claim": "The function does not handle X or Z states in value. If the input signal is undriven or metastable, the function's output could be X, potentially propagating uncertainty to key validity decisions.",
-      "cond": "any call with contaminated value",
-      "risk": "An X result might be interpreted as valid or invalid unpredictably, bypassing integrity checks and causing key mismanagement.",
-      "signals": [
-        "value"
       ],
-      "refs": [
-        "keymgr_pkg.sv:274-276"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr_pkg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "value",
+          "valid_data_chk"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when used as a key validity filter",
+        "consequent": "The function only rejects all-zeros and all-ones; it does not check for other weak key patterns (e.g. alternating bits, low Hamming weight, known test vectors). If this function is the sole key validity check, it may allow cryptographically",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The function checks whether a key value is neither all zeros nor all ones, intended to filter trivially invalid key material. If it is the only entropy/validity gate before a cryptographic operation, it may miss other weak patterns (low entropy, repeats) leading to use of sub-standard keys and potential compromise of cryptographic strength. This touches the keys/secrets category.",
   "evidence_refs": [
     "keymgr_pkg.sv:274-276"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr_pkg.sv",
   "line_start": 274,
-  "line_end": 276,
-  "security_implications": ""
+  "line_end": 276
 }

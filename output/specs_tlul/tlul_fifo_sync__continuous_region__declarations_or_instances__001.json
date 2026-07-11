@@ -28,8 +28,6 @@
       "spare_rsp_o"
     ],
     "used": [
-      "clk_i",
-      "rst_ni",
       "tl_h_i.a_valid",
       "tl_h_i.a_opcode",
       "tl_h_i.a_param",
@@ -39,7 +37,6 @@
       "tl_h_i.a_mask",
       "tl_h_i.a_data",
       "tl_h_i.a_user",
-      "spare_req_i",
       "tl_d_i.a_ready",
       "tl_d_i.d_valid",
       "tl_d_i.d_opcode",
@@ -50,76 +47,27 @@
       "tl_d_i.d_data",
       "tl_d_i.d_user",
       "tl_d_i.d_error",
-      "spare_rsp_i",
-      "tl_h_i.d_ready",
-      "reqfifo_rdata",
-      "reqfifo_wdata"
+      "spare_req_i",
+      "spare_rsp_i"
     ],
     "modes": [
-      "AccessAckData"
+      "ReqPass",
+      "ReqDepth",
+      "RspPass",
+      "RspDepth"
     ],
     "tags": [
-      "fifo",
       "handshake",
-      "parameterization",
-      "mask",
-      "wipe"
+      "fifo",
+      "clock_crossing",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "The request FIFO wdata_i is the concatenation of tl_h_i.a_opcode, a_param, a_size, a_source, a_address, a_mask, a_data, a_user, spare_req_i, in that order.",
-      "cond": "always",
-      "signals": [
-        "reqfifo.wdata_i",
-        "tl_h_i.a_opcode",
-        "tl_h_i.a_param",
-        "tl_h_i.a_size",
-        "tl_h_i.a_source",
-        "tl_h_i.a_address",
-        "tl_h_i.a_mask",
-        "tl_h_i.a_data",
-        "tl_h_i.a_user",
-        "spare_req_i"
-      ],
-      "refs": [
-        "tlul_fifo_sync.sv:108-122"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "reqfifo.wdata_i == {tl_h_i.a_opcode, tl_h_i.a_param, tl_h_i.a_size, tl_h_i.a_source, tl_h_i.a_address, tl_h_i.a_mask, tl_h_i.a_data, tl_h_i.a_user, spare_req_i}",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_fifo_sync",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "reqfifo.wdata_i",
-          "tl_h_i.a_opcode",
-          "tl_h_i.a_param",
-          "tl_h_i.a_size",
-          "tl_h_i.a_source",
-          "tl_h_i.a_address",
-          "tl_h_i.a_mask",
-          "tl_h_i.a_data"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "always",
-        "consequent": "reqfifo.wdata_i == {tl_h_i.a_opcode, tl_h_i.a_param, tl_h_i.a_size, tl_h_i.a_source, tl_h_i.a_address, tl_h_i.a_mask, tl_h_i.a_data, tl_h_i.a_user, spare_req_i}",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G2",
-      "type": "assignment",
-      "claim": "The assign block splits reqfifo_rdata into device A-channel outputs in the same order as packed.",
+      "claim": "The reqfifo output data (reqfifo_rdata) is continuously decoded into the device-side A‑channel signals (tl_d_o.a_opcode, .a_param, .a_size, .a_source, .a_address, .a_mask, .a_data, .a_user) and spare_req_o.",
       "cond": "always",
       "signals": [
         "reqfifo_rdata",
@@ -166,22 +114,22 @@
       }
     },
     {
-      "id": "G3",
-      "type": "assignment",
-      "claim": "The response FIFO wdata_i concatenates d_channel signals; the d_data field is forced to zero when d_opcode != AccessAckData.",
-      "cond": "always (combinational at port connection)",
+      "id": "G2",
+      "type": "data_path_sanitization",
+      "claim": "The response FIFO input data is forced to zero in the d_data field whenever the incoming d_opcode is not AccessAckData.",
+      "cond": "always (combinational expression on the wdata_i bus)",
       "signals": [
-        "rspfifo.wdata_i",
         "tl_d_i.d_opcode",
-        "tl_d_i.d_data"
+        "tl_d_i.d_data",
+        "top_pkg::TL_DW"
       ],
       "refs": [
-        "tlul_fifo_sync.sv:150-159"
+        "tlul_fifo_sync.sv:150-156"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "tl_d_i.d_valid && tl_d_o.d_ready && (tl_d_i.d_opcode != tlul_pkg::AccessAckData)",
-        "consequent": "rspfifo.wdata_i[TL_DW-1:0] == 0",
+        "antecedent": "",
+        "consequent": "(tl_d_i.d_opcode != tlul_pkg::AccessAckData) -> (rspfifo_wdata_slice_for_d_data == {top_pkg::TL_DW{1'b0}})",
         "formalizability": "direct"
       },
       "risk": "",
@@ -190,34 +138,46 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "rspfifo.wdata_i",
           "tl_d_i.d_opcode",
-          "tl_d_i.d_data"
+          "tl_d_i.d_data",
+          "top_pkg::TL_DW"
         ],
         "temporal_shape": "comb",
-        "antecedent": "tl_d_i.d_valid && tl_d_o.d_ready && (tl_d_i.d_opcode != tlul_pkg::AccessAckData)",
-        "consequent": "rspfifo.wdata_i[TL_DW-1:0] == 0",
+        "antecedent": "always (combinational expression on the wdata_i bus)",
+        "consequent": "(tl_d_i.d_opcode != tlul_pkg::AccessAckData) -> (rspfifo_wdata_slice_for_d_data == {top_pkg::TL_DW{1'b0}})",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     },
     {
-      "id": "G4",
-      "type": "assignment",
-      "claim": "The request FIFO clear input is permanently deasserted.",
+      "id": "G3",
+      "type": "instance_connection",
+      "claim": "The rspfifo instance connects the device-side D‑channel valid/ready handshake (tl_d_i.d_valid, tl_d_o.d_ready) to the host-side D‑channel valid/ready (tl_h_o.d_valid, tl_h_i.d_ready) and forwards the conditioned response data.",
       "cond": "always",
       "signals": [
-        "reqfifo.clr_i"
+        "tl_d_i.d_valid",
+        "tl_d_o.d_ready",
+        "tl_h_o.d_valid",
+        "tl_h_i.d_ready",
+        "tl_h_o.d_opcode",
+        "tl_h_o.d_param",
+        "tl_h_o.d_size",
+        "tl_h_o.d_source",
+        "tl_h_o.d_sink",
+        "tl_h_o.d_data",
+        "tl_h_o.d_user",
+        "tl_h_o.d_error",
+        "spare_rsp_o"
       ],
       "refs": [
-        "tlul_fifo_sync.sv:105"
+        "tlul_fifo_sync.sv:144-170"
       ],
       "formal": {
         "temporal_shape": "always",
         "antecedent": "",
-        "consequent": "reqfifo.clr_i == 1'b0",
-        "formalizability": "direct"
+        "consequent": "rspfifo instance maps wvalid/wready/rvalid/rready as described",
+        "formalizability": "none"
       },
       "risk": "",
       "formal_sketch": {
@@ -225,211 +185,154 @@
         "clock": "",
         "reset": "",
         "signals": [
-          "reqfifo.clr_i"
+          "tl_d_i.d_valid",
+          "tl_d_o.d_ready",
+          "tl_h_o.d_valid",
+          "tl_h_i.d_ready",
+          "tl_h_o.d_opcode",
+          "tl_h_o.d_param",
+          "tl_h_o.d_size",
+          "tl_h_o.d_source"
         ],
         "temporal_shape": "always",
         "antecedent": "always",
-        "consequent": "reqfifo.clr_i == 1'b0",
-        "formalizability": "direct",
-        "confidence": 1.0,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "G5",
-      "type": "assignment",
-      "claim": "The response FIFO clear input is permanently deasserted.",
-      "cond": "always",
-      "signals": [
-        "rspfifo.clr_i"
-      ],
-      "refs": [
-        "tlul_fifo_sync.sv:147"
-      ],
-      "formal": {
-        "temporal_shape": "always",
-        "antecedent": "",
-        "consequent": "rspfifo.clr_i == 1'b0",
-        "formalizability": "direct"
-      },
-      "risk": "",
-      "formal_sketch": {
-        "scope": "tlul_fifo_sync",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "rspfifo.clr_i"
-        ],
-        "temporal_shape": "always",
-        "antecedent": "always",
-        "consequent": "rspfifo.clr_i == 1'b0",
-        "formalizability": "direct",
-        "confidence": 1.0,
+        "consequent": "rspfifo instance maps wvalid/wready/rvalid/rready as described",
+        "formalizability": "none",
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
-  "assumptions": [],
-  "uncertain_points": [
+  "assumptions": [
     {
-      "id": "U1",
-      "type": "U_fault_containment_gap",
-      "priority": "medium",
-      "claim": "Both FIFO clear inputs are tied low; there is no mechanism to flush stuck transactions, which may lead to system deadlock if either side stalls permanently.",
-      "cond": "when either handshake partner stops being ready",
-      "risk": "system hangs with no recovery path",
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "The ReqDepth/ReqPass and RspDepth/RspPass parameters are chosen large enough to prevent FIFO overflow under all valid traffic scenarios, because the full and error outputs are unconnected and no back‑pressure or error reporting is available.",
+      "cond": "during normal operation",
+      "risk": "If an overflow occurs, requests or responses are silently dropped, leading to protocol deadlock, data loss, or system unavailability.",
       "signals": [
-        "reqfifo.clr_i",
-        "rspfifo.clr_i"
+        "ReqDepth",
+        "ReqPass",
+        "RspDepth",
+        "RspPass"
       ],
       "refs": [
-        "tlul_fifo_sync.sv:105",
-        "tlul_fifo_sync.sv:147"
+        "tlul_fifo_sync.sv:102,126-128,144,171-173"
       ],
       "formal": {
         "temporal_shape": "always",
-        "antecedent": "1'b1",
-        "consequent": "reqfifo.clr_i == 0 && rspfifo.clr_i == 0",
+        "antecedent": "",
+        "consequent": "reqfifo.full_o == 0 && rspfifo.full_o == 0",
         "formalizability": "partial"
       },
       "formal_sketch": {
         "scope": "tlul_fifo_sync",
         "clock": "",
-        "reset": "",
+        "reset": "reporting",
         "signals": [
-          "reqfifo.clr_i",
-          "rspfifo.clr_i"
+          "ReqDepth",
+          "ReqPass",
+          "RspDepth",
+          "RspPass"
         ],
         "temporal_shape": "always",
-        "antecedent": "1'b1",
-        "consequent": "reqfifo.clr_i == 0 && rspfifo.clr_i == 0",
+        "antecedent": "during normal operation",
+        "consequent": "reqfifo.full_o == 0 && rspfifo.full_o == 0",
         "formalizability": "partial",
-        "confidence": 1.0,
+        "confidence": 0.95,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "The full, depth, and error outputs of both reqfifo and rspfifo are left unconnected. No mechanism exists to detect or recover from FIFO overflow or internal errors.",
+      "cond": "when a FIFO fills up or enters an error state",
+      "risk": "Silent loss of TL-UL transactions may cause system deadlock or protocol violation; in a security context this can be exploited for denial‑of‑service.",
+      "signals": [
+        "reqfifo.full_o",
+        "reqfifo.depth_o",
+        "reqfifo.err_o",
+        "rspfifo.full_o",
+        "rspfifo.depth_o",
+        "rspfifo.err_o"
+      ],
+      "refs": [
+        "tlul_fifo_sync.sv:126-128,171-173"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "fifo_overflow_condition",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "tlul_fifo_sync",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reqfifo.full_o",
+          "reqfifo.depth_o",
+          "reqfifo.err_o",
+          "rspfifo.full_o",
+          "rspfifo.depth_o",
+          "rspfifo.err_o"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "fifo_overflow_condition",
+        "consequent": "The full, depth, and error outputs of both reqfifo and rspfifo are left unconnected. No mechanism exists to detect or recover from FIFO overflow or internal errors",
+        "formalizability": "none",
+        "confidence": 0.85,
         "source": "llm"
       }
     },
     {
       "id": "U2",
-      "type": "U_fault_containment_gap",
+      "type": "U_security_intent_gap",
       "priority": "medium",
-      "claim": "FIFO error outputs (err_o) are left unconnected; any internal FIFO error (e.g., overflow when wvalid asserted during full) will not be detected or reported.",
-      "cond": "if prim_fifo_sync asserts err_o",
-      "risk": "silent data loss or corruption without notification",
+      "claim": "The clr_i inputs of both FIFOs are permanently tied to 0, preventing an explicit flush of in‑flight transactions except via a full reset. Security policies often require the ability to purge sensitive data from buffers after an error or a lifecycle change.",
+      "cond": "after a security event that demands clearing of outstanding transactions",
+      "risk": "Stale transactions containing addresses, data, or opcodes may persist in the FIFOs and be forwarded, potentially leaking confidential information or causing unintended operations.",
       "signals": [
-        "reqfifo.err_o",
-        "rspfifo.err_o"
+        "clr_i",
+        "reqfifo",
+        "rspfifo"
       ],
       "refs": [
-        "tlul_fifo_sync.sv:128",
-        "tlul_fifo_sync.sv:173"
+        "tlul_fifo_sync.sv:105,147"
       ],
       "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
+        "temporal_shape": "always",
+        "antecedent": "security_flush_event",
+        "consequent": "fifo_clr_i == 0",
         "formalizability": "none"
       },
       "formal_sketch": {
         "scope": "tlul_fifo_sync",
         "clock": "",
-        "reset": "reported.",
+        "reset": "reset.",
         "signals": [
-          "reqfifo.err_o",
-          "rspfifo.err_o"
+          "clr_i",
+          "reqfifo",
+          "rspfifo"
         ],
-        "temporal_shape": "comb",
-        "antecedent": "if prim_fifo_sync asserts err_o",
-        "consequent": "FIFO error outputs (err_o) are left unconnected; any internal FIFO error (e.g., overflow when wvalid asserted during full) will not be detected or reported",
+        "temporal_shape": "always",
+        "antecedent": "security_flush_event",
+        "consequent": "fifo_clr_i == 0",
         "formalizability": "none",
-        "confidence": 0.85,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U3",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "Spare signals (spare_req_i/o, spare_rsp_i/o) are passed straight through FIFOs without any known protocol definition; their width and stability contract are unclear.",
-      "cond": "when used by connected logic",
-      "risk": "unexpected side-band data crossing or metastability issues",
-      "signals": [
-        "spare_req_i",
-        "spare_req_o",
-        "spare_rsp_i",
-        "spare_rsp_o"
-      ],
-      "refs": [
-        "tlul_fifo_sync.sv:120",
-        "tlul_fifo_sync.sv:138",
-        "tlul_fifo_sync.sv:159",
-        "tlul_fifo_sync.sv:170"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "tlul_fifo_sync",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "spare_req_i",
-          "spare_req_o",
-          "spare_rsp_i",
-          "spare_rsp_o"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "when used by connected logic",
-        "consequent": "Spare signals (spare_req_i/o, spare_rsp_i/o) are passed straight through FIFOs without any known protocol definition; their width and stability contract are unclear",
-        "formalizability": "none",
-        "confidence": 0.85,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U4",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "Preprocessor ifdef VERILATOR uses a different wdata expression (reqfifo_wdata) for simulation; equivalence to the synthesis concatenation is not locally enforced.",
-      "cond": "when VERILATOR is defined",
-      "risk": "simulation/synthesis mismatch leading to undetected bugs",
-      "signals": [
-        "reqfifo_wdata",
-        "reqfifo.wdata_i"
-      ],
-      "refs": [
-        "tlul_fifo_sync.sv:109-121"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "tlul_fifo_sync",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "reqfifo_wdata",
-          "reqfifo.wdata_i"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "when VERILATOR is defined",
-        "consequent": "Preprocessor ifdef VERILATOR uses a different wdata expression (reqfifo_wdata) for simulation; equivalence to the synthesis concatenation is not locally enforced",
-        "formalizability": "none",
-        "confidence": 0.85,
+        "confidence": 0.8,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "The response FIFO zeroizes the d_data field when the d_opcode is not AccessAckData, which prevents data leakage on error or non‑data responses—a deliberate security hardening measure. However, both FIFOs have their full/error status unconnected, so overflow can silently drop transactions and may be exploitable for denial‑of‑service. The lack of programmable flush (clr_i tied to 0) means that sensitive in‑flight data cannot be cleared without a system reset, which could violate data‑wipe requirements after a security alert or lifecycle transition.",
   "evidence_refs": [
     "tlul_fifo_sync.sv:100-175"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_fifo_sync.sv",
   "line_start": 100,
-  "line_end": 175,
-  "security_implications": ""
+  "line_end": 175
 }

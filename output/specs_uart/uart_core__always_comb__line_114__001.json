@@ -11,69 +11,131 @@
       "allzero_cnt_d"
     ],
     "modes": [
-      "rxblvl=0",
-      "rxblvl=1",
-      "rxblvl=2",
-      "rxblvl=3"
+      "rxblvl configuration"
     ],
     "tags": [
       "error",
-      "csr"
+      "break_detection",
+      "configuration"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "break_err is assigned based on reg2hw.ctrl.rxblvl.q: 2'h0 -> (allzero_cnt_d >= 5'd2); 2'h1 -> (>=5'd4); 2'h2 -> (>=5'd8); default (2'h3) -> (>=5'd16).",
+      "claim": "break_err is asserted when the number of consecutive zero bits (allzero_cnt_d) reaches or exceeds the threshold selected by the rxblvl configuration field.",
       "cond": "always",
       "signals": [
         "break_err",
-        "reg2hw.ctrl.rxblvl.q",
-        "allzero_cnt_d"
+        "allzero_cnt_d",
+        "reg2hw.ctrl.rxblvl.q"
       ],
       "refs": [
-        "uart_core.sv:115-120"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:114-121"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(reg2hw.ctrl.rxblvl.q == 2'h0 && break_err) == (allzero_cnt_d >= 5'd2) && (reg2hw.ctrl.rxblvl.q == 2'h1 && break_err) == (allzero_cnt_d >= 5'd4) && (reg2hw.ctrl.rxblvl.q == 2'h2 && break_err) == (allzero_cnt_d >= 5'd8) && (reg2hw.ctrl.rxblvl.q == 2'h3 && break_err) == (allzero_cnt_d >= 5'd16)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "break_err",
+          "allzero_cnt_d",
+          "reg2hw.ctrl.rxblvl.q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(reg2hw.ctrl.rxblvl.q == 2'h0 && break_err) == (allzero_cnt_d >= 5'd2) && (reg2hw.ctrl.rxblvl.q == 2'h1 && break_err) == (allzero_cnt_d >= 5'd4) && (reg2hw.ctrl.rxblvl.q == 2'h2 && break_err) == (allzero_cnt_d >= 5'd8) && (reg2hw.ctrl.rxblvl.q == 2'h3 && break_err) == (allzero_cnt_d >= 5'd16)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "allzero_cnt_d accurately reflects the number of consecutive zero bits received on the UART line and is updated before this combinational block evaluates.",
-      "cond": "during normal UART reception",
-      "risk": "incorrect or stale allzero_cnt_d can cause false break_err assertion or missed break detection.",
+      "claim": "reg2hw.ctrl.rxblvl.q must be a stable 2-bit value that encodes a valid operational mode (0, 1, 2) as defined by the UART specification; value 3 is a legal hardware encoding but should not be selected in normal operation.",
+      "cond": "during UART frame reception",
+      "risk": "If SW sets rxblvl to reserved value 3, break detection threshold becomes 16 leading to missed break conditions and potential failure to detect line break events used for error handling or wake-up.",
       "signals": [
-        "allzero_cnt_d"
+        "reg2hw.ctrl.rxblvl.q"
       ],
       "refs": [
-        "uart_core.sv:116-119"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:114-121"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "reg2hw.ctrl.rxblvl.q inside {0,1,2}",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.ctrl.rxblvl.q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "during UART frame reception",
+        "consequent": "reg2hw.ctrl.rxblvl.q inside {0,1,2}",
+        "formalizability": "partial",
+        "confidence": 0.95,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_unhandled_legal_case",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "rxblvl.q=2'h3 is covered by the default case with threshold 16; if 2'h3 is a legal writable value, the chosen threshold may be unintended.",
-      "cond": "software writes 2'h3 to ctrl.rxblvl",
-      "risk": "break detection could use an incorrect threshold, leading to false or missed break signaling.",
+      "claim": "rxblvl=3 (2'b11) is not defined in the register specification but is handled by a default case with a threshold of 16; need to confirm if this is an intended reserved value or an undocumented mode that could be exploited.",
+      "cond": "when SW writes 3 to rxblvl field",
+      "risk": "Unintended break detection threshold could be used to bypass break error detection, leading to missed UART error interrupts or failure to detect line breaks that may be used for security-critical functions.",
       "signals": [
         "reg2hw.ctrl.rxblvl.q",
         "break_err"
       ],
       "refs": [
-        "uart_core.sv:119"
-      ]
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:119"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.ctrl.rxblvl.q == 3",
+        "consequent": "break_err == (allzero_cnt_d >= 16)",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "reg2hw.ctrl.rxblvl.q",
+          "break_err"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "reg2hw.ctrl.rxblvl.q == 3",
+        "consequent": "break_err == (allzero_cnt_d >= 16)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The break_err signal is part of UART error detection (break condition). If the rxblvl field is set to the reserved value 3 (not documented in spec), the threshold jumps to 16 bit times. An attacker with register write access could set this value to make the UART miss break conditions, potentially preventing the system from detecting a break intended for wake-up or error handling. This could be used to mask an attack or disrupt communication integrity.",
   "evidence_refs": [
-    "uart_core.sv:114-121"
+    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:114-121"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 114,
-  "line_end": 121,
-  "security_implications": ""
+  "line_end": 121
 }

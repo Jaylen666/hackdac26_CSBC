@@ -14,22 +14,23 @@
     ],
     "modes": [],
     "tags": [
-      "clock_domain",
-      "reset",
-      "parameterization"
+      "debug",
+      "synchronization",
+      "access_control",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "continue_cpu_boot_o.good is always driven to prim_mubi_pkg::MuBi4True, a 4-bit multi-bit true constant.",
+      "claim": "continue_cpu_boot_o.good is unconditionally driven to prim_mubi_pkg::MuBi4True.",
       "cond": "always",
       "signals": [
         "continue_cpu_boot_o.good"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:306"
+        "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv:306"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -55,34 +56,38 @@
     },
     {
       "id": "G2",
-      "type": "generate_param",
-      "claim": "The prim_flop_2sync instance is configured with Width=1, providing a 1-bit double-flop synchronization path from halt_cpu_boot_i to halt_cpu_boot_sync.",
-      "cond": "always",
+      "type": "instance_behavior",
+      "claim": "halt_cpu_boot_sync is a 2-stage synchronised version of halt_cpu_boot_i, providing a metastable-hardened signal on the destination clock domain after reset.",
+      "cond": "always after rst_ni deassertion",
       "signals": [
+        "halt_cpu_boot_sync",
         "halt_cpu_boot_i",
-        "halt_cpu_boot_sync"
+        "clk_i",
+        "rst_ni"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:310-316"
+        "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv:309-316"
       ],
       "formal": {
         "temporal_shape": "next_cycle",
-        "antecedent": "",
-        "consequent": "halt_cpu_boot_sync == $past(halt_cpu_boot_i, 2)",
+        "antecedent": "rst_ni == 1",
+        "consequent": "halt_cpu_boot_sync == ##2 $past(halt_cpu_boot_i, 2)",
         "formalizability": "partial"
       },
       "risk": "",
       "formal_sketch": {
         "scope": "soc_dbg_ctrl",
-        "clock": "",
-        "reset": "",
+        "clock": "clk_i",
+        "reset": "rst_ni",
         "signals": [
+          "halt_cpu_boot_sync",
           "halt_cpu_boot_i",
-          "halt_cpu_boot_sync"
+          "clk_i",
+          "rst_ni"
         ],
         "temporal_shape": "next_cycle",
-        "antecedent": "always",
-        "consequent": "halt_cpu_boot_sync == $past(halt_cpu_boot_i, 2)",
+        "antecedent": "rst_ni == 1",
+        "consequent": "halt_cpu_boot_sync == ##2 $past(halt_cpu_boot_i, 2)",
         "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
@@ -92,21 +97,94 @@
   "assumptions": [
     {
       "id": "A1",
-      "type": "producer_contract",
-      "claim": "halt_cpu_boot_i must be held stable for at least two cycles of clk_i to be reliably captured by the synchronizer.",
-      "cond": "when halt_cpu_boot_i is asynchronous to clk_i",
-      "risk": "Metastability or mis‑sampling on halt_cpu_boot_sync may cause spurious downstream behavior.",
+      "type": "lifecycle",
+      "claim": "rst_ni is asserted for at least two clk_i cycles during power-up to initialise the synchroniser flops.",
+      "cond": "at initial start-up",
+      "risk": "halt_cpu_boot_sync may power up with an unknown or metastable state, causing spurious halt/continue behaviour downstream.",
       "signals": [
-        "halt_cpu_boot_i",
+        "rst_ni",
         "clk_i"
       ],
       "refs": [
-        "soc_dbg_ctrl.sv:308-316"
+        "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv:310-314"
       ],
       "formal": {
         "temporal_shape": "always",
+        "antecedent": "during initial cycles",
+        "consequent": "rst_ni remains 0 for >= 2 cycles",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "clk_i"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during initial cycles",
+        "consequent": "rst_ni remains 0 for >= 2 cycles",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_security_intent_gap",
+      "priority": "high",
+      "claim": "Unconditionally driving continue_cpu_boot_o.good to MuBi4True may bypass any debug authorisation checks, allowing CPU boot to continue even when life‑cycle or debug policy should block it.",
+      "cond": "if continue_cpu_boot_o is used to gate CPU boot after a debug halt and security state forbids debug",
+      "risk": "Un-validated debug access or CPU boot extension, potentially breaking secure boot and debug isolation.",
+      "signals": [
+        "continue_cpu_boot_o.good"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv:306"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
         "antecedent": "",
-        "consequent": "assume $stable(halt_cpu_boot_i) for [*2:2] cycles",
+        "consequent": "continue_cpu_boot_o.good == MuBi4True",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "soc_dbg_ctrl",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "continue_cpu_boot_o.good"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "if continue_cpu_boot_o is used to gate CPU boot after a debug halt and security state forbids debug",
+        "consequent": "continue_cpu_boot_o.good == MuBi4True",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_temporal_window",
+      "priority": "low",
+      "claim": "The 2‑cycle synchroniser delay between halt_cpu_boot_i and halt_cpu_boot_sync may cause the pwrmgr FSM to miss a halt request if it expects an immediate response.",
+      "cond": "when halt_cpu_boot_i is asserted and the pwrmgr requires same‑cycle halt detection",
+      "risk": "CPU boot may proceed past the intended halt point, weakening debug control.",
+      "signals": [
+        "halt_cpu_boot_i",
+        "halt_cpu_boot_sync",
+        "clk_i"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv:309-316"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "halt_cpu_boot_i changes",
+        "consequent": "halt_cpu_boot_sync changes ##2 later",
         "formalizability": "partial"
       },
       "formal_sketch": {
@@ -115,92 +193,23 @@
         "reset": "",
         "signals": [
           "halt_cpu_boot_i",
+          "halt_cpu_boot_sync",
           "clk_i"
         ],
-        "temporal_shape": "always",
-        "antecedent": "when halt_cpu_boot_i is asynchronous to clk_i",
-        "consequent": "assume $stable(halt_cpu_boot_i) for [*2:2] cycles",
+        "temporal_shape": "next_cycle",
+        "antecedent": "halt_cpu_boot_i changes",
+        "consequent": "halt_cpu_boot_sync changes ##2 later",
         "formalizability": "partial",
         "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_cross_chunk_dependency",
-      "priority": "medium",
-      "claim": "The synchronized signal halt_cpu_boot_sync is used by unexamined downstream logic; if it directly gates CPU boot or debug, a spurious value could bypass security checks.",
-      "cond": "unknown",
-      "risk": "Premature CPU boot or debug access due to mis‑synchronized halt signal.",
-      "signals": [
-        "halt_cpu_boot_sync"
-      ],
-      "refs": [
-        "soc_dbg_ctrl.sv:316"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "soc_dbg_ctrl",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "halt_cpu_boot_sync"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "unknown",
-        "consequent": "The synchronized signal halt_cpu_boot_sync is used by unexamined downstream logic; if it directly gates CPU boot or debug, a spurious value could bypass security checks",
-        "formalizability": "none",
-        "confidence": 0.85,
-        "source": "llm"
-      }
-    },
-    {
-      "id": "U2",
-      "type": "U_fault_containment_gap",
-      "priority": "high",
-      "claim": "Only the 'good' field of struct continue_cpu_boot_o is assigned in this chunk; other fields (e.g., valid, value) may be unassigned, leaving the multi-bit message in an undefined or X state.",
-      "cond": "when other fields are not driven elsewhere",
-      "risk": "Power manager may interpret an incomplete multi-bit message as a legal unlock or fail to complete boot, leading to deadlock or security‑critical bypass.",
-      "signals": [
-        "continue_cpu_boot_o"
-      ],
-      "refs": [
-        "soc_dbg_ctrl.sv:306"
-      ],
-      "formal": {
-        "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "",
-        "formalizability": "none"
-      },
-      "formal_sketch": {
-        "scope": "soc_dbg_ctrl",
-        "clock": "",
-        "reset": "",
-        "signals": [
-          "continue_cpu_boot_o"
-        ],
-        "temporal_shape": "comb",
-        "antecedent": "when other fields are not driven elsewhere",
-        "consequent": "Only the 'good' field of struct continue_cpu_boot_o is assigned in this chunk; other fields (e.g., valid, value) may be unassigned, leaving the multi-bit message in an undefined or X state",
-        "formalizability": "none",
-        "confidence": 0.8,
-        "source": "llm"
-      }
-    }
-  ],
+  "security_implications": "The chunk unconditionally sets continue_cpu_boot_o.good to MuBi4True. If this signal is used to authorise CPU boot continuation after a debug halt, it would bypass any lifecycle or debug‑enable checks, potentially allowing unrestricted debug access and breaking secure debug isolation.",
   "evidence_refs": [
-    "soc_dbg_ctrl.sv:306-317"
+    "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv:306-317"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/soc_dbg_ctrl/rtl/soc_dbg_ctrl.sv",
   "line_start": 306,
-  "line_end": 317,
-  "security_implications": ""
+  "line_end": 317
 }

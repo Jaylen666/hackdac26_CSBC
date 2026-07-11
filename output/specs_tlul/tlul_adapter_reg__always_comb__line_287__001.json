@@ -8,35 +8,33 @@
     ],
     "used": [
       "wr_req",
-      "tl_i.a_address"
+      "tl_i.a_address[1:0]"
     ],
-    "modes": [
-      "wr_req_active",
-      "no_request"
-    ],
+    "modes": [],
     "tags": [
       "error",
-      "alignment"
+      "handshake",
+      "access_control"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "mux_case",
-      "claim": "addr_align_err is combinational: it equals the OR reduction of tl_i.a_address[1:0] when wr_req is 1, otherwise 0.",
-      "cond": "continuous (always_comb)",
+      "type": "assignment",
+      "claim": "When wr_req is asserted, addr_align_err is asserted iff any of tl_i.a_address[1:0] bits are high, detecting a non-word-aligned write address.",
+      "cond": "wr_req == 1",
       "signals": [
         "wr_req",
-        "tl_i.a_address[1:0]",
-        "addr_align_err"
+        "addr_align_err",
+        "tl_i.a_address[1:0]"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:287-295"
+        "288-290"
       ],
       "formal": {
         "temporal_shape": "comb",
-        "antecedent": "",
-        "consequent": "(wr_req == 1'b1) ? (addr_align_err == |(tl_i.a_address[1:0])) : (addr_align_err == 1'b0)",
+        "antecedent": "wr_req",
+        "consequent": "addr_align_err == |tl_i.a_address[1:0]",
         "formalizability": "direct"
       },
       "risk": "",
@@ -46,34 +44,102 @@
         "reset": "",
         "signals": [
           "wr_req",
-          "tl_i.a_address[1:0]",
+          "addr_align_err",
+          "tl_i.a_address[1:0]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "wr_req",
+        "consequent": "addr_align_err == |tl_i.a_address[1:0]",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G2",
+      "type": "default_fallback",
+      "claim": "When wr_req is not asserted, addr_align_err is forced to 0, regardless of tl_i.a_address.",
+      "cond": "!wr_req",
+      "signals": [
+        "wr_req",
+        "addr_align_err"
+      ],
+      "refs": [
+        "291-294"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "!wr_req",
+        "consequent": "addr_align_err == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wr_req",
           "addr_align_err"
         ],
         "temporal_shape": "comb",
-        "antecedent": "continuous (always_comb)",
-        "consequent": "(wr_req == 1'b1) ? (addr_align_err == |(tl_i.a_address[1:0])) : (addr_align_err == 1'b0)",
+        "antecedent": "!wr_req",
+        "consequent": "addr_align_err == 1'b0",
         "formalizability": "direct",
         "confidence": 1.0,
         "source": "llm"
       }
     }
   ],
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "handshake",
+      "claim": "wr_req is asserted only for write transactions, and during those transactions tl_i.a_address[1:0] carries the low bits of the transfer address.",
+      "cond": "always",
+      "risk": "If wr_req is asserted during read transactions, an alignment error could be wrongly flagged or missing, possibly causing spurious error responses or masking real misalignments.",
+      "signals": [
+        "wr_req"
+      ],
+      "refs": [
+        "288"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "tlul_adapter_reg",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wr_req"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always",
+        "consequent": "wr_req is asserted only for write transactions, and during those transactions tl_i.a_address[1:0] carries the low bits of the transfer address",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_cross_chunk_dependency",
+      "type": "U_spec_gap",
       "priority": "medium",
-      "claim": "Only write address alignment is checked; read alignment is not handled by this chunk, and it is unknown how addr_align_err is consumed to enforce alignment elsewhere.",
-      "cond": "unknown",
-      "risk": "Unaligned reads may be permitted by the adapter, or addr_align_err might be ignored, violating the comportability spec and causing undefined hardware behavior.",
+      "claim": "Alignment checking is only implemented for write requests (wr_req). It is unclear whether read requests also require alignment checks per the comportability specification.",
+      "cond": "when a read transaction is active (no signal in this chunk)",
+      "risk": "Unchecked read misalignments could allow partial read of secrets or cause data corruption if downstream logic does not handle partial reads.",
       "signals": [
-        "addr_align_err",
         "wr_req",
-        "tl_i.a_address"
+        "tl_i.a_address[1:0]"
       ],
       "refs": [
-        "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:287-295"
+        "288-295"
       ],
       "formal": {
         "temporal_shape": "comb",
@@ -84,26 +150,25 @@
       "formal_sketch": {
         "scope": "tlul_adapter_reg",
         "clock": "",
-        "reset": "",
+        "reset": "comportability",
         "signals": [
-          "addr_align_err",
           "wr_req",
-          "tl_i.a_address"
+          "tl_i.a_address[1:0]"
         ],
         "temporal_shape": "comb",
-        "antecedent": "unknown",
-        "consequent": "Only write address alignment is checked; read alignment is not handled by this chunk, and it is unknown how addr_align_err is consumed to enforce alignment elsewhere",
+        "antecedent": "when a read transaction is active (no signal in this chunk)",
+        "consequent": "Alignment checking is only implemented for write requests (wr_req). It is unclear whether read requests also require alignment checks per the comportability specification",
         "formalizability": "none",
         "confidence": 0.85,
         "source": "llm"
       }
     }
   ],
+  "security_implications": "addr_align_err signals a misaligned write address, potentially preventing partial writes to control/status registers. If error handling is incomplete or if reads are unchecked, a misaligned transaction could bypass access controls, corrupt secrets, or leak data. The write-only check exposes a possible gap for read-based attacks.",
   "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv:287-295"
+    "287-295"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/tlul/rtl/tlul_adapter_reg.sv",
   "line_start": 287,
-  "line_end": 295,
-  "security_implications": ""
+  "line_end": 295
 }

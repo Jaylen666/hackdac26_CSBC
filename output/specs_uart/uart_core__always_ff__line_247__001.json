@@ -9,13 +9,12 @@
     ],
     "used": [
       "rx_sync",
-      "rx_sync_q1"
+      "rst_ni",
+      "clk_i"
     ],
-    "modes": [
-      "reset",
-      "normal"
-    ],
+    "modes": [],
     "tags": [
+      "synchronizer",
       "reset",
       "clock_domain"
     ]
@@ -24,87 +23,50 @@
     {
       "id": "G1",
       "type": "reg_update",
-      "claim": "On active low reset (!rst_ni), both synchronizer flops rx_sync_q1 and rx_sync_q2 are assigned to 1'b1.",
-      "cond": "!rst_ni",
+      "claim": "On reset (!rst_ni), both rx_sync_q1 and rx_sync_q2 are driven to 1. When rst_ni is high, rx_sync_q1 gets the value of rx_sync and rx_sync_q2 gets the previous rx_sync_q1 on each clock edge.",
+      "cond": "always",
       "signals": [
-        "rst_ni",
-        "rx_sync_q1",
-        "rx_sync_q2"
-      ],
-      "refs": [
-        "uart_core.sv:248-250"
-      ]
-    },
-    {
-      "id": "G2",
-      "type": "reg_update",
-      "claim": "When not in reset, rx_sync_q1 is updated with the incoming rx_sync on every clk_i posedge, and rx_sync_q2 is updated with the previous rx_sync_q1.",
-      "cond": "rst_ni",
-      "signals": [
-        "rx_sync",
         "rx_sync_q1",
         "rx_sync_q2",
-        "clk_i"
-      ],
-      "refs": [
-        "uart_core.sv:251-254"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "producer_contract",
-      "claim": "The external UART RX signal (rx_sync) idles high (1'b1) because the synchronizer reset value is 1'b1.",
-      "cond": "After reset deassertion",
-      "risk": "If rx_sync idles low, the synchronizer's initial high output could cause the receiver to see a spurious start bit.",
-      "signals": [
         "rx_sync",
         "rst_ni"
       ],
       "refs": [
-        "uart_core.sv:248-250"
-      ]
-    },
-    {
-      "id": "A2",
-      "type": "value_domain",
-      "claim": "The 2-stage synchronizer is assumed to be sufficient to resolve metastability for the given clk_i frequency and technology.",
-      "cond": "During normal operation",
-      "risk": "If metastability is not resolved within two clock cycles, rx_sync_q2 may become metastable or capture an incorrect value, leading to downstream logic sampling a wrong bit.",
-      "signals": [
-        "rx_sync",
-        "clk_i",
-        "rx_sync_q1",
-        "rx_sync_q2"
+        "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:247-255"
       ],
-      "refs": [
-        "uart_core.sv:247-255"
-      ]
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "rx_sync_q1 == $past(rx_sync) && rx_sync_q2 == $past(rx_sync_q1)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "uart_core",
+        "clock": "clock",
+        "reset": "rst_ni",
+        "signals": [
+          "rx_sync_q1",
+          "rx_sync_q2",
+          "rx_sync",
+          "rst_ni"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni == 1",
+        "consequent": "rx_sync_q1 == $past(rx_sync) && rx_sync_q2 == $past(rx_sync_q1)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [
-    {
-      "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "low",
-      "claim": "The synchronizer uses only two flip-flop stages; it is uncertain whether additional stages or a more robust CDC scheme are required for reliable operation at the highest supported UART baud rate.",
-      "cond": "During normal operation",
-      "risk": "Insufficient synchronization could result in metastable sampling in the edge detector or bit counter, leading to data corruption or framing errors.",
-      "signals": [
-        "rx_sync_q1",
-        "rx_sync_q2"
-      ],
-      "refs": [
-        "uart_core.sv:247-255"
-      ]
-    }
-  ],
+  "assumptions": [],
+  "uncertain_points": [],
+  "security_implications": "",
   "evidence_refs": [
-    "uart_core.sv:247-255"
+    "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv:247-255"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/uart/rtl/uart_core.sv",
   "line_start": 247,
-  "line_end": 255,
-  "security_implications": ""
+  "line_end": 255
 }

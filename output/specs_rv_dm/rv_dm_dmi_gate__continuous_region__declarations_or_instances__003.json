@@ -1,71 +1,844 @@
 {
   "chunk_id": "rv_dm_dmi_gate__continuous_region__declarations_or_instances__003",
-  "summary": "利用生命周期硬化信号和strap采样脉冲，以安全方式锁存并分发硬件调试使能，并对调试TL接口实施门控。",
-  "behavior": "该区域通过多个硬化单元产生一个锁存的调试使能信号 strap_hw_debug_en_q，并将其同步分发到多路副本（strap_hw_debug_en）。首先，lc_strap_en 由 strap_en 经 lc_tx_bool_to_lc_tx 转换，然后与 lc_hw_debug_en[0] 进行硬化与（lc_tx_and_hi）产生 lc_hw_debug_en_masked。硬化或门（u_prim_lc_or_hardened）将 lc_hw_debug_en_masked 与当前锁存值 strap_hw_debug_en_q 合并，得到 hw_debug_en_set。同时，hw_debug_en_gating 由 lc_check_byp_en[0] 和 lc_escalate_en[0] 通过 lc_tx_and_lo 和反相器产生，其意图是当 lc_check_byp_en 或 lc_escalate_en 任意一个为 OFF 时输出 ON（即允许通过），否则输出 OFF（门控关闭）。hw_debug_en_set 和 hw_debug_en_gating 经过 lc_tx_and_hi 形成 strap_hw_debug_en_d，再通过 prim_lc_sender 更新 strap_hw_debug_en_q。因此，要使能调试，需要在 lc_check_byp_en 和 lc_escalate_en 均为 OFF（严格 FALSE）的条件下，strap_en 采样脉冲生效且 lc_hw_debug_en 或者已锁存的使能为 ON，才会将锁存位置为 ON。当 lc_check_byp_en 或 lc_escalate_en 出现非 OFF 值（true loose）时，下一周期锁存值被清除为 false loose。锁存值通过 prim_lc_sync 无损拷贝为多份，分别供给 TL 适配器使能判断（dmi_en = lc_tx_test_true_strict(strap_hw_debug_en[StEnDmiTlulAdapter])）和 TL 门控实例（u_tlul_lc_gate_dbg 使用 strap_hw_debug_en[StEnDmiTlulLcGate]）。DMI 侧握手信号 dmi_req_ready 和 dmi_rsp_valid 被 dmi_en 门控，当禁止时表现为 deassert。TL 门控实例配置为 ReturnBlankResp，保证在被门控时向上游返回全零有效响应。整个逻辑通过多个 SVA 断言验证：锁存上升沿必须由 lc_hw_debug_en 和 strap_en 共同触发；清除必须由 bypass 或 escalate 非 OFF 触发。",
+  "header": {
+    "module": "rv_dm_dmi_gate",
+    "block_kind": "mixed",
+    "driven": [
+      "lc_strap_en",
+      "lc_hw_debug_en_masked",
+      "hw_debug_en_set",
+      "hw_debug_en_gating",
+      "strap_hw_debug_en_d",
+      "strap_hw_debug_en_q",
+      "strap_hw_debug_en",
+      "dmi_en",
+      "intg_error_o",
+      "dbg_gate_intg_error",
+      "dmi_intg_error",
+      "dbg_tl_h2d_gated",
+      "dbg_tl_d2h_gated",
+      "dmi_req_ready",
+      "dmi_rsp_valid",
+      "dbg_tl_d2h_win_o",
+      "dmi_req_valid_o",
+      "dmi_req_o",
+      "dmi_rsp_ready_o"
+    ],
+    "used": [
+      "strap_en",
+      "lc_hw_debug_en",
+      "lc_check_byp_en",
+      "lc_escalate_en",
+      "clk_i",
+      "rst_ni",
+      "dbg_tl_h2d_win_i",
+      "dmi_req_ready_i",
+      "dmi_rsp_valid_i",
+      "dmi_rsp_i",
+      "strap_en_i"
+    ],
+    "modes": [
+      "StEnDmiTlulAdapter",
+      "StEnDmiTlulLcGate",
+      "StEnDmiTlulLast",
+      "strap_hw_debug_en_e"
+    ],
+    "tags": [
+      "lifecycle",
+      "access_control",
+      "debug",
+      "integrity",
+      "error",
+      "hardened"
+    ]
+  },
   "guarantees": [
     {
-      "property": "当 lc_check_byp_en[0] 和 lc_escalate_en[0] 均为严格 FALSE 且 strap_en 有效时，若 lc_hw_debug_en[0] 为严格 TRUE 或 strap_hw_debug_en_q 已为严格 TRUE，则 strap_hw_debug_en_q 在下一周期被置为严格 TRUE。",
-      "output_signals": [
-        "strap_hw_debug_en_q"
+      "id": "G1",
+      "type": "assignment",
+      "claim": "lc_strap_en is assigned from strap_en using lc_tx_bool_to_lc_tx.",
+      "cond": "always",
+      "signals": [
+        "strap_en",
+        "lc_strap_en"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:252-259"
-      ]
+      "refs": [
+        "146"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_strap_en == lc_tx_bool_to_lc_tx(strap_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_en",
+          "lc_strap_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "lc_strap_en == lc_tx_bool_to_lc_tx(strap_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "property": "只要 lc_check_byp_en[0] 或 lc_escalate_en[0] 任意一个为 true loose，下一周期 strap_hw_debug_en_q 必定为 false loose（即被清除）。",
-      "output_signals": [
-        "strap_hw_debug_en_q"
+      "id": "G2",
+      "type": "assignment",
+      "claim": "lc_hw_debug_en_masked is the hardened AND-HI of lc_strap_en and lc_hw_debug_en[0].",
+      "cond": "always",
+      "signals": [
+        "lc_strap_en",
+        "lc_hw_debug_en[0]",
+        "lc_hw_debug_en_masked"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:274-278"
-      ]
+      "refs": [
+        "147"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_hw_debug_en_masked == lc_tx_and_hi(lc_strap_en, lc_hw_debug_en[0])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_strap_en",
+          "lc_hw_debug_en[0]",
+          "lc_hw_debug_en_masked"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "lc_hw_debug_en_masked == lc_tx_and_hi(lc_strap_en, lc_hw_debug_en[0])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "property": "当 debug 被禁止时（dmi_en 为 0），TL 门控实例会返回全零的有效 TL 响应，并且 DMI 握手信号 dmi_req_ready 和 dmi_rsp_valid 被强制为 0。",
-      "output_signals": [
+      "id": "G3",
+      "type": "instance",
+      "claim": "hw_debug_en_set is produced by a hardened OR of lc_hw_debug_en_masked and strap_hw_debug_en_q.",
+      "cond": "always",
+      "signals": [
+        "lc_hw_debug_en_masked",
+        "strap_hw_debug_en_q",
+        "hw_debug_en_set"
+      ],
+      "refs": [
+        "155-163"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw_debug_en_set == prim_lc_or_hardened_output(lc_hw_debug_en_masked, strap_hw_debug_en_q)",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_masked",
+          "strap_hw_debug_en_q",
+          "hw_debug_en_set"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw_debug_en_set == prim_lc_or_hardened_output(lc_hw_debug_en_masked, strap_hw_debug_en_q)",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G4",
+      "type": "assignment",
+      "claim": "hw_debug_en_gating is the inverse of the AND-LO of lc_check_byp_en[0] and lc_escalate_en[0].",
+      "cond": "always",
+      "signals": [
+        "lc_check_byp_en[0]",
+        "lc_escalate_en[0]",
+        "hw_debug_en_gating"
+      ],
+      "refs": [
+        "167"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "hw_debug_en_gating == lc_tx_inv(lc_tx_and_lo(lc_check_byp_en[0], lc_escalate_en[0]))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_check_byp_en[0]",
+          "lc_escalate_en[0]",
+          "hw_debug_en_gating"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "hw_debug_en_gating == lc_tx_inv(lc_tx_and_lo(lc_check_byp_en[0], lc_escalate_en[0]))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G5",
+      "type": "assignment",
+      "claim": "strap_hw_debug_en_d is the hardened AND-HI of hw_debug_en_set and hw_debug_en_gating.",
+      "cond": "always",
+      "signals": [
+        "hw_debug_en_set",
+        "hw_debug_en_gating",
+        "strap_hw_debug_en_d"
+      ],
+      "refs": [
+        "171"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "strap_hw_debug_en_d == lc_tx_and_hi(hw_debug_en_set, hw_debug_en_gating)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw_debug_en_set",
+          "hw_debug_en_gating",
+          "strap_hw_debug_en_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "strap_hw_debug_en_d == lc_tx_and_hi(hw_debug_en_set, hw_debug_en_gating)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G6",
+      "type": "reg_update",
+      "claim": "strap_hw_debug_en_q is a flopped version of strap_hw_debug_en_d (via prim_lc_sender).",
+      "cond": "every positive clock edge",
+      "signals": [
+        "strap_hw_debug_en_d",
+        "strap_hw_debug_en_q",
+        "clk_i"
+      ],
+      "refs": [
+        "173-178"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "",
+        "consequent": "strap_hw_debug_en_q == $past(strap_hw_debug_en_d)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "clk_i",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en_d",
+          "strap_hw_debug_en_q",
+          "clk_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "every positive clock edge",
+        "consequent": "strap_hw_debug_en_q == $past(strap_hw_debug_en_d)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G7",
+      "type": "instance",
+      "claim": "strap_hw_debug_en is a multi-copy synchronized version of strap_hw_debug_en_q (no CDC delay when AsyncOn=0).",
+      "cond": "always (combinational passthrough)",
+      "signals": [
+        "strap_hw_debug_en_q",
+        "strap_hw_debug_en"
+      ],
+      "refs": [
+        "186-195"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "strap_hw_debug_en == strap_hw_debug_en_q /* assuming no clock synchronization */",
+        "formalizability": "partial"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en_q",
+          "strap_hw_debug_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always (combinational passthrough)",
+        "consequent": "strap_hw_debug_en == strap_hw_debug_en_q /* assuming no clock synchronization */",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G8",
+      "type": "assignment",
+      "claim": "dmi_en is 1 if and only if strap_hw_debug_en[StEnDmiTlulAdapter] is strict true.",
+      "cond": "always",
+      "signals": [
+        "strap_hw_debug_en[StEnDmiTlulAdapter]",
+        "dmi_en"
+      ],
+      "refs": [
+        "199"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "dmi_en == lc_tx_test_true_strict(strap_hw_debug_en[StEnDmiTlulAdapter])",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en[StEnDmiTlulAdapter]",
+          "dmi_en"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "dmi_en == lc_tx_test_true_strict(strap_hw_debug_en[StEnDmiTlulAdapter])",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G9",
+      "type": "assignment",
+      "claim": "intg_error_o is the logical OR of dbg_gate_intg_error and dmi_intg_error.",
+      "cond": "always",
+      "signals": [
+        "dbg_gate_intg_error",
+        "dmi_intg_error",
+        "intg_error_o"
+      ],
+      "refs": [
+        "206"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "intg_error_o == (dbg_gate_intg_error | dmi_intg_error)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dbg_gate_intg_error",
+          "dmi_intg_error",
+          "intg_error_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "intg_error_o == (dbg_gate_intg_error | dmi_intg_error)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G10",
+      "type": "instance",
+      "claim": "dbg_tl_d2h_win_o is driven by the TL-UL life cycle gate. When gated, it returns a blank all-zero response; otherwise it passes the adapter's D2H.",
+      "cond": "always",
+      "signals": [
+        "strap_hw_debug_en[StEnDmiTlulLcGate]",
         "dbg_tl_d2h_win_o",
+        "dbg_tl_d2h_gated"
+      ],
+      "refs": [
+        "210-226"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en[StEnDmiTlulLcGate]",
+          "dbg_tl_d2h_win_o",
+          "dbg_tl_d2h_gated"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "dbg_tl_d2h_win_o is driven by the TL-UL life cycle gate. When gated, it returns a blank all-zero response; otherwise it passes the adapter's D2H",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G11",
+      "type": "assignment",
+      "claim": "dmi_req_ready = dmi_req_ready_i & dmi_en; dmi_rsp_valid = dmi_rsp_valid_i & dmi_en.",
+      "cond": "always",
+      "signals": [
+        "dmi_en",
+        "dmi_req_ready_i",
+        "dmi_rsp_valid_i",
         "dmi_req_ready",
         "dmi_rsp_valid"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:210-213",
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:244-245"
-      ]
-    }
-  ],
-  "security_implications": "该逻辑管理硬件调试使能的锁存与分发，使用生命周期硬化信号（lc_hw_debug_en、lc_check_byp_en、lc_escalate_en）确保仅在授权状态下开启调试。硬化原语（prim_lc_or_hardened、lc_tx_and_hi 等）防止毛刺或非严格值意外产生 ON 状态。门控机制在 bypass 或 escalate 触发时立即清除使能并返回空白响应，构成防御深度。",
-  "assumptions": [
-    {
-      "constraint": "strap_en_i 脉冲必须在采样时钟沿保持稳定至少一个时钟周期，以满足 prim_lc_or_hardened 和 prim_lc_sender 的建立/保持要求。",
-      "bug_relevance": "若不满足，strap_hw_debug_en_q 可能无法正确锁存，导致调试使能未能开启或意外保持。但这是硬件时序基本假设。",
-      "related_signals": [
-        "strap_en_i"
+      "refs": [
+        "244-245"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:158-162"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "(dmi_req_ready == (dmi_req_ready_i & dmi_en)) && (dmi_rsp_valid == (dmi_rsp_valid_i & dmi_en))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_en",
+          "dmi_req_ready_i",
+          "dmi_rsp_valid_i",
+          "dmi_req_ready",
+          "dmi_rsp_valid"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "(dmi_req_ready == (dmi_req_ready_i & dmi_en)) && (dmi_rsp_valid == (dmi_rsp_valid_i & dmi_en))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
-      "constraint": "所有 lc_tx_t 信号的编码必须符合生命周期编码规范（TRUE 为 ON 编码，FALSE 为 OFF 编码），硬化函数才能正确解释。",
-      "bug_relevance": "违反将导致门控或锁存行为异常，可能使调试在未授权时使能或无法紧急关闭。",
-      "related_signals": [
-        "lc_hw_debug_en",
-        "lc_check_byp_en",
-        "lc_escalate_en",
+      "id": "G12",
+      "type": "error_detection",
+      "claim": "Assertion LcHwDebugEnSet_A: If lc_hw_debug_en[0] or strap_hw_debug_en_q is ON-strict, check_byp and escalate are OFF-strict, and strap_en_i is asserted, then next cycle strap_hw_debug_en_q is ON-strict.",
+      "cond": "trigger condition from assertion",
+      "signals": [
+        "lc_hw_debug_en[0]",
+        "strap_hw_debug_en_q",
+        "lc_check_byp_en[0]",
+        "lc_escalate_en[0]",
+        "strap_en_i"
+      ],
+      "refs": [
+        "252-259"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "(lc_tx_test_true_strict(lc_hw_debug_en[0]) || lc_tx_test_true_strict(strap_hw_debug_en_q)) && lc_tx_test_false_strict(lc_check_byp_en[0]) && lc_tx_test_false_strict(lc_escalate_en[0]) && strap_en_i",
+        "consequent": "lc_tx_test_true_strict(strap_hw_debug_en_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en[0]",
+          "strap_hw_debug_en_q",
+          "lc_check_byp_en[0]",
+          "lc_escalate_en[0]",
+          "strap_en_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "(lc_tx_test_true_strict(lc_hw_debug_en[0]) || lc_tx_test_true_strict(strap_hw_debug_en_q)) && lc_tx_test_false_strict(lc_check_byp_en[0]) && lc_tx_test_false_strict(lc_escalate_en[0]) && strap_en_i",
+        "consequent": "lc_tx_test_true_strict(strap_hw_debug_en_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G13",
+      "type": "error_detection",
+      "claim": "Assertion LcHwDebugEnSetRev0_A: A false-loose to true-strict transition on strap_hw_debug_en_q implies that lc_hw_debug_en[0] was true-strict in the previous cycle.",
+      "cond": "detected by sequence",
+      "signals": [
+        "strap_hw_debug_en_q",
+        "lc_hw_debug_en[0]"
+      ],
+      "refs": [
+        "261-265"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_tx_test_false_loose(strap_hw_debug_en_q) ##1 lc_tx_test_true_strict(strap_hw_debug_en_q)",
+        "consequent": "$past(lc_tx_test_true_strict(lc_hw_debug_en[0]))",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en_q",
+          "lc_hw_debug_en[0]"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_tx_test_false_loose(strap_hw_debug_en_q) ##1 lc_tx_test_true_strict(strap_hw_debug_en_q)",
+        "consequent": "$past(lc_tx_test_true_strict(lc_hw_debug_en[0]))",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G14",
+      "type": "error_detection",
+      "claim": "Assertion LcHwDebugEnSetRev1_A: A false-loose to true-strict transition on strap_hw_debug_en_q implies that strap_en was asserted in the previous cycle.",
+      "cond": "detected by sequence",
+      "signals": [
+        "strap_hw_debug_en_q",
         "strap_en"
       ],
-      "source_refs": [
-        "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:145-146"
-      ]
+      "refs": [
+        "267-271"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_tx_test_false_loose(strap_hw_debug_en_q) ##1 lc_tx_test_true_strict(strap_hw_debug_en_q)",
+        "consequent": "$past(strap_en)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en_q",
+          "strap_en"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_tx_test_false_loose(strap_hw_debug_en_q) ##1 lc_tx_test_true_strict(strap_hw_debug_en_q)",
+        "consequent": "$past(strap_en)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G15",
+      "type": "error_detection",
+      "claim": "Assertion LcHwDebugEnClear_A: If lc_check_byp_en[0] or lc_escalate_en[0] is true-loose, then next cycle strap_hw_debug_en_q is false-loose.",
+      "cond": "trigger condition from assertion",
+      "signals": [
+        "lc_check_byp_en[0]",
+        "lc_escalate_en[0]",
+        "strap_hw_debug_en_q"
+      ],
+      "refs": [
+        "274-278"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_tx_test_true_loose(lc_check_byp_en[0]) || lc_tx_test_true_loose(lc_escalate_en[0])",
+        "consequent": "lc_tx_test_false_loose(strap_hw_debug_en_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_check_byp_en[0]",
+          "lc_escalate_en[0]",
+          "strap_hw_debug_en_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "lc_tx_test_true_loose(lc_check_byp_en[0]) || lc_tx_test_true_loose(lc_escalate_en[0])",
+        "consequent": "lc_tx_test_false_loose(strap_hw_debug_en_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "evidence_refs": [
-    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:145-280"
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "value_domain",
+      "claim": "lc_hw_debug_en_i, lc_check_byp_en_i, lc_escalate_en_i are stable, correctly encoded lc_tx_t signals.",
+      "cond": "when used in hardened gates",
+      "risk": "Faulty encoding or glitches could cause incorrect debug enable gating or bypass of security checks.",
+      "signals": [
+        "lc_hw_debug_en_i",
+        "lc_check_byp_en_i",
+        "lc_escalate_en_i"
+      ],
+      "refs": [],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "lc_hw_debug_en_i in {On, Off, ...} /* valid lc_tx_t encoding */",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "lc_hw_debug_en_i",
+          "lc_check_byp_en_i",
+          "lc_escalate_en_i"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when used in hardened gates",
+        "consequent": "lc_hw_debug_en_i in {On, Off, ...} /* valid lc_tx_t encoding */",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A2",
+      "type": "handshake",
+      "claim": "strap_en_i is a clean one-cycle pulse, asserted only after all life cycle inputs are stable.",
+      "cond": "during sampling window",
+      "risk": "A glitch or prolonged assertion could cause unintended latching of debug enable.",
+      "signals": [
+        "strap_en_i"
+      ],
+      "refs": [],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "strap_en_i",
+        "consequent": "$past(!strap_en_i) /* single-cycle pulse */",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_en_i"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "strap_en_i",
+        "consequent": "$past(!strap_en_i) /* single-cycle pulse */",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A3",
+      "type": "producer_contract",
+      "claim": "dmi_req_ready_i and dmi_rsp_valid_i obey the DMI handshake protocol, and the adapter (tlul_adapter_dmi) correctly translates TL-UL to DMI with no spurious responses.",
+      "cond": "always",
+      "risk": "Protocol violations could cause deadlock, data corruption, or incorrect DMI transactions.",
+      "signals": [
+        "dmi_req_ready_i",
+        "dmi_rsp_valid_i",
+        "dmi_req_valid_o",
+        "dmi_rsp_ready_o"
+      ],
+      "refs": [
+        "230-242"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "/* protocol checks beyond this chunk */",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_req_ready_i",
+          "dmi_rsp_valid_i",
+          "dmi_req_valid_o",
+          "dmi_rsp_ready_o"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "/* protocol checks beyond this chunk */",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "A4",
+      "type": "security_precondition",
+      "claim": "The hardened primitives (prim_lc_or_hardened, prim_lc_sender, prim_lc_sync) operate correctly and do not introduce false ON states.",
+      "cond": "all operation",
+      "risk": "A fault in a hardened primitive could allow debug enable to be spuriously set or cleared, violating security.",
+      "signals": [
+        "hw_debug_en_set",
+        "strap_hw_debug_en_q",
+        "strap_hw_debug_en"
+      ],
+      "refs": [
+        "155-163",
+        "173-178",
+        "186-195"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "/* black‑box assumption */",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "hw_debug_en_set",
+          "strap_hw_debug_en_q",
+          "strap_hw_debug_en"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "all operation",
+        "consequent": "/* black‑box assumption */",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
   ],
   "uncertain_points": [
-    "lc_tx_and_lo 和 lc_tx_inv 的精确真值表未在片段中定义，需查阅 lc_tx 包以确认门控逻辑的边界条件。",
-    "StEnDmiTlulLast 的实际数值未显式声明，仅从枚举推断为 2，影响数组位宽和副本索引。"
+    {
+      "id": "U1",
+      "type": "U_fault_containment_gap",
+      "priority": "medium",
+      "claim": "When dmi_en transitions from 1 to 0, the gating of dmi_req_ready and dmi_rsp_valid may leave an in‑flight DMI transaction without completing the response handshake.",
+      "cond": "dmi_en drops while a DMI request is pending and dmi_rsp_valid_i is high",
+      "risk": "The adapter may stall or lose the response, and the requester sees no response (gate blocks it). Could cause a silent deadlock or unfinished transaction.",
+      "signals": [
+        "dmi_en",
+        "dmi_req_ready",
+        "dmi_rsp_valid",
+        "dmi_req_ready_i",
+        "dmi_rsp_valid_i",
+        "dmi_rsp_ready_o"
+      ],
+      "refs": [
+        "244-245"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "dmi_en && dmi_rsp_valid_i && !dmi_rsp_ready_o",
+        "consequent": "/* need to verify eventual completion */",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "dmi_en",
+          "dmi_req_ready",
+          "dmi_rsp_valid",
+          "dmi_req_ready_i",
+          "dmi_rsp_valid_i",
+          "dmi_rsp_ready_o"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "dmi_en && dmi_rsp_valid_i && !dmi_rsp_ready_o",
+        "consequent": "/* need to verify eventual completion */",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "U2",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "Two separate life-cycle gating signals control the TL-UL gate (StEnDmiTlulLcGate) and the DMI adapter (StEnDmiTlulAdapter). The spec does not clarify why they are separate.",
+      "cond": "unknown",
+      "risk": "If the two signals diverge (e.g., due to differing propagation), the gate and adapter could be out of sync, leading to unexpected behavior.",
+      "signals": [
+        "strap_hw_debug_en[StEnDmiTlulAdapter]",
+        "strap_hw_debug_en[StEnDmiTlulLcGate]"
+      ],
+      "refs": [
+        "199",
+        "225"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "rv_dm_dmi_gate",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "strap_hw_debug_en[StEnDmiTlulAdapter]",
+          "strap_hw_debug_en[StEnDmiTlulLcGate]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "Two separate life-cycle gating signals control the TL-UL gate (StEnDmiTlulLcGate) and the DMI adapter (StEnDmiTlulAdapter). The spec does not clarify why they are separate",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "This block gates the debug interface (TL-UL to DMI) based on life‑cycle state, strap sampling, and escalation inputs. Hardened primitives prevent glitch propagation that could spuriously enable debug. The gated TL-UL path returns an all‑zero blank response when disabled, which protects internal data but could mask error information. Integrity errors from both the gate and the adapter are aggregated into a single alert output (intg_error_o). A failure in the latching or the OR-hardened logic could allow unauthorized debug access, undermining life‑cycle security. The separate lc_en signals for the gate and the adapter may introduce a desynchronization risk if the relative timing differs.",
+  "evidence_refs": [
+    "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv:145-280"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/rv_dm/rtl/rv_dm_dmi_gate.sv",
   "line_start": 145,

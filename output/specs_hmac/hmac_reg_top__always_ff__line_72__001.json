@@ -15,30 +15,50 @@
     "modes": [],
     "tags": [
       "error",
-      "integrity",
-      "csr",
-      "reset"
+      "integrity"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
-      "type": "reg_update",
-      "claim": "On asynchronous reset (rst_ni low), err_q is cleared to 0.",
+      "type": "reset_clear",
+      "claim": "When rst_ni is low (reset active), err_q is forced to 0 immediately.",
       "cond": "rst_ni == 0",
       "signals": [
         "rst_ni",
         "err_q"
       ],
       "refs": [
-        "hmac_reg_top.sv:73-74"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:73-74"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "err_q == 1'b0",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "!rst_ni",
+        "consequent": "err_q == 1'b0",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "reg_update",
-      "claim": "On each posedge clk_i when rst_ni is high, if intg_err or reg_we_err is high, err_q is set to 1; otherwise it retains its previous value.",
-      "cond": "rst_ni == 1; intg_err || reg_we_err",
+      "claim": "When not in reset and either intg_err or reg_we_err is high at a rising clock edge, err_q becomes 1 on the next clock cycle.",
+      "cond": "posedge clk_i && rst_ni && (intg_err || reg_we_err)",
       "signals": [
         "clk_i",
         "rst_ni",
@@ -47,46 +67,152 @@
         "err_q"
       ],
       "refs": [
-        "hmac_reg_top.sv:75-76"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:75-76"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (intg_err || reg_we_err)",
+        "consequent": "err_q == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "intg_err",
+          "reg_we_err",
+          "err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && (intg_err || reg_we_err)",
+        "consequent": "err_q == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    },
+    {
+      "id": "G3",
+      "type": "default_fallback",
+      "claim": "Otherwise (no reset and no error condition), err_q retains its previous value.",
+      "cond": "posedge clk_i && rst_ni && !(intg_err || reg_we_err)",
+      "signals": [
+        "clk_i",
+        "rst_ni",
+        "err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:72-78"
+      ],
+      "formal": {
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(intg_err || reg_we_err)",
+        "consequent": "$stable(err_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "clk_i",
+          "rst_ni",
+          "err_q"
+        ],
+        "temporal_shape": "next_cycle",
+        "antecedent": "rst_ni && !(intg_err || reg_we_err)",
+        "consequent": "$stable(err_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "assumptions": [],
+  "assumptions": [
+    {
+      "id": "A1",
+      "type": "reset_integrity",
+      "claim": "rst_ni is assumed to be a clean asynchronous reset signal that meets standard recovery/removal timing and is asserted for at least one full clock cycle.",
+      "cond": "during reset deassertion or when err_q is expected to be cleared",
+      "risk": "If rst_ni is glitchy or not held long enough, err_q may not clear properly, retaining a stale error that could propagate to downstream security logic.",
+      "signals": [
+        "rst_ni",
+        "clk_i",
+        "err_q"
+      ],
+      "refs": [
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:72-74"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "clk_i",
+        "reset": "rst_ni",
+        "signals": [
+          "rst_ni",
+          "clk_i",
+          "err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "during reset deassertion or when err_q is expected to be cleared",
+        "consequent": "rst_ni is assumed to be a clean asynchronous reset signal that meets standard recovery/removal timing and is asserted for at least one full clock cycle",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
+    }
+  ],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "high",
-      "claim": "err_q is a sticky error bit that latches high on any error condition and is only cleared by hard reset. It is unclear whether this matches the intended register specification (e.g., if software is expected to clear it).",
-      "cond": "After an error event, while reset is inactive",
-      "risk": "If the design requires a software-clearable error status, missing a clear path could lead to missed error detection in subsequent operations or inability to distinguish new errors from past ones.",
-      "signals": [
-        "err_q"
-      ],
-      "refs": [
-        "hmac_reg_top.sv:72-78"
-      ]
-    },
-    {
-      "id": "U2",
       "type": "U_cross_chunk_dependency",
-      "priority": "high",
-      "claim": "The severity of err_q's sticky-until-reset behavior depends on how it is consumed. If err_q feeds interrupt/alert logic, a missing clear mechanism might be acceptable only if the system is reset on alert; otherwise it could cause spurious or masked alerts.",
-      "cond": "When err_q is high and system not reset",
-      "risk": "Permanent assertion of an error signal due to lack of clear could break alert handling or mask new errors.",
+      "priority": "medium",
+      "claim": "err_q is sticky and never cleared by this block except on reset. It is unclear whether a software-clear or auto-clear mechanism exists elsewhere; if absent, a single error latches err_q permanently until system reset.",
+      "cond": "After any error event (intg_err || reg_we_err) has set err_q",
+      "risk": "Permanent error state may deny service or mask subsequent error events, affecting HMAC integrity monitoring.",
       "signals": [
         "err_q"
       ],
       "refs": [
-        "hmac_reg_top.sv:72-78"
-      ]
+        "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:72-78"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac_reg_top",
+        "clock": "",
+        "reset": "reset.",
+        "signals": [
+          "err_q"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "After any error event (intg_err || reg_we_err) has set err_q",
+        "consequent": "err_q is sticky and never cleared by this block except on reset. It is unclear whether a software-clear or auto-clear mechanism exists elsewhere; if absent, a single error latches err_q permanently until system reset",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "err_q is a sticky error indicator for integrity errors (intg_err) and register write errors (reg_we_err) in the HMAC register block. If this flag cannot be cleared without a system reset, an attacker could deliberately trigger an integrity error to permanently lock the error signal, potentially blinding the system to further errors or forcing an unrecoverable fault state.",
   "evidence_refs": [
-    "hmac_reg_top.sv:72-78"
+    "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv:72-78"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_reg_top.sv",
   "line_start": 72,
-  "line_end": 78,
-  "security_implications": ""
+  "line_end": 78
 }

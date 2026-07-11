@@ -11,7 +11,6 @@
       "reg_hash_start_i",
       "reg_hash_continue_i",
       "st_q",
-      "StIdle",
       "txcnt_eq_blksz",
       "reg_hash_stop_d",
       "idle_q"
@@ -21,84 +20,138 @@
     ],
     "tags": [
       "handshake",
-      "fifo",
-      "lifecycle"
+      "state",
+      "counter"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "mux_case",
-      "claim": "idle_d is assigned by a prioritized ternary chain: if reg_hash_start_i or reg_hash_continue_i is high, idle_d = 0; else if st_q == StIdle, idle_d = 1; else if txcnt_eq_blksz and reg_hash_stop_d are both high, idle_d = 1; otherwise idle_d = idle_q.",
-      "cond": "always combinational",
+      "claim": "idle_d is 0 when reg_hash_start_i or reg_hash_continue_i is asserted; otherwise 1 when current state is StIdle; otherwise 1 when txcnt_eq_blksz and reg_hash_stop_d are both true; otherwise idle_d holds the previous idle value from idle_q.",
+      "cond": "always",
       "signals": [
+        "idle_d",
         "reg_hash_start_i",
         "reg_hash_continue_i",
         "st_q",
         "StIdle",
         "txcnt_eq_blksz",
         "reg_hash_stop_d",
-        "idle_q",
-        "idle_d"
+        "idle_q"
       ],
       "refs": [
-        "file:473-482"
-      ]
+        "hmac_core.sv:473-482"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "idle_d == ((reg_hash_start_i || reg_hash_continue_i) ? 1'b0 : (st_q == StIdle) ? 1'b1 : (txcnt_eq_blksz && reg_hash_stop_d) ? 1'b1 : idle_q)",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "idle_d",
+          "reg_hash_start_i",
+          "reg_hash_continue_i",
+          "st_q",
+          "StIdle",
+          "txcnt_eq_blksz",
+          "reg_hash_stop_d",
+          "idle_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "idle_d == ((reg_hash_start_i || reg_hash_continue_i) ? 1'b0 : (st_q == StIdle) ? 1'b1 : (txcnt_eq_blksz && reg_hash_stop_d) ? 1'b1 : idle_q)",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "idle_o is continuously assigned to the value of idle_d.",
+      "claim": "idle_o is a combinational copy of idle_d.",
       "cond": "always",
       "signals": [
         "idle_o",
         "idle_d"
       ],
       "refs": [
-        "file:484-484"
-      ]
-    }
-  ],
-  "assumptions": [
-    {
-      "id": "A1",
-      "type": "value_domain",
-      "claim": "txcnt_eq_blksz must be asserted only when a complete data block has been processed (i.e., the block boundary has been reached).",
-      "cond": "when idle indication is to reflect true module idleness",
-      "risk": "if txcnt_eq_blksz toggles prematurely, idle_d (and hence idle_o) may go high before the module is actually idle, misleading downstream logic and potentially causing protocol errors or data corruption.",
-      "signals": [
-        "txcnt_eq_blksz",
-        "reg_hash_stop_d",
-        "idle_d"
+        "hmac_core.sv:484"
       ],
-      "refs": [
-        "file:480-480"
-      ]
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "idle_o == idle_d",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "idle_o",
+          "idle_d"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "idle_o == idle_d",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "assumptions": [],
   "uncertain_points": [
     {
       "id": "U1",
-      "type": "U_spec_gap",
-      "priority": "medium",
-      "claim": "The idle logic uses txcnt_eq_blksz to qualify reg_hash_stop_d; if stop is asserted while a block is still in progress (txcnt_eq_blksz = 0), idle_d stays 0 until the block completes and stop is still asserted. It is unclear whether immediate idle should be forced on stop regardless of block completion.",
-      "cond": "when reg_hash_stop_d = 1 and txcnt_eq_blksz = 0",
-      "risk": "may cause downstream controllers to incorrectly interpret that the module is still busy after a stop request, leading to hung handshakes or out-of-sync protocol state.",
+      "type": "U_cross_chunk_dependency",
+      "priority": "low",
+      "claim": "idle_d defaults to idle_q, implying a registered feedback; need to verify that idle_q is a flip‑flop output to prevent combinational loop.",
+      "cond": "always",
+      "risk": "If idle_q is not registered, a combinational loop forms, causing oscillation or X propagation.",
       "signals": [
-        "reg_hash_stop_d",
-        "txcnt_eq_blksz",
-        "idle_d"
+        "idle_d",
+        "idle_q"
       ],
       "refs": [
-        "file:478-480"
-      ]
+        "hmac_core.sv:482"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "hmac_core",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "idle_d",
+          "idle_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "idle_d defaults to idle_q, implying a registered feedback; need to verify that idle_q is a flip‑flop output to prevent combinational loop",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "idle_o reflects the core's idle status, which may gate the output of digest values or control state transitions. An incorrect idle calculation (e.g., priority glitch or stale feedback) could cause premature data exposure or disrupted flow control, potentially leaking secret material or breaching protocol integrity.",
   "evidence_refs": [
-    "file:473-484"
+    "hmac_core.sv:473-484"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac_core.sv",
   "line_start": 473,
-  "line_end": 484,
-  "security_implications": ""
+  "line_end": 484
 }

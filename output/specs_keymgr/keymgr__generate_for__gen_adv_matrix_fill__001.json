@@ -8,111 +8,258 @@
       "adv_dvalid[i]"
     ],
     "used": [
-      "data_rand[0]"
-    ],
-    "modes": [
+      "data_rand[0]",
       "KeyMgrStages",
       "StageWidth",
       "AdvLfsrCopies"
     ],
+    "modes": [
+      "fill_stages"
+    ],
     "tags": [
-      "parameterization",
-      "sparse_fsm",
-      "security"
+      "secret",
+      "key",
+      "entropy",
+      "parameterization"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_matrix[i] is assigned {AdvLfsrCopies{data_rand[0]}}.",
+      "claim": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_matrix[i] is driven to a replication of data_rand[0] with width AdvLfsrCopies.",
       "cond": "always",
       "signals": [
-        "adv_matrix[i]",
-        "data_rand[0]"
+        "adv_matrix",
+        "data_rand[0]",
+        "i",
+        "KeyMgrStages",
+        "StageWidth",
+        "AdvLfsrCopies"
       ],
       "refs": [
-        "file:406-409"
-      ]
+        "keymgr.sv:407-407"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_matrix[i] == {AdvLfsrCopies{data_rand[0]}}",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "adv_matrix",
+          "data_rand[0]",
+          "i",
+          "KeyMgrStages",
+          "StageWidth",
+          "AdvLfsrCopies"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "adv_matrix[i] == {AdvLfsrCopies{data_rand[0]}}",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     },
     {
       "id": "G2",
       "type": "assignment",
-      "claim": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_dvalid[i] is assigned 1'b1.",
+      "claim": "For each i in [KeyMgrStages, 2**StageWidth-1], adv_dvalid[i] is driven to 1'b1.",
       "cond": "always",
       "signals": [
-        "adv_dvalid[i]"
+        "adv_dvalid",
+        "i",
+        "KeyMgrStages",
+        "StageWidth"
       ],
       "refs": [
-        "file:406-409"
-      ]
+        "keymgr.sv:408-408"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "adv_dvalid[i] == 1'b1",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "adv_dvalid",
+          "i",
+          "KeyMgrStages",
+          "StageWidth"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "adv_dvalid[i] == 1'b1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
       "type": "value_domain",
-      "claim": "KeyMgrStages < 2**StageWidth, so that the loop body executes and the padding entries are driven.",
-      "cond": "parameter instantiation",
-      "risk": "If violated, the loop does not execute, leaving adv_matrix and adv_dvalid entries beyond KeyMgrStages undriven (x) and potentially causing downstream silent failures.",
+      "claim": "data_rand[0] provides unpredictable (random) entropy; it is not stuck-at or deterministic.",
+      "cond": "always, when used for fill generation",
+      "risk": "If data_rand[0] is constant or predictable, the fill values are predictable, reducing the entropy of unused stages and potentially weakening key derivation if they are accessed.",
       "signals": [
-        "adv_matrix",
-        "adv_dvalid"
+        "data_rand[0]"
       ],
       "refs": [
-        "file:406"
-      ]
+        "keymgr.sv:407-407"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "",
+        "consequent": "$countones(data_rand[0]) > 0 (entropy) — not formally checkable",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "data_rand[0]"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "always, when used for fill generation",
+        "consequent": "$countones(data_rand[0]) > 0 (entropy) — not formally checkable",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
     },
     {
       "id": "A2",
-      "type": "value_domain",
-      "claim": "AdvLfsrCopies matches the declared bit width of each adv_matrix entry and is positive (>=1).",
-      "cond": "synthesis/elaboration",
-      "risk": "If AdvLfsrCopies is 0, replication yields a zero-width vector; if mismatch, width extension/truncation may corrupt data or cause elaboration errors.",
+      "type": "producer_contract",
+      "claim": "Any read index into adv_matrix or adv_dvalid is always less than KeyMgrStages; the fill entries (i >= KeyMgrStages) are never read.",
+      "cond": "whenever adv_matrix or adv_dvalid is consumed",
+      "risk": "If a consumer reads an index >= KeyMgrStages, it will see the fill value (data_rand[0] replicated) with valid high, leading to incorrect key material or integrity failure.",
       "signals": [
-        "adv_matrix"
+        "adv_matrix",
+        "adv_dvalid",
+        "KeyMgrStages"
       ],
       "refs": [
-        "file:407"
-      ]
+        "keymgr.sv:407-408"
+      ],
+      "formal": {
+        "temporal_shape": "always",
+        "antecedent": "consumer_read_enable",
+        "consequent": "read_index < KeyMgrStages",
+        "formalizability": "partial"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "adv_matrix",
+          "adv_dvalid",
+          "KeyMgrStages"
+        ],
+        "temporal_shape": "always",
+        "antecedent": "consumer_read_enable",
+        "consequent": "read_index < KeyMgrStages",
+        "formalizability": "partial",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "uncertain_points": [
     {
       "id": "U1",
       "type": "U_security_intent_gap",
-      "priority": "high",
-      "claim": "adv_dvalid is forced to 1 for all padding entries (i >= KeyMgrStages), making them appear as valid stages. It is unclear whether the design intends to treat them as invalid to prevent accidental stage activation or key access.",
-      "cond": "When any logic iterates over adv_dvalid to determine active stages",
-      "risk": "A buggy or malicious use of adv_dvalid could accept a padding entry as a legitimate key stage, potentially bypassing stage count checks and exposing secret material.",
+      "priority": "medium",
+      "claim": "The fill stages (i >= KeyMgrStages) are set valid (adv_dvalid=1) even though they contain only replicated data_rand[0]. It is unclear whether marking them as valid is intentional to prevent stalling or a mistake that could allow accidental consumption of low-entropy fill data.",
+      "cond": "if a consumer index erroneously enters the fill range",
+      "risk": "If a consumer reads a fill entry, it receives a valid signal and deterministic replicated bits, which could be used as key material, degrading security.",
       "signals": [
-        "adv_dvalid"
+        "adv_dvalid[i]",
+        "adv_matrix[i]",
+        "KeyMgrStages"
       ],
       "refs": [
-        "file:408"
-      ]
+        "keymgr.sv:407-408"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "i >= KeyMgrStages && i < 2**StageWidth",
+        "consequent": "adv_dvalid[i] == 1'b1",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "KeyMgrStages",
+        "signals": [
+          "adv_dvalid[i]",
+          "adv_matrix[i]",
+          "KeyMgrStages"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "i >= KeyMgrStages && i < 2**StageWidth",
+        "consequent": "adv_dvalid[i] == 1'b1",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     },
     {
       "id": "U2",
-      "type": "U_security_intent_gap",
-      "priority": "medium",
-      "claim": "The padding data is a single random bit data_rand[0] replicated AdvLfsrCopies times. This may not provide sufficient entropy for masking, especially if the bit is predictable or has low toggle rate.",
-      "cond": "during operation when padding entries are read",
-      "risk": "If these dummy entries are used for side-channel resistance, a weak random pattern could leak information through power/EM analysis.",
+      "type": "U_spec_gap",
+      "priority": "low",
+      "claim": "The fill data is a replication of a single bit (data_rand[0]), resulting in an all-zeroes or all-ones pattern for each entry. It is not a full-width random word. The design intent may have expected a wider entropy source.",
+      "cond": "when data_rand[0] is driven",
+      "risk": "If fill entries are ever used, they provide minimal entropy (1 bit spread across the word), potentially weakening key diversity compared to ideal random fill.",
       "signals": [
-        "data_rand[0]",
-        "adv_matrix"
+        "adv_matrix[i]",
+        "data_rand[0]"
       ],
       "refs": [
-        "file:407"
-      ]
+        "keymgr.sv:407-407"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "$onehot0({AdvLfsrCopies{data_rand[0]}}) == 1'b1 or similar",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "keymgr",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "adv_matrix[i]",
+          "data_rand[0]"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "when data_rand[0] is driven",
+        "consequent": "$onehot0({AdvLfsrCopies{data_rand[0]}}) == 1'b1 or similar",
+        "formalizability": "none",
+        "confidence": 0.8,
+        "source": "llm"
+      }
     }
   ],
+  "security_implications": "The fill values for advanced matrix entries beyond KeyMgrStages are assigned from data_rand[0] replicated, and adv_dvalid is tied high. If data_rand[0] is not truly random, the fill data is predictable, potentially weakening security if those entries are read. Additionally, setting valid=1 for unused entries may allow accidental use of fill data, leading to incorrect or predictable key material.",
   "evidence_refs": [
-    "file:406-409"
+    "keymgr.sv:406-409"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/keymgr/rtl/keymgr.sv",
   "line_start": 406,
-  "line_end": 409,
-  "security_implications": ""
+  "line_end": 409
 }

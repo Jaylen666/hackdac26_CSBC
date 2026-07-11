@@ -8,22 +8,24 @@
     ],
     "used": [
       "idle_q",
-      "clk",
-      "rst_n",
       "msg_fifo_req",
       "msg_fifo_we",
-      "wmask_byte"
+      "wmask_byte",
+      "clk",
+      "rst_n"
     ],
     "modes": [],
     "tags": [
-      "assertion"
+      "handshake",
+      "fifo",
+      "reset"
     ]
   },
   "guarantees": [
     {
       "id": "G1",
       "type": "assignment",
-      "claim": "idle_o is continuously assigned to idle_q, following its value at all times.",
+      "claim": "idle_o is always equal to idle_q",
       "cond": "always",
       "signals": [
         "idle_o",
@@ -31,32 +33,117 @@
       ],
       "refs": [
         "hmac.sv:903"
-      ]
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "idle_o == idle_q",
+        "formalizability": "direct"
+      },
+      "risk": "",
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "idle_o",
+          "idle_q"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "always",
+        "consequent": "idle_o == idle_q",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
   "assumptions": [
     {
       "id": "A1",
-      "type": "value_domain",
-      "claim": "Whenever a message FIFO write is requested (msg_fifo_req & msg_fifo_we), wmask_byte must be all zeros or all ones.",
+      "type": "producer_contract",
+      "claim": "When msg_fifo_req and msg_fifo_we are both high, wmask_byte must be all-zero or all-one (byte-aligned).",
       "cond": "msg_fifo_req & msg_fifo_we",
-      "risk": "Non-byte-aligned writes could corrupt message data inside the HMAC message FIFO, breaking data integrity.",
+      "risk": "If wmask_byte is not byte-aligned, partial byte writes could corrupt HMAC registers, potentially affecting key/digest integrity or exposing secret data.",
       "signals": [
         "msg_fifo_req",
         "msg_fifo_we",
         "wmask_byte"
       ],
       "refs": [
-        "hmac.sv:914"
-      ]
+        "hmac.sv:912-914"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "msg_fifo_req && msg_fifo_we",
+        "consequent": "wmask_byte == '0 || wmask_byte == '1",
+        "formalizability": "direct"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "msg_fifo_req",
+          "msg_fifo_we",
+          "wmask_byte"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "msg_fifo_req && msg_fifo_we",
+        "consequent": "wmask_byte == '0 || wmask_byte == '1",
+        "formalizability": "direct",
+        "confidence": 1.0,
+        "source": "llm"
+      }
     }
   ],
-  "uncertain_points": [],
+  "uncertain_points": [
+    {
+      "id": "U1",
+      "type": "U_cross_chunk_dependency",
+      "priority": "medium",
+      "claim": "The property wmask_bytealign_p is defined but no assertion or assumption binding is visible in this chunk. It may be instantiated elsewhere or not enforced.",
+      "cond": "unknown",
+      "risk": "The byte-alignment requirement might not be enforced, allowing non-aligned wmask writes to corrupt registers.",
+      "signals": [
+        "wmask_bytealign_p",
+        "msg_fifo_req",
+        "msg_fifo_we",
+        "wmask_byte"
+      ],
+      "refs": [
+        "hmac.sv:912-915"
+      ],
+      "formal": {
+        "temporal_shape": "comb",
+        "antecedent": "",
+        "consequent": "",
+        "formalizability": "none"
+      },
+      "formal_sketch": {
+        "scope": "hmac",
+        "clock": "",
+        "reset": "",
+        "signals": [
+          "wmask_bytealign_p",
+          "msg_fifo_req",
+          "msg_fifo_we",
+          "wmask_byte"
+        ],
+        "temporal_shape": "comb",
+        "antecedent": "unknown",
+        "consequent": "The property wmask_bytealign_p is defined but no assertion or assumption binding is visible in this chunk. It may be instantiated elsewhere or not enforced",
+        "formalizability": "none",
+        "confidence": 0.85,
+        "source": "llm"
+      }
+    }
+  ],
+  "security_implications": "HMAC uses wmask_byte for write transfers to registers including key and digest. If wmask_byte is not byte-aligned (all-zero or all-one) during a msg_fifo write request, partial writes may corrupt key or digest state, leading to secret leakage or integrity failure. The property wmask_bytealign_p asserts this condition, but its binding is not visible.",
   "evidence_refs": [
     "hmac.sv:903-915"
   ],
   "source_file": "/home/smy/opentitan/hw/ip/hmac/rtl/hmac.sv",
   "line_start": 903,
-  "line_end": 915,
-  "security_implications": ""
+  "line_end": 915
 }
